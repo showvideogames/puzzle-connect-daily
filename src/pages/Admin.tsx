@@ -186,8 +186,8 @@ export default function Admin() {
             <Link to="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1 mb-6">
               <ArrowLeft className="w-4 h-4" /> Back to game
             </Link>
-            <h1 className="text-2xl font-bold tracking-tight">Admin Login</h1>
-            <p className="text-sm text-muted-foreground mt-1">Sign in to manage puzzles.</p>
+            <h1 className="text-2xl font-bold tracking-tight">{isSignUp ? "Create Admin Account" : "Admin Login"}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{isSignUp ? "Sign up, then ask an admin to grant you access." : "Sign in to manage puzzles."}</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -199,8 +199,11 @@ export default function Admin() {
               <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
             <Button type="submit" className="w-full" disabled={loginLoading}>
-              {loginLoading ? "Signing in…" : "Sign In"}
+              {loginLoading ? (isSignUp ? "Creating account…" : "Signing in…") : (isSignUp ? "Sign Up" : "Sign In")}
             </Button>
+            <button type="button" onClick={() => setIsSignUp(!isSignUp)} className="text-sm text-muted-foreground hover:text-foreground transition-colors w-full text-center">
+              {isSignUp ? "Already have an account? Sign in" : "Need an account? Sign up"}
+            </button>
           </form>
         </div>
       </div>
