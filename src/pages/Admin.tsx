@@ -143,7 +143,7 @@ export default function Admin() {
         // Insert new
         const { data, error } = await supabase
           .from("puzzles")
-          .insert({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, created_by: user!.id })
+          .insert({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, created_by: user!.id, word_order: wordOrder.length === 16 ? wordOrder : null })
           .select("id")
           .single();
         if (error) throw error;
