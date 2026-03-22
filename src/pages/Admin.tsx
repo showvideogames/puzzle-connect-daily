@@ -36,6 +36,8 @@ export default function Admin() {
   ]);
   const [isPublished, setIsPublished] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [wordOrder, setWordOrder] = useState<string[]>([]);
+  const [swapFirst, setSwapFirst] = useState<number | null>(null);
 
   // Existing puzzles list
   const [puzzles, setPuzzles] = useState<any[]>([]);
