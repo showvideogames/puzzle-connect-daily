@@ -67,6 +67,20 @@ export default function Admin() {
     setLoginLoading(false);
   }
 
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setLoginLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      setResetSent(true);
+    }
+    setLoginLoading(false);
+  }
+
   function updateGroup(idx: number, field: keyof GroupForm, value: string | number) {
     setGroups((g) => g.map((gr, i) => (i === idx ? { ...gr, [field]: value } : gr)));
   }
