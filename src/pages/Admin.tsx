@@ -133,7 +133,7 @@ export default function Admin() {
         // Update existing
         const { error } = await supabase
           .from("puzzles")
-          .update({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished })
+          .update({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, word_order: wordOrder.length === 16 ? wordOrder : null })
           .eq("id", editingId);
         if (error) throw error;
 
