@@ -181,6 +181,8 @@ export default function Admin() {
       { ...emptyGroup(), difficulty: 4 },
     ]);
     setIsPublished(false);
+    setWordOrder([]);
+    setSwapFirst(null);
   }
 
   function editPuzzle(p: any) {
