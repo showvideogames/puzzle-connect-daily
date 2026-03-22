@@ -42,6 +42,8 @@ export default function Admin() {
   // Existing puzzles list
   const [puzzles, setPuzzles] = useState<any[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedStatsId, setExpandedStatsId] = useState<string | null>(null);
+  const [puzzleStats, setPuzzleStats] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (isAdmin) loadPuzzles();
