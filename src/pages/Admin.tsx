@@ -338,7 +338,7 @@ export default function Admin() {
                     {p.is_published ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </Button>
                   <Button variant="ghost" size="icon" onClick={() => editPuzzle(p)}>
-                    <Plus className="w-4 h-4 rotate-45" />
+                    <Pencil className="w-4 h-4" />
                   </Button>
                   <Button variant="ghost" size="icon" onClick={() => deletePuzzle(p.id)}>
                     <Trash2 className="w-4 h-4 text-destructive" />
