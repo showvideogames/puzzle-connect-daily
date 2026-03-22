@@ -1,48 +1,49 @@
+import { supabase } from "@/integrations/supabase/client";
 import { Puzzle } from "./types";
 
-// Sample puzzles — in the future these come from a backend
-const PUZZLES: Puzzle[] = [
-  {
-    id: "2026-03-22",
-    date: "2026-03-22",
-    groups: [
-      { category: "Coffee Drinks", words: ["LATTE", "MOCHA", "ESPRESSO", "CORTADO"], difficulty: 1 },
-      { category: "Card Games", words: ["BRIDGE", "POKER", "HEARTS", "SPADES"], difficulty: 2 },
-      { category: "___ Break", words: ["LUNCH", "SPRING", "JAIL", "COMMERCIAL"], difficulty: 3 },
-      { category: "Things That Are Pitched", words: ["TENT", "IDEA", "BASEBALL", "VOICE"], difficulty: 4 },
-    ],
-  },
-  {
-    id: "2026-03-21",
-    date: "2026-03-21",
-    groups: [
-      { category: "Pasta Shapes", words: ["PENNE", "RIGATONI", "FUSILLI", "ORZO"], difficulty: 1 },
-      { category: "Ways to Say Goodbye", words: ["ADIOS", "CIAO", "CHEERIO", "FAREWELL"], difficulty: 2 },
-      { category: "Things in a Wallet", words: ["CASH", "LICENSE", "RECEIPT", "PHOTO"], difficulty: 3 },
-      { category: "Double ___", words: ["DUTCH", "TAKE", "CHECK", "AGENT"], difficulty: 4 },
-    ],
-  },
-  {
-    id: "2026-03-20",
-    date: "2026-03-20",
-    groups: [
-      { category: "Citrus Fruits", words: ["LEMON", "LIME", "ORANGE", "GRAPEFRUIT"], difficulty: 1 },
-      { category: "Musical Instruments", words: ["DRUMS", "VIOLIN", "TRUMPET", "PIANO"], difficulty: 2 },
-      { category: "Shades of Blue", words: ["NAVY", "COBALT", "TEAL", "CERULEAN"], difficulty: 3 },
-      { category: "Things That Ring", words: ["BELL", "PHONE", "ALARM", "BOXING"], difficulty: 4 },
-    ],
-  },
-];
+// Fetch today's published puzzle from the database
+export async function getTodaysPuzzle(): Promise<Puzzle | null> {
+  const today = new Date().toISOString().split("T")[0];
 
-export function getTodaysPuzzle(): Puzzle {
-  // Return the first puzzle as "today's"
-  return PUZZLES[0];
+  // Try today's puzzle first, then the most recent published one
+  const { data, error } = await supabase
+    .from("puzzles")
+    .select("*, puzzle_groups(*)")
+    .eq("is_published", true)
+    .lte("date", today)
+    .order("date", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error || !data) return null;
+
+  return mapPuzzle(data);
 }
 
-export function getPuzzleById(id: string): Puzzle | undefined {
-  return PUZZLES.find((p) => p.id === id);
+export async function getPuzzleByDate(date: string): Promise<Puzzle | null> {
+  const { data, error } = await supabase
+    .from("puzzles")
+    .select("*, puzzle_groups(*)")
+    .eq("date", date)
+    .eq("is_published", true)
+    .single();
+
+  if (error || !data) return null;
+  return mapPuzzle(data);
 }
 
-export function getAllPuzzles(): Puzzle[] {
-  return PUZZLES;
+function mapPuzzle(data: any): Puzzle {
+  const groups = [...(data.puzzle_groups || [])]
+    .sort((a: any, b: any) => a.sort_order - b.sort_order)
+    .map((g: any) => ({
+      category: g.category,
+      words: g.words as string[],
+      difficulty: g.difficulty as 1 | 2 | 3 | 4,
+    }));
+
+  return {
+    id: data.id,
+    date: data.date,
+    groups,
+  };
 }
