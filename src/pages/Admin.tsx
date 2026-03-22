@@ -376,6 +376,49 @@ export default function Admin() {
             ))}
           </div>
 
+          {/* Grid Order Editor */}
+          {hasAll16 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Grid Layout Order</h3>
+                <Button variant="outline" size="sm" onClick={generateWordOrder}>
+                  {wordOrder.length === 16 ? "Reset Order" : "Customize Order"}
+                </Button>
+              </div>
+              {wordOrder.length === 16 && (
+                <>
+                  <p className="text-xs text-muted-foreground">Click two tiles to swap their positions. This is how the puzzle will appear to players before they shuffle.</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {wordOrder.map((word, idx) => {
+                      const groupIdx = groups.findIndex((g) =>
+                        g.words.split(",").map((w) => w.trim().toUpperCase()).includes(word)
+                      );
+                      const diffColors = [
+                        "bg-[hsl(var(--group-1)/0.3)]",
+                        "bg-[hsl(var(--group-2)/0.3)]",
+                        "bg-[hsl(var(--group-3)/0.3)]",
+                        "bg-[hsl(var(--group-4)/0.3)]",
+                      ];
+                      const isSwapSelected = swapFirst === idx;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleTileClick(idx)}
+                          className={`rounded-lg px-2 py-3 text-xs font-semibold uppercase tracking-wide text-center transition-all duration-150 active:scale-95 cursor-pointer border-2 ${
+                            isSwapSelected ? "border-primary ring-2 ring-primary/30" : "border-transparent"
+                          } ${diffColors[groupIdx] || "bg-muted"}`}
+                        >
+                          {word}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
