@@ -22,6 +22,8 @@ export default function Admin() {
   const [password, setPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   // Puzzle form
   const [puzzleDate, setPuzzleDate] = useState("");
