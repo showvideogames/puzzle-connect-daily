@@ -1,16 +1,25 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import { GameHeader } from "@/components/GameHeader";
+import { GameBoard } from "@/components/GameBoard";
+import { StatsModal } from "@/components/StatsModal";
+import { HowToPlayModal } from "@/components/HowToPlayModal";
+import { getTodaysPuzzle } from "@/lib/puzzles";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+export default function Index() {
+  const [showStats, setShowStats] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const puzzle = getTodaysPuzzle();
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
+      <GameHeader
+        onStatsClick={() => setShowStats(true)}
+        onHowToPlayClick={() => setShowHelp(true)}
+      />
+      <div className="w-full max-w-lg border-b border-border mb-4" />
+      <GameBoard puzzle={puzzle} />
+      <StatsModal open={showStats} onClose={() => setShowStats(false)} />
+      <HowToPlayModal open={showHelp} onClose={() => setShowHelp(false)} />
     </div>
   );
-};
-
-const Index = PlaceholderIndex;
-
-export default Index;
+}
