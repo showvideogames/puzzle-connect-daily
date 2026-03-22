@@ -465,26 +465,60 @@ export default function Admin() {
             {puzzles.map((p) => (
               <div
                 key={p.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-border bg-card"
+                className="rounded-lg border border-border bg-card overflow-hidden"
               >
-                <div>
-                  <span className="font-medium">{p.date}</span>
-                  {p.title && <span className="text-muted-foreground ml-2">— {p.title}</span>}
-                  <span className={`ml-3 text-xs font-medium px-2 py-0.5 rounded-full ${p.is_published ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
-                    {p.is_published ? "Published" : "Draft"}
-                  </span>
+                <div className="flex items-center justify-between p-3">
+                  <div>
+                    <span className="font-medium">{p.date}</span>
+                    {p.title && <span className="text-muted-foreground ml-2">— {p.title}</span>}
+                    <span className={`ml-3 text-xs font-medium px-2 py-0.5 rounded-full ${p.is_published ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
+                      {p.is_published ? "Published" : "Draft"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => toggleStats(p.id)} title="View stats">
+                      <BarChart3 className={`w-4 h-4 ${expandedStatsId === p.id ? "text-primary" : ""}`} />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => togglePublish(p.id, p.is_published)} title={p.is_published ? "Unpublish" : "Publish"}>
+                      {p.is_published ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => editPuzzle(p)}>
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => deletePuzzle(p.id)}>
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => togglePublish(p.id, p.is_published)} title={p.is_published ? "Unpublish" : "Publish"}>
-                    {p.is_published ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => editPuzzle(p)}>
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => deletePuzzle(p.id)}>
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
-                </div>
+                {expandedStatsId === p.id && (
+                  <div className="border-t border-border px-4 py-3 bg-secondary/30">
+                    {!puzzleStats[p.id] ? (
+                      <p className="text-sm text-muted-foreground animate-pulse">Loading stats…</p>
+                    ) : puzzleStats[p.id].total_players === 0 ? (
+                      <p className="text-sm text-muted-foreground">No completions yet.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex gap-6 text-sm">
+                          <div><span className="font-semibold">{puzzleStats[p.id].total_players}</span> <span className="text-muted-foreground">players</span></div>
+                          <div><span className="font-semibold">{puzzleStats[p.id].wins}</span> <span className="text-muted-foreground">wins</span></div>
+                          <div><span className="font-semibold">{puzzleStats[p.id].losses}</span> <span className="text-muted-foreground">losses</span></div>
+                          <div><span className="font-semibold">{puzzleStats[p.id].total_players > 0 ? Math.round((puzzleStats[p.id].wins / puzzleStats[p.id].total_players) * 100) : 0}%</span> <span className="text-muted-foreground">win rate</span></div>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground mb-1">Mistakes when winning:</p>
+                          <div className="flex gap-4 text-xs">
+                            {[0, 1, 2, 3].map((m) => (
+                              <div key={m} className="flex items-center gap-1">
+                                <span className="text-muted-foreground">{m}:</span>
+                                <span className="font-semibold">{puzzleStats[p.id].guess_distribution?.[String(m)] || 0}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
