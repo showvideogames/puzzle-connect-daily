@@ -23,7 +23,7 @@ export function DailyStatsModal({ puzzleId, open, onClose }: DailyStatsProps) {
     if (!open) return;
     setLoading(true);
     supabase.rpc("get_puzzle_stats", { _puzzle_id: puzzleId }).then(({ data }) => {
-      setStats(data as PuzzleStats | null);
+      setStats(data as unknown as PuzzleStats | null);
       setLoading(false);
     });
   }, [open, puzzleId]);
