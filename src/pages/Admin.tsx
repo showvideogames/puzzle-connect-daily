@@ -87,6 +87,30 @@ export default function Admin() {
     setGroups((g) => g.map((gr, i) => (i === idx ? { ...gr, [field]: value } : gr)));
   }
 
+  // Compute all words from groups
+  const allWords = groups.flatMap((g) =>
+    g.words.split(",").map((w) => w.trim().toUpperCase()).filter(Boolean)
+  );
+  const hasAll16 = allWords.length === 16 && new Set(allWords).size === 16;
+
+  function generateWordOrder() {
+    setWordOrder([...allWords]);
+    setSwapFirst(null);
+  }
+
+  function handleTileClick(idx: number) {
+    if (swapFirst === null) {
+      setSwapFirst(idx);
+    } else {
+      setWordOrder((prev) => {
+        const next = [...prev];
+        [next[swapFirst], next[idx]] = [next[idx], next[swapFirst]];
+        return next;
+      });
+      setSwapFirst(null);
+    }
+  }
+
   async function handleSave() {
     if (!puzzleDate) {
       toast.error("Please set a date for the puzzle.");
