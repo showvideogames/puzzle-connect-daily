@@ -217,6 +217,18 @@ export default function Admin() {
     loadPuzzles();
   }
 
+  async function toggleStats(id: string) {
+    if (expandedStatsId === id) {
+      setExpandedStatsId(null);
+      return;
+    }
+    setExpandedStatsId(id);
+    if (!puzzleStats[id]) {
+      const { data } = await supabase.rpc("get_puzzle_stats", { _puzzle_id: id });
+      setPuzzleStats((prev) => ({ ...prev, [id]: data }));
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
