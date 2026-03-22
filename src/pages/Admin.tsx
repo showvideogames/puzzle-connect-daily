@@ -54,8 +54,14 @@ export default function Admin() {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoginLoading(true);
-    const { error } = await signIn(email, password);
-    if (error) toast.error(error.message);
+    if (isSignUp) {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) toast.error(error.message);
+      else toast.success("Account created! Ask an existing admin to grant you the admin role.");
+    } else {
+      const { error } = await signIn(email, password);
+      if (error) toast.error(error.message);
+    }
     setLoginLoading(false);
   }
 
