@@ -198,6 +198,8 @@ export default function Admin() {
         difficulty: g.difficulty as 1 | 2 | 3 | 4,
       }))
     );
+    setWordOrder(p.word_order || []);
+    setSwapFirst(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
