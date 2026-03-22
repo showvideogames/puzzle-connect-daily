@@ -36,6 +36,8 @@ export default function Admin() {
   ]);
   const [isPublished, setIsPublished] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [wordOrder, setWordOrder] = useState<string[]>([]);
+  const [swapFirst, setSwapFirst] = useState<number | null>(null);
 
   // Existing puzzles list
   const [puzzles, setPuzzles] = useState<any[]>([]);
@@ -85,6 +87,30 @@ export default function Admin() {
     setGroups((g) => g.map((gr, i) => (i === idx ? { ...gr, [field]: value } : gr)));
   }
 
+  // Compute all words from groups
+  const allWords = groups.flatMap((g) =>
+    g.words.split(",").map((w) => w.trim().toUpperCase()).filter(Boolean)
+  );
+  const hasAll16 = allWords.length === 16 && new Set(allWords).size === 16;
+
+  function generateWordOrder() {
+    setWordOrder([...allWords]);
+    setSwapFirst(null);
+  }
+
+  function handleTileClick(idx: number) {
+    if (swapFirst === null) {
+      setSwapFirst(idx);
+    } else {
+      setWordOrder((prev) => {
+        const next = [...prev];
+        [next[swapFirst], next[idx]] = [next[idx], next[swapFirst]];
+        return next;
+      });
+      setSwapFirst(null);
+    }
+  }
+
   async function handleSave() {
     if (!puzzleDate) {
       toast.error("Please set a date for the puzzle.");
@@ -107,7 +133,7 @@ export default function Admin() {
         // Update existing
         const { error } = await supabase
           .from("puzzles")
-          .update({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished })
+          .update({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, word_order: wordOrder.length === 16 ? wordOrder : null })
           .eq("id", editingId);
         if (error) throw error;
 
@@ -117,7 +143,7 @@ export default function Admin() {
         // Insert new
         const { data, error } = await supabase
           .from("puzzles")
-          .insert({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, created_by: user!.id })
+          .insert({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, created_by: user!.id, word_order: wordOrder.length === 16 ? wordOrder : null })
           .select("id")
           .single();
         if (error) throw error;
@@ -155,6 +181,8 @@ export default function Admin() {
       { ...emptyGroup(), difficulty: 4 },
     ]);
     setIsPublished(false);
+    setWordOrder([]);
+    setSwapFirst(null);
   }
 
   function editPuzzle(p: any) {
@@ -170,6 +198,8 @@ export default function Admin() {
         difficulty: g.difficulty as 1 | 2 | 3 | 4,
       }))
     );
+    setWordOrder(p.word_order || []);
+    setSwapFirst(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -345,6 +375,49 @@ export default function Admin() {
               </div>
             ))}
           </div>
+
+          {/* Grid Order Editor */}
+          {hasAll16 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Grid Layout Order</h3>
+                <Button variant="outline" size="sm" onClick={generateWordOrder}>
+                  {wordOrder.length === 16 ? "Reset Order" : "Customize Order"}
+                </Button>
+              </div>
+              {wordOrder.length === 16 && (
+                <>
+                  <p className="text-xs text-muted-foreground">Click two tiles to swap their positions. This is how the puzzle will appear to players before they shuffle.</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {wordOrder.map((word, idx) => {
+                      const groupIdx = groups.findIndex((g) =>
+                        g.words.split(",").map((w) => w.trim().toUpperCase()).includes(word)
+                      );
+                      const diffColors = [
+                        "bg-[hsl(var(--group-1)/0.3)]",
+                        "bg-[hsl(var(--group-2)/0.3)]",
+                        "bg-[hsl(var(--group-3)/0.3)]",
+                        "bg-[hsl(var(--group-4)/0.3)]",
+                      ];
+                      const isSwapSelected = swapFirst === idx;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleTileClick(idx)}
+                          className={`rounded-lg px-2 py-3 text-xs font-semibold uppercase tracking-wide text-center transition-all duration-150 active:scale-95 cursor-pointer border-2 ${
+                            isSwapSelected ? "border-primary ring-2 ring-primary/30" : "border-transparent"
+                          } ${diffColors[groupIdx] || "bg-muted"}`}
+                        >
+                          {word}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-2 cursor-pointer">

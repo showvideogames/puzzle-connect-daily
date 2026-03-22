@@ -19,7 +19,9 @@ export function useGame(puzzle: Puzzle) {
     [puzzle]
   );
 
-  const [shuffledWords, setShuffledWords] = useState(() => shuffleArray(allWords));
+  const [shuffledWords, setShuffledWords] = useState(() =>
+    puzzle.wordOrder && puzzle.wordOrder.length === 16 ? puzzle.wordOrder : shuffleArray(allWords)
+  );
   const [state, setState] = useState<GameState>(() => ({
     puzzleId: puzzle.id,
     solvedGroups: [],

@@ -8,6 +8,7 @@ export interface Puzzle {
   id: string;
   date: string;
   groups: PuzzleGroup[];
+  wordOrder?: string[] | null; // custom initial grid layout
 }
 
 export interface GameStats {

@@ -58,6 +58,7 @@ export type Database = {
           is_published: boolean
           title: string | null
           updated_at: string
+          word_order: string[] | null
         }
         Insert: {
           created_at?: string
@@ -67,6 +68,7 @@ export type Database = {
           is_published?: boolean
           title?: string | null
           updated_at?: string
+          word_order?: string[] | null
         }
         Update: {
           created_at?: string
@@ -76,6 +78,7 @@ export type Database = {
           is_published?: boolean
           title?: string | null
           updated_at?: string
+          word_order?: string[] | null
         }
         Relationships: []
       }

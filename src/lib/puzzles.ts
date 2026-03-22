@@ -45,5 +45,6 @@ function mapPuzzle(data: any): Puzzle {
     id: data.id,
     date: data.date,
     groups,
+    wordOrder: data.word_order || null,
   };
 }

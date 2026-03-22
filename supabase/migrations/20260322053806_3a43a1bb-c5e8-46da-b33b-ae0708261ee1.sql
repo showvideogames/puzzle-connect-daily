@@ -1,0 +1,1 @@
+ALTER TABLE public.puzzles ADD COLUMN word_order TEXT[];
