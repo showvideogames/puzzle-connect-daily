@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { Puzzle, GameState } from "@/lib/types";
 import { hasPlayedToday, markPlayed, recordGameResult } from "@/lib/stats";
+import { supabase } from "@/integrations/supabase/client";
 
 function shuffleArray<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -33,6 +34,17 @@ export function useGame(puzzle: Puzzle) {
   }));
   const [shaking, setShaking] = useState(false);
   const [lastRevealedGroup, setLastRevealedGroup] = useState<number | null>(null);
+
+  const saveResultToDb = useCallback(async (won: boolean, mistakes: number) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from("game_results").upsert({
+      user_id: user.id,
+      puzzle_id: puzzle.id,
+      won,
+      mistakes,
+    }, { onConflict: "user_id,puzzle_id" });
+  }, [puzzle.id]);
 
   const toggleWord = useCallback((word: string) => {
     if (state.isComplete) return;
@@ -69,7 +81,6 @@ export function useGame(puzzle: Puzzle) {
       const newSolved = [...state.solvedGroups, groupIdx];
       const isWon = newSolved.length === 4;
 
-      // Remove solved words from shuffled
       const solvedWords = puzzle.groups[groupIdx].words;
       setShuffledWords((prev) => prev.filter((w) => !solvedWords.includes(w)));
 
@@ -84,9 +95,9 @@ export function useGame(puzzle: Puzzle) {
       if (isWon) {
         markPlayed(puzzle.id);
         recordGameResult(true, state.mistakes);
+        saveResultToDb(true, state.mistakes);
       }
     } else {
-      // Wrong guess
       setShaking(true);
       setTimeout(() => setShaking(false), 400);
 
@@ -104,7 +115,7 @@ export function useGame(puzzle: Puzzle) {
       if (isLost) {
         markPlayed(puzzle.id);
         recordGameResult(false, newMistakes);
-        // Reveal all remaining groups
+        saveResultToDb(false, newMistakes);
         setTimeout(() => {
           setState((s) => ({
             ...s,
@@ -114,7 +125,7 @@ export function useGame(puzzle: Puzzle) {
         }, 600);
       }
     }
-  }, [state, puzzle]);
+  }, [state, puzzle, saveResultToDb]);
 
   const remainingWords = useMemo(() => {
     const solvedWords = state.solvedGroups.flatMap((i) => puzzle.groups[i].words);

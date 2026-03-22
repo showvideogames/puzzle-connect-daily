@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      game_results: {
+        Row: {
+          completed_at: string
+          id: string
+          mistakes: number
+          puzzle_id: string
+          user_id: string
+          won: boolean
+        }
+        Insert: {
+          completed_at?: string
+          id?: string
+          mistakes?: number
+          puzzle_id: string
+          user_id: string
+          won: boolean
+        }
+        Update: {
+          completed_at?: string
+          id?: string
+          mistakes?: number
+          puzzle_id?: string
+          user_id?: string
+          won?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_results_puzzle_id_fkey"
+            columns: ["puzzle_id"]
+            isOneToOne: false
+            referencedRelation: "puzzles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       puzzle_groups: {
         Row: {
           category: string
@@ -108,6 +143,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_puzzle_stats: { Args: { _puzzle_id: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
