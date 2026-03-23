@@ -1,0 +1,1 @@
+ALTER TABLE public.puzzles ADD COLUMN rainbow_herring text[] DEFAULT NULL;

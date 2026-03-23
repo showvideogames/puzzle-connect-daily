@@ -20,6 +20,8 @@ export function GameBoard({ puzzle }: GameBoardProps) {
     shaking,
     lastRevealedGroup,
     oneAway,
+    rainbowWords,
+    showRainbowPopup,
   } = useGame(puzzle);
 
   return (
@@ -49,10 +51,20 @@ export function GameBoard({ puzzle }: GameBoardProps) {
               key={word}
               word={word}
               isSelected={state.selectedWords.includes(word)}
+              isRainbow={rainbowWords.includes(word)}
               onClick={() => toggleWord(word)}
               disabled={state.isComplete}
             />
           ))}
+        </div>
+      )}
+
+      {/* Rainbow Herring popup */}
+      {showRainbowPopup && (
+        <div className="flex justify-center mt-3 animate-fade-up">
+          <div className="rainbow-tile px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg">
+            🌈 Rainbow Herring!
+          </div>
         </div>
       )}
 

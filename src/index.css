@@ -110,3 +110,26 @@
 .animate-reveal { animation: reveal-group 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .animate-pop { animation: pop-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .animate-fade-up { animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+/* Rainbow Herring tile effect */
+@keyframes rainbow-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.rainbow-tile {
+  background: linear-gradient(
+    90deg,
+    hsl(0 80% 60%),
+    hsl(30 90% 55%),
+    hsl(55 85% 50%),
+    hsl(130 60% 45%),
+    hsl(210 70% 55%),
+    hsl(270 65% 55%),
+    hsl(330 70% 55%),
+    hsl(0 80% 60%)
+  );
+  background-size: 300% 100%;
+  animation: rainbow-shift 3s ease-in-out infinite;
+}

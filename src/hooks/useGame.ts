@@ -35,6 +35,8 @@ export function useGame(puzzle: Puzzle) {
   const [shaking, setShaking] = useState(false);
   const [lastRevealedGroup, setLastRevealedGroup] = useState<number | null>(null);
   const [oneAway, setOneAway] = useState(false);
+  const [rainbowWords, setRainbowWords] = useState<string[]>([]);
+  const [showRainbowPopup, setShowRainbowPopup] = useState(false);
 
   const saveResultToDb = useCallback(async (won: boolean, mistakes: number) => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -68,6 +70,23 @@ export function useGame(puzzle: Puzzle) {
 
   const submitGuess = useCallback(() => {
     if (state.selectedWords.length !== 4 || state.isComplete) return;
+
+    // Check for Rainbow Herring before normal logic
+    if (
+      puzzle.rainbowHerring &&
+      puzzle.rainbowHerring.length === 4 &&
+      rainbowWords.length === 0 // only trigger once
+    ) {
+      const selected = [...state.selectedWords].sort();
+      const herring = [...puzzle.rainbowHerring].sort();
+      if (selected.every((w, i) => w === herring[i])) {
+        setRainbowWords(state.selectedWords);
+        setShowRainbowPopup(true);
+        setTimeout(() => setShowRainbowPopup(false), 3000);
+        setState((s) => ({ ...s, selectedWords: [] }));
+        return;
+      }
+    }
 
     const matchedGroupIndex = puzzle.groups.findIndex(
       (g) =>
@@ -155,5 +174,7 @@ export function useGame(puzzle: Puzzle) {
     shaking,
     lastRevealedGroup,
     oneAway,
+    rainbowWords,
+    showRainbowPopup,
   };
 }
