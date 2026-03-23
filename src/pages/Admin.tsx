@@ -207,6 +207,12 @@ export default function Admin() {
     );
     setWordOrder(p.word_order || []);
     setSwapFirst(null);
+    // Load rainbow herring
+    if (p.rainbow_herring && p.rainbow_herring.length === 4) {
+      setRainbowHerring(p.rainbow_herring);
+    } else {
+      setRainbowHerring([null, null, null, null]);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
