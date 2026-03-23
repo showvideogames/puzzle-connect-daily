@@ -99,8 +99,20 @@ export function useGame(puzzle: Puzzle) {
         saveResultToDb(true, state.mistakes);
       }
     } else {
+      // Check for "one away" — 3 of 4 words match a single unsolved group
+      const isOneAway = puzzle.groups.some(
+        (g, idx) =>
+          !state.solvedGroups.includes(idx) &&
+          g.words.filter((w) => state.selectedWords.includes(w)).length === 3
+      );
+
       setShaking(true);
       setTimeout(() => setShaking(false), 400);
+
+      if (isOneAway) {
+        setOneAway(true);
+        setTimeout(() => setOneAway(false), 2000);
+      }
 
       const newMistakes = state.mistakes + 1;
       const isLost = newMistakes >= MAX_MISTAKES;
