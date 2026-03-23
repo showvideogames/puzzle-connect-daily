@@ -56,6 +56,15 @@ export function GameBoard({ puzzle }: GameBoardProps) {
         </div>
       )}
 
+      {/* One Away popup */}
+      {oneAway && (
+        <div className="flex justify-center mt-3 animate-fade-up">
+          <div className="bg-foreground text-background px-5 py-2 rounded-full text-sm font-semibold shadow-md">
+            One away…
+          </div>
+        </div>
+      )}
+
       {/* Mistakes */}
       <div className="mt-4">
         <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} />
