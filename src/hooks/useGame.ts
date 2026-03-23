@@ -174,5 +174,7 @@ export function useGame(puzzle: Puzzle) {
     shaking,
     lastRevealedGroup,
     oneAway,
+    rainbowWords,
+    showRainbowPopup,
   };
 }
