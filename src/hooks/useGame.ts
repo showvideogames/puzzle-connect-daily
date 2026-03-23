@@ -34,6 +34,7 @@ export function useGame(puzzle: Puzzle) {
   }));
   const [shaking, setShaking] = useState(false);
   const [lastRevealedGroup, setLastRevealedGroup] = useState<number | null>(null);
+  const [oneAway, setOneAway] = useState(false);
 
   const saveResultToDb = useCallback(async (won: boolean, mistakes: number) => {
     const { data: { user } } = await supabase.auth.getUser();
