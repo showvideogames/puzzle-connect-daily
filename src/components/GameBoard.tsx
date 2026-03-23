@@ -51,6 +51,7 @@ export function GameBoard({ puzzle }: GameBoardProps) {
               key={word}
               word={word}
               isSelected={state.selectedWords.includes(word)}
+              isRainbow={rainbowWords.includes(word)}
               onClick={() => toggleWord(word)}
               disabled={state.isComplete}
             />
