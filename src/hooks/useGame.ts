@@ -71,6 +71,23 @@ export function useGame(puzzle: Puzzle) {
   const submitGuess = useCallback(() => {
     if (state.selectedWords.length !== 4 || state.isComplete) return;
 
+    // Check for Rainbow Herring before normal logic
+    if (
+      puzzle.rainbowHerring &&
+      puzzle.rainbowHerring.length === 4 &&
+      rainbowWords.length === 0 // only trigger once
+    ) {
+      const selected = [...state.selectedWords].sort();
+      const herring = [...puzzle.rainbowHerring].sort();
+      if (selected.every((w, i) => w === herring[i])) {
+        setRainbowWords(state.selectedWords);
+        setShowRainbowPopup(true);
+        setTimeout(() => setShowRainbowPopup(false), 3000);
+        setState((s) => ({ ...s, selectedWords: [] }));
+        return;
+      }
+    }
+
     const matchedGroupIndex = puzzle.groups.findIndex(
       (g) =>
         !state.solvedGroups.includes(puzzle.groups.indexOf(g)) &&
