@@ -146,9 +146,10 @@ export default function Admin() {
         await supabase.from("puzzle_groups").delete().eq("puzzle_id", editingId);
       } else {
         // Insert new
+        const rainbowArr = rainbowHerring.every(w => w) ? rainbowHerring as string[] : null;
         const { data, error } = await supabase
           .from("puzzles")
-          .insert({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, created_by: user!.id, word_order: wordOrder.length === 16 ? wordOrder : null })
+          .insert({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, created_by: user!.id, word_order: wordOrder.length === 16 ? wordOrder : null, rainbow_herring: rainbowArr })
           .select("id")
           .single();
         if (error) throw error;
