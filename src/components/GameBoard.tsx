@@ -19,6 +19,7 @@ export function GameBoard({ puzzle }: GameBoardProps) {
     submitGuess,
     shaking,
     lastRevealedGroup,
+    oneAway,
   } = useGame(puzzle);
 
   return (
