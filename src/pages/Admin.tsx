@@ -135,9 +135,10 @@ export default function Admin() {
 
       if (editingId) {
         // Update existing
+        const rainbowArr = rainbowHerring.every(w => w) ? rainbowHerring as string[] : null;
         const { error } = await supabase
           .from("puzzles")
-          .update({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, word_order: wordOrder.length === 16 ? wordOrder : null })
+          .update({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, word_order: wordOrder.length === 16 ? wordOrder : null, rainbow_herring: rainbowArr })
           .eq("id", editingId);
         if (error) throw error;
 
