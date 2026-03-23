@@ -189,6 +189,7 @@ export default function Admin() {
     setIsPublished(false);
     setWordOrder([]);
     setSwapFirst(null);
+    setRainbowHerring([null, null, null, null]);
   }
 
   function editPuzzle(p: any) {
