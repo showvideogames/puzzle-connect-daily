@@ -1,4 +1,5 @@
-import { BarChart3, HelpCircle, TrendingUp, User, LogOut } from "lucide-react";
+import { BarChart3, HelpCircle, TrendingUp, Archive } from "lucide-react";
+import { Link } from "react-router-dom";
 import { PlayerAuth } from "./PlayerAuth";
 import type { User as AuthUser } from "@supabase/supabase-js";
 
