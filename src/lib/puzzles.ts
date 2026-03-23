@@ -58,5 +58,6 @@ function mapPuzzle(data: any): Puzzle {
     date: data.date,
     groups,
     wordOrder: data.word_order || null,
+    rainbowHerring: data.rainbow_herring || null,
   };
 }
