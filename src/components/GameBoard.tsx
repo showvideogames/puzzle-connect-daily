@@ -20,6 +20,8 @@ export function GameBoard({ puzzle }: GameBoardProps) {
     shaking,
     lastRevealedGroup,
     oneAway,
+    rainbowWords,
+    showRainbowPopup,
   } = useGame(puzzle);
 
   return (
