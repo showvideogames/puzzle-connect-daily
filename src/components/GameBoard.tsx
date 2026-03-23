@@ -19,6 +19,7 @@ export function GameBoard({ puzzle }: GameBoardProps) {
     submitGuess,
     shaking,
     lastRevealedGroup,
+    oneAway,
   } = useGame(puzzle);
 
   return (
@@ -52,6 +53,15 @@ export function GameBoard({ puzzle }: GameBoardProps) {
               disabled={state.isComplete}
             />
           ))}
+        </div>
+      )}
+
+      {/* One Away popup */}
+      {oneAway && (
+        <div className="flex justify-center mt-3 animate-fade-up">
+          <div className="bg-foreground text-background px-5 py-2 rounded-full text-sm font-semibold shadow-md">
+            One away…
+          </div>
         </div>
       )}
 
