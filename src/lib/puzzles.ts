@@ -20,6 +20,18 @@ export async function getTodaysPuzzle(): Promise<Puzzle | null> {
   return mapPuzzle(data);
 }
 
+export async function getPuzzleById(id: string): Promise<Puzzle | null> {
+  const { data, error } = await supabase
+    .from("puzzles")
+    .select("*, puzzle_groups(*)")
+    .eq("id", id)
+    .eq("is_published", true)
+    .single();
+
+  if (error || !data) return null;
+  return mapPuzzle(data);
+}
+
 export async function getPuzzleByDate(date: string): Promise<Puzzle | null> {
   const { data, error } = await supabase
     .from("puzzles")

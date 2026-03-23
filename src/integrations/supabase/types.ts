@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      archive_access: {
+        Row: {
+          granted_at: string
+          granted_by: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       game_results: {
         Row: {
           completed_at: string
@@ -143,7 +164,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_archive_puzzles: {
+        Args: never
+        Returns: {
+          date: string
+          id: string
+          title: string
+        }[]
+      }
       get_puzzle_stats: { Args: { _puzzle_id: string }; Returns: Json }
+      has_archive_access: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

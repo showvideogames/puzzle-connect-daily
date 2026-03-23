@@ -1,4 +1,5 @@
-import { BarChart3, HelpCircle, TrendingUp, User, LogOut } from "lucide-react";
+import { BarChart3, HelpCircle, TrendingUp, Archive } from "lucide-react";
+import { Link } from "react-router-dom";
 import { PlayerAuth } from "./PlayerAuth";
 import type { User as AuthUser } from "@supabase/supabase-js";
 
@@ -38,6 +39,13 @@ export function GameHeader({ onStatsClick, onHowToPlayClick, onDailyStatsClick, 
             <TrendingUp className="w-5 h-5 text-muted-foreground" />
           </button>
         )}
+        <Link
+          to="/archive"
+          className="p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95"
+          aria-label="Puzzle archive"
+        >
+          <Archive className="w-5 h-5 text-muted-foreground" />
+        </Link>
         <PlayerAuth user={user} onSignOut={onSignOut} />
       </div>
     </header>
