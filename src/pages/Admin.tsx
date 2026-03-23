@@ -444,6 +444,48 @@ export default function Admin() {
             </div>
           )}
 
+          {/* Rainbow Herring Editor */}
+          {hasAll16 && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold">🌈 Rainbow Herring (optional)</h3>
+              <p className="text-xs text-muted-foreground">Pick one word from each group. If a player guesses all 4, the tiles turn rainbow and they don't lose a mistake.</p>
+              <div className="grid grid-cols-2 gap-3">
+                {groups.map((g, i) => {
+                  const groupWords = g.words.split(",").map((w) => w.trim().toUpperCase()).filter(Boolean);
+                  return (
+                    <div key={i}>
+                      <Label className="text-xs">{g.category || `Group ${i + 1}`}</Label>
+                      <select
+                        value={rainbowHerring[i] || ""}
+                        onChange={(e) => {
+                          setRainbowHerring((prev) => {
+                            const next = [...prev];
+                            next[i] = e.target.value || null;
+                            return next;
+                          });
+                        }}
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="">— none —</option>
+                        {groupWords.map((w) => (
+                          <option key={w} value={w}>{w}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+              {rainbowHerring.every(w => w) && (
+                <div className="flex gap-2 flex-wrap">
+                  <span className="text-xs text-muted-foreground">Selected:</span>
+                  {rainbowHerring.map((w, i) => (
+                    <span key={i} className="rainbow-tile text-white text-xs font-semibold px-2 py-0.5 rounded">{w}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
