@@ -39,6 +39,13 @@ export function GameHeader({ onStatsClick, onHowToPlayClick, onDailyStatsClick, 
             <TrendingUp className="w-5 h-5 text-muted-foreground" />
           </button>
         )}
+        <Link
+          to="/archive"
+          className="p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95"
+          aria-label="Puzzle archive"
+        >
+          <Archive className="w-5 h-5 text-muted-foreground" />
+        </Link>
         <PlayerAuth user={user} onSignOut={onSignOut} />
       </div>
     </header>
