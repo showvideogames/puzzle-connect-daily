@@ -59,6 +59,15 @@ export function GameBoard({ puzzle }: GameBoardProps) {
         </div>
       )}
 
+      {/* Rainbow Herring popup */}
+      {showRainbowPopup && (
+        <div className="flex justify-center mt-3 animate-fade-up">
+          <div className="rainbow-tile px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg">
+            🌈 Rainbow Herring!
+          </div>
+        </div>
+      )}
+
       {/* One Away popup */}
       {oneAway && (
         <div className="flex justify-center mt-3 animate-fade-up">
