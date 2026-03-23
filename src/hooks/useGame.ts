@@ -154,5 +154,6 @@ export function useGame(puzzle: Puzzle) {
     submitGuess,
     shaking,
     lastRevealedGroup,
+    oneAway,
   };
 }
