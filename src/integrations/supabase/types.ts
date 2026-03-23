@@ -112,6 +112,7 @@ export type Database = {
           date: string
           id: string
           is_published: boolean
+          rainbow_herring: string[] | null
           title: string | null
           updated_at: string
           word_order: string[] | null
@@ -122,6 +123,7 @@ export type Database = {
           date: string
           id?: string
           is_published?: boolean
+          rainbow_herring?: string[] | null
           title?: string | null
           updated_at?: string
           word_order?: string[] | null
@@ -132,6 +134,7 @@ export type Database = {
           date?: string
           id?: string
           is_published?: boolean
+          rainbow_herring?: string[] | null
           title?: string | null
           updated_at?: string
           word_order?: string[] | null
