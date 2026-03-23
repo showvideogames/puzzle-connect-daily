@@ -457,6 +457,9 @@ export default function Admin() {
         </section>
 
         {/* Existing puzzles list */}
+        <ArchiveAccessManager />
+
+        {/* All Puzzles */}
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">All Puzzles ({puzzles.length})</h2>
           {puzzles.length === 0 && (
