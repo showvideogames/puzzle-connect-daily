@@ -29,6 +29,7 @@ export default function Admin() {
   // Puzzle form
   const [puzzleDate, setPuzzleDate] = useState("");
   const [puzzleTitle, setPuzzleTitle] = useState("");
+  const [rainbowHerring, setRainbowHerring] = useState<(string | null)[]>([null, null, null, null]);
   const [groups, setGroups] = useState<GroupForm[]>([
     { ...emptyGroup(), difficulty: 1 },
     { ...emptyGroup(), difficulty: 2 },
