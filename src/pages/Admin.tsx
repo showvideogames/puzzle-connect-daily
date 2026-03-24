@@ -16,17 +16,11 @@ interface GroupForm {
 }
 
 const emptyGroup = (): GroupForm => ({ category: "", words: "", difficulty: 1 });
-
-async function withTimeout<T>(promise: PromiseLike<T>, label: string, ms = 15000): Promise<T> {
-  return await Promise.race([
-    promise,
-    new Promise<never>((_, reject) => {
-      window.setTimeout(() => {
-        reject(new Error(`${label} is taking too long. Please try again.`));
-      }, ms);
-    }),
-  ]);
-}
+const parseWords = (value: string) =>
+  value
+    .split(",")
+    .map((w) => w.trim().toUpperCase())
+    .filter(Boolean);
 
 export default function Admin() {
   const { user, loading, isAdmin, signIn, signOut } = useAuth();
@@ -59,19 +53,24 @@ export default function Admin() {
   const [puzzleStats, setPuzzleStats] = useState<Record<string, any>>({});
 
   useEffect(() => {
-    if (isAdmin) loadPuzzles();
+    if (isAdmin) {
+      void loadPuzzles();
+    }
   }, [isAdmin]);
 
   async function loadPuzzles() {
-    const { data, error } = await withTimeout(
-      supabase
-        .from("puzzles")
-        .select("*, puzzle_groups(*)")
-        .order("date", { ascending: false }),
-      "Loading puzzles"
-    );
+    const { data, error } = await supabase
+      .from("puzzles")
+      .select("*, puzzle_groups(*)")
+      .order("date", { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error("Load puzzles error:", error);
+      toast.error("Couldn't load puzzles.");
+      setPuzzles([]);
+      return;
+    }
+
     setPuzzles(data || []);
   }
 
@@ -108,9 +107,7 @@ export default function Admin() {
   }
 
   // Compute all words from groups
-  const allWords = groups.flatMap((g) =>
-    g.words.split(",").map((w) => w.trim().toUpperCase()).filter(Boolean)
-  );
+  const allWords = groups.flatMap((g) => parseWords(g.words));
   const hasAll16 = allWords.length === 16 && new Set(allWords).size === 16;
 
   function generateWordOrder() {
@@ -136,80 +133,91 @@ export default function Admin() {
       toast.error("Please set a date for the puzzle.");
       return;
     }
-    for (let i = 0; i < 4; i++) {
-      const g = groups[i];
-      const words = g.words.split(",").map((w) => w.trim().toUpperCase()).filter(Boolean);
-      if (!g.category || words.length !== 4) {
+
+    const normalizedGroups = groups.map((g, index) => ({
+      category: g.category.trim(),
+      words: parseWords(g.words),
+      difficulty: g.difficulty,
+      sort_order: index,
+    }));
+
+    for (let i = 0; i < normalizedGroups.length; i++) {
+      const group = normalizedGroups[i];
+      if (!group.category || group.words.length !== 4) {
         toast.error(`Group ${i + 1}: needs a category and exactly 4 comma-separated words.`);
         return;
       }
     }
 
+    if (new Set(normalizedGroups.flatMap((group) => group.words)).size !== 16) {
+      toast.error("Each puzzle needs 16 unique words.");
+      return;
+    }
+
+    const existingPuzzleForDate = puzzles.find((p) => p.date === puzzleDate && p.id !== editingId);
+    if (existingPuzzleForDate) {
+      toast.error("A puzzle already exists for this date.");
+      return;
+    }
+
     setSaving(true);
     try {
       let puzzleId = editingId;
-      const rainbowArr = rainbowHerring.every(w => w) ? rainbowHerring as string[] : null;
+      const rainbowArr = rainbowHerring.every(Boolean) ? (rainbowHerring as string[]) : null;
 
       if (editingId) {
-        const { error } = await withTimeout(
-          supabase
-            .from("puzzles")
-            .update({
-              date: puzzleDate,
-              title: puzzleTitle || null,
-              is_published: isPublished,
-              word_order: wordOrder.length === 16 ? wordOrder : null,
-              rainbow_herring: rainbowArr,
-            })
-            .eq("id", editingId),
-          "Updating puzzle"
-        );
+        const { error } = await supabase
+          .from("puzzles")
+          .update({
+            date: puzzleDate,
+            title: puzzleTitle || null,
+            is_published: isPublished,
+            word_order: wordOrder.length === 16 ? wordOrder : null,
+            rainbow_herring: rainbowArr,
+          })
+          .eq("id", editingId);
         if (error) throw error;
 
-        const { error: delError } = await withTimeout(
-          supabase.from("puzzle_groups").delete().eq("puzzle_id", editingId),
-          "Replacing puzzle groups"
-        );
+        const { error: delError } = await supabase.from("puzzle_groups").delete().eq("puzzle_id", editingId);
         if (delError) throw delError;
       } else {
-        const { data, error } = await withTimeout(
-          supabase
-            .from("puzzles")
-            .insert({
-              date: puzzleDate,
-              title: puzzleTitle || null,
-              is_published: isPublished,
-              created_by: user!.id,
-              word_order: wordOrder.length === 16 ? wordOrder : null,
-              rainbow_herring: rainbowArr,
-            })
-            .select("id")
-            .single(),
-          "Creating puzzle"
-        );
+        const { data, error } = await supabase
+          .from("puzzles")
+          .insert({
+            date: puzzleDate,
+            title: puzzleTitle || null,
+            is_published: isPublished,
+            created_by: user!.id,
+            word_order: wordOrder.length === 16 ? wordOrder : null,
+            rainbow_herring: rainbowArr,
+          })
+          .select("id")
+          .single();
         if (error) throw error;
         puzzleId = data.id;
       }
 
-      const groupRows = groups.map((g, i) => ({
-        puzzle_id: puzzleId!,
-        category: g.category,
-        words: g.words.split(",").map((w) => w.trim().toUpperCase()).filter(Boolean),
-        difficulty: g.difficulty,
-        sort_order: i,
-      }));
-      const { error: gError } = await withTimeout(
-        supabase.from("puzzle_groups").insert(groupRows),
-        "Saving puzzle groups"
+      const { error: groupError } = await supabase.from("puzzle_groups").insert(
+        normalizedGroups.map((group) => ({
+          puzzle_id: puzzleId!,
+          category: group.category,
+          words: group.words,
+          difficulty: group.difficulty,
+          sort_order: group.sort_order,
+        }))
       );
-      if (gError) throw gError;
+      if (groupError) throw groupError;
 
       toast.success(editingId ? "Puzzle updated!" : "Puzzle created!");
       resetForm();
-      void loadPuzzles();
+      await loadPuzzles();
     } catch (err: any) {
       console.error("Save puzzle error:", err);
-      toast.error(err.message || "Failed to save puzzle.");
+      if (err?.code === "23505") {
+        toast.error("A puzzle already exists for this date.");
+      } else {
+        toast.error(err.message || "Failed to save puzzle.");
+      }
     } finally {
       setSaving(false);
     }
