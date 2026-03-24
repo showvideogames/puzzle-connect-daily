@@ -17,6 +17,17 @@ interface GroupForm {
 
 const emptyGroup = (): GroupForm => ({ category: "", words: "", difficulty: 1 });
 
+async function withTimeout<T>(promise: PromiseLike<T>, label: string, ms = 15000): Promise<T> {
+  return await Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error(`${label} is taking too long. Please try again.`));
+      }, ms);
+    }),
+  ]);
+}
+
 export default function Admin() {
   const { user, loading, isAdmin, signIn, signOut } = useAuth();
   const [email, setEmail] = useState("");
