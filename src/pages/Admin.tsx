@@ -63,10 +63,15 @@ export default function Admin() {
   }, [isAdmin]);
 
   async function loadPuzzles() {
-    const { data } = await supabase
-      .from("puzzles")
-      .select("*, puzzle_groups(*)")
-      .order("date", { ascending: false });
+    const { data, error } = await withTimeout(
+      supabase
+        .from("puzzles")
+        .select("*, puzzle_groups(*)")
+        .order("date", { ascending: false }),
+      "Loading puzzles"
+    );
+
+    if (error) throw error;
     setPuzzles(data || []);
   }
 
