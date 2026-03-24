@@ -151,28 +151,46 @@ export default function Admin() {
       const rainbowArr = rainbowHerring.every(w => w) ? rainbowHerring as string[] : null;
 
       if (editingId) {
-        // Update existing
-        const { error } = await supabase
-          .from("puzzles")
-          .update({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, word_order: wordOrder.length === 16 ? wordOrder : null, rainbow_herring: rainbowArr })
-          .eq("id", editingId);
+        const { error } = await withTimeout(
+          supabase
+            .from("puzzles")
+            .update({
+              date: puzzleDate,
+              title: puzzleTitle || null,
+              is_published: isPublished,
+              word_order: wordOrder.length === 16 ? wordOrder : null,
+              rainbow_herring: rainbowArr,
+            })
+            .eq("id", editingId),
+          "Updating puzzle"
+        );
         if (error) throw error;
 
-        // Delete old groups and re-insert
-        const { error: delError } = await supabase.from("puzzle_groups").delete().eq("puzzle_id", editingId);
+        const { error: delError } = await withTimeout(
+          supabase.from("puzzle_groups").delete().eq("puzzle_id", editingId),
+          "Replacing puzzle groups"
+        );
         if (delError) throw delError;
       } else {
-        // Insert new
-        const { data, error } = await supabase
-          .from("puzzles")
-          .insert({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, created_by: user!.id, word_order: wordOrder.length === 16 ? wordOrder : null, rainbow_herring: rainbowArr })
-          .select("id")
-          .single();
+        const { data, error } = await withTimeout(
+          supabase
+            .from("puzzles")
+            .insert({
+              date: puzzleDate,
+              title: puzzleTitle || null,
+              is_published: isPublished,
+              created_by: user!.id,
+              word_order: wordOrder.length === 16 ? wordOrder : null,
+              rainbow_herring: rainbowArr,
+            })
+            .select("id")
+            .single(),
+          "Creating puzzle"
+        );
         if (error) throw error;
         puzzleId = data.id;
       }
 
-      // Insert groups
       const groupRows = groups.map((g, i) => ({
         puzzle_id: puzzleId!,
         category: g.category,
@@ -180,12 +198,15 @@ export default function Admin() {
         difficulty: g.difficulty,
         sort_order: i,
       }));
-      const { error: gError } = await supabase.from("puzzle_groups").insert(groupRows);
+      const { error: gError } = await withTimeout(
+        supabase.from("puzzle_groups").insert(groupRows),
+        "Saving puzzle groups"
+      );
       if (gError) throw gError;
 
       toast.success(editingId ? "Puzzle updated!" : "Puzzle created!");
       resetForm();
-      loadPuzzles();
+      void loadPuzzles();
     } catch (err: any) {
       console.error("Save puzzle error:", err);
       toast.error(err.message || "Failed to save puzzle.");
