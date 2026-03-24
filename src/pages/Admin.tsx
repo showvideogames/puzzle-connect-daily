@@ -132,10 +132,10 @@ export default function Admin() {
     setSaving(true);
     try {
       let puzzleId = editingId;
+      const rainbowArr = rainbowHerring.every(w => w) ? rainbowHerring as string[] : null;
 
       if (editingId) {
         // Update existing
-        const rainbowArr = rainbowHerring.every(w => w) ? rainbowHerring as string[] : null;
         const { error } = await supabase
           .from("puzzles")
           .update({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, word_order: wordOrder.length === 16 ? wordOrder : null, rainbow_herring: rainbowArr })
@@ -143,10 +143,10 @@ export default function Admin() {
         if (error) throw error;
 
         // Delete old groups and re-insert
-        await supabase.from("puzzle_groups").delete().eq("puzzle_id", editingId);
+        const { error: delError } = await supabase.from("puzzle_groups").delete().eq("puzzle_id", editingId);
+        if (delError) throw delError;
       } else {
         // Insert new
-        const rainbowArr = rainbowHerring.every(w => w) ? rainbowHerring as string[] : null;
         const { data, error } = await supabase
           .from("puzzles")
           .insert({ date: puzzleDate, title: puzzleTitle || null, is_published: isPublished, created_by: user!.id, word_order: wordOrder.length === 16 ? wordOrder : null, rainbow_herring: rainbowArr })
@@ -171,9 +171,11 @@ export default function Admin() {
       resetForm();
       loadPuzzles();
     } catch (err: any) {
+      console.error("Save puzzle error:", err);
       toast.error(err.message || "Failed to save puzzle.");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   function resetForm() {
