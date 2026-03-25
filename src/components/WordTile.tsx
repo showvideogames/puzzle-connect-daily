@@ -13,7 +13,7 @@ export function WordTile({ word, isSelected, onClick, disabled, isRainbow }: Wor
       disabled={disabled}
       className={`tile-base h-16 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-150 ease-out
         ${isRainbow
-          ? `rainbow-tile text-white shadow-md ${isSelected ? "ring-3 ring-foreground scale-[0.97]" : ""}`
+          ? `rainbow-tile text-white shadow-md ${isSelected ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background scale-[0.97]" : ""}`
           : isSelected
             ? "bg-tile-selected text-tile-selected-fg shadow-md scale-[0.97]"
             : "bg-tile hover:shadow-sm active:scale-95"
