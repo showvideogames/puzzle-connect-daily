@@ -37,6 +37,7 @@ export function useGame(puzzle: Puzzle) {
   const [oneAway, setOneAway] = useState(false);
   const [rainbowWords, setRainbowWords] = useState<string[]>([]);
   const [showRainbowPopup, setShowRainbowPopup] = useState(false);
+  const [matchedWords, setMatchedWords] = useState<string[]>([]);
 
   const saveResultToDb = useCallback(async (won: boolean, mistakes: number) => {
     const { data: { user } } = await supabase.auth.getUser();
