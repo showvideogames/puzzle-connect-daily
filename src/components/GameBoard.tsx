@@ -22,6 +22,7 @@ export function GameBoard({ puzzle }: GameBoardProps) {
     oneAway,
     rainbowWords,
     showRainbowPopup,
+    matchedWords,
   } = useGame(puzzle);
 
   return (
@@ -32,9 +33,7 @@ export function GameBoard({ puzzle }: GameBoardProps) {
 
       {/* Solved groups */}
       <div className="space-y-2 mb-2">
-        {state.solvedGroups
-          .sort((a, b) => puzzle.groups[a].difficulty - puzzle.groups[b].difficulty)
-          .map((groupIdx) => (
+        {state.solvedGroups.map((groupIdx) => (
             <SolvedGroup
               key={groupIdx}
               group={puzzle.groups[groupIdx]}
@@ -52,8 +51,9 @@ export function GameBoard({ puzzle }: GameBoardProps) {
               word={word}
               isSelected={state.selectedWords.includes(word)}
               isRainbow={rainbowWords.includes(word)}
+              isMatched={matchedWords.includes(word)}
               onClick={() => toggleWord(word)}
-              disabled={state.isComplete}
+              disabled={state.isComplete || matchedWords.length > 0}
             />
           ))}
         </div>
