@@ -177,5 +177,6 @@ export function useGame(puzzle: Puzzle) {
     oneAway,
     rainbowWords,
     showRainbowPopup,
+    matchedWords,
   };
 }
