@@ -33,9 +33,7 @@ export function GameBoard({ puzzle }: GameBoardProps) {
 
       {/* Solved groups */}
       <div className="space-y-2 mb-2">
-        {state.solvedGroups
-          .sort((a, b) => puzzle.groups[a].difficulty - puzzle.groups[b].difficulty)
-          .map((groupIdx) => (
+        {state.solvedGroups.map((groupIdx) => (
             <SolvedGroup
               key={groupIdx}
               group={puzzle.groups[groupIdx]}
