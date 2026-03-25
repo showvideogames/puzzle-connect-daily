@@ -22,6 +22,7 @@ export function GameBoard({ puzzle }: GameBoardProps) {
     oneAway,
     rainbowWords,
     showRainbowPopup,
+    matchedWords,
   } = useGame(puzzle);
 
   return (
