@@ -97,27 +97,37 @@ export function useGame(puzzle: Puzzle) {
 
     if (matchedGroupIndex !== -1) {
       const groupIdx = matchedGroupIndex;
-      setLastRevealedGroup(groupIdx);
-
-      const newSolved = [...state.solvedGroups, groupIdx];
-      const isWon = newSolved.length === 4;
-
       const solvedWords = puzzle.groups[groupIdx].words;
-      setShuffledWords((prev) => prev.filter((w) => !solvedWords.includes(w)));
 
-      setState((s) => ({
-        ...s,
-        solvedGroups: newSolved,
-        selectedWords: [],
-        isComplete: isWon || s.mistakes >= MAX_MISTAKES,
-        isWon,
-      }));
+      // Phase 1: Mark matched words (wiggle animation)
+      setMatchedWords(solvedWords);
+      setState((s) => ({ ...s, selectedWords: [] }));
 
-      if (isWon) {
-        markPlayed(puzzle.id);
-        recordGameResult(true, state.mistakes);
-        saveResultToDb(true, state.mistakes);
-      }
+      // Phase 2: After wiggle, collapse and reveal solved group
+      setTimeout(() => {
+        setMatchedWords([]);
+        setLastRevealedGroup(groupIdx);
+        setShuffledWords((prev) => prev.filter((w) => !solvedWords.includes(w)));
+
+        const newSolved = [...state.solvedGroups, groupIdx];
+        const isWon = newSolved.length === 4;
+
+        setState((s) => ({
+          ...s,
+          solvedGroups: newSolved,
+          selectedWords: [],
+          isComplete: isWon || s.mistakes >= MAX_MISTAKES,
+          isWon,
+        }));
+
+        if (isWon) {
+          markPlayed(puzzle.id);
+          recordGameResult(true, state.mistakes);
+          saveResultToDb(true, state.mistakes);
+        }
+      }, 700);
+
+      return;
     } else {
       // Check for "one away" — 3 of 4 words match a single unsolved group
       const isOneAway = puzzle.groups.some(
