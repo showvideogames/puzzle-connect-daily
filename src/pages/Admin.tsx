@@ -129,6 +129,16 @@ export default function Admin() {
   }
 
   async function handleSave() {
+    if (loading) {
+      toast.error("Still restoring your session. Please try again in a second.");
+      return;
+    }
+
+    if (!user || !isAdmin) {
+      toast.error("You need admin access before you can save puzzles.");
+      return;
+    }
+
     if (!puzzleDate) {
       toast.error("Please set a date for the puzzle.");
       return;
@@ -210,7 +220,7 @@ export default function Admin() {
 
       toast.success(editingId ? "Puzzle updated!" : "Puzzle created!");
       resetForm();
-      await loadPuzzles();
+      void loadPuzzles();
     } catch (err: any) {
       console.error("Save puzzle error:", err);
       if (err?.code === "23505") {

@@ -1,52 +1,108 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [adminLoading, setAdminLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+    let isMounted = true;
 
-        if (session?.user) {
-          // Check admin role using the has_role function
-          const { data } = await supabase.rpc("has_role", {
-            _user_id: session.user.id,
-            _role: "admin",
-          });
-          setIsAdmin(!!data);
-        } else {
-          setIsAdmin(false);
+    const applySession = (nextSession: Session | null) => {
+      if (!isMounted) return;
+
+      const nextUser = nextSession?.user ?? null;
+      setSession(nextSession);
+      setUser(nextUser);
+      setIsAdmin(false);
+      setAdminLoading(!!nextUser);
+      setAuthLoading(false);
+    };
+
+    const initializeAuth = async () => {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error("Failed to restore auth session:", error);
+
+        if (error.code === "refresh_token_not_found") {
+          void supabase.auth.signOut({ scope: "local" });
         }
-        setLoading(false);
-      }
-    );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        supabase.rpc("has_role", {
-          _user_id: session.user.id,
-          _role: "admin",
-        }).then(({ data }) => setIsAdmin(!!data));
+        applySession(null);
+        return;
       }
-      setLoading(false);
+
+      applySession(data.session ?? null);
+    };
+
+    void initializeAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      applySession(nextSession);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!user) {
+      setIsAdmin(false);
+      setAdminLoading(false);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    setAdminLoading(true);
+
+    const loadAdminRole = async () => {
+      const { data, error } = await supabase.rpc("has_role", {
+        _user_id: user.id,
+        _role: "admin",
+      });
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.error("Failed to check admin role:", error);
+        setIsAdmin(false);
+      } else {
+        setIsAdmin(!!data);
+      }
+
+      setAdminLoading(false);
+    };
+
+    void loadAdminRole();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
 
   const signIn = (email: string, password: string) =>
     supabase.auth.signInWithPassword({ email, password });
 
-  const signOut = () => supabase.auth.signOut();
+  const signOut = () => supabase.auth.signOut({ scope: "local" });
 
-  return { user, session, loading, isAdmin, signIn, signOut };
+  return {
+    user,
+    session,
+    loading: authLoading || adminLoading,
+    isAdmin,
+    signIn,
+    signOut,
+  };
 }
