@@ -19,7 +19,8 @@ interface GameBoardProps {
   settings?: GameSettings;
 }
 
-export function GameBoard({ puzzle }: GameBoardProps) {
+export function GameBoard({ puzzle, settings }: GameBoardProps) {
+  const showRainbow = settings?.showRainbowColors ?? true;
   const {
     state,
     remainingWords,
