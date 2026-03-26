@@ -7,9 +7,10 @@ export interface PuzzleGroup {
 export interface Puzzle {
   id: string;
   date: string;
+  title?: string | null;
   groups: PuzzleGroup[];
-  wordOrder?: string[] | null; // custom initial grid layout
-  rainbowHerring?: string[] | null; // 4 words (one per group) that trigger rainbow effect
+  wordOrder?: string[] | null;
+  rainbowHerring?: string[] | null;
 }
 
 export interface GameStats {
