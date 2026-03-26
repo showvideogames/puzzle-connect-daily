@@ -21,6 +21,13 @@ export interface GameStats {
   guessDistribution: number[]; // mistakes 0-4
 }
 
+export interface GuessAttempt {
+  words: string[];
+  groupIndices: number[]; // which group each word belongs to (by difficulty)
+  isCorrect: boolean;
+  isRainbow?: boolean;
+}
+
 export interface GameState {
   puzzleId: string;
   solvedGroups: number[];
@@ -29,4 +36,6 @@ export interface GameState {
   selectedWords: string[];
   isComplete: boolean;
   isWon: boolean;
+  guessHistory: GuessAttempt[];
+  gotRainbow: boolean;
 }
