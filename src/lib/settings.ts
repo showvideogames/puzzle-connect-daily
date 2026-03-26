@@ -1,0 +1,21 @@
+const SETTINGS_KEY = "connections-settings";
+
+export interface GameSettings {
+  showRainbowColors: boolean;
+}
+
+const defaults: GameSettings = {
+  showRainbowColors: true,
+};
+
+export function loadSettings(): GameSettings {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) return { ...defaults, ...JSON.parse(raw) };
+  } catch {}
+  return { ...defaults };
+}
+
+export function saveSettings(settings: GameSettings) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
