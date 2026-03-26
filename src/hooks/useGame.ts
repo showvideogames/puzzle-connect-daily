@@ -72,8 +72,40 @@ export function useGame(puzzle: Puzzle) {
     setShuffledWords((prev) => shuffleArray(prev));
   }, []);
 
+  const getWordGroupIndex = useCallback((word: string): number => {
+    for (let i = 0; i < puzzle.groups.length; i++) {
+      if (puzzle.groups[i].words.includes(word)) return i;
+    }
+    return -1;
+  }, [puzzle]);
+
+  const fireConfetti = useCallback(() => {
+    const duration = 2000;
+    const end = Date.now() + duration;
+    const frame = () => {
+      confetti({
+        particleCount: 3,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0, y: 0.7 },
+        colors: ['#4CAF50', '#FF9800', '#2196F3', '#E91E63'],
+      });
+      confetti({
+        particleCount: 3,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1, y: 0.7 },
+        colors: ['#4CAF50', '#FF9800', '#2196F3', '#E91E63'],
+      });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    };
+    frame();
+  }, []);
+
   const submitGuess = useCallback(() => {
     if (state.selectedWords.length !== 4 || state.isComplete) return;
+
+    const guessGroupIndices = state.selectedWords.map((w) => getWordGroupIndex(w));
 
     // Check for Rainbow Herring before normal logic
     if (
@@ -87,7 +119,13 @@ export function useGame(puzzle: Puzzle) {
         setRainbowWords(state.selectedWords);
         setShowRainbowPopup(true);
         setTimeout(() => setShowRainbowPopup(false), 3000);
-        setState((s) => ({ ...s, selectedWords: [] }));
+        const attempt: GuessAttempt = {
+          words: [...state.selectedWords],
+          groupIndices: guessGroupIndices,
+          isCorrect: false,
+          isRainbow: true,
+        };
+        setState((s) => ({ ...s, selectedWords: [], gotRainbow: true, guessHistory: [...s.guessHistory, attempt] }));
         return;
       }
     }
@@ -101,10 +139,15 @@ export function useGame(puzzle: Puzzle) {
     if (matchedGroupIndex !== -1) {
       const groupIdx = matchedGroupIndex;
       const solvedWords = puzzle.groups[groupIdx].words;
+      const attempt: GuessAttempt = {
+        words: [...state.selectedWords],
+        groupIndices: guessGroupIndices,
+        isCorrect: true,
+      };
 
       // Phase 1: Mark matched words (wiggle animation)
       setMatchedWords(solvedWords);
-      setState((s) => ({ ...s, selectedWords: [] }));
+      setState((s) => ({ ...s, selectedWords: [], guessHistory: [...s.guessHistory, attempt] }));
 
       // Phase 2: After wiggle, collapse and reveal solved group
       setTimeout(() => {
@@ -127,11 +170,18 @@ export function useGame(puzzle: Puzzle) {
           markPlayed(puzzle.id);
           recordGameResult(true, state.mistakes);
           saveResultToDb(true, state.mistakes);
+          fireConfetti();
         }
       }, 700);
 
       return;
     } else {
+      const attempt: GuessAttempt = {
+        words: [...state.selectedWords],
+        groupIndices: guessGroupIndices,
+        isCorrect: false,
+      };
+
       // Check for "one away" — 3 of 4 words match a single unsolved group
       const isOneAway = puzzle.groups.some(
         (g, idx) =>
@@ -156,6 +206,7 @@ export function useGame(puzzle: Puzzle) {
         selectedWords: [],
         isComplete: isLost,
         isWon: false,
+        guessHistory: [...s.guessHistory, attempt],
       }));
 
       if (isLost) {
@@ -171,7 +222,7 @@ export function useGame(puzzle: Puzzle) {
         }, 600);
       }
     }
-  }, [state, puzzle, saveResultToDb]);
+  }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, fireConfetti]);
 
   const remainingWords = useMemo(() => {
     const solvedWords = state.solvedGroups.flatMap((i) => puzzle.groups[i].words);
