@@ -35,10 +35,8 @@ export function GameBoard({ puzzle }: GameBoardProps) {
 
   const [copied, setCopied] = useState(false);
 
-  const generateShareText = useCallback(() => {
-    const title = puzzle.title || `Puzzle ${puzzle.date}`;
-    const lines: string[] = [`🧩 ${title}`];
-
+  const generateShareLines = useCallback((): string[] => {
+    const lines: string[] = [];
     for (const attempt of state.guessHistory) {
       if (attempt.isRainbow) {
         lines.push("🌈");
@@ -52,9 +50,13 @@ export function GameBoard({ puzzle }: GameBoardProps) {
         lines.push(row);
       }
     }
-
-    return lines.join("\n");
+    return lines;
   }, [state.guessHistory, puzzle]);
+
+  const generateShareText = useCallback(() => {
+    const title = puzzle.title || `Puzzle ${puzzle.date}`;
+    return `🧩 ${title}\n${generateShareLines().join("\n")}`;
+  }, [puzzle, generateShareLines]);
 
   const handleShare = useCallback(async () => {
     const text = generateShareText();
