@@ -79,6 +79,25 @@ export function useGame(puzzle: Puzzle) {
     return -1;
   }, [puzzle]);
 
+  const playCelebrationSound = useCallback(() => {
+    try {
+      const ctx = new AudioContext();
+      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.5);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + i * 0.15);
+        osc.stop(ctx.currentTime + i * 0.15 + 0.5);
+      });
+    } catch {}
+  }, []);
+
   const fireConfetti = useCallback(() => {
     const duration = 2000;
     const end = Date.now() + duration;
@@ -100,7 +119,8 @@ export function useGame(puzzle: Puzzle) {
       if (Date.now() < end) requestAnimationFrame(frame);
     };
     frame();
-  }, []);
+    playCelebrationSound();
+  }, [playCelebrationSound]);
 
   const submitGuess = useCallback(() => {
     if (state.selectedWords.length !== 4 || state.isComplete) return;
