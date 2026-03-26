@@ -7,9 +7,10 @@ export interface PuzzleGroup {
 export interface Puzzle {
   id: string;
   date: string;
+  title?: string | null;
   groups: PuzzleGroup[];
-  wordOrder?: string[] | null; // custom initial grid layout
-  rainbowHerring?: string[] | null; // 4 words (one per group) that trigger rainbow effect
+  wordOrder?: string[] | null;
+  rainbowHerring?: string[] | null;
 }
 
 export interface GameStats {
@@ -21,6 +22,13 @@ export interface GameStats {
   guessDistribution: number[]; // mistakes 0-4
 }
 
+export interface GuessAttempt {
+  words: string[];
+  groupIndices: number[]; // which group each word belongs to (by difficulty)
+  isCorrect: boolean;
+  isRainbow?: boolean;
+}
+
 export interface GameState {
   puzzleId: string;
   solvedGroups: number[];
@@ -29,4 +37,6 @@ export interface GameState {
   selectedWords: string[];
   isComplete: boolean;
   isWon: boolean;
+  guessHistory: GuessAttempt[];
+  gotRainbow: boolean;
 }
