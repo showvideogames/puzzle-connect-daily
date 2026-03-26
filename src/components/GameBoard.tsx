@@ -114,11 +114,11 @@ export function GameBoard({ puzzle, settings }: GameBoardProps) {
         </div>
       )}
 
-      {/* Rainbow Herring popup */}
+      {/* Rainbow Spotted popup */}
       {showRainbowPopup && (
         <div className="flex justify-center mt-3 animate-fade-up">
-          <div className="rainbow-tile px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg">
-            🌈 Rainbow Herring!
+          <div className={`${showRainbow ? "rainbow-tile" : "bg-foreground"} px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg`}>
+            🌈 Rainbow Spotted!
           </div>
         </div>
       )}
