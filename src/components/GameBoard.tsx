@@ -175,14 +175,24 @@ export function GameBoard({ puzzle }: GameBoardProps) {
             Come back tomorrow for a new puzzle.
           </p>
           {state.guessHistory.length > 0 && (
-            <button
-              onClick={handleShare}
-              className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold
-                hover:opacity-90 transition-all duration-150 active:scale-95 shadow-md"
-            >
-              {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-              {copied ? "Copied!" : "Share Score"}
-            </button>
+            <div className="mt-4 space-y-3">
+              {/* Emoji grid preview */}
+              <div className="flex flex-col items-center gap-0.5">
+                {generateShareLines().map((line, i) => (
+                  <span key={i} className="text-2xl leading-tight tracking-wider">
+                    {line}
+                  </span>
+                ))}
+              </div>
+              <button
+                onClick={handleShare}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold
+                  hover:opacity-90 transition-all duration-150 active:scale-95 shadow-md"
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+                {copied ? "Copied!" : "Share Score"}
+              </button>
+            </div>
           )}
         </div>
       )}
