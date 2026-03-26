@@ -32,6 +32,8 @@ export function useGame(puzzle: Puzzle) {
     selectedWords: [],
     isComplete: hasPlayedToday(puzzle.id),
     isWon: false,
+    guessHistory: [],
+    gotRainbow: false,
   }));
   const [shaking, setShaking] = useState(false);
   const [lastRevealedGroup, setLastRevealedGroup] = useState<number | null>(null);
