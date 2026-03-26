@@ -1,4 +1,5 @@
 import { Puzzle } from "@/lib/types";
+import { GameSettings } from "@/lib/settings";
 import { useGame } from "@/hooks/useGame";
 import { WordTile } from "./WordTile";
 import { SolvedGroup } from "./SolvedGroup";
@@ -15,9 +16,11 @@ const DIFFICULTY_EMOJI: Record<number, string> = {
 
 interface GameBoardProps {
   puzzle: Puzzle;
+  settings?: GameSettings;
 }
 
-export function GameBoard({ puzzle }: GameBoardProps) {
+export function GameBoard({ puzzle, settings }: GameBoardProps) {
+  const showRainbow = settings?.showRainbowColors ?? true;
   const {
     state,
     remainingWords,
@@ -102,7 +105,7 @@ export function GameBoard({ puzzle }: GameBoardProps) {
               key={word}
               word={word}
               isSelected={state.selectedWords.includes(word)}
-              isRainbow={rainbowWords.includes(word)}
+              isRainbow={showRainbow && rainbowWords.includes(word)}
               isMatched={matchedWords.includes(word)}
               onClick={() => toggleWord(word)}
               disabled={state.isComplete || matchedWords.length > 0}
@@ -111,11 +114,11 @@ export function GameBoard({ puzzle }: GameBoardProps) {
         </div>
       )}
 
-      {/* Rainbow Herring popup */}
+      {/* Rainbow Spotted popup */}
       {showRainbowPopup && (
         <div className="flex justify-center mt-3 animate-fade-up">
-          <div className="rainbow-tile px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg">
-            🌈 Rainbow Herring!
+          <div className={`${showRainbow ? "rainbow-tile" : "bg-foreground"} px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg`}>
+            🌈 Rainbow Spotted!
           </div>
         </div>
       )}
