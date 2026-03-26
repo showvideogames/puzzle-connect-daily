@@ -3,7 +3,15 @@ import { useGame } from "@/hooks/useGame";
 import { WordTile } from "./WordTile";
 import { SolvedGroup } from "./SolvedGroup";
 import { MistakeDots } from "./MistakeDots";
-import { Shuffle, Send, X } from "lucide-react";
+import { Shuffle, Send, X, Share2, Check } from "lucide-react";
+import { useState, useCallback } from "react";
+
+const DIFFICULTY_EMOJI: Record<number, string> = {
+  0: "🟩",
+  1: "🟧",
+  2: "🟦",
+  3: "🟪",
+};
 
 interface GameBoardProps {
   puzzle: Puzzle;
@@ -24,6 +32,48 @@ export function GameBoard({ puzzle }: GameBoardProps) {
     showRainbowPopup,
     matchedWords,
   } = useGame(puzzle);
+
+  const [copied, setCopied] = useState(false);
+
+  const generateShareText = useCallback(() => {
+    const title = puzzle.title || `Puzzle ${puzzle.date}`;
+    const lines: string[] = [`🧩 ${title}`];
+
+    for (const attempt of state.guessHistory) {
+      if (attempt.isRainbow) {
+        lines.push("🌈");
+      } else {
+        const row = attempt.groupIndices
+          .map((gi) => {
+            const diff = puzzle.groups[gi]?.difficulty;
+            return DIFFICULTY_EMOJI[diff - 1] || "⬜";
+          })
+          .join("");
+        lines.push(row);
+      }
+    }
+
+    return lines.join("\n");
+  }, [state.guessHistory, puzzle]);
+
+  const handleShare = useCallback(async () => {
+    const text = generateShareText();
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [generateShareText]);
 
   return (
     <div className="w-full max-w-lg mx-auto px-2 animate-fade-up">
@@ -122,6 +172,16 @@ export function GameBoard({ puzzle }: GameBoardProps) {
           <p className="text-sm text-muted-foreground mt-1">
             Come back tomorrow for a new puzzle.
           </p>
+          {state.guessHistory.length > 0 && (
+            <button
+              onClick={handleShare}
+              className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold
+                hover:opacity-90 transition-all duration-150 active:scale-95 shadow-md"
+            >
+              {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+              {copied ? "Copied!" : "Share Score"}
+            </button>
+          )}
         </div>
       )}
     </div>
