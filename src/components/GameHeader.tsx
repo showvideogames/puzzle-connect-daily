@@ -7,7 +7,7 @@ interface GameHeaderProps {
   onStatsClick: () => void;
   onHowToPlayClick: () => void;
   onDailyStatsClick: () => void;
-  onSettingsClick: () => void;
+  onSettingsClick?: () => void;
   user: AuthUser | null;
   onSignOut: () => void;
 }

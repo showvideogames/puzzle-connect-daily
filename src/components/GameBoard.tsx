@@ -1,4 +1,5 @@
 import { Puzzle } from "@/lib/types";
+import { GameSettings } from "@/lib/settings";
 import { useGame } from "@/hooks/useGame";
 import { WordTile } from "./WordTile";
 import { SolvedGroup } from "./SolvedGroup";
@@ -15,6 +16,7 @@ const DIFFICULTY_EMOJI: Record<number, string> = {
 
 interface GameBoardProps {
   puzzle: Puzzle;
+  settings?: GameSettings;
 }
 
 export function GameBoard({ puzzle }: GameBoardProps) {
