@@ -216,6 +216,7 @@ export function useGame(puzzle: Puzzle) {
       );
 
       setShaking(true);
+      vibrateError();
       setTimeout(() => setShaking(false), 400);
 
       if (isOneAway) {
