@@ -171,6 +171,7 @@ export function useGame(puzzle: Puzzle) {
 
       // Phase 1: Mark matched words (wiggle animation)
       setMatchedWords(solvedWords);
+      vibrateSuccess();
       setState((s) => ({ ...s, selectedWords: [], guessHistory: [...s.guessHistory, attempt] }));
 
       // Phase 2: After wiggle, collapse and reveal solved group
