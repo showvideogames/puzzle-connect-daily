@@ -195,6 +195,7 @@ export function useGame(puzzle: Puzzle) {
           recordGameResult(true, state.mistakes);
           saveResultToDb(true, state.mistakes);
           fireConfetti();
+          vibrateCelebration();
         }
       }, 700);
 
