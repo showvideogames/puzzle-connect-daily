@@ -24,6 +24,12 @@ export default function Index() {
   const handleSettingsChange = useCallback((newSettings: GameSettings) => {
     setSettings(newSettings);
     saveSettings(newSettings);
+    document.documentElement.classList.toggle("dark", newSettings.darkMode);
+  }, []);
+
+  // Apply dark mode on mount
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", settings.darkMode);
   }, []);
 
   useEffect(() => {

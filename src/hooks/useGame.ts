@@ -81,8 +81,10 @@ export function useGame(puzzle: Puzzle) {
 
   const playCelebrationSound = useCallback(() => {
     try {
+      const settings = JSON.parse(localStorage.getItem("connections-settings") || "{}");
+      if (settings.soundEnabled === false) return;
       const ctx = new AudioContext();
-      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      const notes = [523.25, 659.25, 783.99, 1046.50];
       notes.forEach((freq, i) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();

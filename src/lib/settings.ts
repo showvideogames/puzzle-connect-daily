@@ -2,10 +2,14 @@ const SETTINGS_KEY = "connections-settings";
 
 export interface GameSettings {
   showRainbowColors: boolean;
+  soundEnabled: boolean;
+  darkMode: boolean;
 }
 
 const defaults: GameSettings = {
   showRainbowColors: true,
+  soundEnabled: true,
+  darkMode: false,
 };
 
 export function loadSettings(): GameSettings {
