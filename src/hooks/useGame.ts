@@ -260,7 +260,7 @@ export function useGame(puzzle: Puzzle) {
               ...s,
               solvedGroups: [...s.solvedGroups, groupIdx],
             }));
-          }, 600 + i * 500);
+          }, 800 + i * 1500);
         });
       }
     }
