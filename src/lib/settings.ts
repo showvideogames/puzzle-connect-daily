@@ -4,12 +4,14 @@ export interface GameSettings {
   showRainbowColors: boolean;
   soundEnabled: boolean;
   darkMode: boolean;
+  hapticEnabled: boolean;
 }
 
 const defaults: GameSettings = {
   showRainbowColors: true,
   soundEnabled: true,
   darkMode: false,
+  hapticEnabled: true,
 };
 
 export function loadSettings(): GameSettings {
