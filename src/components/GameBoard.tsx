@@ -172,10 +172,14 @@ export function GameBoard({ puzzle, settings }: GameBoardProps) {
       {state.isComplete && (
         <div className="text-center mt-6 animate-fade-up">
           <p className="text-lg font-bold">
-            {state.isWon ? "🎉 Well done!" : "Better luck next time!"}
+            {state.isWon
+              ? "🎉 Well done!"
+              : `😔 Nice try! ${state.mistakes}/${state.maxMistakes} mistakes`}
           </p>
           <p className="text-sm text-muted-foreground mt-1">
-            Come back tomorrow for a new puzzle.
+            {state.isWon
+              ? "Come back tomorrow for a new puzzle."
+              : "Here are the answers. Come back tomorrow!"}
           </p>
           {state.guessHistory.length > 0 && (
             <div className="mt-4 space-y-3">
