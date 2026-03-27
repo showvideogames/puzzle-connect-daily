@@ -240,13 +240,28 @@ export function useGame(puzzle: Puzzle) {
         markPlayed(puzzle.id);
         recordGameResult(false, newMistakes);
         saveResultToDb(false, newMistakes);
-        setTimeout(() => {
-          setState((s) => ({
-            ...s,
-            solvedGroups: [0, 1, 2, 3],
-          }));
-          setShuffledWords([]);
-        }, 600);
+
+        // Reveal groups one by one, sorted by difficulty (easiest first)
+        const sortedIndices = puzzle.groups
+          .map((g, i) => ({ idx: i, diff: g.difficulty }))
+          .sort((a, b) => a.diff - b.diff)
+          .map((item) => item.idx);
+
+        const unsolvedIndices = sortedIndices.filter(
+          (idx) => !state.solvedGroups.includes(idx)
+        );
+
+        unsolvedIndices.forEach((groupIdx, i) => {
+          setTimeout(() => {
+            const solvedWords = puzzle.groups[groupIdx].words;
+            setLastRevealedGroup(groupIdx);
+            setShuffledWords((prev) => prev.filter((w) => !solvedWords.includes(w)));
+            setState((s) => ({
+              ...s,
+              solvedGroups: [...s.solvedGroups, groupIdx],
+            }));
+          }, 600 + i * 500);
+        });
       }
     }
   }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, fireConfetti]);
