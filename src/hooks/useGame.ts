@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { Puzzle, GameState, GuessAttempt } from "@/lib/types";
 import { hasPlayedToday, markPlayed, recordGameResult } from "@/lib/stats";
+import { loadSettings } from "@/lib/settings";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
 
