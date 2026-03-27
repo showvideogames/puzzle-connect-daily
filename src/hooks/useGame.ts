@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { Puzzle, GameState, GuessAttempt } from "@/lib/types";
 import { hasPlayedToday, markPlayed, recordGameResult } from "@/lib/stats";
+import { loadSettings } from "@/lib/settings";
+import { vibrateSuccess, vibrateError, vibrateCelebration } from "@/lib/haptics";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -169,6 +171,7 @@ export function useGame(puzzle: Puzzle) {
 
       // Phase 1: Mark matched words (wiggle animation)
       setMatchedWords(solvedWords);
+      vibrateSuccess();
       setState((s) => ({ ...s, selectedWords: [], guessHistory: [...s.guessHistory, attempt] }));
 
       // Phase 2: After wiggle, collapse and reveal solved group
@@ -193,6 +196,7 @@ export function useGame(puzzle: Puzzle) {
           recordGameResult(true, state.mistakes);
           saveResultToDb(true, state.mistakes);
           fireConfetti();
+          vibrateCelebration();
         }
       }, 700);
 
@@ -212,6 +216,7 @@ export function useGame(puzzle: Puzzle) {
       );
 
       setShaking(true);
+      vibrateError();
       setTimeout(() => setShaking(false), 400);
 
       if (isOneAway) {

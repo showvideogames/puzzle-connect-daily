@@ -31,6 +31,11 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange }: Set
       description: "Play celebration sounds on win",
       key: "soundEnabled" as const,
     },
+    {
+      label: "Haptic Feedback",
+      description: "Vibrate on actions (mobile devices)",
+      key: "hapticEnabled" as const,
+    },
   ];
 
   return (
