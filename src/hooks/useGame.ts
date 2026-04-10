@@ -100,6 +100,24 @@ export function useGame(puzzle: Puzzle) {
   const [showRainbowPopup, setShowRainbowPopup] = useState(false);
   const [matchedWords, setMatchedWords] = useState<string[]>([]);
 
+  // Auto-save progress
+  useEffect(() => {
+    if (state.isComplete) {
+      clearProgress(puzzle.id);
+      return;
+    }
+    if (state.solvedGroups.length > 0 || state.mistakes > 0 || state.guessHistory.length > 0) {
+      saveProgress(puzzle.id, {
+        solvedGroups: state.solvedGroups,
+        mistakes: state.mistakes,
+        guessHistory: state.guessHistory,
+        gotRainbow: state.gotRainbow,
+        shuffledWords,
+        rainbowWords,
+      });
+    }
+  }, [state, shuffledWords, rainbowWords, puzzle.id]);
+
   const saveResultToDb = useCallback(async (won: boolean, mistakes: number) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
