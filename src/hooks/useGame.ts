@@ -15,6 +15,41 @@ function shuffleArray<T>(arr: T[]): T[] {
   return a;
 }
 
+interface SavedProgress {
+  solvedGroups: number[];
+  mistakes: number;
+  guessHistory: GuessAttempt[];
+  gotRainbow: boolean;
+  shuffledWords: string[];
+  rainbowWords: string[];
+}
+
+function progressKey(puzzleId: string) {
+  return `connections-progress-${puzzleId}`;
+}
+
+function saveProgress(puzzleId: string, data: SavedProgress) {
+  try {
+    localStorage.setItem(progressKey(puzzleId), JSON.stringify(data));
+  } catch {}
+}
+
+function loadProgress(puzzleId: string): SavedProgress | null {
+  try {
+    const raw = localStorage.getItem(progressKey(puzzleId));
+    if (!raw) return null;
+    return JSON.parse(raw) as SavedProgress;
+  } catch {
+    return null;
+  }
+}
+
+function clearProgress(puzzleId: string) {
+  try {
+    localStorage.removeItem(progressKey(puzzleId));
+  } catch {}
+}
+
 export function useGame(puzzle: Puzzle) {
   const MAX_MISTAKES = 4;
 
@@ -23,26 +58,65 @@ export function useGame(puzzle: Puzzle) {
     [puzzle]
   );
 
-  const [shuffledWords, setShuffledWords] = useState(() =>
-    puzzle.wordOrder && puzzle.wordOrder.length === 16 ? puzzle.wordOrder : shuffleArray(allWords)
-  );
-  const [state, setState] = useState<GameState>(() => ({
-    puzzleId: puzzle.id,
-    solvedGroups: [],
-    mistakes: 0,
-    maxMistakes: MAX_MISTAKES,
-    selectedWords: [],
-    isComplete: hasPlayedToday(puzzle.id),
-    isWon: false,
-    guessHistory: [],
-    gotRainbow: false,
-  }));
+  const saved = useMemo(() => {
+    if (hasPlayedToday(puzzle.id)) return null;
+    return loadProgress(puzzle.id);
+  }, [puzzle.id]);
+
+  const [shuffledWords, setShuffledWords] = useState(() => {
+    if (saved) return saved.shuffledWords;
+    return puzzle.wordOrder && puzzle.wordOrder.length === 16 ? puzzle.wordOrder : shuffleArray(allWords);
+  });
+  const [state, setState] = useState<GameState>(() => {
+    if (saved) {
+      return {
+        puzzleId: puzzle.id,
+        solvedGroups: saved.solvedGroups,
+        mistakes: saved.mistakes,
+        maxMistakes: MAX_MISTAKES,
+        selectedWords: [],
+        isComplete: false,
+        isWon: false,
+        guessHistory: saved.guessHistory,
+        gotRainbow: saved.gotRainbow,
+      };
+    }
+    return {
+      puzzleId: puzzle.id,
+      solvedGroups: [],
+      mistakes: 0,
+      maxMistakes: MAX_MISTAKES,
+      selectedWords: [],
+      isComplete: hasPlayedToday(puzzle.id),
+      isWon: false,
+      guessHistory: [],
+      gotRainbow: false,
+    };
+  });
   const [shaking, setShaking] = useState(false);
   const [lastRevealedGroup, setLastRevealedGroup] = useState<number | null>(null);
   const [oneAway, setOneAway] = useState(false);
-  const [rainbowWords, setRainbowWords] = useState<string[]>([]);
+  const [rainbowWords, setRainbowWords] = useState<string[]>(saved?.rainbowWords ?? []);
   const [showRainbowPopup, setShowRainbowPopup] = useState(false);
   const [matchedWords, setMatchedWords] = useState<string[]>([]);
+
+  // Auto-save progress
+  useEffect(() => {
+    if (state.isComplete) {
+      clearProgress(puzzle.id);
+      return;
+    }
+    if (state.solvedGroups.length > 0 || state.mistakes > 0 || state.guessHistory.length > 0) {
+      saveProgress(puzzle.id, {
+        solvedGroups: state.solvedGroups,
+        mistakes: state.mistakes,
+        guessHistory: state.guessHistory,
+        gotRainbow: state.gotRainbow,
+        shuffledWords,
+        rainbowWords,
+      });
+    }
+  }, [state, shuffledWords, rainbowWords, puzzle.id]);
 
   const saveResultToDb = useCallback(async (won: boolean, mistakes: number) => {
     const { data: { user } } = await supabase.auth.getUser();
