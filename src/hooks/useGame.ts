@@ -22,6 +22,8 @@ interface SavedProgress {
   gotRainbow: boolean;
   shuffledWords: string[];
   rainbowWords: string[];
+  isComplete?: boolean;
+  isWon?: boolean;
 }
 
 function progressKey(puzzleId: string) {
@@ -59,7 +61,6 @@ export function useGame(puzzle: Puzzle) {
   );
 
   const saved = useMemo(() => {
-    if (hasPlayedToday(puzzle.id)) return null;
     return loadProgress(puzzle.id);
   }, [puzzle.id]);
 
@@ -75,8 +76,8 @@ export function useGame(puzzle: Puzzle) {
         mistakes: saved.mistakes,
         maxMistakes: MAX_MISTAKES,
         selectedWords: [],
-        isComplete: false,
-        isWon: false,
+        isComplete: saved.isComplete ?? false,
+        isWon: saved.isWon ?? false,
         guessHistory: saved.guessHistory,
         gotRainbow: saved.gotRainbow,
       };
@@ -100,12 +101,8 @@ export function useGame(puzzle: Puzzle) {
   const [showRainbowPopup, setShowRainbowPopup] = useState(false);
   const [matchedWords, setMatchedWords] = useState<string[]>([]);
 
-  // Auto-save progress
+  // Auto-save progress (including completed state)
   useEffect(() => {
-    if (state.isComplete) {
-      clearProgress(puzzle.id);
-      return;
-    }
     if (state.solvedGroups.length > 0 || state.mistakes > 0 || state.guessHistory.length > 0) {
       saveProgress(puzzle.id, {
         solvedGroups: state.solvedGroups,
@@ -114,6 +111,8 @@ export function useGame(puzzle: Puzzle) {
         gotRainbow: state.gotRainbow,
         shuffledWords,
         rainbowWords,
+        isComplete: state.isComplete,
+        isWon: state.isWon,
       });
     }
   }, [state, shuffledWords, rainbowWords, puzzle.id]);
