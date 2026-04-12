@@ -61,7 +61,6 @@ export function useGame(puzzle: Puzzle) {
   );
 
   const saved = useMemo(() => {
-    if (hasPlayedToday(puzzle.id)) return null;
     return loadProgress(puzzle.id);
   }, [puzzle.id]);
 
@@ -77,8 +76,8 @@ export function useGame(puzzle: Puzzle) {
         mistakes: saved.mistakes,
         maxMistakes: MAX_MISTAKES,
         selectedWords: [],
-        isComplete: false,
-        isWon: false,
+        isComplete: saved.isComplete ?? false,
+        isWon: saved.isWon ?? false,
         guessHistory: saved.guessHistory,
         gotRainbow: saved.gotRainbow,
       };
