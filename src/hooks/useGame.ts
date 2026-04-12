@@ -22,6 +22,8 @@ interface SavedProgress {
   gotRainbow: boolean;
   shuffledWords: string[];
   rainbowWords: string[];
+  isComplete?: boolean;
+  isWon?: boolean;
 }
 
 function progressKey(puzzleId: string) {
