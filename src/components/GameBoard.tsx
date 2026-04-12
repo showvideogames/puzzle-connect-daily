@@ -4,7 +4,8 @@ import { useGame } from "@/hooks/useGame";
 import { WordTile } from "./WordTile";
 import { SolvedGroup } from "./SolvedGroup";
 import { MistakeDots } from "./MistakeDots";
-import { Shuffle, Send, X, Share2, Check } from "lucide-react";
+import { DailyStatsModal } from "./DailyStatsModal";
+import { Shuffle, Send, X, Share2, Check, TrendingUp } from "lucide-react";
 import { useState, useCallback } from "react";
 
 const DIFFICULTY_EMOJI: Record<number, string> = {
@@ -37,6 +38,7 @@ export function GameBoard({ puzzle, settings }: GameBoardProps) {
   } = useGame(puzzle);
 
   const [copied, setCopied] = useState(false);
+  const [showGlobalStats, setShowGlobalStats] = useState(false);
 
   const generateShareLines = useCallback((): string[] => {
     const lines: string[] = [];
@@ -191,18 +193,33 @@ export function GameBoard({ puzzle, settings }: GameBoardProps) {
                   </span>
                 ))}
               </div>
-              <button
-                onClick={handleShare}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold
-                  hover:opacity-90 transition-all duration-150 active:scale-95 shadow-md"
-              >
-                {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                {copied ? "Copied!" : "Share Score"}
-              </button>
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  onClick={handleShare}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold
+                    hover:opacity-90 transition-all duration-150 active:scale-95 shadow-md"
+                >
+                  {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+                  {copied ? "Copied!" : "Share Score"}
+                </button>
+                <button
+                  onClick={() => setShowGlobalStats(true)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border text-sm font-semibold
+                    hover:bg-secondary transition-all duration-150 active:scale-95 shadow-md"
+                >
+                  <TrendingUp className="w-4 h-4" /> Global Stats
+                </button>
+              </div>
             </div>
           )}
         </div>
       )}
+
+      <DailyStatsModal
+        puzzleId={puzzle.id}
+        open={showGlobalStats}
+        onClose={() => setShowGlobalStats(false)}
+      />
     </div>
   );
 }
