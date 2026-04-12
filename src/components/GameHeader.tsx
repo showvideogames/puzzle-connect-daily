@@ -38,15 +38,13 @@ export function GameHeader({ onStatsClick, onHowToPlayClick, onDailyStatsClick, 
         >
           <BarChart3 className="w-5 h-5 text-muted-foreground" />
         </button>
-        {user && (
-          <button
-            onClick={onDailyStatsClick}
-            className="p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95"
-            aria-label="Daily puzzle stats"
-          >
-            <TrendingUp className="w-5 h-5 text-muted-foreground" />
-          </button>
-        )}
+        <button
+          onClick={onDailyStatsClick}
+          className="p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95"
+          aria-label="Daily puzzle stats"
+        >
+          <TrendingUp className="w-5 h-5 text-muted-foreground" />
+        </button>
         <Link
           to="/archive"
           className="p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95"
