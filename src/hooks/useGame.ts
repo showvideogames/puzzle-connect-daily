@@ -101,12 +101,8 @@ export function useGame(puzzle: Puzzle) {
   const [showRainbowPopup, setShowRainbowPopup] = useState(false);
   const [matchedWords, setMatchedWords] = useState<string[]>([]);
 
-  // Auto-save progress
+  // Auto-save progress (including completed state)
   useEffect(() => {
-    if (state.isComplete) {
-      clearProgress(puzzle.id);
-      return;
-    }
     if (state.solvedGroups.length > 0 || state.mistakes > 0 || state.guessHistory.length > 0) {
       saveProgress(puzzle.id, {
         solvedGroups: state.solvedGroups,
@@ -115,6 +111,8 @@ export function useGame(puzzle: Puzzle) {
         gotRainbow: state.gotRainbow,
         shuffledWords,
         rainbowWords,
+        isComplete: state.isComplete,
+        isWon: state.isWon,
       });
     }
   }, [state, shuffledWords, rainbowWords, puzzle.id]);
