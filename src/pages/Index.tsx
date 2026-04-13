@@ -11,15 +11,20 @@ import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
+type ModalName = "stats" | "help" | "dailyStats" | "settings" | null;
+
 export default function Index() {
-  const [showStats, setShowStats] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-  const [showDailyStats, setShowDailyStats] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  // FIX 4: One "activeModal" dial instead of 4 separate booleans.
+  // Only one modal can ever be open at a time — by design.
+  const [activeModal, setActiveModal] = useState<ModalName>(null);
   const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [settings, setSettings] = useState<GameSettings>(loadSettings);
+
+  const openModal = useCallback((name: ModalName) => setActiveModal(name), []);
+  const closeModal = useCallback(() => setActiveModal(null), []);
 
   const handleSettingsChange = useCallback((newSettings: GameSettings) => {
     setSettings(newSettings);
@@ -27,43 +32,67 @@ export default function Index() {
     document.documentElement.classList.toggle("dark", newSettings.darkMode);
   }, []);
 
-  // Apply dark mode on mount
+  // FIX 1: Apply dark mode once on mount using the loaded settings.
   useEffect(() => {
     document.documentElement.classList.toggle("dark", settings.darkMode);
-  }, []);
+  }, [settings.darkMode]);
 
+  // FIX 2: Use only onAuthStateChange to manage user state.
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-    supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
     return () => subscription.unsubscribe();
   }, []);
 
+  // FIX 3 + FIX 5: Error handling AND an 8-second timeout so users never wait forever.
   useEffect(() => {
-    getTodaysPuzzle().then((p) => {
-      setPuzzle(p);
+    const timeout = setTimeout(() => {
+      setError(true);
       setLoading(false);
-    });
+    }, 8000);
+
+    getTodaysPuzzle()
+      .then((p) => {
+        clearTimeout(timeout);
+        setPuzzle(p);
+        setLoading(false);
+      })
+      .catch(() => {
+        clearTimeout(timeout);
+        setError(true);
+        setLoading(false);
+      });
+
+    return () => clearTimeout(timeout);
+  }, []);
+
+  const handleSignOut = useCallback(() => {
+    supabase.auth.signOut();
   }, []);
 
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       <GameHeader
-        onStatsClick={() => setShowStats(true)}
-        onHowToPlayClick={() => setShowHelp(true)}
-        onDailyStatsClick={() => setShowDailyStats(true)}
-        onSettingsClick={() => setShowSettings(true)}
+        onStatsClick={() => openModal("stats")}
+        onHowToPlayClick={() => openModal("help")}
+        onDailyStatsClick={() => openModal("dailyStats")}
+        onSettingsClick={() => openModal("settings")}
         user={user}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={handleSignOut}
       />
       <div className="w-full max-w-lg border-b border-border mb-4" />
 
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
           <p className="text-muted-foreground animate-pulse">Loading puzzle…</p>
+        </div>
+      ) : error ? (
+        <div className="flex-1 flex items-center justify-center text-center px-4">
+          <div>
+            <p className="text-lg font-medium">Something went wrong.</p>
+            <p className="text-sm text-muted-foreground mt-1">Couldn't load today's puzzle. Please refresh and try again.</p>
+          </div>
         </div>
       ) : puzzle ? (
         <GameBoard puzzle={puzzle} settings={settings} />
@@ -76,19 +105,19 @@ export default function Index() {
         </div>
       )}
 
-      <StatsModal open={showStats} onClose={() => setShowStats(false)} />
-      <HowToPlayModal open={showHelp} onClose={() => setShowHelp(false)} />
+      <StatsModal open={activeModal === "stats"} onClose={closeModal} />
+      <HowToPlayModal open={activeModal === "help"} onClose={closeModal} />
       <SettingsModal
-        open={showSettings}
-        onClose={() => setShowSettings(false)}
+        open={activeModal === "settings"}
+        onClose={closeModal}
         settings={settings}
         onSettingsChange={handleSettingsChange}
       />
       {puzzle && (
         <DailyStatsModal
           puzzleId={puzzle.id}
-          open={showDailyStats}
-          onClose={() => setShowDailyStats(false)}
+          open={activeModal === "dailyStats"}
+          onClose={closeModal}
         />
       )}
     </div>
