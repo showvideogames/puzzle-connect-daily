@@ -5,6 +5,7 @@ import { WordTile } from "./WordTile";
 import { SolvedGroup } from "./SolvedGroup";
 import { MistakeDots } from "./MistakeDots";
 import { DailyStatsModal } from "./DailyStatsModal";
+import { CountdownTimer } from "./CountdownTimer";
 import { Shuffle, Send, X, Share2, Check, TrendingUp } from "lucide-react";
 import { useState, useCallback } from "react";
 
@@ -229,6 +230,8 @@ export function GameBoard({ puzzle, settings }: GameBoardProps) {
               </div>
             </div>
           )}
+
+          <CountdownTimer />
         </div>
       )}
 
