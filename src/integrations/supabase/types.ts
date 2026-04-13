@@ -105,6 +105,33 @@ export type Database = {
           },
         ]
       }
+      puzzle_stats: {
+        Row: {
+          mistakes_0: number
+          mistakes_1: number
+          mistakes_2: number
+          mistakes_3: number
+          mistakes_4: number
+          puzzle_id: string
+        }
+        Insert: {
+          mistakes_0?: number
+          mistakes_1?: number
+          mistakes_2?: number
+          mistakes_3?: number
+          mistakes_4?: number
+          puzzle_id: string
+        }
+        Update: {
+          mistakes_0?: number
+          mistakes_1?: number
+          mistakes_2?: number
+          mistakes_3?: number
+          mistakes_4?: number
+          puzzle_id?: string
+        }
+        Relationships: []
+      }
       puzzles: {
         Row: {
           created_at: string
