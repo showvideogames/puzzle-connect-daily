@@ -3,6 +3,7 @@ import { Puzzle, GameState, GuessAttempt } from "@/lib/types";
 import { hasPlayedToday, markPlayed, recordGameResult } from "@/lib/stats";
 import { loadSettings } from "@/lib/settings";
 import { vibrateSuccess, vibrateError, vibrateCelebration } from "@/lib/haptics";
+import { submitGlobalStats } from "@/lib/globalStats";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -277,6 +278,8 @@ export function useGame(puzzle: Puzzle) {
           markPlayed(puzzle.id);
           recordGameResult(true, state.mistakes);
           saveResultToDb(true, state.mistakes);
+          // Submit global stats — mistakes 0–3 for wins
+          submitGlobalStats(puzzle.id, state.mistakes);
           fireConfetti();
           vibrateCelebration();
 
@@ -335,6 +338,8 @@ export function useGame(puzzle: Puzzle) {
         markPlayed(puzzle.id);
         recordGameResult(false, newMistakes);
         saveResultToDb(false, newMistakes);
+        // Submit global stats — losses always count as 4 mistakes
+        submitGlobalStats(puzzle.id, 4);
 
         const sortedIndices = puzzle.groups
           .map((g, i) => ({ idx: i, diff: g.difficulty }))
