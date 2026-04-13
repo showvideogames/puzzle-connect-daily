@@ -24,6 +24,9 @@ interface SavedProgress {
   rainbowWords: string[];
   isComplete?: boolean;
   isWon?: boolean;
+  // Stores the fully revealed board order after game ends (including auto-revealed
+  // groups on a loss), so refreshing shows the complete board instead of a blank slate.
+  finalSolvedGroups?: number[];
 }
 
 function progressKey(puzzleId: string) {
@@ -72,13 +75,13 @@ export function useGame(puzzle: Puzzle) {
   });
 
   const [state, setState] = useState<GameState>(() => {
-    // FIX: If we have saved progress, always use it — including isComplete and isWon.
-    // Previously, hasPlayedToday() was overriding the saved isWon/isComplete,
-    // causing the board to appear reset on refresh even though progress was saved.
     if (saved) {
+      // If we have a finalSolvedGroups saved, use that so the full board
+      // shows on refresh rather than a partial or blank board.
+      const solvedGroups = saved.finalSolvedGroups ?? saved.solvedGroups;
       return {
         puzzleId: puzzle.id,
-        solvedGroups: saved.solvedGroups,
+        solvedGroups,
         mistakes: saved.mistakes,
         maxMistakes: MAX_MISTAKES,
         selectedWords: [],
@@ -89,8 +92,6 @@ export function useGame(puzzle: Puzzle) {
       };
     }
 
-    // No saved progress — brand new game.
-    // (hasPlayedToday is only a fallback if localStorage was cleared.)
     return {
       puzzleId: puzzle.id,
       solvedGroups: [],
@@ -278,6 +279,20 @@ export function useGame(puzzle: Puzzle) {
           saveResultToDb(true, state.mistakes);
           fireConfetti();
           vibrateCelebration();
+
+          // Save the fully revealed board immediately on win so refresh works
+          const allGroupIndices = puzzle.groups.map((_, i) => i);
+          saveProgress(puzzle.id, {
+            solvedGroups: newSolved,
+            finalSolvedGroups: allGroupIndices,
+            mistakes: state.mistakes,
+            guessHistory: [...state.guessHistory, attempt],
+            gotRainbow: state.gotRainbow,
+            shuffledWords: [],
+            rainbowWords,
+            isComplete: true,
+            isWon: true,
+          });
         }
       }, 700);
 
@@ -330,6 +345,13 @@ export function useGame(puzzle: Puzzle) {
           (idx) => !state.solvedGroups.includes(idx)
         );
 
+        // Build the full final board: player-solved groups first, then unsolved by difficulty
+        const finalSolvedGroups = [
+          ...state.solvedGroups,
+          ...unsolvedIndices,
+        ];
+
+        // Animate the reveal one by one
         unsolvedIndices.forEach((groupIdx, i) => {
           setTimeout(() => {
             const solvedWords = puzzle.groups[groupIdx].words;
@@ -339,6 +361,22 @@ export function useGame(puzzle: Puzzle) {
               ...s,
               solvedGroups: [...s.solvedGroups, groupIdx],
             }));
+
+            // After the LAST group is revealed, save the complete final board
+            // so that refreshing the page shows the full revealed state
+            if (i === unsolvedIndices.length - 1) {
+              saveProgress(puzzle.id, {
+                solvedGroups: finalSolvedGroups,
+                finalSolvedGroups,
+                mistakes: newMistakes,
+                guessHistory: [...state.guessHistory, attempt],
+                gotRainbow: state.gotRainbow,
+                shuffledWords: [],
+                rainbowWords,
+                isComplete: true,
+                isWon: false,
+              });
+            }
           }, 800 + i * 1500);
         });
       }
