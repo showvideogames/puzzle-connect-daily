@@ -5,15 +5,15 @@ import { WordTile } from "./WordTile";
 import { SolvedGroup } from "./SolvedGroup";
 import { MistakeDots } from "./MistakeDots";
 import { DailyStatsModal } from "./DailyStatsModal";
-import { CountdownTimer } from "./CountdownTimer";
 import { Shuffle, Send, X, Share2, Check, TrendingUp } from "lucide-react";
 import { useState, useCallback } from "react";
 
+// Easiest → hardest: orange, green, light blue heart, pink heart
 const DIFFICULTY_EMOJI: Record<number, string> = {
-  0: "🟩",
-  1: "🟧",
+  0: "🟧",
+  1: "🟩",
   2: "🟦",
-  3: "🟪",
+  3: "🟥",
 };
 
 // Returns an encouraging headline based on how many mistakes were made
@@ -81,7 +81,7 @@ export function GameBoard({ puzzle, settings }: GameBoardProps) {
     const title = puzzle.title || `Puzzle ${puzzle.date}`;
     const headline = getResultHeadline(state.isWon, state.mistakes);
     return `🧩 ${title}\n${headline}\n${generateShareLines().join("\n")}`;
-  }, [puzzle, generateShareLines, state.isWon, state.mistakes, state.maxMistakes]);
+  }, [puzzle, generateShareLines, state.isWon, state.mistakes]);
 
   const handleShare = useCallback(async () => {
     const text = generateShareText();
@@ -230,8 +230,6 @@ export function GameBoard({ puzzle, settings }: GameBoardProps) {
               </div>
             </div>
           )}
-
-          <CountdownTimer />
         </div>
       )}
 
