@@ -69,15 +69,18 @@ function WordTile({
         relative rounded-lg py-3 px-1 text-xs font-bold uppercase tracking-wide
         transition-all duration-150 select-none cursor-pointer
         ${isShaking ? "animate-shake" : ""}
-        ${isSelected && isRainbow
-          ? "rainbow-tile text-white ring-[3px] ring-white ring-offset-[3px] ring-offset-black"
+        ${isRainbow
+          ? "rainbow-tile text-white"
           : isSelected
           ? "bg-foreground text-background scale-95 shadow-inner"
-          : isRainbow
-          ? "rainbow-tile text-white"
           : "bg-secondary text-foreground hover:bg-secondary/80 active:scale-95"}
         ${disabled ? "opacity-60" : ""}
       `}
+      style={isSelected && isRainbow ? {
+        outline: "3px solid white",
+        outlineOffset: "3px",
+        boxShadow: "0 0 0 6px black",
+      } : undefined}
     >
       {word}
     </button>
@@ -246,10 +249,10 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
           <h2 className="text-base font-bold tracking-tight">How to Play</h2>
           <button
             onClick={handleClose}
-            className="rounded-full p-1 hover:bg-secondary transition-colors"
-            aria-label="Close"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+            aria-label="Skip tutorial"
           >
-            <X className="w-4 h-4" />
+            Skip Tutorial
           </button>
         </div>
 
