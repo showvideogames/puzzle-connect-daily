@@ -26,7 +26,7 @@ const TUTORIAL_GROUPS = [
   },
   {
     category: "Words Before 'Day'",
-    words: ["GREEN", "DOOMS", "SNOW", "VALENTINE'S"],
+    words: ["GREEN", "SUN", "SNOW", "VALENTINE'S"],
     difficulty: 4,
     color: "bg-red-500",
   },
@@ -64,11 +64,10 @@ function WordTile({
 }) {
   return (
     <button
-      onClick={onClick}
-      disabled={disabled}
+      onClick={disabled ? undefined : onClick}
       className={`
         relative rounded-lg py-3 px-1 text-xs font-bold uppercase tracking-wide
-        transition-all duration-150 select-none
+        transition-all duration-150 select-none cursor-pointer
         ${isShaking ? "animate-shake" : ""}
         ${isSelected && isRainbow
           ? "rainbow-tile text-white ring-2 ring-offset-1 ring-black scale-95 shadow-md"
@@ -77,7 +76,7 @@ function WordTile({
           : isRainbow
           ? "rainbow-tile text-white shadow-md"
           : "bg-secondary text-foreground hover:bg-secondary/80 active:scale-95"}
-        ${disabled ? "opacity-60 pointer-events-none" : "cursor-pointer"}
+        ${disabled ? "opacity-60" : ""}
       `}
     >
       {word}
