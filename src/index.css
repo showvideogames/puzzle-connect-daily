@@ -39,15 +39,15 @@
 
     --radius: 0.75rem;
 
-    /* Puzzle group colors */
-    --group-1: 82 35% 72%;
-    --group-1-fg: 82 40% 18%;
-    --group-2: 16 60% 72%;
-    --group-2-fg: 16 55% 20%;
-    --group-3: 215 40% 72%;
-    --group-3-fg: 215 45% 18%;
-    --group-4: 43 65% 68%;
-    --group-4-fg: 43 60% 18%;
+    /* Puzzle group colors — easiest to hardest: orange, green, light blue, pink */
+    --group-1: 25 90% 68%;
+    --group-1-fg: 25 80% 18%;
+    --group-2: 130 45% 58%;
+    --group-2-fg: 130 50% 14%;
+    --group-3: 200 75% 68%;
+    --group-3-fg: 200 70% 18%;
+    --group-4: 0 75% 72%;
+    --group-4-fg: 0 70% 20%;
 
     /* Tile colors */
     --tile: 36 18% 88%;
@@ -93,14 +93,15 @@
     --input: 220 10% 22%;
     --ring: 40 15% 90%;
 
-    --group-1: 82 30% 30%;
-    --group-1-fg: 82 35% 85%;
-    --group-2: 16 50% 35%;
-    --group-2-fg: 16 50% 90%;
-    --group-3: 215 35% 35%;
-    --group-3-fg: 215 40% 90%;
-    --group-4: 43 55% 35%;
-    --group-4-fg: 43 55% 90%;
+    /* Dark mode group colors — same hues, darker/muted */
+    --group-1: 25 75% 35%;
+    --group-1-fg: 25 80% 90%;
+    --group-2: 130 40% 30%;
+    --group-2-fg: 130 45% 88%;
+    --group-3: 200 60% 35%;
+    --group-3-fg: 200 65% 90%;
+    --group-4: 0 55% 35%;
+    --group-4-fg: 0 60% 90%;
 
     --tile: 220 12% 18%;
     --tile-selected: 40 15% 85%;
