@@ -26,7 +26,7 @@ const TUTORIAL_GROUPS = [
   },
   {
     category: "Words Before 'Day'",
-    words: ["GREEN", "SUN", "SNOW", "VALENTINE'S"],
+    words: ["GREEN", "DOOMS", "SNOW", "VALENTINE'S"],
     difficulty: 4,
     color: "bg-red-500",
   },
@@ -177,9 +177,8 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
     }
   }, [selected]);
 
-  // ── Solve groups: rainbow words are locked ──
+  // ── Solve groups: all words clickable, rainbow words just look different ──
   const handleGroupWordClick = useCallback((word: string) => {
-    if (RAINBOW_WORDS.includes(word)) return;
     if (selected.includes(word)) {
       setSelected((s) => s.filter((w) => w !== word));
       return;
@@ -381,7 +380,7 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
                         isRainbow={isRainbowWord}
                         isShaking={false}
                         onClick={() => handleGroupWordClick(word)}
-                        disabled={isRainbowWord}
+                        disabled={false}
                       />
                     );
                   })}
