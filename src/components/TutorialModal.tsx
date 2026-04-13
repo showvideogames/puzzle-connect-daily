@@ -70,11 +70,11 @@ function WordTile({
         transition-all duration-150 select-none cursor-pointer
         ${isShaking ? "animate-shake" : ""}
         ${isSelected && isRainbow
-          ? "rainbow-tile text-white ring-2 ring-offset-1 ring-black scale-95 shadow-md"
+          ? "rainbow-tile text-white ring-[3px] ring-white ring-offset-[3px] ring-offset-black scale-95 shadow-md"
           : isSelected
           ? "bg-foreground text-background scale-95 shadow-inner"
           : isRainbow
-          ? "rainbow-tile text-white shadow-md"
+          ? "rainbow-tile text-white ring-[3px] ring-white ring-offset-[3px] ring-offset-black shadow-md"
           : "bg-secondary text-foreground hover:bg-secondary/80 active:scale-95"}
         ${disabled ? "opacity-60" : ""}
       `}
