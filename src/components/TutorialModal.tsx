@@ -71,14 +71,13 @@ function WordTile({
         transition-all duration-150 select-none
         ${isShaking ? "animate-shake" : ""}
         ${isSelected && isRainbow
-          ? "rainbow-tile text-white shadow-md ring-2 ring-offset-1 ring-black scale-95"
+          ? "rainbow-tile text-white ring-2 ring-offset-1 ring-black scale-95 shadow-md"
           : isSelected
           ? "bg-foreground text-background scale-95 shadow-inner"
           : isRainbow
           ? "rainbow-tile text-white shadow-md"
           : "bg-secondary text-foreground hover:bg-secondary/80 active:scale-95"}
-        ${disabled && !isRainbow ? "opacity-50 cursor-default" : ""}
-        ${isRainbow ? "cursor-default" : "cursor-pointer"}
+        ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}
       `}
     >
       {word}
@@ -298,17 +297,21 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
               </div>
 
               <div className="grid grid-cols-4 gap-2">
-                {boardWords.map((word) => (
-                  <WordTile
-                    key={word}
-                    word={word}
-                    isSelected={selected.includes(word)}
-                    isRainbow={false}
-                    isShaking={shakingWord === word}
-                    onClick={() => handleRainbowWordClick(word)}
-                    disabled={false}
-                  />
-                ))}
+                {boardWords.map((word) => {
+                  const isAlreadySelected = selected.includes(word);
+                  const isRainbowWord = RAINBOW_WORDS.includes(word);
+                  return (
+                    <WordTile
+                      key={word}
+                      word={word}
+                      isSelected={isAlreadySelected}
+                      isRainbow={isAlreadySelected && isRainbowWord}
+                      isShaking={shakingWord === word}
+                      onClick={() => handleRainbowWordClick(word)}
+                      disabled={false}
+                    />
+                  );
+                })}
               </div>
 
               <p className="text-center text-xs text-muted-foreground">{selected.length} / 4 selected</p>
