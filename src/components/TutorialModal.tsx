@@ -26,7 +26,7 @@ const TUTORIAL_GROUPS = [
   },
   {
     category: "Words Before 'Day'",
-    words: ["GREEN", "SUN", "SNOW", "VALENTINE'S"],
+    words: ["GREEN", "DOOMS", "SNOW", "VALENTINE'S"],
     difficulty: 4,
     color: "bg-red-500",
   },
@@ -77,7 +77,7 @@ function WordTile({
           : isRainbow
           ? "rainbow-tile text-white shadow-md"
           : "bg-secondary text-foreground hover:bg-secondary/80 active:scale-95"}
-        ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}
+        ${disabled ? "opacity-60 pointer-events-none" : "cursor-pointer"}
       `}
     >
       {word}
@@ -297,21 +297,17 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
               </div>
 
               <div className="grid grid-cols-4 gap-2">
-                {boardWords.map((word) => {
-                  const isAlreadySelected = selected.includes(word);
-                  const isRainbowWord = RAINBOW_WORDS.includes(word);
-                  return (
-                    <WordTile
-                      key={word}
-                      word={word}
-                      isSelected={isAlreadySelected}
-                      isRainbow={isAlreadySelected && isRainbowWord}
-                      isShaking={shakingWord === word}
-                      onClick={() => handleRainbowWordClick(word)}
-                      disabled={false}
-                    />
-                  );
-                })}
+                {boardWords.map((word) => (
+                  <WordTile
+                    key={word}
+                    word={word}
+                    isSelected={selected.includes(word)}
+                    isRainbow={false}
+                    isShaking={shakingWord === word}
+                    onClick={() => handleRainbowWordClick(word)}
+                    disabled={false}
+                  />
+                ))}
               </div>
 
               <p className="text-center text-xs text-muted-foreground">{selected.length} / 4 selected</p>
