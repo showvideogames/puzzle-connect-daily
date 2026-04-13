@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { GameHeader } from "@/components/GameHeader";
 import { GameBoard } from "@/components/GameBoard";
 import { StatsModal } from "@/components/StatsModal";
-import { HowToPlayModal } from "@/components/HowToPlayModal";
+import { TutorialModal } from "@/components/TutorialModal";
 import { DailyStatsModal } from "@/components/DailyStatsModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { getTodaysPuzzle } from "@/lib/puzzles";
@@ -11,11 +11,11 @@ import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
+const TUTORIAL_SEEN_KEY = "tutorial-seen";
+
 type ModalName = "stats" | "help" | "dailyStats" | "settings" | null;
 
 export default function Index() {
-  // FIX 4: One "activeModal" dial instead of 4 separate booleans.
-  // Only one modal can ever be open at a time — by design.
   const [activeModal, setActiveModal] = useState<ModalName>(null);
   const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,12 +32,12 @@ export default function Index() {
     document.documentElement.classList.toggle("dark", newSettings.darkMode);
   }, []);
 
-  // FIX 1: Apply dark mode once on mount using the loaded settings.
+  // Apply dark mode once on mount
   useEffect(() => {
     document.documentElement.classList.toggle("dark", settings.darkMode);
   }, [settings.darkMode]);
 
-  // FIX 2: Use only onAuthStateChange to manage user state.
+  // Auth state
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
@@ -45,7 +45,7 @@ export default function Index() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // FIX 3 + FIX 5: Error handling AND an 8-second timeout so users never wait forever.
+  // Load puzzle
   useEffect(() => {
     const timeout = setTimeout(() => {
       setError(true);
@@ -66,6 +66,24 @@ export default function Index() {
 
     return () => clearTimeout(timeout);
   }, []);
+
+  // Auto-show tutorial on first visit
+  useEffect(() => {
+    try {
+      const seen = localStorage.getItem(TUTORIAL_SEEN_KEY);
+      if (!seen) {
+        // Small delay so the puzzle loads first and doesn't feel abrupt
+        setTimeout(() => setActiveModal("help"), 800);
+      }
+    } catch {}
+  }, []);
+
+  const handleTutorialClose = useCallback(() => {
+    try {
+      localStorage.setItem(TUTORIAL_SEEN_KEY, "true");
+    } catch {}
+    closeModal();
+  }, [closeModal]);
 
   const handleSignOut = useCallback(() => {
     supabase.auth.signOut();
@@ -106,7 +124,10 @@ export default function Index() {
       )}
 
       <StatsModal open={activeModal === "stats"} onClose={closeModal} />
-      <HowToPlayModal open={activeModal === "help"} onClose={closeModal} />
+      <TutorialModal
+        open={activeModal === "help"}
+        onClose={handleTutorialClose}
+      />
       <SettingsModal
         open={activeModal === "settings"}
         onClose={closeModal}
