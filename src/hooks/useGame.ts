@@ -66,9 +66,15 @@ export function useGame(puzzle: Puzzle) {
 
   const [shuffledWords, setShuffledWords] = useState(() => {
     if (saved) return saved.shuffledWords;
-    return puzzle.wordOrder && puzzle.wordOrder.length === 16 ? puzzle.wordOrder : shuffleArray(allWords);
+    return puzzle.wordOrder && puzzle.wordOrder.length === 16
+      ? puzzle.wordOrder
+      : shuffleArray(allWords);
   });
+
   const [state, setState] = useState<GameState>(() => {
+    // FIX: If we have saved progress, always use it — including isComplete and isWon.
+    // Previously, hasPlayedToday() was overriding the saved isWon/isComplete,
+    // causing the board to appear reset on refresh even though progress was saved.
     if (saved) {
       return {
         puzzleId: puzzle.id,
@@ -82,6 +88,9 @@ export function useGame(puzzle: Puzzle) {
         gotRainbow: saved.gotRainbow,
       };
     }
+
+    // No saved progress — brand new game.
+    // (hasPlayedToday is only a fallback if localStorage was cleared.)
     return {
       puzzleId: puzzle.id,
       solvedGroups: [],
@@ -94,6 +103,7 @@ export function useGame(puzzle: Puzzle) {
       gotRainbow: false,
     };
   });
+
   const [shaking, setShaking] = useState(false);
   const [lastRevealedGroup, setLastRevealedGroup] = useState<number | null>(null);
   const [oneAway, setOneAway] = useState(false);
@@ -208,7 +218,7 @@ export function useGame(puzzle: Puzzle) {
     if (
       puzzle.rainbowHerring &&
       puzzle.rainbowHerring.length === 4 &&
-      rainbowWords.length === 0 // only trigger once
+      rainbowWords.length === 0
     ) {
       const selected = [...state.selectedWords].sort();
       const herring = [...puzzle.rainbowHerring].sort();
@@ -242,12 +252,10 @@ export function useGame(puzzle: Puzzle) {
         isCorrect: true,
       };
 
-      // Phase 1: Mark matched words (wiggle animation)
       setMatchedWords(solvedWords);
       vibrateSuccess();
       setState((s) => ({ ...s, selectedWords: [], guessHistory: [...s.guessHistory, attempt] }));
 
-      // Phase 2: After wiggle, collapse and reveal solved group
       setTimeout(() => {
         setMatchedWords([]);
         setLastRevealedGroup(groupIdx);
@@ -281,7 +289,6 @@ export function useGame(puzzle: Puzzle) {
         isCorrect: false,
       };
 
-      // Check for "one away" — 3 of 4 words match a single unsolved group
       const isOneAway = puzzle.groups.some(
         (g, idx) =>
           !state.solvedGroups.includes(idx) &&
@@ -314,7 +321,6 @@ export function useGame(puzzle: Puzzle) {
         recordGameResult(false, newMistakes);
         saveResultToDb(false, newMistakes);
 
-        // Reveal groups one by one, sorted by difficulty (easiest first)
         const sortedIndices = puzzle.groups
           .map((g, i) => ({ idx: i, diff: g.difficulty }))
           .sort((a, b) => a.diff - b.diff)
