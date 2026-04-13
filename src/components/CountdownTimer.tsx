@@ -17,17 +17,31 @@ function formatTime(ms: number) {
 
 export function CountdownTimer() {
   const [remaining, setRemaining] = useState(getTimeUntilMidnight);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
       const ms = getTimeUntilMidnight();
       if (ms <= 0) {
-        window.location.reload();
+        clearInterval(interval);
+        setIsReady(true);
+        return;
       }
       setRemaining(ms);
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  if (isReady) {
+    return (
+      <div className="text-center mt-6">
+        <p className="text-sm font-semibold text-foreground">
+          New puzzle available!
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">Refresh the page to play.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="text-center mt-6 text-sm text-muted-foreground">
