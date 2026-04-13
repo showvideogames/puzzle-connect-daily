@@ -8,12 +8,12 @@ interface GlobalStatsModalProps {
   onClose: () => void;
 }
 
-const ROWS: { key: keyof Omit<PuzzleStats, "total">; label: string; emoji: string }[] = [
-  { key: "mistakes0", label: "0 mistakes", emoji: "🎯" },
-  { key: "mistakes1", label: "1 mistake",  emoji: "✅" },
-  { key: "mistakes2", label: "2 mistakes", emoji: "😅" },
-  { key: "mistakes3", label: "3 mistakes", emoji: "😬" },
-  { key: "mistakes4", label: "Didn't finish", emoji: "💀" },
+const ROWS: { key: keyof Omit<PuzzleStats, "total">; label: string }[] = [
+  { key: "mistakes0", label: "0 mistakes" },
+  { key: "mistakes1", label: "1 mistake"  },
+  { key: "mistakes2", label: "2 mistakes" },
+  { key: "mistakes3", label: "3 mistakes" },
+  { key: "mistakes4", label: "Didn't finish" },
 ];
 
 function pct(count: number, total: number): number {
@@ -87,7 +87,7 @@ export function GlobalStatsModal({ puzzleId, open, onClose }: GlobalStatsModalPr
 
           {!loading && stats && (
             <div className="space-y-3 mt-2">
-              {ROWS.map(({ key, label, emoji }) => {
+              {ROWS.map(({ key, label }) => {
                 const count = stats[key];
                 const p = pct(count, stats.total);
                 return (
@@ -95,7 +95,7 @@ export function GlobalStatsModal({ puzzleId, open, onClose }: GlobalStatsModalPr
                     {/* Label row */}
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-medium text-muted-foreground">
-                        {emoji} {label}
+                        {label}
                       </span>
                       <span className="text-xs font-bold tabular-nums">
                         {p}%
