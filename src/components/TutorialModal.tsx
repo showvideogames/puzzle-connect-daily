@@ -70,7 +70,9 @@ function WordTile({
         relative rounded-lg py-3 px-1 text-xs font-bold uppercase tracking-wide
         transition-all duration-150 select-none
         ${isShaking ? "animate-shake" : ""}
-        ${isSelected
+        ${isSelected && isRainbow
+          ? "rainbow-tile text-white shadow-md ring-2 ring-offset-1 ring-black scale-95"
+          : isSelected
           ? "bg-foreground text-background scale-95 shadow-inner"
           : isRainbow
           ? "rainbow-tile text-white shadow-md"
@@ -145,7 +147,8 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
 
   const handleClose = useCallback(() => {
     onClose();
-    setTimeout(reset, 300);
+    // Reset immediately — delayed reset was causing state bleed into next open
+    reset();
   }, [onClose, reset]);
 
   // ── Rainbow hunt: only rainbow words can be selected ──
