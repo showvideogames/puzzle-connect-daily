@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, LogOut, Save, Eye, EyeOff, ArrowLeft, Pencil, BarChart3 } from "lucide-react";
+import { Plus, Trash2, LogOut, Save, Eye, EyeOff, ArrowLeft, Pencil, BarChart3, RotateCcw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ArchiveAccessManager } from "@/components/ArchiveAccessManager";
 import { toast } from "sonner";
@@ -15,12 +15,46 @@ interface GroupForm {
   difficulty: 1 | 2 | 3 | 4;
 }
 
+const DRAFT_KEY = "admin-puzzle-draft";
+
 const emptyGroup = (): GroupForm => ({ category: "", words: "", difficulty: 1 });
 const parseWords = (value: string) =>
   value
     .split(",")
     .map((w) => w.trim().toUpperCase())
     .filter(Boolean);
+
+interface DraftData {
+  puzzleDate: string;
+  puzzleTitle: string;
+  groups: GroupForm[];
+  isPublished: boolean;
+  wordOrder: string[];
+  rainbowHerring: (string | null)[];
+  editingId: string | null;
+}
+
+function saveDraft(data: DraftData) {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+  } catch {}
+}
+
+function loadDraft(): DraftData | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as DraftData;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {}
+}
 
 export default function Admin() {
   const { user, loading, isAdmin, signIn, signOut } = useAuth();
@@ -45,6 +79,7 @@ export default function Admin() {
   const [saving, setSaving] = useState(false);
   const [wordOrder, setWordOrder] = useState<string[]>([]);
   const [swapFirst, setSwapFirst] = useState<number | null>(null);
+  const [draftRestored, setDraftRestored] = useState(false);
 
   // Existing puzzles list
   const [puzzles, setPuzzles] = useState<any[]>([]);
@@ -52,11 +87,41 @@ export default function Admin() {
   const [expandedStatsId, setExpandedStatsId] = useState<string | null>(null);
   const [puzzleStats, setPuzzleStats] = useState<Record<string, any>>({});
 
+  // Restore draft on mount (only if not editing an existing puzzle)
   useEffect(() => {
     if (isAdmin) {
       void loadPuzzles();
+      const draft = loadDraft();
+      if (draft && !draft.editingId) {
+        setPuzzleDate(draft.puzzleDate);
+        setPuzzleTitle(draft.puzzleTitle);
+        setGroups(draft.groups);
+        setIsPublished(draft.isPublished);
+        setWordOrder(draft.wordOrder);
+        setRainbowHerring(draft.rainbowHerring);
+        setDraftRestored(true);
+      }
     }
   }, [isAdmin]);
+
+  // Build current draft data from state
+  const getCurrentDraft = useCallback((): DraftData => ({
+    puzzleDate,
+    puzzleTitle,
+    groups,
+    isPublished,
+    wordOrder,
+    rainbowHerring,
+    editingId,
+  }), [puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, editingId]);
+
+  // Called onBlur from any field — saves draft silently
+  const handleBlurSave = useCallback(() => {
+    // Only save drafts for new puzzles, not edits (edits are already in the DB)
+    if (!editingId) {
+      saveDraft(getCurrentDraft());
+    }
+  }, [editingId, getCurrentDraft]);
 
   async function loadPuzzles() {
     const { data, error } = await supabase
@@ -219,6 +284,8 @@ export default function Admin() {
       if (groupError) throw groupError;
 
       toast.success(editingId ? "Puzzle updated!" : "Puzzle created!");
+      clearDraft();
+      setDraftRestored(false);
       resetForm();
       void loadPuzzles();
     } catch (err: any) {
@@ -249,6 +316,13 @@ export default function Admin() {
     setRainbowHerring([null, null, null, null]);
   }
 
+  function handleClearDraft() {
+    clearDraft();
+    setDraftRestored(false);
+    resetForm();
+    toast.success("Draft cleared.");
+  }
+
   function editPuzzle(p: any) {
     setEditingId(p.id);
     setPuzzleDate(p.date);
@@ -264,12 +338,12 @@ export default function Admin() {
     );
     setWordOrder(p.word_order || []);
     setSwapFirst(null);
-    // Load rainbow herring
     if (p.rainbow_herring && p.rainbow_herring.length === 4) {
       setRainbowHerring(p.rainbow_herring);
     } else {
       setRainbowHerring([null, null, null, null]);
     }
+    setDraftRestored(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -307,7 +381,6 @@ export default function Admin() {
 
   // Login screen
   if (!user) {
-    // Forgot password view
     if (showForgotPassword) {
       return (
         <div className="min-h-screen flex items-center justify-center px-4">
@@ -413,6 +486,19 @@ export default function Admin() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 mt-6 space-y-8">
+        {/* Draft restored notice */}
+        {draftRestored && (
+          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm">
+            <span className="text-muted-foreground">✏️ Draft restored from your last session.</span>
+            <button
+              onClick={handleClearDraft}
+              className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Clear draft
+            </button>
+          </div>
+        )}
+
         {/* Puzzle Editor */}
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">{editingId ? "Edit Puzzle" : "Create New Puzzle"}</h2>
@@ -420,11 +506,23 @@ export default function Admin() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="pdate">Date</Label>
-              <Input id="pdate" type="date" value={puzzleDate} onChange={(e) => setPuzzleDate(e.target.value)} />
+              <Input
+                id="pdate"
+                type="date"
+                value={puzzleDate}
+                onChange={(e) => setPuzzleDate(e.target.value)}
+                onBlur={handleBlurSave}
+              />
             </div>
             <div>
               <Label htmlFor="ptitle">Title (optional)</Label>
-              <Input id="ptitle" value={puzzleTitle} onChange={(e) => setPuzzleTitle(e.target.value)} placeholder="e.g. Monday Mashup" />
+              <Input
+                id="ptitle"
+                value={puzzleTitle}
+                onChange={(e) => setPuzzleTitle(e.target.value)}
+                onBlur={handleBlurSave}
+                placeholder="e.g. Monday Mashup"
+              />
             </div>
           </div>
 
@@ -442,6 +540,7 @@ export default function Admin() {
                     <Input
                       value={g.category}
                       onChange={(e) => updateGroup(i, "category", e.target.value)}
+                      onBlur={handleBlurSave}
                       placeholder="e.g. Coffee Drinks"
                     />
                   </div>
@@ -450,6 +549,7 @@ export default function Admin() {
                     <Input
                       value={g.words}
                       onChange={(e) => updateGroup(i, "words", e.target.value)}
+                      onBlur={handleBlurSave}
                       placeholder="LATTE, MOCHA, ESPRESSO, CORTADO"
                     />
                   </div>
@@ -521,6 +621,7 @@ export default function Admin() {
                             return next;
                           });
                         }}
+                        onBlur={handleBlurSave}
                         className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                       >
                         <option value="">— none —</option>
@@ -548,7 +649,13 @@ export default function Admin() {
               <input
                 type="checkbox"
                 checked={isPublished}
-                onChange={(e) => setIsPublished(e.target.checked)}
+                onChange={(e) => {
+                  setIsPublished(e.target.checked);
+                  // Save draft immediately on checkbox change since there's no blur event
+                  if (!editingId) {
+                    saveDraft({ ...getCurrentDraft(), isPublished: e.target.checked });
+                  }
+                }}
                 className="rounded border-border"
               />
               <span className="text-sm font-medium">Publish immediately</span>
