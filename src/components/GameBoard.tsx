@@ -15,6 +15,24 @@ const DIFFICULTY_EMOJI: Record<number, string> = {
   3: "🟪",
 };
 
+// Returns an encouraging headline based on how many mistakes were made
+function getResultHeadline(isWon: boolean, mistakes: number): string {
+  if (isWon && mistakes === 0) return "Perfect game! 🎯";
+  if (isWon && mistakes === 1) return "Amazing 🎉";
+  if (isWon && mistakes === 2) return "Great job! 👏";
+  if (isWon && mistakes === 3) return "Clutch!!! 🙌";
+  return "Valiant effort. 💪";
+}
+
+// Returns a friendly subtitle
+function getResultSubtitle(isWon: boolean, mistakes: number): string {
+  if (isWon && mistakes === 0) return "No mistakes — impressive. Come back tomorrow!";
+  if (isWon && mistakes === 1) return "Well done. Come back tomorrow!";
+  if (isWon && mistakes === 2) return "Easy does it. Come back tomorrow!";
+  if (isWon && mistakes === 3) return "Way to dig deep and find the solve. Come back tomorrow!";
+  return "Almost had it. Come back tomorrow!";
+}
+
 interface GameBoardProps {
   puzzle: Puzzle;
   settings?: GameSettings;
@@ -60,8 +78,9 @@ export function GameBoard({ puzzle, settings }: GameBoardProps) {
 
   const generateShareText = useCallback(() => {
     const title = puzzle.title || `Puzzle ${puzzle.date}`;
-    return `🧩 ${title}\n${generateShareLines().join("\n")}`;
-  }, [puzzle, generateShareLines]);
+    const headline = getResultHeadline(state.isWon, state.mistakes);
+    return `🧩 ${title}\n${headline}\n${generateShareLines().join("\n")}`;
+  }, [puzzle, generateShareLines, state.isWon, state.mistakes, state.maxMistakes]);
 
   const handleShare = useCallback(async () => {
     const text = generateShareText();
@@ -70,7 +89,6 @@ export function GameBoard({ puzzle, settings }: GameBoardProps) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // fallback
       const textarea = document.createElement("textarea");
       textarea.value = text;
       document.body.appendChild(textarea);
@@ -91,12 +109,12 @@ export function GameBoard({ puzzle, settings }: GameBoardProps) {
       {/* Solved groups */}
       <div className="space-y-2 mb-2">
         {state.solvedGroups.map((groupIdx) => (
-            <SolvedGroup
-              key={groupIdx}
-              group={puzzle.groups[groupIdx]}
-              animate={groupIdx === lastRevealedGroup}
-            />
-          ))}
+          <SolvedGroup
+            key={groupIdx}
+            group={puzzle.groups[groupIdx]}
+            animate={groupIdx === lastRevealedGroup}
+          />
+        ))}
       </div>
 
       {/* Word grid */}
@@ -174,15 +192,12 @@ export function GameBoard({ puzzle, settings }: GameBoardProps) {
       {state.isComplete && (
         <div className="text-center mt-6 animate-fade-up">
           <p className="text-lg font-bold">
-            {state.isWon
-              ? "🎉 Well done!"
-              : `😔 Nice try! ${state.mistakes}/${state.maxMistakes} mistakes`}
+            {getResultHeadline(state.isWon, state.mistakes)}
           </p>
           <p className="text-sm text-muted-foreground mt-1">
-            {state.isWon
-              ? "Come back tomorrow for a new puzzle."
-              : "Here are the answers. Come back tomorrow!"}
+            {getResultSubtitle(state.isWon, state.mistakes)}
           </p>
+
           {state.guessHistory.length > 0 && (
             <div className="mt-4 space-y-3">
               {/* Emoji grid preview */}
@@ -193,6 +208,8 @@ export function GameBoard({ puzzle, settings }: GameBoardProps) {
                   </span>
                 ))}
               </div>
+
+              {/* Action buttons */}
               <div className="flex items-center justify-center gap-3">
                 <button
                   onClick={handleShare}
