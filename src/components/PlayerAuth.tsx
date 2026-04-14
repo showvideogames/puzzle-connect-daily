@@ -88,11 +88,12 @@ export function PlayerAuth({ user, onSignOut }: PlayerAuthProps) {
 
         {showDropdown && (
           <div
-            className="absolute right-0 top-full mt-1 rounded-xl shadow-xl z-50 overflow-hidden"
+            className="absolute right-0 top-full mt-1 rounded-xl shadow-xl overflow-hidden"
             style={{
               background: "hsl(var(--card))",
               border: "1px solid hsl(var(--border))",
               minWidth: "200px",
+              zIndex: 9999,
             }}
           >
             {!showChangePassword ? (
