@@ -1,6 +1,5 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
-// Pastel background colors for each tag color
 const COLOR_STYLES: Record<string, { bg: string; ring: string }> = {
   orange: { bg: "bg-orange-200 dark:bg-orange-900/50", ring: "ring-orange-400" },
   green:  { bg: "bg-green-200 dark:bg-green-900/50",  ring: "ring-green-400"  },
@@ -22,15 +21,15 @@ interface WordTileProps {
   disabled?: boolean;
   isRainbow?: boolean;
   isMatched?: boolean;
-  // Advanced features
   advancedFeatures?: boolean;
   tileColor?: string | null;
   onColorChange?: (word: string, color: string | null) => void;
-  // Drag and drop
   draggable?: boolean;
   onDragStart?: (word: string) => void;
   onDragOver?: (word: string) => void;
   onDrop?: () => void;
+  onTouchDragMove?: (x: number, y: number) => void;
+  onTouchDragEnd?: () => void;
 }
 
 export function WordTile({
@@ -47,14 +46,81 @@ export function WordTile({
   onDragStart,
   onDragOver,
   onDrop,
+  onTouchDragMove,
+  onTouchDragEnd,
 }: WordTileProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [popoverOffset, setPopoverOffset] = useState(0); // horizontal nudge in px
   const lastTapRef = useRef<number>(0);
   const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const isTouchDragging = useRef(false);
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
 
-  // Double-tap detection — waits 300ms before committing to a single tap,
-  // so a double-tap cancels the selection and opens the color picker instead.
+  // When color picker opens, check if it would clip off the right edge and nudge it left
+  useEffect(() => {
+    if (!showColorPicker || !wrapperRef.current) return;
+    const rect = wrapperRef.current.getBoundingClientRect();
+    const popoverWidth = 160; // approximate width of the popover
+    const rightEdge = rect.left + rect.width / 2 + popoverWidth / 2;
+    const screenWidth = window.innerWidth;
+    if (rightEdge > screenWidth - 8) {
+      // Shift left by however much it overflows, plus a small margin
+      setPopoverOffset(-(rightEdge - screenWidth + 12));
+    } else {
+      setPopoverOffset(0);
+    }
+  }, [showColorPicker]);
+
+  // Attach non-passive touch listeners directly to DOM so preventDefault works
+  useEffect(() => {
+    const el = buttonRef.current;
+    if (!el || !advancedFeatures) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+      isTouchDragging.current = false;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!touchStartPos.current) return;
+      const touch = e.touches[0];
+      const dx = Math.abs(touch.clientX - touchStartPos.current.x);
+      const dy = Math.abs(touch.clientY - touchStartPos.current.y);
+
+      if (!isTouchDragging.current && dx < 8 && dy < 8) return;
+
+      isTouchDragging.current = true;
+      e.preventDefault();
+      onDragStart?.(word);
+      onTouchDragMove?.(touch.clientX, touch.clientY);
+    };
+
+    const handleTouchEnd = () => {
+      if (isTouchDragging.current) {
+        onTouchDragEnd?.();
+      }
+      isTouchDragging.current = false;
+      touchStartPos.current = null;
+    };
+
+    el.addEventListener("touchstart", handleTouchStart, { passive: true });
+    el.addEventListener("touchmove", handleTouchMove, { passive: false });
+    el.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener("touchstart", handleTouchStart);
+      el.removeEventListener("touchmove", handleTouchMove);
+      el.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [advancedFeatures, word, onDragStart, onTouchDragMove, onTouchDragEnd]);
+
   const handleClick = useCallback(() => {
+    if (isTouchDragging.current) return;
+
+    // No Advanced Features — fire instantly, zero delay
     if (!advancedFeatures) {
       onClick();
       return;
@@ -64,7 +130,7 @@ export function WordTile({
     const timeSinceLastTap = now - lastTapRef.current;
     lastTapRef.current = now;
 
-    if (timeSinceLastTap < 300) {
+    if (timeSinceLastTap < 250) {
       // Double-tap — cancel pending single-tap and open color picker
       if (singleTapTimer.current) {
         clearTimeout(singleTapTimer.current);
@@ -72,11 +138,11 @@ export function WordTile({
       }
       setShowColorPicker(true);
     } else {
-      // Wait to see if a second tap follows before selecting
+      // Wait briefly to see if a second tap follows
       singleTapTimer.current = setTimeout(() => {
         singleTapTimer.current = null;
         onClick();
-      }, 300);
+      }, 250);
     }
   }, [advancedFeatures, onClick]);
 
@@ -102,8 +168,14 @@ export function WordTile({
           : "bg-tile hover:shadow-sm active:scale-95";
 
   return (
-    <div className="relative" style={{ touchAction: "manipulation" }}>
+    <div
+      ref={wrapperRef}
+      data-word={word}
+      className="relative"
+      style={{ touchAction: advancedFeatures ? "none" : "manipulation" }}
+    >
       <button
+        ref={buttonRef}
         onClick={handleClick}
         disabled={disabled}
         draggable={advancedFeatures && draggable}
@@ -115,16 +187,20 @@ export function WordTile({
         {word}
       </button>
 
-      {/* Color picker popover */}
       {showColorPicker && (
         <>
           <div
             className="fixed inset-0 z-40"
             onClick={() => setShowColorPicker(false)}
           />
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50
-            bg-background border border-border rounded-full shadow-lg px-2 py-1.5
-            flex items-center gap-1.5 animate-fade-up"
+          <div
+            className="absolute bottom-full mb-2 z-50
+              bg-background border border-border rounded-full shadow-lg px-2 py-1.5
+              flex items-center gap-1.5 animate-fade-up"
+            style={{
+              left: "50%",
+              transform: `translateX(calc(-50% + ${popoverOffset}px))`,
+            }}
           >
             {COLOR_CIRCLES.map(({ key, circle }) => (
               <button
