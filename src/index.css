@@ -125,6 +125,7 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'DM Sans', system-ui, sans-serif;
+    overflow-x: hidden;
   }
 }
 
