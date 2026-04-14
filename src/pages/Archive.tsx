@@ -268,7 +268,7 @@ export default function Archive() {
                     key={i}
                     onClick={() => handleDayClick(dateStr)}
                     disabled={!isClickable}
-                    className="relative flex flex-col items-center justify-center rounded-lg transition-all duration-150"
+                    className="relative flex flex-col items-start justify-start rounded-lg transition-all duration-150"
                     style={{
                       aspectRatio: "1",
                       background: isToday
@@ -281,6 +281,7 @@ export default function Archive() {
                         : "1px solid transparent",
                       cursor: isClickable ? "pointer" : "default",
                       opacity: !isPast && !isToday ? 0.3 : 1,
+                      padding: "4px 0 0 5px",
                     }}
                     onMouseEnter={(e) => {
                       if (isClickable) (e.currentTarget as HTMLElement).style.background = "hsl(var(--secondary)/0.8)";
@@ -289,8 +290,9 @@ export default function Archive() {
                       if (isClickable) (e.currentTarget as HTMLElement).style.background = "hsl(var(--secondary))";
                     }}
                   >
+                    {/* Day number — always at top */}
                     <span style={{
-                      fontSize: "13px",
+                      fontSize: "12px",
                       fontWeight: isToday ? 700 : 500,
                       color: isToday ? "hsl(var(--background))" : "hsl(var(--foreground))",
                       lineHeight: 1,
@@ -298,16 +300,20 @@ export default function Archive() {
                       {dayNum}
                     </span>
 
-                    {/* Star indicator */}
+                    {/* Star — large, centered in remaining space */}
                     {result && (
-                      <span style={{
-                        fontSize: "9px",
-                        lineHeight: 1,
-                        marginTop: "2px",
-                        color: result.won ? "#f59e0b" : "hsl(var(--muted-foreground))",
-                      }}>
-                        {result.won ? "★" : "✦"}
-                      </span>
+                      <div className="flex-1 flex items-center justify-center w-full">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <polygon
+                            points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
+                            fill={result.won ? "#f59e0b" : "none"}
+                            stroke={result.won ? "#f59e0b" : "hsl(var(--muted-foreground))"}
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </div>
                     )}
                   </button>
                 );
@@ -317,11 +323,17 @@ export default function Archive() {
             {/* Legend */}
             <div className="flex items-center gap-4 mt-4 justify-center">
               <div className="flex items-center gap-1.5">
-                <span style={{ fontSize: "11px", color: "#f59e0b" }}>★</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
+                    fill="#f59e0b" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
                 <span style={{ fontSize: "11px", color: "hsl(var(--muted-foreground))" }}>Won</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span style={{ fontSize: "11px", color: "hsl(var(--muted-foreground))" }}>✦</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
+                    fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
                 <span style={{ fontSize: "11px", color: "hsl(var(--muted-foreground))" }}>Played</span>
               </div>
             </div>
