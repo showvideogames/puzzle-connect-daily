@@ -5,6 +5,7 @@ export interface GameSettings {
   soundEnabled: boolean;
   darkMode: boolean;
   hapticEnabled: boolean;
+  advancedFeatures: boolean;
 }
 
 const defaults: GameSettings = {
@@ -12,6 +13,7 @@ const defaults: GameSettings = {
   soundEnabled: true,
   darkMode: false,
   hapticEnabled: true,
+  advancedFeatures: false,
 };
 
 export function loadSettings(): GameSettings {
