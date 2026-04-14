@@ -6,11 +6,10 @@ import { SolvedGroup } from "./SolvedGroup";
 import { MistakeDots } from "./MistakeDots";
 import { GlobalStatsModal } from "./GlobalStatsModal";
 import { PuzzleRating } from "./PuzzleRating";
-import { Shuffle, Send, X, Share2, Check, TrendingUp } from "lucide-react";
+import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser } from "lucide-react";
 import { useState, useCallback } from "react";
 import type { User } from "@supabase/supabase-js";
 
-// Easiest → hardest: orange, green, light blue heart, pink heart
 const DIFFICULTY_EMOJI: Record<number, string> = {
   0: "🟧",
   1: "🟩",
@@ -18,7 +17,6 @@ const DIFFICULTY_EMOJI: Record<number, string> = {
   3: "🟥",
 };
 
-// Returns an encouraging headline based on how many mistakes were made
 function getResultHeadline(isWon: boolean, mistakes: number): string {
   if (isWon && mistakes === 0) return "Perfect game! 🎯";
   if (isWon && mistakes === 1) return "Amazing 🎉";
@@ -27,7 +25,6 @@ function getResultHeadline(isWon: boolean, mistakes: number): string {
   return "Valiant effort. 💪";
 }
 
-// Returns a friendly subtitle
 function getResultSubtitle(isWon: boolean, mistakes: number): string {
   if (isWon && mistakes === 0) return "No mistakes — impressive. Come back tomorrow!";
   if (isWon && mistakes === 1) return "Well done. Come back tomorrow!";
@@ -44,6 +41,8 @@ interface GameBoardProps {
 
 export function GameBoard({ puzzle, settings, user = null }: GameBoardProps) {
   const showRainbow = settings?.showRainbowColors ?? true;
+  const advancedFeatures = settings?.advancedFeatures ?? false;
+
   const {
     state,
     remainingWords,
@@ -57,6 +56,13 @@ export function GameBoard({ puzzle, settings, user = null }: GameBoardProps) {
     rainbowWords,
     showRainbowPopup,
     matchedWords,
+    tileColors,
+    setTileColor,
+    clearAllColors,
+    hasAnyColor,
+    handleDragStart,
+    handleDragOver,
+    handleDrop,
   } = useGame(puzzle);
 
   const [copied, setCopied] = useState(false);
@@ -133,6 +139,13 @@ export function GameBoard({ puzzle, settings, user = null }: GameBoardProps) {
               isMatched={matchedWords.includes(word)}
               onClick={() => toggleWord(word)}
               disabled={state.isComplete || matchedWords.length > 0}
+              advancedFeatures={advancedFeatures}
+              tileColor={tileColors[word] ?? null}
+              onColorChange={setTileColor}
+              draggable={advancedFeatures}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
             />
           ))}
         </div>
@@ -161,14 +174,14 @@ export function GameBoard({ puzzle, settings, user = null }: GameBoardProps) {
         <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} />
       </div>
 
-      {/* Rating — only for logged-in users, only when complete */}
+      {/* Rating */}
       {state.isComplete && (
         <PuzzleRating puzzleId={puzzle.id} user={user} />
       )}
 
       {/* Controls */}
       {!state.isComplete && (
-        <div className="flex items-center justify-center gap-3 mt-4">
+        <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
           <button
             onClick={shuffle}
             className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium
@@ -194,6 +207,17 @@ export function GameBoard({ puzzle, settings, user = null }: GameBoardProps) {
           >
             <Send className="w-4 h-4" /> Submit
           </button>
+
+          {/* Clear Colors button — only when Advanced Features on AND at least one tile is colored */}
+          {advancedFeatures && hasAnyColor && (
+            <button
+              onClick={clearAllColors}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium
+                hover:bg-secondary transition-colors duration-150 active:scale-95"
+            >
+              <Eraser className="w-4 h-4" /> Clear Colors
+            </button>
+          )}
         </div>
       )}
 
@@ -209,7 +233,6 @@ export function GameBoard({ puzzle, settings, user = null }: GameBoardProps) {
 
           {state.guessHistory.length > 0 && (
             <div className="mt-4 space-y-3">
-              {/* Emoji grid preview */}
               <div className="flex flex-col items-center gap-0.5">
                 {generateShareLines().map((line, i) => (
                   <span key={i} className="text-2xl leading-tight tracking-wider">
@@ -218,7 +241,6 @@ export function GameBoard({ puzzle, settings, user = null }: GameBoardProps) {
                 ))}
               </div>
 
-              {/* Action buttons */}
               <div className="flex items-center justify-center gap-3">
                 <button
                   onClick={handleShare}
