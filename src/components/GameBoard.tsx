@@ -5,8 +5,10 @@ import { WordTile } from "./WordTile";
 import { SolvedGroup } from "./SolvedGroup";
 import { MistakeDots } from "./MistakeDots";
 import { GlobalStatsModal } from "./GlobalStatsModal";
+import { PuzzleRating } from "./PuzzleRating";
 import { Shuffle, Send, X, Share2, Check, TrendingUp } from "lucide-react";
 import { useState, useCallback } from "react";
+import type { User } from "@supabase/supabase-js";
 
 // Easiest → hardest: orange, green, light blue heart, pink heart
 const DIFFICULTY_EMOJI: Record<number, string> = {
@@ -37,9 +39,10 @@ function getResultSubtitle(isWon: boolean, mistakes: number): string {
 interface GameBoardProps {
   puzzle: Puzzle;
   settings?: GameSettings;
+  user?: User | null;
 }
 
-export function GameBoard({ puzzle, settings }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null }: GameBoardProps) {
   const showRainbow = settings?.showRainbowColors ?? true;
   const {
     state,
@@ -157,6 +160,11 @@ export function GameBoard({ puzzle, settings }: GameBoardProps) {
       <div className="mt-4">
         <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} />
       </div>
+
+      {/* Rating — only for logged-in users, only when complete */}
+      {state.isComplete && (
+        <PuzzleRating puzzleId={puzzle.id} user={user} />
+      )}
 
       {/* Controls */}
       {!state.isComplete && (
