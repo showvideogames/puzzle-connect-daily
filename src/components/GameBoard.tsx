@@ -64,6 +64,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     handleDragStart,
     handleDragOver,
     handleDrop,
+    handleTouchDragMove,
+    handleTouchDragEnd,
   } = useGame(puzzle);
 
   // When Advanced Features is toggled off, clear all tile colors instantly
@@ -154,6 +156,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
+              onTouchDragMove={handleTouchDragMove}
+              onTouchDragEnd={handleTouchDragEnd}
+              data-word={word}
             />
           ))}
         </div>
