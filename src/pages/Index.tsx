@@ -113,7 +113,7 @@ export default function Index() {
           </div>
         </div>
       ) : puzzle ? (
-        <GameBoard puzzle={puzzle} settings={settings} />
+        <GameBoard puzzle={puzzle} settings={settings} user={user} />
       ) : (
         <div className="flex-1 flex items-center justify-center text-center px-4">
           <div>
