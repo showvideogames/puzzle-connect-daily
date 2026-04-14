@@ -268,7 +268,7 @@ export default function Archive() {
                     key={i}
                     onClick={() => handleDayClick(dateStr)}
                     disabled={!isClickable}
-                    className="relative flex flex-col items-start justify-start rounded-lg transition-all duration-150"
+                    className="relative flex flex-col items-center rounded-lg transition-all duration-150"
                     style={{
                       aspectRatio: "1",
                       background: isToday
@@ -281,7 +281,9 @@ export default function Archive() {
                         : "1px solid transparent",
                       cursor: isClickable ? "pointer" : "default",
                       opacity: !isPast && !isToday ? 0.3 : 1,
-                      padding: "4px 0 0 5px",
+                      paddingTop: "5px",
+                      paddingBottom: "4px",
+                      gap: "3px",
                     }}
                     onMouseEnter={(e) => {
                       if (isClickable) (e.currentTarget as HTMLElement).style.background = "hsl(var(--secondary)/0.8)";
@@ -290,30 +292,30 @@ export default function Archive() {
                       if (isClickable) (e.currentTarget as HTMLElement).style.background = "hsl(var(--secondary))";
                     }}
                   >
-                    {/* Day number — always at top */}
+                    {/* Day number — top center */}
                     <span style={{
-                      fontSize: "12px",
-                      fontWeight: isToday ? 700 : 500,
+                      fontSize: "14px",
+                      fontWeight: isToday ? 700 : 600,
                       color: isToday ? "hsl(var(--background))" : "hsl(var(--foreground))",
                       lineHeight: 1,
                     }}>
                       {dayNum}
                     </span>
 
-                    {/* Star — large, centered in remaining space */}
-                    {result && (
-                      <div className="flex-1 flex items-center justify-center w-full">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <polygon
-                            points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
-                            fill={result.won ? "#f59e0b" : "none"}
-                            stroke={result.won ? "#f59e0b" : "hsl(var(--muted-foreground))"}
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </div>
+                    {/* Star — centered below number */}
+                    {result ? (
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <polygon
+                          points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
+                          fill={result.won ? "#f59e0b" : "none"}
+                          stroke={result.won ? "#f59e0b" : "hsl(var(--muted-foreground))"}
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    ) : (
+                      <div style={{ width: "22px", height: "22px" }} />
                     )}
                   </button>
                 );
