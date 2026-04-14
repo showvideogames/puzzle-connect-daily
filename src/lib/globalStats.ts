@@ -10,7 +10,7 @@ export interface PuzzleStats {
 }
 
 function submittedKey(puzzleId: string) {
-  return `global-stats-submitted-${puzzleId}`;
+  return `global-stats-submitted-v2-${puzzleId}`;
 }
 
 export function hasSubmittedStats(puzzleId: string): boolean {
@@ -40,28 +40,10 @@ export async function submitGlobalStats(
 
   const col = `mistakes_${Math.min(mistakes, 4) as 0 | 1 | 2 | 3 | 4}`;
 
-  // Try to increment existing row
-  const { data: existing } = await supabase
-    .from("puzzle_stats")
-    .select("*")
-    .eq("puzzle_id", puzzleId)
-    .single();
-
-  if (existing) {
-    await supabase
-      .from("puzzle_stats")
-      .update({ [col]: (existing[col] ?? 0) + 1 })
-      .eq("puzzle_id", puzzleId);
-  } else {
-    await supabase.from("puzzle_stats").insert({
-      puzzle_id: puzzleId,
-      mistakes_0: col === "mistakes_0" ? 1 : 0,
-      mistakes_1: col === "mistakes_1" ? 1 : 0,
-      mistakes_2: col === "mistakes_2" ? 1 : 0,
-      mistakes_3: col === "mistakes_3" ? 1 : 0,
-      mistakes_4: col === "mistakes_4" ? 1 : 0,
-    });
-  }
+  await supabase.rpc("increment_puzzle_stat", {
+    p_puzzle_id: puzzleId,
+    p_column: col,
+  });
 
   markSubmitted(puzzleId);
 }
