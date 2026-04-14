@@ -132,24 +132,21 @@ export function useGame(puzzle: Puzzle) {
     }
   }, [state, shuffledWords, rainbowWords, tileColors, puzzle.id]);
 
-  // Save tile colors even before any guesses are made
+  // Save tile colors whenever they change (including when cleared)
   useEffect(() => {
-    const hasColors = Object.values(tileColors).some(Boolean);
-    if (hasColors) {
-      const existing = loadProgress(puzzle.id);
-      saveProgress(puzzle.id, {
-        solvedGroups: state.solvedGroups,
-        mistakes: state.mistakes,
-        guessHistory: state.guessHistory,
-        gotRainbow: state.gotRainbow,
-        shuffledWords,
-        rainbowWords,
-        isComplete: state.isComplete,
-        isWon: state.isWon,
-        tileColors,
-        ...(existing?.finalSolvedGroups ? { finalSolvedGroups: existing.finalSolvedGroups } : {}),
-      });
-    }
+    const existing = loadProgress(puzzle.id);
+    saveProgress(puzzle.id, {
+      solvedGroups: state.solvedGroups,
+      mistakes: state.mistakes,
+      guessHistory: state.guessHistory,
+      gotRainbow: state.gotRainbow,
+      shuffledWords,
+      rainbowWords,
+      isComplete: state.isComplete,
+      isWon: state.isWon,
+      tileColors,
+      ...(existing?.finalSolvedGroups ? { finalSolvedGroups: existing.finalSolvedGroups } : {}),
+    });
   }, [tileColors]);
 
   const saveResultToDb = useCallback(async (won: boolean, mistakes: number) => {
@@ -411,7 +408,7 @@ export function useGame(puzzle: Puzzle) {
       setState((s) => ({
         ...s,
         mistakes: newMistakes,
-        selectedWords: [],
+        // Keep selectedWords intact so the player can see what they just guessed
         isComplete: isLost,
         isWon: false,
         guessHistory: [...s.guessHistory, attempt],
