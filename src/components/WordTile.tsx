@@ -50,7 +50,8 @@ export function WordTile({
   onTouchDragEnd,
 }: WordTileProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const [popoverOffset, setPopoverOffset] = useState(0); // horizontal nudge in px
+  const [popoverLeft, setPopoverLeft] = useState<string>("50%");
+  const [popoverTransform, setPopoverTransform] = useState<string>("translateX(-50%)");
   const lastTapRef = useRef<number>(0);
   const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -58,20 +59,35 @@ export function WordTile({
   const isTouchDragging = useRef(false);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
 
-  // When color picker opens, check if it would clip off the right edge and nudge it left
-  useEffect(() => {
-    if (!showColorPicker || !wrapperRef.current) return;
-    const rect = wrapperRef.current.getBoundingClientRect();
-    const popoverWidth = 160; // approximate width of the popover
-    const rightEdge = rect.left + rect.width / 2 + popoverWidth / 2;
-    const screenWidth = window.innerWidth;
-    if (rightEdge > screenWidth - 8) {
-      // Shift left by however much it overflows, plus a small margin
-      setPopoverOffset(-(rightEdge - screenWidth + 12));
-    } else {
-      setPopoverOffset(0);
+  // Calculate popover position before showing it so it never flashes off-screen
+  const openColorPicker = useCallback(() => {
+    if (wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      const popoverWidth = 170;
+      const tileMidX = rect.left + rect.width / 2;
+      const screenWidth = window.innerWidth;
+
+      let left = tileMidX;
+      let transform = "translateX(-50%)";
+
+      const wouldOverflowRight = tileMidX + popoverWidth / 2 > screenWidth - 8;
+      const wouldOverflowLeft = tileMidX - popoverWidth / 2 < 8;
+
+      if (wouldOverflowRight) {
+        // Pin to right edge with margin
+        left = screenWidth - popoverWidth - 8;
+        transform = "translateX(0)";
+      } else if (wouldOverflowLeft) {
+        // Pin to left edge with margin
+        left = 8;
+        transform = "translateX(0)";
+      }
+
+      setPopoverLeft(`${left}px`);
+      setPopoverTransform(transform);
     }
-  }, [showColorPicker]);
+    setShowColorPicker(true);
+  }, []);
 
   // Attach non-passive touch listeners directly to DOM so preventDefault works
   useEffect(() => {
@@ -136,7 +152,7 @@ export function WordTile({
         clearTimeout(singleTapTimer.current);
         singleTapTimer.current = null;
       }
-      setShowColorPicker(true);
+      openColorPicker();
     } else {
       // Wait briefly to see if a second tap follows
       singleTapTimer.current = setTimeout(() => {
@@ -144,7 +160,7 @@ export function WordTile({
         onClick();
       }, 250);
     }
-  }, [advancedFeatures, onClick]);
+  }, [advancedFeatures, onClick, openColorPicker]);
 
   const handleColorSelect = useCallback((color: string | null) => {
     onColorChange?.(word, color);
@@ -193,13 +209,19 @@ export function WordTile({
             className="fixed inset-0 z-40"
             onClick={() => setShowColorPicker(false)}
           />
+          {/* Fixed position so it's measured against the viewport, not the tile */}
           <div
-            className="absolute bottom-full mb-2 z-50
-              bg-background border border-border rounded-full shadow-lg px-2 py-1.5
-              flex items-center gap-1.5 animate-fade-up"
+            className="fixed bottom-auto z-50 bg-background border border-border rounded-full shadow-lg px-2 py-1.5 flex items-center gap-1.5 animate-fade-up"
             style={{
-              left: "50%",
-              transform: `translateX(calc(-50% + ${popoverOffset}px))`,
+              left: popoverLeft,
+              top: (() => {
+                if (wrapperRef.current) {
+                  const rect = wrapperRef.current.getBoundingClientRect();
+                  return `${rect.top - 8}px`;
+                }
+                return "auto";
+              })(),
+              transform: `${popoverTransform} translateY(-100%)`,
             }}
           >
             {COLOR_CIRCLES.map(({ key, circle }) => (
