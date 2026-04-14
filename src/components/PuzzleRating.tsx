@@ -6,8 +6,8 @@ const LABELS: Record<number, string> = {
   1: "Bad",
   2: "Meh",
   3: "Good",
-  4: "Liked it",
-  5: "Loved it",
+  4: "Liked",
+  5: "Loved",
 };
 
 function Star({ filled, partial }: { filled: boolean; partial?: boolean }) {
