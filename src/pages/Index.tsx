@@ -22,6 +22,7 @@ export default function Index() {
   const [error, setError] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [settings, setSettings] = useState<GameSettings>(loadSettings);
+  const [clearColorsTrigger, setClearColorsTrigger] = useState(0);
 
   const openModal = useCallback((name: ModalName) => setActiveModal(name), []);
   const closeModal = useCallback(() => setActiveModal(null), []);
@@ -30,6 +31,10 @@ export default function Index() {
     setSettings(newSettings);
     saveSettings(newSettings);
     document.documentElement.classList.toggle("dark", newSettings.darkMode);
+    // If Advanced Features just got turned off, tell GameBoard to clear all colors
+    if (!newSettings.advancedFeatures) {
+      setClearColorsTrigger((n) => n + 1);
+    }
   }, []);
 
   // Apply dark mode once on mount
@@ -72,7 +77,6 @@ export default function Index() {
     try {
       const seen = localStorage.getItem(TUTORIAL_SEEN_KEY);
       if (!seen) {
-        // Small delay so the puzzle loads first and doesn't feel abrupt
         setTimeout(() => setActiveModal("help"), 800);
       }
     } catch {}
@@ -113,7 +117,7 @@ export default function Index() {
           </div>
         </div>
       ) : puzzle ? (
-        <GameBoard puzzle={puzzle} settings={settings} user={user} />
+        <GameBoard puzzle={puzzle} settings={settings} user={user} clearColorsTrigger={clearColorsTrigger} />
       ) : (
         <div className="flex-1 flex items-center justify-center text-center px-4">
           <div>
