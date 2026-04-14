@@ -19,7 +19,7 @@ export function GameHeader({ onStatsClick, onHowToPlayClick, onDailyStatsClick, 
         <img
           src="/rainbow-categories.png"
           alt="Rainbow Categories"
-          style={{ height: "40px", width: "auto" }}
+          style={{ height: "52px", width: "auto" }}
         />
       </Link>
       <div className="flex items-center gap-1 shrink-0">
