@@ -17,7 +17,7 @@ export function GameHeader({ onStatsClick, onHowToPlayClick, onDailyStatsClick, 
     <header className="flex items-center justify-between w-full max-w-lg mx-auto py-3 px-2">
       <Link to="/" aria-label="Home">
         <img
-          src="/Rainbow_Categories_cropped.png"
+          src="/rainbow-categories.png"
           alt="Rainbow Categories"
           style={{ height: "40px", width: "auto" }}
         />
