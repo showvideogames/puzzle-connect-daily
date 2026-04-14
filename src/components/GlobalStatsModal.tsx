@@ -61,14 +61,19 @@ export function GlobalStatsModal({ puzzleId, open, onClose }: GlobalStatsModalPr
           </button>
         </div>
 
-        {/* Player count */}
+        {/* Player count + solve rate */}
         {stats && (
-          <p className="text-center text-2xl font-bold tabular-nums px-5 pb-1">
-            {stats.total.toLocaleString()}
-            <span className="text-sm font-normal text-muted-foreground ml-1">
-              {stats.total === 1 ? "player" : "players"}
-            </span>
-          </p>
+          <div className="text-center px-5 pb-1">
+            <p className="text-2xl font-bold tabular-nums">
+              {stats.total.toLocaleString()}
+              <span className="text-sm font-normal text-muted-foreground ml-1">
+                {stats.total === 1 ? "play" : "plays"}
+              </span>
+            </p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {pct(stats.mistakes0 + stats.mistakes1 + stats.mistakes2 + stats.mistakes3, stats.total)}% solve rate
+            </p>
+          </div>
         )}
 
         {/* Body */}
