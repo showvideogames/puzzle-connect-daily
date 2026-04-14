@@ -140,7 +140,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* Word grid */}
       {remainingWords.length > 0 && (
         <div className={`grid grid-cols-4 gap-2 ${shaking ? "animate-shake" : ""}`}>
-          {remainingWords.map((word) => (
+          {remainingWords.map((word, index) => (
             <WordTile
               key={word}
               word={word}
@@ -157,6 +157,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               onDragOver={handleDragOver}
               onDrop={handleDrop}
               onTouchDragMove={handleTouchDragMove}
+              column={(index % 4) + 1}
               onTouchDragEnd={handleTouchDragEnd}
               data-word={word}
             />
