@@ -7,7 +7,7 @@ import { MistakeDots } from "./MistakeDots";
 import { GlobalStatsModal } from "./GlobalStatsModal";
 import { PuzzleRating } from "./PuzzleRating";
 import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser } from "lucide-react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { User } from "@supabase/supabase-js";
 
 const DIFFICULTY_EMOJI: Record<number, string> = {
@@ -37,9 +37,10 @@ interface GameBoardProps {
   puzzle: Puzzle;
   settings?: GameSettings;
   user?: User | null;
+  clearColorsTrigger?: number;
 }
 
-export function GameBoard({ puzzle, settings, user = null }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0 }: GameBoardProps) {
   const showRainbow = settings?.showRainbowColors ?? true;
   const advancedFeatures = settings?.advancedFeatures ?? false;
 
@@ -64,6 +65,13 @@ export function GameBoard({ puzzle, settings, user = null }: GameBoardProps) {
     handleDragOver,
     handleDrop,
   } = useGame(puzzle);
+
+  // When Advanced Features is toggled off, clear all tile colors instantly
+  useEffect(() => {
+    if (clearColorsTrigger > 0) {
+      clearAllColors();
+    }
+  }, [clearColorsTrigger]);
 
   const [copied, setCopied] = useState(false);
   const [showGlobalStats, setShowGlobalStats] = useState(false);
