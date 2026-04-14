@@ -50,8 +50,10 @@ export function WordTile({
 }: WordTileProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const lastTapRef = useRef<number>(0);
+  const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Double-tap detection (works on both mobile and desktop)
+  // Double-tap detection — waits 300ms before committing to a single tap,
+  // so a double-tap cancels the selection and opens the color picker instead.
   const handleClick = useCallback(() => {
     if (!advancedFeatures) {
       onClick();
@@ -63,11 +65,18 @@ export function WordTile({
     lastTapRef.current = now;
 
     if (timeSinceLastTap < 300) {
-      // Double tap — show color picker
+      // Double-tap — cancel pending single-tap and open color picker
+      if (singleTapTimer.current) {
+        clearTimeout(singleTapTimer.current);
+        singleTapTimer.current = null;
+      }
       setShowColorPicker(true);
     } else {
-      // Single tap — normal select
-      onClick();
+      // Wait to see if a second tap follows before selecting
+      singleTapTimer.current = setTimeout(() => {
+        singleTapTimer.current = null;
+        onClick();
+      }, 300);
     }
   }, [advancedFeatures, onClick]);
 
@@ -76,7 +85,6 @@ export function WordTile({
     setShowColorPicker(false);
   }, [word, onColorChange]);
 
-  // Determine background based on color tag + selection state
   const colorStyle = tileColor ? COLOR_STYLES[tileColor] : null;
 
   const baseClasses = `tile-base h-16 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-150 ease-out relative
@@ -110,7 +118,6 @@ export function WordTile({
       {/* Color picker popover */}
       {showColorPicker && (
         <>
-          {/* Invisible overlay to catch outside clicks */}
           <div
             className="fixed inset-0 z-40"
             onClick={() => setShowColorPicker(false)}
@@ -128,7 +135,6 @@ export function WordTile({
                 `}
               />
             ))}
-            {/* Clear button */}
             {tileColor && (
               <button
                 onClick={(e) => { e.stopPropagation(); handleColorSelect(null); }}
