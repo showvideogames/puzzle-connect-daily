@@ -14,7 +14,7 @@ interface GameHeaderProps {
 
 export function GameHeader({ onStatsClick, onHowToPlayClick, onDailyStatsClick, onSettingsClick, user, onSignOut }: GameHeaderProps) {
   return (
-    <header className="flex items-center justify-between w-full max-w-lg mx-auto py-4 px-2 overflow-hidden">
+    <header className="flex items-center justify-between w-full max-w-lg mx-auto py-4 px-2">
       <h1 className="text-2xl font-bold tracking-tight shrink-0">Connections</h1>
       <div className="flex items-center gap-1 shrink-0">
         <button
