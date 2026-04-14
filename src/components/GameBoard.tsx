@@ -81,10 +81,10 @@ export function GameBoard({ puzzle, settings, user = null }: GameBoardProps) {
   }, [state.guessHistory, puzzle]);
 
   const generateShareText = useCallback(() => {
-    const title = puzzle.title || `Puzzle ${puzzle.date}`;
-    const headline = getResultHeadline(state.isWon, state.mistakes);
-    return `🧩 ${title}\n${headline}\n${generateShareLines().join("\n")}`;
-  }, [puzzle, generateShareLines, state.isWon, state.mistakes]);
+    const d = new Date(puzzle.date + "T12:00:00");
+    const formatted = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    return `🧩 ${formatted}\n${generateShareLines().join("\n")}`;
+  }, [puzzle, generateShareLines]);
 
   const handleShare = useCallback(async () => {
     const text = generateShareText();
