@@ -119,7 +119,10 @@ interface TutorialModalProps {
   onClose: () => void;
 }
 
+type Tab = "tutorial" | "rules";
+
 export function TutorialModal({ open, onClose }: TutorialModalProps) {
+  const [tab, setTab] = useState<Tab>("tutorial");
   const [phase, setPhase] = useState<Phase>("welcome");
   // All 16 words, shuffled. Never removed during rainbow hunt — rainbow words stay on board.
   const [boardWords, setBoardWords] = useState<string[]>(() => shuffle(ALL_WORDS));
@@ -245,20 +248,148 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
-          <h2 className="text-base font-bold tracking-tight">How to Play</h2>
-          <button
-            onClick={handleClose}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
-            aria-label="Skip tutorial"
-          >
-            Skip Tutorial
-          </button>
+        <div className="shrink-0 px-5 pt-5 pb-0">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-bold tracking-tight">How to Play</h2>
+            <button
+              onClick={handleClose}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+              aria-label="Skip tutorial"
+            >
+              Skip
+            </button>
+          </div>
+          {/* Tab pills */}
+          <div className="flex gap-1 p-1 rounded-lg mb-3" style={{ background: "hsl(var(--secondary))" }}>
+            <button
+              onClick={() => setTab("tutorial")}
+              className="flex-1 py-1.5 text-xs font-semibold rounded-md transition-all duration-150"
+              style={{
+                background: tab === "tutorial" ? "hsl(var(--card))" : "transparent",
+                color: tab === "tutorial" ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))",
+                boxShadow: tab === "tutorial" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+              }}
+            >
+              Tutorial
+            </button>
+            <button
+              onClick={() => setTab("rules")}
+              className="flex-1 py-1.5 text-xs font-semibold rounded-md transition-all duration-150"
+              style={{
+                background: tab === "rules" ? "hsl(var(--card))" : "transparent",
+                color: tab === "rules" ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))",
+                boxShadow: tab === "rules" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+              }}
+            >
+              How to Play
+            </button>
+          </div>
         </div>
 
         <div className="overflow-y-auto flex-1 px-5 pb-6">
 
-          {/* ── WELCOME ── */}
+          {/* ── RULES TAB ── */}
+          {tab === "rules" && (
+            <div className="py-4 space-y-5">
+              <section>
+                <p style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "hsl(var(--muted-foreground))",
+                  marginBottom: "6px",
+                }}>The Goal</p>
+                <p className="text-sm leading-relaxed">
+                  Find four groups of four words that share something in common. Each word belongs to exactly one group.
+                </p>
+              </section>
+
+              <div style={{ height: "1px", background: "hsl(var(--border))" }} />
+
+              <section>
+                <p style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "hsl(var(--muted-foreground))",
+                  marginBottom: "6px",
+                }}>The Categories</p>
+                <p className="text-sm leading-relaxed mb-3">
+                  There are four difficulty levels, color-coded from easiest to hardest:
+                </p>
+                <div className="space-y-2">
+                  {[
+                    { color: "bg-amber-500", label: "Easiest" },
+                    { color: "bg-green-600", label: "Medium" },
+                    { color: "bg-blue-500", label: "Hard" },
+                    { color: "bg-red-500", label: "Hardest" },
+                  ].map(({ color, label }) => (
+                    <div key={label} className="flex items-center gap-3">
+                      <div className={`w-8 h-5 rounded ${color} shrink-0`} />
+                      <span className="text-sm">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <div style={{ height: "1px", background: "hsl(var(--border))" }} />
+
+              <section>
+                <p style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "hsl(var(--muted-foreground))",
+                  marginBottom: "6px",
+                }}>The Rainbow</p>
+                <p className="text-sm leading-relaxed">
+                  Every puzzle has a hidden 5th category — the <strong>Rainbow</strong>. One word from each of the four groups shares a secret connection. Find and submit all four Rainbow words before solving the main groups.
+                </p>
+                <div className="mt-3 rounded-lg px-4 py-3 text-sm font-medium text-white text-center"
+                  style={{ background: "linear-gradient(to right, #f87171, #facc15, #4ade80, #60a5fa)" }}>
+                  🌈 Rainbow Spotted!
+                </div>
+              </section>
+
+              <div style={{ height: "1px", background: "hsl(var(--border))" }} />
+
+              <section>
+                <p style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "hsl(var(--muted-foreground))",
+                  marginBottom: "6px",
+                }}>Mistakes</p>
+                <p className="text-sm leading-relaxed">
+                  You have <strong>4 mistakes</strong> before the puzzle ends. If you select 3 words from the same group, you'll get a <strong>"One Away"</strong> hint.
+                </p>
+              </section>
+
+              <div style={{ height: "1px", background: "hsl(var(--border))" }} />
+
+              <section>
+                <p style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "hsl(var(--muted-foreground))",
+                  marginBottom: "6px",
+                }}>New Puzzles</p>
+                <p className="text-sm leading-relaxed">
+                  A new puzzle drops every day. Past puzzles are available in the archive.
+                </p>
+              </section>
+            </div>
+          )}
+
+          {/* ── TUTORIAL TAB ── */}
+          {tab === "tutorial" && (<>
           {phase === "welcome" && (
             <div className="flex flex-col items-center text-center gap-5 py-4">
               <div className="text-5xl">🌈</div>
@@ -447,6 +578,8 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
               </button>
             </div>
           )}
+
+          </>)}
 
         </div>
       </div>
