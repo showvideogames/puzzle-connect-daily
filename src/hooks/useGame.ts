@@ -25,9 +25,8 @@ interface SavedProgress {
   rainbowWords: string[];
   isComplete?: boolean;
   isWon?: boolean;
-  // Stores the fully revealed board order after game ends (including auto-revealed
-  // groups on a loss), so refreshing shows the complete board instead of a blank slate.
   finalSolvedGroups?: number[];
+  tileColors?: Record<string, string | null>;
 }
 
 function progressKey(puzzleId: string) {
@@ -75,10 +74,12 @@ export function useGame(puzzle: Puzzle) {
       : shuffleArray(allWords);
   });
 
+  const [tileColors, setTileColors] = useState<Record<string, string | null>>(() => {
+    return saved?.tileColors ?? {};
+  });
+
   const [state, setState] = useState<GameState>(() => {
     if (saved) {
-      // If we have a finalSolvedGroups saved, use that so the full board
-      // shows on refresh rather than a partial or blank board.
       const solvedGroups = saved.finalSolvedGroups ?? saved.solvedGroups;
       return {
         puzzleId: puzzle.id,
@@ -112,8 +113,9 @@ export function useGame(puzzle: Puzzle) {
   const [rainbowWords, setRainbowWords] = useState<string[]>(saved?.rainbowWords ?? []);
   const [showRainbowPopup, setShowRainbowPopup] = useState(false);
   const [matchedWords, setMatchedWords] = useState<string[]>([]);
+  const [draggedWord, setDraggedWord] = useState<string | null>(null);
 
-  // Auto-save progress (including completed state)
+  // Auto-save progress including tile colors
   useEffect(() => {
     if (state.solvedGroups.length > 0 || state.mistakes > 0 || state.guessHistory.length > 0) {
       saveProgress(puzzle.id, {
@@ -125,9 +127,30 @@ export function useGame(puzzle: Puzzle) {
         rainbowWords,
         isComplete: state.isComplete,
         isWon: state.isWon,
+        tileColors,
       });
     }
-  }, [state, shuffledWords, rainbowWords, puzzle.id]);
+  }, [state, shuffledWords, rainbowWords, tileColors, puzzle.id]);
+
+  // Save tile colors even before any guesses are made
+  useEffect(() => {
+    const hasColors = Object.values(tileColors).some(Boolean);
+    if (hasColors) {
+      const existing = loadProgress(puzzle.id);
+      saveProgress(puzzle.id, {
+        solvedGroups: state.solvedGroups,
+        mistakes: state.mistakes,
+        guessHistory: state.guessHistory,
+        gotRainbow: state.gotRainbow,
+        shuffledWords,
+        rainbowWords,
+        isComplete: state.isComplete,
+        isWon: state.isWon,
+        tileColors,
+        ...(existing?.finalSolvedGroups ? { finalSolvedGroups: existing.finalSolvedGroups } : {}),
+      });
+    }
+  }, [tileColors]);
 
   const saveResultToDb = useCallback(async (won: boolean, mistakes: number) => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -139,6 +162,39 @@ export function useGame(puzzle: Puzzle) {
       mistakes,
     }, { onConflict: "user_id,puzzle_id" });
   }, [puzzle.id]);
+
+  const setTileColor = useCallback((word: string, color: string | null) => {
+    setTileColors((prev) => ({ ...prev, [word]: color }));
+  }, []);
+
+  const clearAllColors = useCallback(() => {
+    setTileColors({});
+  }, []);
+
+  const hasAnyColor = useMemo(() => {
+    return Object.values(tileColors).some(Boolean);
+  }, [tileColors]);
+
+  const handleDragStart = useCallback((word: string) => {
+    setDraggedWord(word);
+  }, []);
+
+  const handleDragOver = useCallback((targetWord: string) => {
+    if (!draggedWord || draggedWord === targetWord) return;
+    setShuffledWords((prev) => {
+      const result = [...prev];
+      const fromIdx = result.indexOf(draggedWord);
+      const toIdx = result.indexOf(targetWord);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      result.splice(fromIdx, 1);
+      result.splice(toIdx, 0, draggedWord);
+      return result;
+    });
+  }, [draggedWord]);
+
+  const handleDrop = useCallback(() => {
+    setDraggedWord(null);
+  }, []);
 
   const toggleWord = useCallback((word: string) => {
     if (state.isComplete) return;
@@ -216,7 +272,6 @@ export function useGame(puzzle: Puzzle) {
 
     const guessGroupIndices = state.selectedWords.map((w) => getWordGroupIndex(w));
 
-    // Check for Rainbow Herring before normal logic
     if (
       puzzle.rainbowHerring &&
       puzzle.rainbowHerring.length === 4 &&
@@ -278,12 +333,10 @@ export function useGame(puzzle: Puzzle) {
           markPlayed(puzzle.id);
           recordGameResult(true, state.mistakes);
           saveResultToDb(true, state.mistakes);
-          // Submit global stats — mistakes 0–3 for wins
           submitGlobalStats(puzzle.id, state.mistakes);
           fireConfetti();
           vibrateCelebration();
 
-          // Save the fully revealed board immediately on win so refresh works
           const allGroupIndices = puzzle.groups.map((_, i) => i);
           saveProgress(puzzle.id, {
             solvedGroups: newSolved,
@@ -295,6 +348,7 @@ export function useGame(puzzle: Puzzle) {
             rainbowWords,
             isComplete: true,
             isWon: true,
+            tileColors,
           });
         }
       }, 700);
@@ -338,7 +392,6 @@ export function useGame(puzzle: Puzzle) {
         markPlayed(puzzle.id);
         recordGameResult(false, newMistakes);
         saveResultToDb(false, newMistakes);
-        // Submit global stats — losses always count as 4 mistakes
         submitGlobalStats(puzzle.id, 4);
 
         const sortedIndices = puzzle.groups
@@ -350,13 +403,11 @@ export function useGame(puzzle: Puzzle) {
           (idx) => !state.solvedGroups.includes(idx)
         );
 
-        // Build the full final board: player-solved groups first, then unsolved by difficulty
         const finalSolvedGroups = [
           ...state.solvedGroups,
           ...unsolvedIndices,
         ];
 
-        // Animate the reveal one by one
         unsolvedIndices.forEach((groupIdx, i) => {
           setTimeout(() => {
             const solvedWords = puzzle.groups[groupIdx].words;
@@ -367,8 +418,6 @@ export function useGame(puzzle: Puzzle) {
               solvedGroups: [...s.solvedGroups, groupIdx],
             }));
 
-            // After the LAST group is revealed, save the complete final board
-            // so that refreshing the page shows the full revealed state
             if (i === unsolvedIndices.length - 1) {
               saveProgress(puzzle.id, {
                 solvedGroups: finalSolvedGroups,
@@ -380,13 +429,14 @@ export function useGame(puzzle: Puzzle) {
                 rainbowWords,
                 isComplete: true,
                 isWon: false,
+                tileColors,
               });
             }
           }, 800 + i * 1500);
         });
       }
     }
-  }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, fireConfetti]);
+  }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, fireConfetti, tileColors]);
 
   const remainingWords = useMemo(() => {
     const solvedWords = state.solvedGroups.flatMap((i) => puzzle.groups[i].words);
@@ -406,5 +456,12 @@ export function useGame(puzzle: Puzzle) {
     rainbowWords,
     showRainbowPopup,
     matchedWords,
+    tileColors,
+    setTileColor,
+    clearAllColors,
+    hasAnyColor,
+    handleDragStart,
+    handleDragOver,
+    handleDrop,
   };
 }
