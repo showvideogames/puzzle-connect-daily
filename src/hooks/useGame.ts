@@ -175,6 +175,7 @@ export function useGame(puzzle: Puzzle) {
     return Object.values(tileColors).some(Boolean);
   }, [tileColors]);
 
+  // Desktop drag handlers
   const handleDragStart = useCallback((word: string) => {
     setDraggedWord(word);
   }, []);
@@ -193,6 +194,34 @@ export function useGame(puzzle: Puzzle) {
   }, [draggedWord]);
 
   const handleDrop = useCallback(() => {
+    setDraggedWord(null);
+  }, []);
+
+  // Mobile touch drag handlers
+  // Uses document.elementFromPoint to find which tile the finger is over
+  const handleTouchDragMove = useCallback((x: number, y: number) => {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return;
+
+    // Walk up the DOM to find a button with a data-word attribute
+    const tileEl = el.closest("[data-word]") as HTMLElement | null;
+    if (!tileEl) return;
+
+    const targetWord = tileEl.dataset.word;
+    if (!targetWord || !draggedWord || targetWord === draggedWord) return;
+
+    setShuffledWords((prev) => {
+      const result = [...prev];
+      const fromIdx = result.indexOf(draggedWord);
+      const toIdx = result.indexOf(targetWord);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      result.splice(fromIdx, 1);
+      result.splice(toIdx, 0, draggedWord);
+      return result;
+    });
+  }, [draggedWord]);
+
+  const handleTouchDragEnd = useCallback(() => {
     setDraggedWord(null);
   }, []);
 
@@ -463,5 +492,7 @@ export function useGame(puzzle: Puzzle) {
     handleDragStart,
     handleDragOver,
     handleDrop,
+    handleTouchDragMove,
+    handleTouchDragEnd,
   };
 }
