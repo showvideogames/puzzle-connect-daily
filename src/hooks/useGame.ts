@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Puzzle, GameState, GuessAttempt } from "@/lib/types";
 import { hasPlayedToday, markPlayed, recordGameResult } from "@/lib/stats";
 import { loadSettings } from "@/lib/settings";
@@ -6,6 +6,7 @@ import { vibrateSuccess, vibrateError, vibrateCelebration } from "@/lib/haptics"
 import { submitGlobalStats } from "@/lib/globalStats";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
+import { saveGameStats } from "@/lib/gameStats";
 
 function shuffleArray<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -114,6 +115,35 @@ export function useGame(puzzle: Puzzle) {
   const [showRainbowPopup, setShowRainbowPopup] = useState(false);
   const [matchedWords, setMatchedWords] = useState<string[]>([]);
   const [draggedWord, setDraggedWord] = useState<string | null>(null);
+
+  // Active timer — counts seconds only while the tab is visible
+  const activeSecondsRef = useRef<number>(0);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isVisibleRef = useRef<boolean>(true);
+
+  // Active timer — pauses when tab is hidden, resumes when visible
+  useEffect(() => {
+    if (state.isComplete) {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      return;
+    }
+
+    const handleVisibilityChange = () => {
+      isVisibleRef.current = !document.hidden;
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    timerIntervalRef.current = setInterval(() => {
+      if (isVisibleRef.current) {
+        activeSecondsRef.current += 1;
+      }
+    }, 1000);
+
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [state.isComplete]);
 
   // Auto-save progress including tile colors
   useEffect(() => {
@@ -293,6 +323,15 @@ export function useGame(puzzle: Puzzle) {
     playCelebrationSound();
   }, [playCelebrationSound]);
 
+  // Converts solved group indices to color names for solve_order tracking
+  const getSolveOrder = useCallback((solvedGroups: number[]): string[] => {
+    const colorNames = ["orange", "green", "blue", "red"];
+    return solvedGroups.map((groupIdx) => {
+      const diff = puzzle.groups[groupIdx]?.difficulty;
+      return colorNames[diff - 1] ?? "unknown";
+    });
+  }, [puzzle]);
+
   const submitGuess = useCallback(() => {
     if (state.selectedWords.length !== 4 || state.isComplete) return;
 
@@ -363,6 +402,21 @@ export function useGame(puzzle: Puzzle) {
           fireConfetti();
           vibrateCelebration();
 
+          // Save full stats
+          saveGameStats({
+            puzzleId: puzzle.id,
+            won: true,
+            mistakes: state.mistakes,
+            activeTimeSeconds: activeSecondsRef.current,
+            foundRainbow: state.gotRainbow,
+            solveOrder: getSolveOrder(newSolved),
+            guessHistory: [...state.guessHistory, attempt].map((g) => ({
+              words: g.words,
+              correct: g.isCorrect,
+              group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
+            })),
+          });
+
           const allGroupIndices = puzzle.groups.map((_, i) => i);
           saveProgress(puzzle.id, {
             solvedGroups: newSolved,
@@ -419,6 +473,21 @@ export function useGame(puzzle: Puzzle) {
         recordGameResult(false, newMistakes);
         saveResultToDb(false, newMistakes);
         submitGlobalStats(puzzle.id, 4);
+
+        // Save full stats on loss
+        saveGameStats({
+          puzzleId: puzzle.id,
+          won: false,
+          mistakes: newMistakes,
+          activeTimeSeconds: activeSecondsRef.current,
+          foundRainbow: state.gotRainbow,
+          solveOrder: getSolveOrder(state.solvedGroups),
+          guessHistory: [...state.guessHistory, attempt].map((g) => ({
+            words: g.words,
+            correct: g.isCorrect,
+            group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
+          })),
+        });
 
         const sortedIndices = puzzle.groups
           .map((g, i) => ({ idx: i, diff: g.difficulty }))
