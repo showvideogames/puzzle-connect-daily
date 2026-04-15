@@ -4,7 +4,7 @@ import { useGame } from "@/hooks/useGame";
 import { WordTile } from "./WordTile";
 import { SolvedGroup } from "./SolvedGroup";
 import { MistakeDots } from "./MistakeDots";
-import { GlobalStatsModal } from "./GlobalStatsModal";
+import { DailyStatsModal } from "./DailyStatsModal";
 import { PuzzleRating } from "./PuzzleRating";
 import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
@@ -277,7 +277,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      <GlobalStatsModal
+      <DailyStatsModal
         puzzleId={puzzle.id}
         open={showGlobalStats}
         onClose={() => setShowGlobalStats(false)}

@@ -3,7 +3,6 @@ import { GameHeader } from "@/components/GameHeader";
 import { GameBoard } from "@/components/GameBoard";
 import { StatsModal } from "@/components/StatsModal";
 import { TutorialModal } from "@/components/TutorialModal";
-import { DailyStatsModal } from "@/components/DailyStatsModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { getTodaysPuzzle } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
@@ -13,7 +12,7 @@ import type { User } from "@supabase/supabase-js";
 
 const TUTORIAL_SEEN_KEY = "tutorial-seen";
 
-type ModalName = "stats" | "help" | "dailyStats" | "settings" | null;
+type ModalName = "stats" | "help" | "settings" | null;
 
 export default function Index() {
   const [activeModal, setActiveModal] = useState<ModalName>(null);
@@ -98,7 +97,6 @@ export default function Index() {
       <GameHeader
         onStatsClick={() => openModal("stats")}
         onHowToPlayClick={() => openModal("help")}
-        onDailyStatsClick={() => openModal("dailyStats")}
         onSettingsClick={() => openModal("settings")}
         user={user}
         onSignOut={handleSignOut}
@@ -138,13 +136,6 @@ export default function Index() {
         settings={settings}
         onSettingsChange={handleSettingsChange}
       />
-      {puzzle && (
-        <DailyStatsModal
-          puzzleId={puzzle.id}
-          open={activeModal === "dailyStats"}
-          onClose={closeModal}
-        />
-      )}
     </div>
   );
 }

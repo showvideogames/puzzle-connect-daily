@@ -59,7 +59,6 @@ export default function ArchivePuzzle() {
       <GameHeader
         onStatsClick={() => setActiveModal("stats")}
         onHowToPlayClick={() => setActiveModal("help")}
-        onDailyStatsClick={() => {}}
         onSettingsClick={() => setActiveModal("settings")}
         user={user}
         onSignOut={() => supabase.auth.signOut()}
