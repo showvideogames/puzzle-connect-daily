@@ -35,6 +35,53 @@ export type Database = {
         }
         Relationships: []
       }
+      game_sessions: {
+        Row: {
+          id: string
+          puzzle_id: string
+          user_id: string | null
+          device_id: string
+          won: boolean
+          mistakes: number
+          active_time_seconds: number
+          found_rainbow: boolean
+          solve_order: string[]
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          puzzle_id: string
+          user_id?: string | null
+          device_id: string
+          won: boolean
+          mistakes?: number
+          active_time_seconds?: number
+          found_rainbow?: boolean
+          solve_order?: string[]
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          puzzle_id?: string
+          user_id?: string | null
+          device_id?: string
+          won?: boolean
+          mistakes?: number
+          active_time_seconds?: number
+          found_rainbow?: boolean
+          solve_order?: string[]
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_sessions_puzzle_id_fkey"
+            columns: ["puzzle_id"]
+            isOneToOne: false
+            referencedRelation: "puzzles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_results: {
         Row: {
           completed_at: string
@@ -66,6 +113,44 @@ export type Database = {
             columns: ["puzzle_id"]
             isOneToOne: false
             referencedRelation: "puzzles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      guess_events: {
+        Row: {
+          id: string
+          game_session_id: string
+          guess_number: number
+          words: string[]
+          correct: boolean
+          group_name: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          game_session_id: string
+          guess_number: number
+          words: string[]
+          correct: boolean
+          group_name?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          game_session_id?: string
+          guess_number?: number
+          words?: string[]
+          correct?: boolean
+          group_name?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guess_events_game_session_id_fkey"
+            columns: ["game_session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -132,6 +217,47 @@ export type Database = {
         }
         Relationships: []
       }
+      puzzle_aggregates: {
+        Row: {
+          id: string
+          puzzle_id: string
+          total_plays: number
+          total_wins: number
+          avg_mistakes: number
+          avg_time_seconds: number
+          most_common_first_solve: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          puzzle_id: string
+          total_plays?: number
+          total_wins?: number
+          avg_mistakes?: number
+          avg_time_seconds?: number
+          most_common_first_solve?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          puzzle_id?: string
+          total_plays?: number
+          total_wins?: number
+          avg_mistakes?: number
+          avg_time_seconds?: number
+          most_common_first_solve?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "puzzle_aggregates_puzzle_id_fkey"
+            columns: ["puzzle_id"]
+            isOneToOne: true
+            referencedRelation: "puzzles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       puzzles: {
         Row: {
           created_at: string
@@ -190,6 +316,36 @@ export type Database = {
         Relationships: []
       }
     }
+      user_streaks: {
+        Row: {
+          id: string
+          user_id: string | null
+          device_id: string
+          current_streak: number
+          longest_streak: number
+          last_played_date: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          device_id: string
+          current_streak?: number
+          longest_streak?: number
+          last_played_date: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          device_id?: string
+          current_streak?: number
+          longest_streak?: number
+          last_played_date?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     Views: {
       [_ in never]: never
     }
