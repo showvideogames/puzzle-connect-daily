@@ -176,12 +176,15 @@ export function WordTile({
         onDragStart={() => onDragStart?.(word)}
         onDragOver={(e) => { e.preventDefault(); onDragOver?.(word); }}
         onDrop={onDrop}
-        className={`${baseClasses} ${stateClasses} w-full overflow-hidden ${isEmojiPuzzle ? "" : "text-xs sm:text-sm"}`}
-        style={isEmojiPuzzle
-          ? { fontSize: "3rem", wordBreak: "break-word", overflowWrap: "break-word" }
-          : { wordBreak: "break-word", overflowWrap: "break-word" }}
+        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "" : "text-xs sm:text-sm"}`}
+        style={{
+          ...(isEmojiPuzzle ? { fontSize: "3rem" } : {}),
+          ...(word.includes(" ")
+            ? { wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "normal" }
+            : { whiteSpace: "nowrap" }),
+        }}
       >
-        <span className="block w-full leading-tight break-words text-center">{word}</span>
+        {word}
       </button>
 
       {showColorPicker && (
