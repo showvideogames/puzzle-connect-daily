@@ -20,7 +20,7 @@ interface SpotTheRainbowModalProps {
 
 export function SpotTheRainbowModal({ open, puzzle, onResult }: SpotTheRainbowModalProps) {
   const [selected, setSelected] = useState<Record<number, string>>({});
-  const [phase, setPhase] = useState<"picking" | "correct" | "wrong">("picking");
+  const [phase, setPhase] = useState<"picking" | "correct">("picking");
 
   if (!open || !puzzle.rainbowHerring) return null;
 
@@ -46,16 +46,13 @@ export function SpotTheRainbowModal({ open, puzzle, onResult }: SpotTheRainbowMo
       playRainbowSound();
       setTimeout(() => onResult(true), 2000);
     } else {
-      setPhase("wrong");
+      onResult(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div
-        className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
-        onClick={phase === "wrong" ? () => onResult(false) : undefined}
-      />
+      <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
       <div className="relative bg-card rounded-xl shadow-2xl p-5 w-full max-w-sm mx-4 animate-pop overflow-y-auto max-h-[90vh]">
 
         {/* Correct result */}
@@ -67,26 +64,6 @@ export function SpotTheRainbowModal({ open, puzzle, onResult }: SpotTheRainbowMo
               <p className="text-xl font-bold">You spotted it!</p>
               <p className="text-sm text-muted-foreground mt-1">Rainbow added to your share.</p>
             </div>
-          </>
-        )}
-
-        {/* Wrong result — modal transforms, no auto-close */}
-        {phase === "wrong" && (
-          <>
-            <h2 className="text-lg font-bold mb-4">Rainbow 🌈</h2>
-            <div
-              className="w-full rounded-lg py-3 px-4 text-center text-white font-bold text-sm mb-4"
-              style={{ background: RAINBOW_GRADIENT }}
-            >
-              {puzzle.rainbowHerring.join(" · ")}
-            </div>
-            <button
-              onClick={() => onResult(false)}
-              className="w-full py-2.5 rounded-full border border-border text-sm font-semibold
-                hover:bg-secondary transition-all duration-150 active:scale-95"
-            >
-              Close
-            </button>
           </>
         )}
 
