@@ -82,11 +82,13 @@ export default function Admin() {
   const [isPublished, setIsPublished] = useState(false);
   const [saving, setSaving] = useState(false);
   const [wordOrder, setWordOrder] = useState<string[]>([]);
-  const [swapFirst, setSwapFirst] = useState<number | null>(null);
   const [draftRestored, setDraftRestored] = useState(false);
   const [dragGroupIdx, setDragGroupIdx] = useState<number | null>(null);
   const [dragOverGroupIdx, setDragOverGroupIdx] = useState<number | null>(null);
   const touchDragGroupIdx = useRef<number | null>(null);
+  const [dragTileIdx, setDragTileIdx] = useState<number | null>(null);
+  const [dragOverTileIdx, setDragOverTileIdx] = useState<number | null>(null);
+  const touchDragTileIdx = useRef<number | null>(null);
 
   // Existing puzzles list
   const [puzzles, setPuzzles] = useState<any[]>([]);
@@ -237,20 +239,50 @@ export default function Admin() {
 
   function generateWordOrder() {
     setWordOrder([...allWords]);
-    setSwapFirst(null);
   }
 
-  function handleTileClick(idx: number) {
-    if (swapFirst === null) {
-      setSwapFirst(idx);
-    } else {
-      setWordOrder((prev) => {
-        const next = [...prev];
-        [next[swapFirst], next[idx]] = [next[idx], next[swapFirst]];
-        return next;
-      });
-      setSwapFirst(null);
+  function swapTiles(a: number, b: number) {
+    if (a === b) return;
+    setWordOrder((prev) => {
+      const next = [...prev];
+      [next[a], next[b]] = [next[b], next[a]];
+      return next;
+    });
+  }
+
+  function handleTileDragStart(idx: number) {
+    setDragTileIdx(idx);
+  }
+
+  function handleTileDragOver(e: React.DragEvent, idx: number) {
+    e.preventDefault();
+    setDragOverTileIdx(idx);
+  }
+
+  function handleTileDrop(idx: number) {
+    if (dragTileIdx !== null) swapTiles(dragTileIdx, idx);
+    setDragTileIdx(null);
+    setDragOverTileIdx(null);
+  }
+
+  function handleTileDragEnd() {
+    setDragTileIdx(null);
+    setDragOverTileIdx(null);
+  }
+
+  function handleTileTouchStart(idx: number) {
+    touchDragTileIdx.current = idx;
+  }
+
+  function handleTileTouchEnd(e: React.TouchEvent) {
+    const touch = e.changedTouches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const tileEl = el?.closest("[data-tile-idx]");
+    const targetIdx = tileEl ? parseInt(tileEl.getAttribute("data-tile-idx")!, 10) : null;
+    if (touchDragTileIdx.current !== null && targetIdx !== null) {
+      swapTiles(touchDragTileIdx.current, targetIdx);
     }
+    touchDragTileIdx.current = null;
   }
 
   async function handleSave() {
@@ -376,7 +408,6 @@ export default function Admin() {
     ]);
     setIsPublished(false);
     setWordOrder([]);
-    setSwapFirst(null);
     setRainbowHerring([null, null, null, null]);
     setRainbowCategoryName("");
     setIsEmojiPuzzle(false);
@@ -656,7 +687,7 @@ export default function Admin() {
               </div>
               {wordOrder.length === 16 && (
                 <>
-                  <p className="text-xs text-muted-foreground">Click two tiles to swap their positions. This is how the puzzle will appear to players before they shuffle.</p>
+                  <p className="text-xs text-muted-foreground">Drag tiles to reorder them. This is how the puzzle will appear to players before they shuffle.</p>
                   <div className="grid grid-cols-4 gap-2">
                     {wordOrder.map((word, idx) => {
                       const groupIdx = groups.findIndex((g) =>
@@ -668,18 +699,28 @@ export default function Admin() {
                         "bg-[hsl(var(--group-3)/0.3)]",
                         "bg-[hsl(var(--group-4)/0.3)]",
                       ];
-                      const isSwapSelected = swapFirst === idx;
+                      const isDragging = dragTileIdx === idx;
+                      const isDropTarget = dragOverTileIdx === idx && dragTileIdx !== idx;
                       return (
-                        <button
+                        <div
                           key={idx}
-                          type="button"
-                          onClick={() => handleTileClick(idx)}
-                          className={`rounded-lg px-2 py-3 text-xs font-semibold uppercase tracking-wide text-center transition-all duration-150 active:scale-95 cursor-pointer border-2 ${
-                            isSwapSelected ? "border-primary ring-2 ring-primary/30" : "border-transparent"
-                          } ${diffColors[groupIdx] || "bg-muted"}`}
+                          data-tile-idx={idx}
+                          draggable
+                          onDragStart={() => handleTileDragStart(idx)}
+                          onDragOver={(e) => handleTileDragOver(e, idx)}
+                          onDrop={() => handleTileDrop(idx)}
+                          onDragEnd={handleTileDragEnd}
+                          onTouchStart={() => handleTileTouchStart(idx)}
+                          onTouchEnd={handleTileTouchEnd}
+                          className={`rounded-lg px-2 py-3 text-xs font-semibold uppercase tracking-wide text-center
+                            transition-all duration-150 cursor-grab active:cursor-grabbing select-none
+                            ${diffColors[groupIdx] || "bg-muted"}
+                            ${isDragging ? "opacity-40" : ""}
+                            ${isDropTarget ? "ring-2 ring-primary scale-105" : ""}
+                          `}
                         >
                           {word}
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
