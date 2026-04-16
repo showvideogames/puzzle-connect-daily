@@ -1,7 +1,7 @@
 /**
- * Rainbow sweep sound — an ascending glissando in 7 staggered bands
- * (one per colour of the rainbow), sweeping up one octave each.
- * Feels distinct from the 4-note celebration chord in useGame.ts.
+ * Rainbow harp glissando — 10 plucked sine-wave notes ascending a pentatonic
+ * scale, staggered like fingers brushing harp strings. Soft attack, warm decay.
+ * Feels light and magical rather than sci-fi.
  */
 export function playRainbowSound(): void {
   try {
@@ -11,31 +11,27 @@ export function playRainbowSound(): void {
     const ctx = new AudioContext();
     const now = ctx.currentTime;
 
-    // 7 sine-wave bands, each offset in time and frequency like prism colours.
-    // Every band sweeps up one octave (start → start × 2) over 0.9 s.
-    const bands: { start: number; delay: number; vol: number }[] = [
-      { start: 280, delay: 0.00, vol: 0.07 },
-      { start: 350, delay: 0.08, vol: 0.07 },
-      { start: 420, delay: 0.16, vol: 0.06 },
-      { start: 500, delay: 0.24, vol: 0.06 },
-      { start: 600, delay: 0.32, vol: 0.05 },
-      { start: 700, delay: 0.40, vol: 0.05 },
-      { start: 840, delay: 0.48, vol: 0.04 },
-    ];
+    // Pentatonic scale starting at C5 (523 Hz) — 10 notes ascending.
+    // Frequencies: C D E G A C D E G A (two octaves of pentatonic)
+    const notes = [523, 587, 659, 784, 880, 1047, 1175, 1319, 1568, 1760];
 
-    bands.forEach(({ start, delay, vol }) => {
+    notes.forEach((freq, i) => {
+      const delay = i * 0.07; // 70 ms between each pluck
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+
       osc.type = "sine";
-      osc.frequency.setValueAtTime(start, now + delay);
-      osc.frequency.exponentialRampToValueAtTime(start * 2, now + delay + 0.9);
+      osc.frequency.value = freq;
+
+      // Sharp pluck attack, then a warm exponential decay like a harp string
       gain.gain.setValueAtTime(0, now + delay);
-      gain.gain.linearRampToValueAtTime(vol, now + delay + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.9);
+      gain.gain.linearRampToValueAtTime(0.12, now + delay + 0.01);  // fast attack
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.8); // warm decay
+
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(now + delay);
-      osc.stop(now + delay + 1.0);
+      osc.stop(now + delay + 0.85);
     });
   } catch {}
 }
