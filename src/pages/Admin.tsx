@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, LogOut, Save, Eye, EyeOff, ArrowLeft, Pencil, BarChart3, RotateCcw } from "lucide-react";
+import { Plus, Trash2, LogOut, Save, Eye, EyeOff, ArrowLeft, Pencil, BarChart3, RotateCcw, GripVertical } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ArchiveAccessManager } from "@/components/ArchiveAccessManager";
 import { toast } from "sonner";
@@ -84,6 +84,9 @@ export default function Admin() {
   const [wordOrder, setWordOrder] = useState<string[]>([]);
   const [swapFirst, setSwapFirst] = useState<number | null>(null);
   const [draftRestored, setDraftRestored] = useState(false);
+  const [dragGroupIdx, setDragGroupIdx] = useState<number | null>(null);
+  const [dragOverGroupIdx, setDragOverGroupIdx] = useState<number | null>(null);
+  const touchDragGroupIdx = useRef<number | null>(null);
 
   // Existing puzzles list
   const [puzzles, setPuzzles] = useState<any[]>([]);
@@ -177,6 +180,55 @@ export default function Admin() {
 
   function updateGroup(idx: number, field: keyof GroupForm, value: string | number) {
     setGroups((g) => g.map((gr, i) => (i === idx ? { ...gr, [field]: value } : gr)));
+  }
+
+  function swapGroups(a: number, b: number) {
+    if (a === b) return;
+    setGroups((prev) => {
+      const next = [...prev];
+      [next[a], next[b]] = [next[b], next[a]];
+      return next;
+    });
+    setRainbowHerring((prev) => {
+      const next = [...prev];
+      [next[a], next[b]] = [next[b], next[a]];
+      return next;
+    });
+  }
+
+  function handleGroupDragStart(i: number) {
+    setDragGroupIdx(i);
+  }
+
+  function handleGroupDragOver(e: React.DragEvent, i: number) {
+    e.preventDefault();
+    setDragOverGroupIdx(i);
+  }
+
+  function handleGroupDrop(i: number) {
+    if (dragGroupIdx !== null) swapGroups(dragGroupIdx, i);
+    setDragGroupIdx(null);
+    setDragOverGroupIdx(null);
+  }
+
+  function handleGroupDragEnd() {
+    setDragGroupIdx(null);
+    setDragOverGroupIdx(null);
+  }
+
+  function handleGroupTouchStart(i: number) {
+    touchDragGroupIdx.current = i;
+  }
+
+  function handleGroupTouchEnd(e: React.TouchEvent) {
+    const touch = e.changedTouches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const groupEl = el?.closest("[data-group-idx]");
+    const targetIdx = groupEl ? parseInt(groupEl.getAttribute("data-group-idx")!, 10) : null;
+    if (touchDragGroupIdx.current !== null && targetIdx !== null) {
+      swapGroups(touchDragGroupIdx.current, targetIdx);
+    }
+    touchDragGroupIdx.current = null;
   }
 
   // Compute all words from groups
@@ -543,35 +595,54 @@ export default function Admin() {
           </div>
 
           <div className="space-y-3">
-            {groups.map((g, i) => (
-              <div key={i} className={`rounded-lg p-4 space-y-2 ${difficultyColors[i]} bg-opacity-30`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Group {i + 1} — {difficultyLabels[i]}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Category Name</Label>
-                    <Input
-                      value={g.category}
-                      onChange={(e) => updateGroup(i, "category", e.target.value)}
-                      onBlur={handleBlurSave}
-                      placeholder="e.g. Coffee Drinks"
-                    />
+            {groups.map((g, i) => {
+              const isDragging = dragGroupIdx === i;
+              const isDropTarget = dragOverGroupIdx === i && dragGroupIdx !== i;
+              return (
+                <div
+                  key={i}
+                  data-group-idx={i}
+                  draggable
+                  onDragStart={() => handleGroupDragStart(i)}
+                  onDragOver={(e) => handleGroupDragOver(e, i)}
+                  onDrop={() => handleGroupDrop(i)}
+                  onDragEnd={handleGroupDragEnd}
+                  onTouchStart={() => handleGroupTouchStart(i)}
+                  onTouchEnd={handleGroupTouchEnd}
+                  className={`rounded-lg p-4 space-y-2 ${difficultyColors[i]} bg-opacity-30 transition-all duration-150
+                    ${isDragging ? "opacity-40" : ""}
+                    ${isDropTarget ? "ring-2 ring-primary ring-offset-1 scale-[1.01]" : ""}
+                  `}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Group {i + 1} — {difficultyLabels[i]}
+                    </span>
+                    <GripVertical className="w-4 h-4 text-muted-foreground/50 cursor-grab active:cursor-grabbing" />
                   </div>
-                  <div>
-                    <Label className="text-xs">4 Words (comma-separated)</Label>
-                    <Input
-                      value={g.words}
-                      onChange={(e) => updateGroup(i, "words", e.target.value)}
-                      onBlur={handleBlurSave}
-                      placeholder="LATTE, MOCHA, ESPRESSO, CORTADO"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Category Name</Label>
+                      <Input
+                        value={g.category}
+                        onChange={(e) => updateGroup(i, "category", e.target.value)}
+                        onBlur={handleBlurSave}
+                        placeholder="e.g. Coffee Drinks"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">4 Words (comma-separated)</Label>
+                      <Input
+                        value={g.words}
+                        onChange={(e) => updateGroup(i, "words", e.target.value)}
+                        onBlur={handleBlurSave}
+                        placeholder="LATTE, MOCHA, ESPRESSO, CORTADO"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Grid Order Editor */}
