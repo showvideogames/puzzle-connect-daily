@@ -179,12 +179,14 @@ export function WordTile({
         className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "" : "text-xs sm:text-sm"}`}
         style={{
           ...(isEmojiPuzzle ? { fontSize: "3rem" } : {}),
-          ...(word.includes(" ")
-            ? { wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "normal" }
-            : { whiteSpace: "nowrap" }),
+          ...(word.includes(" ") ? {} : { whiteSpace: "nowrap" }),
         }}
       >
-        {word}
+        {word.includes(" ") ? (
+          <span style={{ display: "block", maxWidth: "80px", wordBreak: "break-word", overflowWrap: "break-word", lineHeight: 1.2 }}>
+            {word}
+          </span>
+        ) : word}
       </button>
 
       {showColorPicker && (
