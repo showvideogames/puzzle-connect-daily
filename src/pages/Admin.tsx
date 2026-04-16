@@ -87,7 +87,7 @@ export default function Admin() {
   const [dragOverGroupIdx, setDragOverGroupIdx] = useState<number | null>(null);
   const touchDragGroupIdx = useRef<number | null>(null);
   const [dragTileIdx, setDragTileIdx] = useState<number | null>(null);
-  const [dropIndex, setDropIndex] = useState<number | null>(null); // insert-before index 0-16
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const touchDragTileIdx = useRef<number | null>(null);
 
   // Existing puzzles list
@@ -241,40 +241,47 @@ export default function Admin() {
     setWordOrder([...allWords]);
   }
 
-  function reorderTile(from: number, to: number) {
-    // `to` is insert-before index. No-op if tile stays in same logical position.
-    if (to === from || to === from + 1) return;
-    setWordOrder((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(from, 1);
-      next.splice(to > from ? to - 1 : to, 0, moved);
-      return next;
-    });
+  // Derive the live preview order: dragged tile moves to hoverIdx, others shift around it
+  function computeTilePreview(order: string[], from: number, to: number): string[] {
+    if (from === to) return order;
+    const next = [...order];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    return next;
   }
 
-  function handleTileDragStart(idx: number) {
-    setDragTileIdx(idx);
+  const tileDisplayOrder =
+    dragTileIdx !== null && hoverIdx !== null
+      ? computeTilePreview(wordOrder, dragTileIdx, hoverIdx)
+      : wordOrder;
+
+  const ghostWord = dragTileIdx !== null ? wordOrder[dragTileIdx] : null;
+
+  function handleTileDragStart(vIdx: number) {
+    setDragTileIdx(vIdx);
+    setHoverIdx(vIdx);
   }
 
-  function handleTileDragOver(e: React.DragEvent, idx: number) {
+  function handleTileDragOver(e: React.DragEvent, vIdx: number) {
     e.preventDefault();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDropIndex(e.clientX < rect.left + rect.width / 2 ? idx : idx + 1);
+    setHoverIdx(vIdx);
   }
 
   function handleTileDrop() {
-    if (dragTileIdx !== null && dropIndex !== null) reorderTile(dragTileIdx, dropIndex);
+    if (dragTileIdx !== null && hoverIdx !== null) {
+      setWordOrder(computeTilePreview(wordOrder, dragTileIdx, hoverIdx));
+    }
     setDragTileIdx(null);
-    setDropIndex(null);
+    setHoverIdx(null);
   }
 
   function handleTileDragEnd() {
     setDragTileIdx(null);
-    setDropIndex(null);
+    setHoverIdx(null);
   }
 
-  function handleTileTouchStart(idx: number) {
-    touchDragTileIdx.current = idx;
+  function handleTileTouchStart(vIdx: number) {
+    touchDragTileIdx.current = vIdx;
   }
 
   function handleTileTouchEnd(e: React.TouchEvent) {
@@ -283,12 +290,10 @@ export default function Admin() {
     const tileEl = el?.closest("[data-tile-idx]");
     const targetIdx = tileEl ? parseInt(tileEl.getAttribute("data-tile-idx")!, 10) : null;
     if (touchDragTileIdx.current !== null && targetIdx !== null) {
-      const rect = tileEl!.getBoundingClientRect();
-      const insertAt = touch.clientX < rect.left + rect.width / 2 ? targetIdx : targetIdx + 1;
-      reorderTile(touchDragTileIdx.current, insertAt);
+      setWordOrder(computeTilePreview(wordOrder, touchDragTileIdx.current, targetIdx));
     }
     touchDragTileIdx.current = null;
-    setDropIndex(null);
+    setHoverIdx(null);
   }
 
   async function handleSave() {
@@ -695,7 +700,7 @@ export default function Admin() {
                 <>
                   <p className="text-xs text-muted-foreground">Drag tiles to reorder them. This is how the puzzle will appear to players before they shuffle.</p>
                   <div className="grid grid-cols-4 gap-2">
-                    {wordOrder.map((word, idx) => {
+                    {tileDisplayOrder.map((word, vIdx) => {
                       const groupIdx = groups.findIndex((g) =>
                         g.words.split(",").map((w) => w.trim().toUpperCase()).includes(word)
                       );
@@ -705,34 +710,25 @@ export default function Admin() {
                         "bg-[hsl(var(--group-3)/0.3)]",
                         "bg-[hsl(var(--group-4)/0.3)]",
                       ];
-                      const isDragging = dragTileIdx === idx;
+                      const isGhost = word === ghostWord;
                       return (
-                        <div key={idx} className="relative">
-                          {/* Insert-before line */}
-                          {dropIndex === idx && dragTileIdx !== idx && dragTileIdx !== idx - 1 && (
-                            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary z-10 -translate-x-1 rounded-full" />
-                          )}
-                          {/* Insert-after line on the last tile */}
-                          {idx === 15 && dropIndex === 16 && dragTileIdx !== 15 && (
-                            <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-primary z-10 translate-x-1 rounded-full" />
-                          )}
-                          <div
-                            data-tile-idx={idx}
-                            draggable
-                            onDragStart={() => handleTileDragStart(idx)}
-                            onDragOver={(e) => handleTileDragOver(e, idx)}
-                            onDrop={handleTileDrop}
-                            onDragEnd={handleTileDragEnd}
-                            onTouchStart={() => handleTileTouchStart(idx)}
-                            onTouchEnd={handleTileTouchEnd}
-                            className={`rounded-lg px-2 py-3 text-xs font-semibold uppercase tracking-wide text-center
-                              transition-opacity duration-150 cursor-grab active:cursor-grabbing select-none
-                              ${diffColors[groupIdx] || "bg-muted"}
-                              ${isDragging ? "opacity-40" : ""}
-                            `}
-                          >
-                            {word}
-                          </div>
+                        <div
+                          key={word}
+                          data-tile-idx={vIdx}
+                          draggable
+                          onDragStart={() => handleTileDragStart(vIdx)}
+                          onDragOver={(e) => handleTileDragOver(e, vIdx)}
+                          onDrop={handleTileDrop}
+                          onDragEnd={handleTileDragEnd}
+                          onTouchStart={() => handleTileTouchStart(vIdx)}
+                          onTouchEnd={handleTileTouchEnd}
+                          className={`rounded-lg px-2 py-3 text-xs font-semibold uppercase tracking-wide text-center
+                            transition-all duration-100 cursor-grab active:cursor-grabbing select-none
+                            ${diffColors[groupIdx] || "bg-muted"}
+                            ${isGhost ? "opacity-30 ring-2 ring-primary ring-dashed" : ""}
+                          `}
+                        >
+                          {word}
                         </div>
                       );
                     })}
