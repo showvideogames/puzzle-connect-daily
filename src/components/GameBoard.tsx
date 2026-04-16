@@ -135,8 +135,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
       {/* Solved groups */}
       <div className="space-y-2 mb-2">
-        {/* Rainbow bar at top — for players who found it during play */}
-        {state.isComplete && state.gotRainbow && puzzle.rainbowHerring && (
+        {/* Rainbow bar at top — appears as soon as the rainbow is found */}
+        {state.gotRainbow && puzzle.rainbowHerring && (
           <div
             className="w-full rounded-lg py-3 px-4 text-center text-white"
             style={{ background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)" }}
