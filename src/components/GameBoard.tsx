@@ -5,6 +5,7 @@ import { WordTile } from "./WordTile";
 import { SolvedGroup } from "./SolvedGroup";
 import { MistakeDots } from "./MistakeDots";
 import { DailyStatsModal } from "./DailyStatsModal";
+import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { PuzzleRating } from "./PuzzleRating";
 import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
@@ -77,6 +78,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   const [copied, setCopied] = useState(false);
   const [showGlobalStats, setShowGlobalStats] = useState(false);
+  const [showSpotModal, setShowSpotModal] = useState(false);
+  const [spotPromptVisible, setSpotPromptVisible] = useState(true);
+  const [bonusRainbowCorrect, setBonusRainbowCorrect] = useState<boolean | null>(null);
 
   const generateShareLines = useCallback((): string[] => {
     const lines: string[] = [];
@@ -93,8 +97,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         lines.push(row);
       }
     }
+    // Rainbow found via bonus modal → 🌈 at the bottom
+    if (bonusRainbowCorrect === true) {
+      lines.push("🌈");
+    }
     return lines;
-  }, [state.guessHistory, puzzle]);
+  }, [state.guessHistory, puzzle, bonusRainbowCorrect]);
 
   const generateShareText = useCallback(() => {
     const d = new Date(puzzle.date + "T12:00:00");
@@ -272,6 +280,25 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   <TrendingUp className="w-4 h-4" /> Global Stats
                 </button>
               </div>
+
+              {/* Spot the Rainbow bonus prompt — only for players who missed it */}
+              {!state.gotRainbow && puzzle.rainbowHerring && spotPromptVisible && bonusRainbowCorrect === null && (
+                <div className="flex items-center gap-2 mt-1 px-4 py-2.5 rounded-full border border-border bg-secondary/30">
+                  <button
+                    onClick={() => setShowSpotModal(true)}
+                    className="flex-1 text-sm font-semibold text-center"
+                  >
+                    Spot the Rainbow? 🌈
+                  </button>
+                  <button
+                    onClick={() => setSpotPromptVisible(false)}
+                    className="p-1 rounded-full hover:bg-secondary transition-colors active:scale-95 shrink-0"
+                    aria-label="Dismiss"
+                  >
+                    <X className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -282,6 +309,22 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         open={showGlobalStats}
         onClose={() => setShowGlobalStats(false)}
       />
+
+      {puzzle.rainbowHerring && (
+        <SpotTheRainbowModal
+          open={showSpotModal}
+          puzzle={puzzle}
+          onDismiss={() => {
+            setSpotPromptVisible(false);
+            setShowSpotModal(false);
+          }}
+          onResult={(correct) => {
+            setBonusRainbowCorrect(correct);
+            setSpotPromptVisible(false);
+            setShowSpotModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }
