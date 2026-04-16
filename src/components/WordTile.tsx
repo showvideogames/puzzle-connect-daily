@@ -177,7 +177,7 @@ export function WordTile({
         onDragOver={(e) => { e.preventDefault(); onDragOver?.(word); }}
         onDrop={onDrop}
         className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "" : "text-xs sm:text-sm"}`}
-        style={isEmojiPuzzle ? { fontSize: "5rem" } : undefined}
+        style={isEmojiPuzzle ? { fontSize: "3rem" } : undefined}
       >
         {word}
       </button>
