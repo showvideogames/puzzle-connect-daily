@@ -136,9 +136,9 @@ export function WordTile({
   }, [advancedFeatures, onClick]);
 
   const handleColorSelect = useCallback((color: string | null) => {
-    onColorChange?.(word, color);
+    onColorChange?.(word, color === tileColor ? null : color);
     setShowColorPicker(false);
-  }, [word, onColorChange]);
+  }, [word, tileColor, onColorChange]);
 
   const colorStyle = tileColor ? COLOR_STYLES[tileColor] : null;
 
