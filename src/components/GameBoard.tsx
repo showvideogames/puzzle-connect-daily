@@ -144,15 +144,30 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         ))}
 
         {/* Rainbow gradient bar — shown when game is over and rainbow was missed */}
-        {state.isComplete && !state.gotRainbow && puzzle.rainbowHerring && bonusRainbowCorrect === null && (
-          <button
-            onClick={() => setShowSpotModal(true)}
-            className="w-full rounded-lg py-3 px-4 text-center text-white font-bold text-sm
-              hover:opacity-90 transition-opacity active:scale-[0.99]"
-            style={{ background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)" }}
-          >
-            Spot the Rainbow? 🌈
-          </button>
+        {state.isComplete && !state.gotRainbow && puzzle.rainbowHerring && (
+          bonusRainbowCorrect === null ? (
+            // Prompt — same two-line structure as SolvedGroup for identical height
+            <button
+              onClick={() => setShowSpotModal(true)}
+              className="w-full rounded-lg py-3 px-4 text-center text-white
+                hover:opacity-90 transition-opacity active:scale-[0.99]"
+              style={{ background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)" }}
+            >
+              <div className="font-bold text-sm uppercase tracking-wide">Spot the Rainbow? 🌈</div>
+              <div className="text-xs mt-0.5 opacity-80">Find one word from each group</div>
+            </button>
+          ) : (
+            // Revealed — shows after modal closes whether correct or wrong
+            <div
+              className="w-full rounded-lg py-3 px-4 text-center text-white"
+              style={{ background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)" }}
+            >
+              <div className="font-bold text-sm uppercase tracking-wide">Rainbow 🌈</div>
+              <div className="text-xs mt-0.5 opacity-90">
+                {[...puzzle.rainbowHerring].sort().join(", ")}
+              </div>
+            </div>
+          )
         )}
       </div>
 

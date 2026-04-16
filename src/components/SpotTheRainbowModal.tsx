@@ -103,7 +103,7 @@ export function SpotTheRainbowModal({ open, puzzle, onResult }: SpotTheRainbowMo
                 return (
                   <div key={groupIdx} className="rounded-lg overflow-hidden">
                     {/* Group header shows category name, then chosen word once picked */}
-                    <div className={`${colors.bg} ${colors.text} px-3 py-1.5`}>
+                    <div className={`${colors.bg} ${colors.text} px-3 py-1.5 text-center`}>
                       <span className="text-[11px] font-bold uppercase tracking-wide opacity-75">
                         {chosenWord ? `✓ ${chosenWord}` : group.category}
                       </span>
