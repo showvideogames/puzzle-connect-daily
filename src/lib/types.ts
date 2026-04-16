@@ -11,6 +11,7 @@ export interface Puzzle {
   groups: PuzzleGroup[];
   wordOrder?: string[] | null;
   rainbowHerring?: string[] | null;
+  rainbowCategoryName?: string | null;
 }
 
 export interface GameStats {

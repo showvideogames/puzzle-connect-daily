@@ -265,6 +265,7 @@ export type Database = {
           date: string
           id: string
           is_published: boolean
+          rainbow_category_name: string | null
           rainbow_herring: string[] | null
           title: string | null
           updated_at: string
@@ -276,6 +277,7 @@ export type Database = {
           date: string
           id?: string
           is_published?: boolean
+          rainbow_category_name?: string | null
           rainbow_herring?: string[] | null
           title?: string | null
           updated_at?: string
@@ -287,6 +289,7 @@ export type Database = {
           date?: string
           id?: string
           is_published?: boolean
+          rainbow_category_name?: string | null
           rainbow_herring?: string[] | null
           title?: string | null
           updated_at?: string

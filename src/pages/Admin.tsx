@@ -31,6 +31,7 @@ interface DraftData {
   isPublished: boolean;
   wordOrder: string[];
   rainbowHerring: (string | null)[];
+  rainbowCategoryName: string;
   editingId: string | null;
 }
 
@@ -69,6 +70,7 @@ export default function Admin() {
   const [puzzleDate, setPuzzleDate] = useState("");
   const [puzzleTitle, setPuzzleTitle] = useState("");
   const [rainbowHerring, setRainbowHerring] = useState<(string | null)[]>([null, null, null, null]);
+  const [rainbowCategoryName, setRainbowCategoryName] = useState("");
   const [groups, setGroups] = useState<GroupForm[]>([
     { ...emptyGroup(), difficulty: 1 },
     { ...emptyGroup(), difficulty: 2 },
@@ -99,6 +101,7 @@ export default function Admin() {
         setIsPublished(draft.isPublished);
         setWordOrder(draft.wordOrder);
         setRainbowHerring(draft.rainbowHerring);
+        setRainbowCategoryName(draft.rainbowCategoryName ?? "");
         setDraftRestored(true);
       }
     }
@@ -112,8 +115,9 @@ export default function Admin() {
     isPublished,
     wordOrder,
     rainbowHerring,
+    rainbowCategoryName,
     editingId,
-  }), [puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, editingId]);
+  }), [puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, rainbowCategoryName, editingId]);
 
   // Called onBlur from any field — saves draft silently
   const handleBlurSave = useCallback(() => {
@@ -249,6 +253,7 @@ export default function Admin() {
             is_published: isPublished,
             word_order: wordOrder.length === 16 ? wordOrder : null,
             rainbow_herring: rainbowArr,
+            rainbow_category_name: rainbowCategoryName.trim() || null,
           })
           .eq("id", editingId);
         if (error) throw error;
@@ -265,6 +270,7 @@ export default function Admin() {
             created_by: user!.id,
             word_order: wordOrder.length === 16 ? wordOrder : null,
             rainbow_herring: rainbowArr,
+            rainbow_category_name: rainbowCategoryName.trim() || null,
           })
           .select("id")
           .single();
@@ -314,6 +320,7 @@ export default function Admin() {
     setWordOrder([]);
     setSwapFirst(null);
     setRainbowHerring([null, null, null, null]);
+    setRainbowCategoryName("");
   }
 
   function handleClearDraft() {
@@ -343,6 +350,7 @@ export default function Admin() {
     } else {
       setRainbowHerring([null, null, null, null]);
     }
+    setRainbowCategoryName(p.rainbow_category_name || "");
     setDraftRestored(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -606,6 +614,17 @@ export default function Admin() {
             <div className="space-y-3">
               <h3 className="text-sm font-semibold">🌈 Rainbow Herring (optional)</h3>
               <p className="text-xs text-muted-foreground">Pick one word from each group. If a player guesses all 4, the tiles turn rainbow and they don't lose a mistake.</p>
+              <div>
+                <Label className="text-xs">Rainbow Category Title</Label>
+                <input
+                  type="text"
+                  value={rainbowCategoryName}
+                  onChange={(e) => setRainbowCategoryName(e.target.value)}
+                  onBlur={handleBlurSave}
+                  placeholder="e.g. Synonyms for Fast ⏱️"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 {groups.map((g, i) => {
                   const groupWords = g.words.split(",").map((w) => w.trim().toUpperCase()).filter(Boolean);
