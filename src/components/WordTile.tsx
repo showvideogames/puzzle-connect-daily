@@ -147,7 +147,7 @@ export function WordTile({
   // ever extending beyond the right edge of the screen.
   const isRightEdge = column === 4;
 
-  const baseClasses = `tile-base h-16 ${isEmojiPuzzle ? "text-3xl" : "text-xs sm:text-sm"} font-semibold rounded-lg transition-all duration-150 ease-out relative
+  const baseClasses = `tile-base h-16 font-semibold rounded-lg transition-all duration-150 ease-out relative
     ${disabled ? "opacity-50 cursor-default" : ""}
   `;
 
@@ -176,7 +176,7 @@ export function WordTile({
         onDragStart={() => onDragStart?.(word)}
         onDragOver={(e) => { e.preventDefault(); onDragOver?.(word); }}
         onDrop={onDrop}
-        className={`${baseClasses} ${stateClasses} w-full`}
+        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "text-5xl" : "text-xs sm:text-sm"}`}
       >
         {word}
       </button>
