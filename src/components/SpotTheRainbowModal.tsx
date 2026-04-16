@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Puzzle } from "@/lib/types";
 import confetti from "canvas-confetti";
+import { playRainbowSound } from "@/lib/sounds";
 
 const GROUP_COLORS: Record<number, { bg: string; text: string }> = {
   1: { bg: "bg-group-1", text: "text-group-1-fg" },
@@ -42,6 +43,7 @@ export function SpotTheRainbowModal({ open, puzzle, onResult }: SpotTheRainbowMo
     if (isCorrect) {
       setPhase("correct");
       confetti({ particleCount: 100, spread: 80, origin: { y: 0.55 } });
+      playRainbowSound();
       setTimeout(() => onResult(true), 2000);
     } else {
       setPhase("wrong");

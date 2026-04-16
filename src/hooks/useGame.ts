@@ -7,6 +7,7 @@ import { submitGlobalStats } from "@/lib/globalStats";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
 import { saveGameStats } from "@/lib/gameStats";
+import { playRainbowSound } from "@/lib/sounds";
 
 function shuffleArray<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -347,6 +348,7 @@ export function useGame(puzzle: Puzzle) {
       if (selected.every((w, i) => w === herring[i])) {
         setRainbowWords(state.selectedWords);
         setShowRainbowPopup(true);
+        playRainbowSound();
         setTimeout(() => setShowRainbowPopup(false), 3000);
         const attempt: GuessAttempt = {
           words: [...state.selectedWords],
