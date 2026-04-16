@@ -39,9 +39,10 @@ interface GameBoardProps {
   settings?: GameSettings;
   user?: User | null;
   clearColorsTrigger?: number;
+  isArchive?: boolean;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0 }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false }: GameBoardProps) {
   const showRainbow = settings?.showRainbowColors ?? true;
   const advancedFeatures = settings?.advancedFeatures ?? false;
 
@@ -67,7 +68,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     handleDrop,
     handleTouchDragMove,
     handleTouchDragEnd,
-  } = useGame(puzzle);
+  } = useGame(puzzle, { isArchive });
 
   // When Advanced Features is toggled off, clear all tile colors instantly
   useEffect(() => {

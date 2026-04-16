@@ -57,7 +57,7 @@ function clearProgress(puzzleId: string) {
   } catch {}
 }
 
-export function useGame(puzzle: Puzzle) {
+export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boolean } = {}) {
   const MAX_MISTAKES = 4;
 
   const allWords = useMemo(
@@ -398,14 +398,16 @@ export function useGame(puzzle: Puzzle) {
 
         if (isWon) {
           markPlayed(puzzle.id);
-          recordGameResult(true, state.mistakes);
-          saveResultToDb(true, state.mistakes);
-          submitGlobalStats(puzzle.id, state.mistakes);
+          if (!isArchive) {
+            recordGameResult(true, state.mistakes);
+            saveResultToDb(true, state.mistakes);
+            submitGlobalStats(puzzle.id, state.mistakes);
+          }
           fireConfetti();
           vibrateCelebration();
 
-          // Save full stats
-          saveGameStats({
+          // Save full stats (skipped for archive replays)
+          if (!isArchive) saveGameStats({
             puzzleId: puzzle.id,
             won: true,
             mistakes: state.mistakes,
@@ -472,12 +474,14 @@ export function useGame(puzzle: Puzzle) {
 
       if (isLost) {
         markPlayed(puzzle.id);
-        recordGameResult(false, newMistakes);
-        saveResultToDb(false, newMistakes);
-        submitGlobalStats(puzzle.id, 4);
+        if (!isArchive) {
+          recordGameResult(false, newMistakes);
+          saveResultToDb(false, newMistakes);
+          submitGlobalStats(puzzle.id, 4);
+        }
 
-        // Save full stats on loss
-        saveGameStats({
+        // Save full stats on loss (skipped for archive replays)
+        if (!isArchive) saveGameStats({
           puzzleId: puzzle.id,
           won: false,
           mistakes: newMistakes,

@@ -10,8 +10,114 @@ import { getPuzzleById } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import type { User } from "@supabase/supabase-js";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 type ModalName = "stats" | "help" | "settings" | null;
+
+const DIFFICULTY_EMOJI: Record<number, string> = {
+  0: "🟧",
+  1: "🟩",
+  2: "🟦",
+  3: "🟥",
+};
+
+interface PreviousSession {
+  id: string;
+  won: boolean;
+  mistakes: number;
+  found_rainbow: boolean;
+  created_at: string;
+}
+
+interface GuessEvent {
+  guess_number: number;
+  words: string[];
+  correct: boolean;
+}
+
+function buildEmojiRow(words: string[], puzzle: Puzzle): string {
+  return words
+    .map((word) => {
+      const group = puzzle.groups.find((g) => g.words.includes(word));
+      if (!group) return "⬜";
+      return DIFFICULTY_EMOJI[group.difficulty - 1] ?? "⬜";
+    })
+    .join("");
+}
+
+function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: Puzzle; user: User | null }) {
+  const [expanded, setExpanded] = useState(false);
+  const [session, setSession] = useState<PreviousSession | null | undefined>(undefined); // undefined = loading
+  const [guessEvents, setGuessEvents] = useState<GuessEvent[]>([]);
+
+  useEffect(() => {
+    if (!user) { setSession(null); return; }
+
+    supabase
+      .from("game_sessions")
+      .select("id, won, mistakes, found_rainbow, created_at")
+      .eq("puzzle_id", puzzleId)
+      .eq("user_id", user.id)
+      .order("id", { ascending: true })
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        if (!data) { setSession(null); return; }
+        setSession(data as PreviousSession);
+        // Fetch guess events for the grid
+        supabase
+          .from("guess_events")
+          .select("guess_number, words, correct")
+          .eq("game_session_id", data.id)
+          .order("guess_number", { ascending: true })
+          .then(({ data: events }) => setGuessEvents((events ?? []) as GuessEvent[]));
+      });
+  }, [puzzleId, user]);
+
+  // Nothing to show
+  if (session === undefined || session === null) return null;
+
+  const formattedDate = new Date(session.created_at).toLocaleDateString("en-US", {
+    month: "long", day: "numeric", year: "numeric",
+  });
+
+  const emojiLines = guessEvents.map((e) => buildEmojiRow(e.words, puzzle));
+
+  return (
+    <div className="w-full max-w-lg px-4 mt-6">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border
+          bg-card hover:bg-secondary transition-colors text-sm font-medium"
+      >
+        <span>See your last result 👀</span>
+        {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+      </button>
+
+      {expanded && (
+        <div className="mt-2 rounded-xl border border-border bg-card px-4 py-4 space-y-3 animate-fade-up">
+          {/* Emoji grid */}
+          {emojiLines.length > 0 && (
+            <div className="flex flex-col items-center gap-0.5">
+              {emojiLines.map((line, i) => (
+                <span key={i} className="text-2xl leading-tight tracking-wider">{line}</span>
+              ))}
+            </div>
+          )}
+
+          {/* Stats row */}
+          <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground flex-wrap">
+            <span>
+              {session.mistakes === 0 ? "No mistakes" : `${session.mistakes} mistake${session.mistakes === 1 ? "" : "s"}`}
+            </span>
+            {session.found_rainbow && <span>🌈 Rainbow found</span>}
+            <span>Played {formattedDate}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ArchivePuzzle() {
   const { puzzleId } = useParams<{ puzzleId: string }>();
@@ -95,7 +201,12 @@ export default function ArchivePuzzle() {
           </div>
         </div>
       ) : puzzle ? (
-        <GameBoard puzzle={puzzle} settings={settings} user={user} />
+        <>
+          <GameBoard puzzle={puzzle} settings={settings} user={user} isArchive />
+          {puzzleId && (
+            <PreviousResult puzzleId={puzzleId} puzzle={puzzle} user={user} />
+          )}
+        </>
       ) : null}
 
       <StatsModal open={activeModal === "stats"} onClose={() => setActiveModal(null)} />
