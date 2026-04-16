@@ -25,7 +25,7 @@ export function playRainbowSound(): void {
 
       // Sharp pluck attack, then a warm exponential decay like a harp string
       gain.gain.setValueAtTime(0, now + delay);
-      gain.gain.linearRampToValueAtTime(0.12, now + delay + 0.01);  // fast attack
+      gain.gain.linearRampToValueAtTime(0.03, now + delay + 0.01);  // fast attack
       gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.8); // warm decay
 
       osc.connect(gain);
