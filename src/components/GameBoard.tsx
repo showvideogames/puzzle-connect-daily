@@ -210,6 +210,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               onTouchDragMove={handleTouchDragMove}
               column={(index % 4) + 1}
               onTouchDragEnd={handleTouchDragEnd}
+              isEmojiPuzzle={puzzle.isEmojiPuzzle ?? false}
               data-word={word}
             />
           ))}

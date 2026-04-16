@@ -264,6 +264,7 @@ export type Database = {
           created_by: string | null
           date: string
           id: string
+          is_emoji_puzzle: boolean
           is_published: boolean
           rainbow_category_name: string | null
           rainbow_herring: string[] | null
@@ -276,6 +277,7 @@ export type Database = {
           created_by?: string | null
           date: string
           id?: string
+          is_emoji_puzzle?: boolean
           is_published?: boolean
           rainbow_category_name?: string | null
           rainbow_herring?: string[] | null
@@ -288,6 +290,7 @@ export type Database = {
           created_by?: string | null
           date?: string
           id?: string
+          is_emoji_puzzle?: boolean
           is_published?: boolean
           rainbow_category_name?: string | null
           rainbow_herring?: string[] | null

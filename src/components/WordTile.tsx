@@ -32,6 +32,7 @@ interface WordTileProps {
   onTouchDragEnd?: () => void;
   // Which column this tile is in (1-indexed). Used to anchor color picker correctly.
   column?: number;
+  isEmojiPuzzle?: boolean;
 }
 
 export function WordTile({
@@ -51,6 +52,7 @@ export function WordTile({
   onTouchDragMove,
   onTouchDragEnd,
   column = 1,
+  isEmojiPuzzle = false,
 }: WordTileProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const lastTapRef = useRef<number>(0);
@@ -145,7 +147,7 @@ export function WordTile({
   // ever extending beyond the right edge of the screen.
   const isRightEdge = column === 4;
 
-  const baseClasses = `tile-base h-16 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-150 ease-out relative
+  const baseClasses = `tile-base h-16 ${isEmojiPuzzle ? "text-3xl" : "text-xs sm:text-sm"} font-semibold rounded-lg transition-all duration-150 ease-out relative
     ${disabled ? "opacity-50 cursor-default" : ""}
   `;
 

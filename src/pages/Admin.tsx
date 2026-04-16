@@ -32,6 +32,7 @@ interface DraftData {
   wordOrder: string[];
   rainbowHerring: (string | null)[];
   rainbowCategoryName: string;
+  isEmojiPuzzle: boolean;
   editingId: string | null;
 }
 
@@ -71,6 +72,7 @@ export default function Admin() {
   const [puzzleTitle, setPuzzleTitle] = useState("");
   const [rainbowHerring, setRainbowHerring] = useState<(string | null)[]>([null, null, null, null]);
   const [rainbowCategoryName, setRainbowCategoryName] = useState("");
+  const [isEmojiPuzzle, setIsEmojiPuzzle] = useState(false);
   const [groups, setGroups] = useState<GroupForm[]>([
     { ...emptyGroup(), difficulty: 1 },
     { ...emptyGroup(), difficulty: 2 },
@@ -102,6 +104,7 @@ export default function Admin() {
         setWordOrder(draft.wordOrder);
         setRainbowHerring(draft.rainbowHerring);
         setRainbowCategoryName(draft.rainbowCategoryName ?? "");
+        setIsEmojiPuzzle(draft.isEmojiPuzzle ?? false);
         setDraftRestored(true);
       }
     }
@@ -116,8 +119,9 @@ export default function Admin() {
     wordOrder,
     rainbowHerring,
     rainbowCategoryName,
+    isEmojiPuzzle,
     editingId,
-  }), [puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, rainbowCategoryName, editingId]);
+  }), [puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, rainbowCategoryName, isEmojiPuzzle, editingId]);
 
   // Called onBlur from any field — saves draft silently
   const handleBlurSave = useCallback(() => {
@@ -254,6 +258,7 @@ export default function Admin() {
             word_order: wordOrder.length === 16 ? wordOrder : null,
             rainbow_herring: rainbowArr,
             rainbow_category_name: rainbowCategoryName.trim() || null,
+            is_emoji_puzzle: isEmojiPuzzle,
           })
           .eq("id", editingId);
         if (error) throw error;
@@ -271,6 +276,7 @@ export default function Admin() {
             word_order: wordOrder.length === 16 ? wordOrder : null,
             rainbow_herring: rainbowArr,
             rainbow_category_name: rainbowCategoryName.trim() || null,
+            is_emoji_puzzle: isEmojiPuzzle,
           })
           .select("id")
           .single();
@@ -321,6 +327,7 @@ export default function Admin() {
     setSwapFirst(null);
     setRainbowHerring([null, null, null, null]);
     setRainbowCategoryName("");
+    setIsEmojiPuzzle(false);
   }
 
   function handleClearDraft() {
@@ -351,6 +358,7 @@ export default function Admin() {
       setRainbowHerring([null, null, null, null]);
     }
     setRainbowCategoryName(p.rainbow_category_name || "");
+    setIsEmojiPuzzle(p.is_emoji_puzzle ?? false);
     setDraftRestored(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -663,7 +671,7 @@ export default function Admin() {
             </div>
           )}
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6 flex-wrap">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -678,6 +686,20 @@ export default function Admin() {
                 className="rounded border-border"
               />
               <span className="text-sm font-medium">Publish immediately</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isEmojiPuzzle}
+                onChange={(e) => {
+                  setIsEmojiPuzzle(e.target.checked);
+                  if (!editingId) {
+                    saveDraft({ ...getCurrentDraft(), isEmojiPuzzle: e.target.checked });
+                  }
+                }}
+                className="rounded border-border"
+              />
+              <span className="text-sm font-medium">Emoji Puzzle 🎨</span>
             </label>
           </div>
 
