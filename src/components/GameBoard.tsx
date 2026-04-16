@@ -79,7 +79,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const [copied, setCopied] = useState(false);
   const [showGlobalStats, setShowGlobalStats] = useState(false);
   const [showSpotModal, setShowSpotModal] = useState(false);
-  const [spotPromptVisible, setSpotPromptVisible] = useState(true);
   const [bonusRainbowCorrect, setBonusRainbowCorrect] = useState<boolean | null>(null);
 
   const generateShareLines = useCallback((): string[] => {
@@ -143,6 +142,18 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             animate={groupIdx === lastRevealedGroup}
           />
         ))}
+
+        {/* Rainbow gradient bar — shown when game is over and rainbow was missed */}
+        {state.isComplete && !state.gotRainbow && puzzle.rainbowHerring && bonusRainbowCorrect === null && (
+          <button
+            onClick={() => setShowSpotModal(true)}
+            className="w-full rounded-lg py-3 px-4 text-center text-white font-bold text-sm
+              hover:opacity-90 transition-opacity active:scale-[0.99]"
+            style={{ background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)" }}
+          >
+            Spot the Rainbow? 🌈
+          </button>
+        )}
       </div>
 
       {/* Word grid */}
@@ -281,24 +292,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 </button>
               </div>
 
-              {/* Spot the Rainbow bonus prompt — only for players who missed it */}
-              {!state.gotRainbow && puzzle.rainbowHerring && spotPromptVisible && bonusRainbowCorrect === null && (
-                <div className="flex items-center gap-2 mt-1 px-4 py-2.5 rounded-full border border-border bg-secondary/30">
-                  <button
-                    onClick={() => setShowSpotModal(true)}
-                    className="flex-1 text-sm font-semibold text-center"
-                  >
-                    Spot the Rainbow? 🌈
-                  </button>
-                  <button
-                    onClick={() => setSpotPromptVisible(false)}
-                    className="p-1 rounded-full hover:bg-secondary transition-colors active:scale-95 shrink-0"
-                    aria-label="Dismiss"
-                  >
-                    <X className="w-3.5 h-3.5 text-muted-foreground" />
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -314,13 +307,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         <SpotTheRainbowModal
           open={showSpotModal}
           puzzle={puzzle}
-          onDismiss={() => {
-            setSpotPromptVisible(false);
-            setShowSpotModal(false);
-          }}
           onResult={(correct) => {
             setBonusRainbowCorrect(correct);
-            setSpotPromptVisible(false);
             setShowSpotModal(false);
           }}
         />

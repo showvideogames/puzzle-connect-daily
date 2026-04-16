@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { X } from "lucide-react";
 import { Puzzle } from "@/lib/types";
 import confetti from "canvas-confetti";
 
@@ -10,15 +9,15 @@ const GROUP_COLORS: Record<number, { bg: string; text: string }> = {
   4: { bg: "bg-group-4", text: "text-group-4-fg" },
 };
 
+const RAINBOW_GRADIENT = "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)";
+
 interface SpotTheRainbowModalProps {
   open: boolean;
   puzzle: Puzzle;
-  onDismiss: () => void;
   onResult: (correct: boolean) => void;
 }
 
-export function SpotTheRainbowModal({ open, puzzle, onDismiss, onResult }: SpotTheRainbowModalProps) {
-  // Maps group index (0–3) → the word the player has selected from that group
+export function SpotTheRainbowModal({ open, puzzle, onResult }: SpotTheRainbowModalProps) {
   const [selected, setSelected] = useState<Record<number, string>>({});
   const [phase, setPhase] = useState<"picking" | "correct" | "wrong">("picking");
 
@@ -46,7 +45,6 @@ export function SpotTheRainbowModal({ open, puzzle, onDismiss, onResult }: SpotT
       setTimeout(() => onResult(true), 2000);
     } else {
       setPhase("wrong");
-      setTimeout(() => onResult(false), 3000);
     }
   };
 
@@ -54,49 +52,46 @@ export function SpotTheRainbowModal({ open, puzzle, onDismiss, onResult }: SpotT
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div
         className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
-        onClick={phase === "picking" ? onDismiss : undefined}
+        onClick={phase === "wrong" ? () => onResult(false) : undefined}
       />
       <div className="relative bg-card rounded-xl shadow-2xl p-5 w-full max-w-sm mx-4 animate-pop overflow-y-auto max-h-[90vh]">
 
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="text-lg font-bold">Spot the Rainbow? 🌈</h2>
-          {phase === "picking" && (
-            <button
-              onClick={onDismiss}
-              className="p-1.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
-              aria-label="Dismiss"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-
         {/* Correct result */}
         {phase === "correct" && (
-          <div className="text-center py-8">
-            <div className="text-4xl mb-3">🌈</div>
-            <p className="text-xl font-bold">You spotted it!</p>
-            <p className="text-sm text-muted-foreground mt-1">Rainbow added to your share.</p>
-          </div>
+          <>
+            <h2 className="text-lg font-bold mb-1">Spot the Rainbow? 🌈</h2>
+            <div className="text-center py-8">
+              <div className="text-4xl mb-3">🌈</div>
+              <p className="text-xl font-bold">You spotted it!</p>
+              <p className="text-sm text-muted-foreground mt-1">Rainbow added to your share.</p>
+            </div>
+          </>
         )}
 
-        {/* Wrong result — show the correct answer */}
+        {/* Wrong result — modal transforms, no auto-close */}
         {phase === "wrong" && (
-          <div className="text-center py-6">
-            <p className="text-sm font-semibold mb-3">Not quite. The Rainbow was:</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {puzzle.rainbowHerring.map(word => (
-                <span key={word} className="px-3 py-1 rounded-full bg-secondary text-sm font-semibold">
-                  {word}
-                </span>
-              ))}
+          <>
+            <h2 className="text-lg font-bold mb-4">Rainbow 🌈</h2>
+            <div
+              className="w-full rounded-lg py-3 px-4 text-center text-white font-bold text-sm mb-4"
+              style={{ background: RAINBOW_GRADIENT }}
+            >
+              {puzzle.rainbowHerring.join(" · ")}
             </div>
-          </div>
+            <button
+              onClick={() => onResult(false)}
+              className="w-full py-2.5 rounded-full border border-border text-sm font-semibold
+                hover:bg-secondary transition-all duration-150 active:scale-95"
+            >
+              Close
+            </button>
+          </>
         )}
 
         {/* Word selection UI */}
         {phase === "picking" && (
           <>
+            <h2 className="text-lg font-bold mb-1">Spot the Rainbow? 🌈</h2>
             <p className="text-xs text-muted-foreground mb-4">
               Pick one word from each group that shares a hidden connection.
             </p>
@@ -107,13 +102,12 @@ export function SpotTheRainbowModal({ open, puzzle, onDismiss, onResult }: SpotT
                 const chosenWord = selected[groupIdx];
                 return (
                   <div key={groupIdx} className="rounded-lg overflow-hidden">
-                    {/* Group colour header — shows chosen word once selected */}
+                    {/* Group header shows category name, then chosen word once picked */}
                     <div className={`${colors.bg} ${colors.text} px-3 py-1.5`}>
                       <span className="text-[11px] font-bold uppercase tracking-wide opacity-75">
-                        {chosenWord ? `✓ ${chosenWord}` : "Pick one…"}
+                        {chosenWord ? `✓ ${chosenWord}` : group.category}
                       </span>
                     </div>
-                    {/* 4 word buttons in a row */}
                     <div className="grid grid-cols-4 gap-1 p-1.5 bg-secondary/20">
                       {group.words.map(word => {
                         const isChosen = chosenWord === word;
