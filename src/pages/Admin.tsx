@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -82,6 +82,7 @@ export default function Admin() {
   const [wordOrder, setWordOrder] = useState<string[]>([]);
   const [swapFirst, setSwapFirst] = useState<number | null>(null);
   const [draftRestored, setDraftRestored] = useState(false);
+  const formInitialized = useRef(false);
 
   // Existing puzzles list
   const [puzzles, setPuzzles] = useState<any[]>([]);
@@ -104,28 +105,15 @@ export default function Admin() {
         setRainbowCategoryName(draft.rainbowCategoryName ?? "");
         setDraftRestored(true);
       }
+      formInitialized.current = true;
     }
   }, [isAdmin]);
 
-  // Build current draft data from state
-  const getCurrentDraft = useCallback((): DraftData => ({
-    puzzleDate,
-    puzzleTitle,
-    groups,
-    isPublished,
-    wordOrder,
-    rainbowHerring,
-    rainbowCategoryName,
-    editingId,
-  }), [puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, rainbowCategoryName, editingId]);
-
-  // Called onBlur from any field — saves draft silently
-  const handleBlurSave = useCallback(() => {
-    // Only save drafts for new puzzles, not edits (edits are already in the DB)
-    if (!editingId) {
-      saveDraft(getCurrentDraft());
-    }
-  }, [editingId, getCurrentDraft]);
+  // Auto-save draft on every change (new puzzles only, after initial load)
+  useEffect(() => {
+    if (!formInitialized.current || editingId) return;
+    saveDraft({ puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, rainbowCategoryName, editingId });
+  }, [puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, rainbowCategoryName, editingId]);
 
   async function loadPuzzles() {
     const { data, error } = await supabase
@@ -307,6 +295,8 @@ export default function Admin() {
   }
 
   function resetForm() {
+    clearDraft();
+    setDraftRestored(false);
     setEditingId(null);
     setPuzzleDate("");
     setPuzzleTitle("");
@@ -324,8 +314,6 @@ export default function Admin() {
   }
 
   function handleClearDraft() {
-    clearDraft();
-    setDraftRestored(false);
     resetForm();
     toast.success("Draft cleared.");
   }
@@ -519,8 +507,7 @@ export default function Admin() {
                 type="date"
                 value={puzzleDate}
                 onChange={(e) => setPuzzleDate(e.target.value)}
-                onBlur={handleBlurSave}
-              />
+                              />
             </div>
             <div>
               <Label htmlFor="ptitle">Title (optional)</Label>
@@ -528,8 +515,7 @@ export default function Admin() {
                 id="ptitle"
                 value={puzzleTitle}
                 onChange={(e) => setPuzzleTitle(e.target.value)}
-                onBlur={handleBlurSave}
-                placeholder="e.g. Monday Mashup"
+                                placeholder="e.g. Monday Mashup"
               />
             </div>
           </div>
@@ -548,8 +534,7 @@ export default function Admin() {
                     <Input
                       value={g.category}
                       onChange={(e) => updateGroup(i, "category", e.target.value)}
-                      onBlur={handleBlurSave}
-                      placeholder="e.g. Coffee Drinks"
+                                            placeholder="e.g. Coffee Drinks"
                     />
                   </div>
                   <div>
@@ -557,8 +542,7 @@ export default function Admin() {
                     <Input
                       value={g.words}
                       onChange={(e) => updateGroup(i, "words", e.target.value)}
-                      onBlur={handleBlurSave}
-                      placeholder="LATTE, MOCHA, ESPRESSO, CORTADO"
+                                            placeholder="LATTE, MOCHA, ESPRESSO, CORTADO"
                     />
                   </div>
                 </div>
@@ -620,8 +604,7 @@ export default function Admin() {
                   type="text"
                   value={rainbowCategoryName}
                   onChange={(e) => setRainbowCategoryName(e.target.value)}
-                  onBlur={handleBlurSave}
-                  placeholder="e.g. Synonyms for Fast ⏱️"
+                                    placeholder="e.g. Synonyms for Fast ⏱️"
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
                 />
               </div>
@@ -640,8 +623,7 @@ export default function Admin() {
                             return next;
                           });
                         }}
-                        onBlur={handleBlurSave}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                                                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                       >
                         <option value="">— none —</option>
                         {groupWords.map((w) => (
@@ -668,13 +650,7 @@ export default function Admin() {
               <input
                 type="checkbox"
                 checked={isPublished}
-                onChange={(e) => {
-                  setIsPublished(e.target.checked);
-                  // Save draft immediately on checkbox change since there's no blur event
-                  if (!editingId) {
-                    saveDraft({ ...getCurrentDraft(), isPublished: e.target.checked });
-                  }
-                }}
+                onChange={(e) => setIsPublished(e.target.checked)}
                 className="rounded border-border"
               />
               <span className="text-sm font-medium">Publish immediately</span>
