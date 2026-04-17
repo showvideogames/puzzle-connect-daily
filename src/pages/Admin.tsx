@@ -33,6 +33,8 @@ interface DraftData {
   rainbowHerring: (string | null)[];
   rainbowCategoryName: string;
   isEmojiPuzzle: boolean;
+  isFreePuzzle: boolean;
+  freePuzzleOrder: number | null;
   editingId: string | null;
 }
 
@@ -73,6 +75,8 @@ export default function Admin() {
   const [rainbowHerring, setRainbowHerring] = useState<(string | null)[]>([null, null, null, null]);
   const [rainbowCategoryName, setRainbowCategoryName] = useState("");
   const [isEmojiPuzzle, setIsEmojiPuzzle] = useState(false);
+  const [isFreePuzzle, setIsFreePuzzle] = useState(false);
+  const [freePuzzleOrder, setFreePuzzleOrder] = useState<number | null>(null);
   const [groups, setGroups] = useState<GroupForm[]>([
     { ...emptyGroup(), difficulty: 1 },
     { ...emptyGroup(), difficulty: 2 },
@@ -110,6 +114,8 @@ export default function Admin() {
         setRainbowHerring(draft.rainbowHerring);
         setRainbowCategoryName(draft.rainbowCategoryName ?? "");
         setIsEmojiPuzzle(draft.isEmojiPuzzle ?? false);
+        setIsFreePuzzle(draft.isFreePuzzle ?? false);
+        setFreePuzzleOrder(draft.freePuzzleOrder ?? null);
         setDraftRestored(true);
       }
     }
@@ -125,8 +131,10 @@ export default function Admin() {
     rainbowHerring,
     rainbowCategoryName,
     isEmojiPuzzle,
+    isFreePuzzle,
+    freePuzzleOrder,
     editingId,
-  }), [puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, rainbowCategoryName, isEmojiPuzzle, editingId]);
+  }), [puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, rainbowCategoryName, isEmojiPuzzle, isFreePuzzle, freePuzzleOrder, editingId]);
 
   // Called onBlur from any field — saves draft silently
   const handleBlurSave = useCallback(() => {
@@ -354,6 +362,8 @@ export default function Admin() {
             rainbow_herring: rainbowArr,
             rainbow_category_name: rainbowCategoryName.trim() || null,
             is_emoji_puzzle: isEmojiPuzzle,
+            is_free_puzzle: isFreePuzzle,
+            free_puzzle_order: isFreePuzzle ? freePuzzleOrder : null,
           })
           .eq("id", editingId);
         if (error) throw error;
@@ -372,6 +382,8 @@ export default function Admin() {
             rainbow_herring: rainbowArr,
             rainbow_category_name: rainbowCategoryName.trim() || null,
             is_emoji_puzzle: isEmojiPuzzle,
+            is_free_puzzle: isFreePuzzle,
+            free_puzzle_order: isFreePuzzle ? freePuzzleOrder : null,
           })
           .select("id")
           .single();
@@ -422,6 +434,8 @@ export default function Admin() {
     setRainbowHerring([null, null, null, null]);
     setRainbowCategoryName("");
     setIsEmojiPuzzle(false);
+    setIsFreePuzzle(false);
+    setFreePuzzleOrder(null);
   }
 
   function handleClearDraft() {
@@ -452,6 +466,8 @@ export default function Admin() {
     }
     setRainbowCategoryName(p.rainbow_category_name || "");
     setIsEmojiPuzzle(p.is_emoji_puzzle ?? false);
+    setIsFreePuzzle(p.is_free_puzzle ?? false);
+    setFreePuzzleOrder(p.free_puzzle_order ?? null);
     setDraftRestored(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -825,6 +841,39 @@ export default function Admin() {
               />
               <span className="text-sm font-medium">Emoji Puzzle 🎨</span>
             </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isFreePuzzle}
+                onChange={(e) => {
+                  setIsFreePuzzle(e.target.checked);
+                  if (!e.target.checked) setFreePuzzleOrder(null);
+                  if (!editingId) {
+                    saveDraft({ ...getCurrentDraft(), isFreePuzzle: e.target.checked, freePuzzleOrder: e.target.checked ? freePuzzleOrder : null });
+                  }
+                }}
+                className="rounded border-border"
+              />
+              <span className="text-sm font-medium">Free Puzzle 🆓</span>
+            </label>
+            {isFreePuzzle && (
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium whitespace-nowrap">Order (1–10)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={freePuzzleOrder ?? ""}
+                  onChange={(e) => {
+                    const raw = parseInt(e.target.value, 10);
+                    setFreePuzzleOrder(isNaN(raw) ? null : Math.min(10, Math.max(1, raw)));
+                  }}
+                  onBlur={handleBlurSave}
+                  placeholder="1"
+                  className="w-16 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3">

@@ -13,6 +13,8 @@ export interface Puzzle {
   rainbowHerring?: string[] | null;
   rainbowCategoryName?: string | null;
   isEmojiPuzzle?: boolean | null;
+  isFreePuzzle?: boolean | null;
+  freePuzzleOrder?: number | null;
 }
 
 export interface GameStats {
