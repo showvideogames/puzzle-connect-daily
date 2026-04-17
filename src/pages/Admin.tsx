@@ -643,13 +643,8 @@ export default function Admin() {
                 <div
                   key={i}
                   data-group-idx={i}
-                  draggable
-                  onDragStart={() => handleGroupDragStart(i)}
                   onDragOver={(e) => handleGroupDragOver(e, i)}
                   onDrop={() => handleGroupDrop(i)}
-                  onDragEnd={handleGroupDragEnd}
-                  onTouchStart={() => handleGroupTouchStart(i)}
-                  onTouchEnd={handleGroupTouchEnd}
                   className={`rounded-lg p-4 space-y-2 ${difficultyColors[i]} bg-opacity-30 transition-all duration-150
                     ${isDragging ? "opacity-40" : ""}
                     ${isDropTarget ? "ring-2 ring-primary ring-offset-1 scale-[1.01]" : ""}
@@ -659,7 +654,16 @@ export default function Admin() {
                     <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Group {i + 1} — {difficultyLabels[i]}
                     </span>
-                    <GripVertical className="w-4 h-4 text-muted-foreground/50 cursor-grab active:cursor-grabbing" />
+                    <span
+                      draggable
+                      onDragStart={() => handleGroupDragStart(i)}
+                      onDragEnd={handleGroupDragEnd}
+                      onTouchStart={() => handleGroupTouchStart(i)}
+                      onTouchEnd={handleGroupTouchEnd}
+                      className="cursor-grab active:cursor-grabbing touch-none p-1 -m-1"
+                    >
+                      <GripVertical className="w-4 h-4 text-muted-foreground/50" />
+                    </span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
