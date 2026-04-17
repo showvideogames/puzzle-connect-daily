@@ -46,7 +46,7 @@ function NoRainbowIndicator() {
         <img
           src="/no-rainbow.png"
           alt="No rainbow"
-          style={{ height: "24px", width: "auto", display: "block" }}
+          style={{ height: "48px", width: "auto", display: "block" }}
         />
         {/* Desktop tooltip — visible on hover via group-hover, hidden on touch devices */}
         <span
@@ -63,7 +63,7 @@ function NoRainbowIndicator() {
       {/* Mobile popup — shown on tap */}
       {open && (
         <div
-          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50
+          className="absolute bottom-full right-0 mb-2 z-50
             rounded-xl px-3 py-2 text-xs font-medium shadow-lg text-center
             bg-foreground text-background sm:hidden"
           style={{ width: "max-content", maxWidth: "220px" }}
