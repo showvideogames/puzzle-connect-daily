@@ -8,8 +8,72 @@ import { DailyStatsModal } from "./DailyStatsModal";
 import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { PuzzleRating } from "./PuzzleRating";
 import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser } from "lucide-react";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { User } from "@supabase/supabase-js";
+
+const TOOLTIP_MSG = "This puzzle has no Rainbow category.";
+
+function NoRainbowIndicator() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close popup when tapping outside on mobile
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent | TouchEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("touchstart", handleClick);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("touchstart", handleClick);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0" style={{ lineHeight: 0 }}>
+      {/* The icon — hover shows tooltip on desktop, tap toggles popup on mobile */}
+      <button
+        type="button"
+        aria-label={TOOLTIP_MSG}
+        onClick={() => setOpen((v) => !v)}
+        className="group focus:outline-none"
+        style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+      >
+        <img
+          src="/no-rainbow.png"
+          alt="No rainbow"
+          style={{ height: "24px", width: "auto", display: "block" }}
+        />
+        {/* Desktop tooltip — visible on hover via group-hover, hidden on touch devices */}
+        <span
+          className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2
+            whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium shadow-md
+            bg-foreground text-background
+            opacity-0 group-hover:opacity-100 transition-opacity duration-150
+            hidden sm:block"
+        >
+          {TOOLTIP_MSG}
+        </span>
+      </button>
+
+      {/* Mobile popup — shown on tap */}
+      {open && (
+        <div
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50
+            rounded-xl px-3 py-2 text-xs font-medium shadow-lg text-center
+            bg-foreground text-background sm:hidden"
+          style={{ width: "max-content", maxWidth: "220px" }}
+        >
+          {TOOLTIP_MSG}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const DIFFICULTY_EMOJI: Record<number, string> = {
   0: "🟧",
@@ -131,9 +195,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   return (
     <div className="w-full max-w-lg mx-auto px-2 animate-fade-up">
-      <p className="text-center text-sm text-muted-foreground mb-4">
-        Find groups of four words that share something in common.
-      </p>
+      <div className="flex items-center justify-center gap-2 mb-4">
+        <p className="text-center text-sm text-muted-foreground">
+          Find groups of four words that share something in common.
+        </p>
+        {!puzzle.rainbowHerring && (
+          <NoRainbowIndicator />
+        )}
+      </div>
 
       {/* Solved groups */}
       <div className="space-y-2 mb-2">
