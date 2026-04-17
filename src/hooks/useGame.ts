@@ -6,7 +6,7 @@ import { vibrateSuccess, vibrateError, vibrateCelebration } from "@/lib/haptics"
 import { submitGlobalStats } from "@/lib/globalStats";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
-import { saveGameStats } from "@/lib/gameStats";
+import { saveGameStats, hasExistingSession } from "@/lib/gameStats";
 import { playRainbowSound } from "@/lib/sounds";
 
 function shuffleArray<T>(arr: T[]): T[] {
@@ -398,16 +398,10 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
 
         if (isWon) {
           markPlayed(puzzle.id);
-          if (!isArchive) {
-            recordGameResult(true, state.mistakes);
-            saveResultToDb(true, state.mistakes);
-            submitGlobalStats(puzzle.id, state.mistakes);
-          }
           fireConfetti();
           vibrateCelebration();
 
-          // Save full stats (skipped for archive replays)
-          if (!isArchive) saveGameStats({
+          const winStatsParams = {
             puzzleId: puzzle.id,
             won: true,
             mistakes: state.mistakes,
@@ -419,7 +413,22 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
               correct: g.isCorrect,
               group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
             })),
-          });
+          };
+
+          if (isArchive) {
+            void (async () => {
+              if (await hasExistingSession(puzzle.id)) return; // Already recorded
+              recordGameResult(true, state.mistakes);
+              saveResultToDb(true, state.mistakes);
+              submitGlobalStats(puzzle.id, state.mistakes);
+              saveGameStats({ ...winStatsParams, skipStreak: true });
+            })();
+          } else {
+            recordGameResult(true, state.mistakes);
+            saveResultToDb(true, state.mistakes);
+            submitGlobalStats(puzzle.id, state.mistakes);
+            saveGameStats(winStatsParams);
+          }
 
           const allGroupIndices = puzzle.groups.map((_, i) => i);
           saveProgress(puzzle.id, {
@@ -474,14 +483,8 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
 
       if (isLost) {
         markPlayed(puzzle.id);
-        if (!isArchive) {
-          recordGameResult(false, newMistakes);
-          saveResultToDb(false, newMistakes);
-          submitGlobalStats(puzzle.id, 4);
-        }
 
-        // Save full stats on loss (skipped for archive replays)
-        if (!isArchive) saveGameStats({
+        const lossStatsParams = {
           puzzleId: puzzle.id,
           won: false,
           mistakes: newMistakes,
@@ -493,7 +496,22 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
             correct: g.isCorrect,
             group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
           })),
-        });
+        };
+
+        if (isArchive) {
+          void (async () => {
+            if (await hasExistingSession(puzzle.id)) return; // Already recorded
+            recordGameResult(false, newMistakes);
+            saveResultToDb(false, newMistakes);
+            submitGlobalStats(puzzle.id, 4);
+            saveGameStats({ ...lossStatsParams, skipStreak: true });
+          })();
+        } else {
+          recordGameResult(false, newMistakes);
+          saveResultToDb(false, newMistakes);
+          submitGlobalStats(puzzle.id, 4);
+          saveGameStats(lossStatsParams);
+        }
 
         const sortedIndices = puzzle.groups
           .map((g, i) => ({ idx: i, diff: g.difficulty }))

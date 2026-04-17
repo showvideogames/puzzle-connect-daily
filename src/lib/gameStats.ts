@@ -28,6 +28,26 @@ interface SaveGameStatsParams {
   foundRainbow: boolean;
   solveOrder: string[];       // e.g. ["orange", "red", "blue", "green"]
   guessHistory: GuessEvent[];
+  skipStreak?: boolean;       // true for archive puzzles — saves stats but not streak
+}
+
+/**
+ * Returns true if this user (by user_id if logged in, device_id otherwise)
+ * already has a game_sessions row for the given puzzle.
+ * Used to decide whether to skip stat writes on archive replay.
+ */
+export async function hasExistingSession(puzzleId: string): Promise<boolean> {
+  try {
+    const deviceId = getDeviceId();
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id ?? null;
+    const { data } = userId
+      ? await supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId).eq("user_id", userId).limit(1).maybeSingle()
+      : await supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId).eq("device_id", deviceId).limit(1).maybeSingle();
+    return !!data;
+  } catch {
+    return false; // On error, don't block saves
+  }
 }
 
 export async function saveGameStats(params: SaveGameStatsParams): Promise<void> {
@@ -39,6 +59,7 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
     foundRainbow,
     solveOrder,
     guessHistory,
+    skipStreak = false,
   } = params;
 
   try {
@@ -120,8 +141,10 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
         updated_at: new Date().toISOString(),
       }, { onConflict: "puzzle_id" });
 
-    // 4. Update streak
-    await updateStreak(userId, deviceId);
+    // 4. Update streak (skipped for archive puzzles)
+    if (!skipStreak) {
+      await updateStreak(userId, deviceId);
+    }
 
   } catch (err) {
     // Never let stat saving crash the game
