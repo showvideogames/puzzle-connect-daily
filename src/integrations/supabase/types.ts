@@ -265,6 +265,8 @@ export type Database = {
           date: string
           id: string
           is_emoji_puzzle: boolean
+          is_free_puzzle: boolean
+          free_puzzle_order: number | null
           is_published: boolean
           rainbow_category_name: string | null
           rainbow_herring: string[] | null
@@ -278,6 +280,8 @@ export type Database = {
           date: string
           id?: string
           is_emoji_puzzle?: boolean
+          is_free_puzzle?: boolean
+          free_puzzle_order?: number | null
           is_published?: boolean
           rainbow_category_name?: string | null
           rainbow_herring?: string[] | null
@@ -291,6 +295,8 @@ export type Database = {
           date?: string
           id?: string
           is_emoji_puzzle?: boolean
+          is_free_puzzle?: boolean
+          free_puzzle_order?: number | null
           is_published?: boolean
           rainbow_category_name?: string | null
           rainbow_herring?: string[] | null

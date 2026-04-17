@@ -61,5 +61,7 @@ function mapPuzzle(data: any): Puzzle {
     rainbowHerring: data.rainbow_herring || null,
     rainbowCategoryName: data.rainbow_category_name || null,
     isEmojiPuzzle: data.is_emoji_puzzle ?? false,
+    isFreePuzzle: data.is_free_puzzle ?? false,
+    freePuzzleOrder: data.free_puzzle_order ?? null,
   };
 }
