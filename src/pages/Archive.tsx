@@ -100,7 +100,7 @@ export default function Archive() {
   // Build puzzle lookup by date
   const puzzleByDate = Object.fromEntries(puzzles.map((p) => [p.date, p]));
   const resultByPuzzleId = Object.fromEntries(results.map((r) => [r.puzzle_id, r]));
-  const todayStr = today.toISOString().split("T")[0];
+  const todayStr = today.toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
 
   // Calendar grid for current viewMonth/viewYear
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();

@@ -131,7 +131,7 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
 
 async function updateStreak(userId: string | null, deviceId: string): Promise<void> {
   try {
-    const today = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
+    const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
 
     const query = userId
       ? supabase.from("user_streaks").select("*").eq("user_id", userId).single()
@@ -154,7 +154,7 @@ async function updateStreak(userId: string | null, deviceId: string): Promise<vo
     const lastPlayed = existing.last_played_date;
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split("T")[0];
+    const yesterdayStr = yesterday.toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
 
     let newStreak = existing.current_streak;
 

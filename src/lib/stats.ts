@@ -47,7 +47,7 @@ export function markPlayed(puzzleId: string) {
 
 export function recordGameResult(won: boolean, mistakes: number) {
   const stats = loadStats();
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
 
   stats.gamesPlayed++;
   if (won) {

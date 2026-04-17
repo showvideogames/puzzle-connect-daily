@@ -3,7 +3,7 @@ import { Puzzle } from "./types";
 
 // Fetch today's published puzzle from the database
 export async function getTodaysPuzzle(): Promise<Puzzle | null> {
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
 
   // Try today's puzzle first, then the most recent published one
   const { data, error } = await supabase
