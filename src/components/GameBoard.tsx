@@ -68,6 +68,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     handleDrop,
     handleTouchDragMove,
     handleTouchDragEnd,
+    alreadyGuessed,
   } = useGame(puzzle, { isArchive });
 
   // When Advanced Features is toggled off, clear all tile colors instantly
@@ -232,6 +233,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         <div className="flex justify-center mt-3 animate-fade-up">
           <div className="bg-foreground text-background px-5 py-2 rounded-full text-sm font-semibold shadow-md">
             One away…
+          </div>
+        </div>
+      )}
+
+      {/* Already Guessed popup */}
+      {alreadyGuessed && (
+        <div className="flex justify-center mt-3 animate-fade-up">
+          <div className="bg-foreground text-background px-5 py-2 rounded-full text-sm font-semibold shadow-md">
+            {alreadyGuessed === "oneaway" ? "Already guessed — and one away!" : "Already guessed!"}
           </div>
         </div>
       )}

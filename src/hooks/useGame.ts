@@ -112,6 +112,7 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
   const [shaking, setShaking] = useState(false);
   const [lastRevealedGroup, setLastRevealedGroup] = useState<number | null>(null);
   const [oneAway, setOneAway] = useState(false);
+  const [alreadyGuessed, setAlreadyGuessed] = useState<"plain" | "oneaway" | null>(null);
   const [rainbowWords, setRainbowWords] = useState<string[]>(saved?.rainbowWords ?? []);
   const [showRainbowPopup, setShowRainbowPopup] = useState(false);
   const [matchedWords, setMatchedWords] = useState<string[]>([]);
@@ -335,6 +336,22 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
 
   const submitGuess = useCallback(() => {
     if (state.selectedWords.length !== 4 || state.isComplete) return;
+
+    // Duplicate guess detection — check before anything else
+    const sortedSelected = [...state.selectedWords].sort();
+    const isDuplicate = state.guessHistory.some(
+      (g) => g.words.length === 4 && [...g.words].sort().every((w, i) => w === sortedSelected[i])
+    );
+    if (isDuplicate) {
+      const isOneAway = puzzle.groups.some(
+        (g, idx) =>
+          !state.solvedGroups.includes(idx) &&
+          g.words.filter((w) => state.selectedWords.includes(w)).length === 3
+      );
+      setAlreadyGuessed(isOneAway ? "oneaway" : "plain");
+      setTimeout(() => setAlreadyGuessed(null), 2000);
+      return;
+    }
 
     const guessGroupIndices = state.selectedWords.map((w) => getWordGroupIndex(w));
 
@@ -584,5 +601,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
     handleDrop,
     handleTouchDragMove,
     handleTouchDragEnd,
+    alreadyGuessed,
   };
 }
