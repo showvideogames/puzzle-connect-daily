@@ -1,10 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
 const COLOR_STYLES: Record<string, { bg: string; ring: string }> = {
-  orange: { bg: "bg-orange-200 dark:bg-orange-900/50", ring: "ring-orange-400" },
+  orange: { bg: "bg-orange-200 dark:bg-orange-700/60", ring: "ring-orange-400" },
   green:  { bg: "bg-green-200 dark:bg-green-900/50",  ring: "ring-green-400"  },
   blue:   { bg: "bg-blue-200 dark:bg-blue-900/50",    ring: "ring-blue-400"   },
-  red:    { bg: "bg-red-200 dark:bg-red-900/50",      ring: "ring-red-400"    },
+  red:    { bg: "bg-red-200 dark:bg-red-800/70",      ring: "ring-red-400"    },
 };
 
 const COLOR_CIRCLES: { key: string; circle: string }[] = [
@@ -31,7 +31,6 @@ interface WordTileProps {
   onDrop?: () => void;
   onTouchDragMove?: (x: number, y: number) => void;
   onTouchDragEnd?: () => void;
-  // Which column this tile is in (1-indexed). Used to anchor color picker correctly.
   column?: number;
   isEmojiPuzzle?: boolean;
 }
@@ -64,7 +63,6 @@ export function WordTile({
   const isTouchDragging = useRef(false);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
 
-  // Attach non-passive touch listeners directly to DOM so preventDefault works
   useEffect(() => {
     const el = buttonRef.current;
     if (!el || !arrangeTiles) return;
@@ -111,7 +109,6 @@ export function WordTile({
   const handleClick = useCallback(() => {
     if (isTouchDragging.current) return;
 
-    // No Color-Code Tiles — fire instantly, zero delay
     if (!colorCodeTiles) {
       onClick();
       return;
@@ -122,14 +119,12 @@ export function WordTile({
     lastTapRef.current = now;
 
     if (timeSinceLastTap < 250) {
-      // Double-tap — cancel pending single-tap and open color picker
       if (singleTapTimer.current) {
         clearTimeout(singleTapTimer.current);
         singleTapTimer.current = null;
       }
       setShowColorPicker(true);
     } else {
-      // Wait briefly to see if a second tap follows
       singleTapTimer.current = setTimeout(() => {
         singleTapTimer.current = null;
         onClick();
@@ -144,9 +139,6 @@ export function WordTile({
 
   const colorStyle = tileColor ? COLOR_STYLES[tileColor] : null;
 
-  // Column 4 = right edge: anchor popover to the right side of the tile.
-  // All others: anchor to the left side. This prevents the popover from
-  // ever extending beyond the right edge of the screen.
   const isRightEdge = column === 4;
 
   const baseClasses = `tile-base h-16 font-semibold rounded-lg transition-all duration-150 ease-out relative
