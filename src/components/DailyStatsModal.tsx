@@ -74,11 +74,11 @@ export function DailyStatsModal({ puzzleId, open, onClose }: DailyStatsProps) {
               </div>
             </div>
 
-            <h3 className="text-sm font-semibold text-center mb-2">Mistakes When Winning</h3>
+            <h3 className="text-sm font-semibold text-center mb-2">Mistake Distribution</h3>
             <div className="space-y-1.5">
               {[0, 1, 2, 3].map((m) => {
                 const count = stats.guess_distribution[String(m)] || 0;
-                const max = Math.max(...Object.values(stats.guess_distribution), 1);
+                const max = Math.max(...Object.values(stats.guess_distribution), stats.losses, 1);
                 const pct = (count / max) * 100;
                 const labels = ["Perfect 🎯", "1 mistake", "2 mistakes", "3 mistakes"];
                 return (
@@ -97,6 +97,26 @@ export function DailyStatsModal({ puzzleId, open, onClose }: DailyStatsProps) {
                   </div>
                 );
               })}
+              {(() => {
+                const count = stats.losses;
+                const max = Math.max(...Object.values(stats.guess_distribution), stats.losses, 1);
+                const pct = (count / max) * 100;
+                return (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] w-16 text-right text-muted-foreground">4 mistakes</span>
+                    <div className="flex-1 h-5 bg-secondary rounded overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded flex items-center justify-end pr-1.5 transition-all duration-500"
+                        style={{ width: `${Math.max(pct, count > 0 ? 14 : 0)}%` }}
+                      >
+                        {count > 0 && (
+                          <span className="text-[10px] font-semibold text-primary-foreground tabular-nums">{count}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </>
         )}
