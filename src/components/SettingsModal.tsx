@@ -62,14 +62,15 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange }: Set
 
           {/* Divider */}
           <div className="border-t border-border pt-4 space-y-4">
+            <p className="text-sm font-medium flex items-center gap-2">
+              Advanced Features
+              <span className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+                Beta
+              </span>
+            </p>
             <label className="flex items-center justify-between gap-3 cursor-pointer">
               <div>
-                <p className="text-sm font-medium flex items-center gap-2">
-                  Arrange Tiles
-                  <span className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-                    Beta
-                  </span>
-                </p>
+                <p className="text-sm font-medium">Arrange Tiles</p>
                 <p className="text-xs text-muted-foreground">
                   Drag & drop tiles to organize your thinking
                 </p>
@@ -83,12 +84,7 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange }: Set
             </label>
             <label className="flex items-center justify-between gap-3 cursor-pointer">
               <div>
-                <p className="text-sm font-medium flex items-center gap-2">
-                  Color-Code Tiles
-                  <span className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-                    Beta
-                  </span>
-                </p>
+                <p className="text-sm font-medium">Color-Code Tiles</p>
                 <p className="text-xs text-muted-foreground">
                   Double-tap tiles to color-tag them
                 </p>
