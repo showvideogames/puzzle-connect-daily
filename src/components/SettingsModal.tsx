@@ -6,14 +6,12 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { GameSettings } from "@/lib/settings";
-
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
   settings: GameSettings;
   onSettingsChange: (settings: GameSettings) => void;
 }
-
 export function SettingsModal({ open, onClose, settings, onSettingsChange }: SettingsModalProps) {
   const items = [
     {
@@ -37,7 +35,6 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange }: Set
       key: "hapticEnabled" as const,
     },
   ];
-
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
@@ -59,10 +56,9 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange }: Set
               />
             </label>
           ))}
-
           {/* Divider */}
           <div className="border-t border-border pt-4 space-y-4">
-            <p className="text-sm font-medium flex items-center gap-2">
+            <p className="text-lg font-bold flex items-center gap-2">
               Advanced Features
               <span className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
                 Beta
@@ -97,7 +93,6 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange }: Set
               />
             </label>
           </div>
-
         </div>
       </DialogContent>
     </Dialog>
