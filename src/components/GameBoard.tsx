@@ -108,7 +108,8 @@ interface GameBoardProps {
 
 export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false }: GameBoardProps) {
   const showRainbow = settings?.showRainbowColors ?? true;
-  const advancedFeatures = settings?.advancedFeatures ?? false;
+  const arrangeTiles = settings?.arrangeTiles ?? false;
+  const colorCodeTiles = settings?.colorCodeTiles ?? false;
 
   const {
     state,
@@ -271,10 +272,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               isMatched={matchedWords.includes(word)}
               onClick={() => toggleWord(word)}
               disabled={state.isComplete || matchedWords.length > 0}
-              advancedFeatures={advancedFeatures}
+              arrangeTiles={arrangeTiles}
+              colorCodeTiles={colorCodeTiles}
               tileColor={tileColors[word] ?? null}
               onColorChange={setTileColor}
-              draggable={advancedFeatures}
+              draggable={arrangeTiles}
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
@@ -354,8 +356,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <Send className="w-4 h-4" /> Submit
           </button>
 
-          {/* Clear Colors button — only when Advanced Features on AND at least one tile is colored */}
-          {advancedFeatures && hasAnyColor && (
+          {/* Clear Colors button — only when Color-Code Tiles on AND at least one tile is colored */}
+          {colorCodeTiles && hasAnyColor && (
             <button
               onClick={clearAllColors}
               className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium

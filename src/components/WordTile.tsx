@@ -21,7 +21,8 @@ interface WordTileProps {
   disabled?: boolean;
   isRainbow?: boolean;
   isMatched?: boolean;
-  advancedFeatures?: boolean;
+  arrangeTiles?: boolean;
+  colorCodeTiles?: boolean;
   tileColor?: string | null;
   onColorChange?: (word: string, color: string | null) => void;
   draggable?: boolean;
@@ -42,7 +43,8 @@ export function WordTile({
   disabled,
   isRainbow,
   isMatched,
-  advancedFeatures = false,
+  arrangeTiles = false,
+  colorCodeTiles = false,
   tileColor = null,
   onColorChange,
   draggable = false,
@@ -65,7 +67,7 @@ export function WordTile({
   // Attach non-passive touch listeners directly to DOM so preventDefault works
   useEffect(() => {
     const el = buttonRef.current;
-    if (!el || !advancedFeatures) return;
+    if (!el || !arrangeTiles) return;
 
     const handleTouchStart = (e: TouchEvent) => {
       const touch = e.touches[0];
@@ -104,13 +106,13 @@ export function WordTile({
       el.removeEventListener("touchmove", handleTouchMove);
       el.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [advancedFeatures, word, onDragStart, onTouchDragMove, onTouchDragEnd]);
+  }, [arrangeTiles, word, onDragStart, onTouchDragMove, onTouchDragEnd]);
 
   const handleClick = useCallback(() => {
     if (isTouchDragging.current) return;
 
-    // No Advanced Features — fire instantly, zero delay
-    if (!advancedFeatures) {
+    // No Color-Code Tiles — fire instantly, zero delay
+    if (!colorCodeTiles) {
       onClick();
       return;
     }
@@ -133,7 +135,7 @@ export function WordTile({
         onClick();
       }, 250);
     }
-  }, [advancedFeatures, onClick]);
+  }, [colorCodeTiles, onClick]);
 
   const handleColorSelect = useCallback((color: string | null) => {
     onColorChange?.(word, color === tileColor ? null : color);
@@ -166,13 +168,13 @@ export function WordTile({
       ref={wrapperRef}
       data-word={word}
       className="relative"
-      style={{ touchAction: advancedFeatures ? "none" : "manipulation" }}
+      style={{ touchAction: arrangeTiles ? "none" : "manipulation" }}
     >
       <button
         ref={buttonRef}
         onClick={handleClick}
         disabled={disabled}
-        draggable={advancedFeatures && draggable}
+        draggable={arrangeTiles && draggable}
         onDragStart={() => onDragStart?.(word)}
         onDragOver={(e) => { e.preventDefault(); onDragOver?.(word); }}
         onDrop={onDrop}

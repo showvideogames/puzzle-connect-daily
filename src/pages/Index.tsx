@@ -30,8 +30,8 @@ export default function Index() {
     setSettings(newSettings);
     saveSettings(newSettings);
     document.documentElement.classList.toggle("dark", newSettings.darkMode);
-    // If Advanced Features just got turned off, tell GameBoard to clear all colors
-    if (!newSettings.advancedFeatures) {
+    // If Color-Code Tiles just got turned off, tell GameBoard to clear all colors
+    if (!newSettings.colorCodeTiles) {
       setClearColorsTrigger((n) => n + 1);
     }
   }, []);
