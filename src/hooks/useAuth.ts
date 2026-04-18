@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 
@@ -9,6 +9,12 @@ export function useAuth() {
   const [adminLoading, setAdminLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // Tracks the last user ID that triggered an admin check. When Supabase fires
+  // TOKEN_REFRESHED on tab-focus the user ID is unchanged, so we must NOT reset
+  // adminLoading — otherwise the second useEffect (keyed on user?.id) never
+  // re-runs and adminLoading stays true forever, locking the UI on the spinner.
+  const lastCheckedUserIdRef = useRef<string | undefined>(undefined);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -18,9 +24,16 @@ export function useAuth() {
       const nextUser = nextSession?.user ?? null;
       setSession(nextSession);
       setUser(nextUser);
-      setIsAdmin(false);
-      setAdminLoading(!!nextUser);
       setAuthLoading(false);
+
+      // Only reset admin state when the user identity actually changes
+      // (fresh login, logout, or a different account). Token-refresh events for
+      // the same user must leave adminLoading / isAdmin untouched.
+      if (nextUser?.id !== lastCheckedUserIdRef.current) {
+        lastCheckedUserIdRef.current = nextUser?.id;
+        setIsAdmin(false);
+        setAdminLoading(!!nextUser);
+      }
     };
 
     const initializeAuth = async () => {
