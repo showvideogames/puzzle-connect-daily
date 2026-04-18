@@ -322,11 +322,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} />
       </div>
 
-      {/* Rating */}
-      {state.isComplete && (
-        <PuzzleRating puzzleId={puzzle.id} user={user} />
-      )}
-
       {/* Controls */}
       {!state.isComplete && (
         <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
@@ -412,10 +407,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
+      {/* Rating */}
+      {state.isComplete && (
+        <PuzzleRating puzzleId={puzzle.id} user={user} />
+      )}
+
       <DailyStatsModal
         puzzleId={puzzle.id}
         open={showGlobalStats}
         onClose={() => setShowGlobalStats(false)}
+        userMistakes={state.mistakes}
+        isComplete={state.isComplete}
       />
 
       {puzzle.rainbowHerring && (

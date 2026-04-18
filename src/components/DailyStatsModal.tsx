@@ -6,6 +6,8 @@ interface DailyStatsProps {
   puzzleId: string;
   open: boolean;
   onClose: () => void;
+  userMistakes?: number;
+  isComplete?: boolean;
 }
 
 interface PuzzleStats {
@@ -15,7 +17,7 @@ interface PuzzleStats {
   guess_distribution: Record<string, number>;
 }
 
-export function DailyStatsModal({ puzzleId, open, onClose }: DailyStatsProps) {
+export function DailyStatsModal({ puzzleId, open, onClose, userMistakes, isComplete }: DailyStatsProps) {
   const [stats, setStats] = useState<PuzzleStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -81,12 +83,13 @@ export function DailyStatsModal({ puzzleId, open, onClose }: DailyStatsProps) {
                 const max = Math.max(...Object.values(stats.guess_distribution), stats.losses, 1);
                 const pct = (count / max) * 100;
                 const labels = ["Perfect 🎯", "1 mistake", "2 mistakes", "3 mistakes"];
+                const isYours = isComplete && userMistakes === m;
                 return (
                   <div key={m} className="flex items-center gap-2">
                     <span className="text-[10px] w-16 text-right text-muted-foreground">{labels[m]}</span>
                     <div className="flex-1 h-5 bg-secondary rounded overflow-hidden">
                       <div
-                        className="h-full bg-primary rounded flex items-center justify-end pr-1.5 transition-all duration-500"
+                        className={`h-full rounded flex items-center justify-end pr-1.5 transition-all duration-500 ${isYours ? "bg-green-500" : "bg-primary"}`}
                         style={{ width: `${Math.max(pct, count > 0 ? 14 : 0)}%` }}
                       >
                         {count > 0 && (
@@ -101,12 +104,13 @@ export function DailyStatsModal({ puzzleId, open, onClose }: DailyStatsProps) {
                 const count = stats.losses;
                 const max = Math.max(...Object.values(stats.guess_distribution), stats.losses, 1);
                 const pct = (count / max) * 100;
+                const isYours = isComplete && userMistakes === 4;
                 return (
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] w-16 text-right text-muted-foreground">4 mistakes</span>
                     <div className="flex-1 h-5 bg-secondary rounded overflow-hidden">
                       <div
-                        className="h-full bg-primary rounded flex items-center justify-end pr-1.5 transition-all duration-500"
+                        className={`h-full rounded flex items-center justify-end pr-1.5 transition-all duration-500 ${isYours ? "bg-green-500" : "bg-primary"}`}
                         style={{ width: `${Math.max(pct, count > 0 ? 14 : 0)}%` }}
                       >
                         {count > 0 && (
