@@ -102,6 +102,7 @@ export function useAuth() {
 
     return () => {
       isMounted = false;
+      setAdminLoading(false);
     };
   }, [user?.id]);
 
