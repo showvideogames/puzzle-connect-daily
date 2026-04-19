@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Puzzle, GameState, GuessAttempt } from "@/lib/types";
 import { hasPlayedToday, markPlayed, recordGameResult } from "@/lib/stats";
-import { loadSettings } from "@/lib/settings";
 import { vibrateSuccess, vibrateError, vibrateCelebration } from "@/lib/haptics";
 import { submitGlobalStats } from "@/lib/globalStats";
 import confetti from "canvas-confetti";
@@ -121,7 +120,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
   const [matchedWords, setMatchedWords] = useState<string[]>([]);
   const [draggedWord, setDraggedWord] = useState<string | null>(null);
 
-  // Active timer — counts seconds only while the tab is visible
   const activeSecondsRef = useRef<number>(0);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isVisibleRef = useRef<boolean>(true);
@@ -149,7 +147,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
     };
   }, [state.isComplete]);
 
-  // Auto-save progress including tile colors
   useEffect(() => {
     if (state.solvedGroups.length > 0 || state.mistakes > 0 || state.guessHistory.length > 0) {
       saveProgress(puzzle.id, {
@@ -166,7 +163,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
     }
   }, [state, shuffledWords, rainbowWords, tileColors, puzzle.id]);
 
-  // Save tile colors whenever they change (including when cleared)
   useEffect(() => {
     const existing = loadProgress(puzzle.id);
     saveProgress(puzzle.id, {
@@ -206,7 +202,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
     return Object.values(tileColors).some(Boolean);
   }, [tileColors]);
 
-  // Desktop drag handlers
   const handleDragStart = useCallback((word: string) => {
     setDraggedWord(word);
   }, []);
@@ -228,7 +223,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
     setDraggedWord(null);
   }, []);
 
-  // Mobile touch drag handlers
   const handleTouchDragMove = useCallback((x: number, y: number) => {
     const el = document.elementFromPoint(x, y);
     if (!el) return;
@@ -333,8 +327,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
   const submitGuess = useCallback(() => {
     if (state.selectedWords.length !== 4 || state.isComplete) return;
 
-    // Duplicate guess detection — skip rainbow guesses since those words
-    // legitimately appear again when solving the real group
     const sortedSelected = [...state.selectedWords].sort();
     const isDuplicate = state.guessHistory.some(
       (g) => !g.isRainbow && g.words.length === 4 && [...g.words].sort().every((w, i) => w === sortedSelected[i])
@@ -361,7 +353,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
       const selected = [...state.selectedWords].sort();
       const herring = [...puzzle.rainbowHerring].sort();
       if (selected.every((w, i) => w === herring[i])) {
-        // Shake for suspense (0.4s) then reveal the rainbow
         setShaking(true);
         setTimeout(() => {
           setShaking(false);
@@ -381,8 +372,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
       }
     }
 
-    // Use idx directly instead of indexOf(g) to avoid mismatches when
-    // rainbow words appear in multiple groups
     const matchedGroupIndex = puzzle.groups.findIndex(
       (g, idx) =>
         !state.solvedGroups.includes(idx) &&
