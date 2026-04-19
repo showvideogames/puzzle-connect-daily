@@ -71,9 +71,12 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
 
   const [shuffledWords, setShuffledWords] = useState(() => {
     if (saved) return saved.shuffledWords;
-    return puzzle.wordOrder && puzzle.wordOrder.length === 16
-      ? puzzle.wordOrder
-      : shuffleArray(allWords);
+    if (puzzle.wordOrder && puzzle.wordOrder.length > 0) {
+      const wordSet = new Set(allWords);
+      const isValid = puzzle.wordOrder.every(w => wordSet.has(w));
+      if (isValid) return puzzle.wordOrder;
+    }
+    return shuffleArray(allWords);
   });
 
   const [tileColors, setTileColors] = useState<Record<string, string | null>>(() => {
@@ -337,10 +340,11 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
   const submitGuess = useCallback(() => {
     if (state.selectedWords.length !== 4 || state.isComplete) return;
 
-    // Duplicate guess detection — check before anything else
+    // Duplicate guess detection — skip rainbow guesses since those words
+    // legitimately appear again when solving the real group
     const sortedSelected = [...state.selectedWords].sort();
     const isDuplicate = state.guessHistory.some(
-      (g) => g.words.length === 4 && [...g.words].sort().every((w, i) => w === sortedSelected[i])
+      (g) => !g.isRainbow && g.words.length === 4 && [...g.words].sort().every((w, i) => w === sortedSelected[i])
     );
     if (isDuplicate) {
       const isOneAway = puzzle.groups.some(
@@ -378,9 +382,11 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
       }
     }
 
+    // Use idx directly instead of indexOf(g) to avoid mismatches when
+    // rainbow words appear in multiple groups
     const matchedGroupIndex = puzzle.groups.findIndex(
-      (g) =>
-        !state.solvedGroups.includes(puzzle.groups.indexOf(g)) &&
+      (g, idx) =>
+        !state.solvedGroups.includes(idx) &&
         g.words.every((w) => state.selectedWords.includes(w))
     );
 
@@ -434,7 +440,7 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
 
           if (isArchive) {
             void (async () => {
-              if (await hasExistingSession(puzzle.id)) return; // Already recorded
+              if (await hasExistingSession(puzzle.id)) return;
               recordGameResult(true, state.mistakes);
               saveResultToDb(true, state.mistakes);
               submitGlobalStats(puzzle.id, state.mistakes);
@@ -492,7 +498,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
       setState((s) => ({
         ...s,
         mistakes: newMistakes,
-        // Keep selectedWords intact so the player can see what they just guessed
         isComplete: isLost,
         isWon: false,
         guessHistory: [...s.guessHistory, attempt],
@@ -517,7 +522,7 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
 
         if (isArchive) {
           void (async () => {
-            if (await hasExistingSession(puzzle.id)) return; // Already recorded
+            if (await hasExistingSession(puzzle.id)) return;
             recordGameResult(false, newMistakes);
             saveResultToDb(false, newMistakes);
             submitGlobalStats(puzzle.id, 4);
