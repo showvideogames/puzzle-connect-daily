@@ -226,7 +226,7 @@
 }
 
 .animate-rainbow-curtain {
-  animation: rainbow-curtain 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: rainbow-curtain 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 /* ── SolvedGroup fade-in after tiles arrive ── */
