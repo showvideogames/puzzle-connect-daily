@@ -147,6 +147,13 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
     };
   }, [state.isComplete]);
 
+  // Dismiss "One away" when selected words change
+  useEffect(() => {
+    if (oneAway) {
+      setOneAway(false);
+    }
+  }, [state.selectedWords]);
+
   useEffect(() => {
     if (state.solvedGroups.length > 0 || state.mistakes > 0 || state.guessHistory.length > 0) {
       saveProgress(puzzle.id, {
@@ -344,8 +351,7 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
 
     const guessGroupIndices = state.selectedWords.map((w) => getWordGroupIndex(w));
 
-    // Rainbow herring detection — wiggle just the 4 selected tiles (same as correct guess),
-    // then reveal the rainbow bar after the animation
+    // Rainbow herring detection — wiggle just the 4 selected tiles then reveal
     if (
       puzzle.rainbowHerring &&
       puzzle.rainbowHerring.length === 4 &&
@@ -354,7 +360,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
       const selected = [...state.selectedWords].sort();
       const herring = [...puzzle.rainbowHerring].sort();
       if (selected.every((w, i) => w === herring[i])) {
-        // Use matchedWords to trigger the same tile wiggle as a correct category guess
         setMatchedWords([...state.selectedWords]);
         setTimeout(() => {
           setMatchedWords([]);
@@ -478,8 +483,8 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
       setTimeout(() => setShaking(false), 400);
 
       if (isOneAway) {
+        // No auto-dismiss — stays until player taps X or changes selection
         setOneAway(true);
-        setTimeout(() => setOneAway(false), 2000);
       }
 
       const newMistakes = state.mistakes + 1;
@@ -584,6 +589,7 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
     shaking,
     lastRevealedGroup,
     oneAway,
+    setOneAway,
     rainbowWords,
     showRainbowPopup,
     matchedWords,
