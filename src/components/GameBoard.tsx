@@ -1,465 +1,128 @@
+import { useState } from "react";
 import { Puzzle } from "@/lib/types";
-import { GameSettings } from "@/lib/settings";
-import { useGame } from "@/hooks/useGame";
-import { WordTile } from "./WordTile";
-import { SolvedGroup } from "./SolvedGroup";
-import { MistakeDots } from "./MistakeDots";
-import { DailyStatsModal } from "./DailyStatsModal";
-import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
-import { PuzzleRating } from "./PuzzleRating";
-import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser } from "lucide-react";
-import { useState, useCallback, useEffect, useRef } from "react";
-import type { User } from "@supabase/supabase-js";
+import confetti from "canvas-confetti";
+import { playRainbowSound } from "@/lib/sounds";
 
-const TOOLTIP_MSG = "This puzzle has no Rainbow category.";
-
-function NoRainbowIndicator() {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent | TouchEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("touchstart", handleClick);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("touchstart", handleClick);
-    };
-  }, [open]);
-
-  return (
-    <div ref={ref} className="relative flex-shrink-0" style={{ lineHeight: 0 }}>
-      <button
-        type="button"
-        aria-label={TOOLTIP_MSG}
-        onClick={() => setOpen((v) => !v)}
-        className="group focus:outline-none"
-        style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
-      >
-        <img
-          src="/no-rainbow.png"
-          alt="No rainbow"
-          style={{ height: "48px", width: "auto", display: "block" }}
-        />
-        <span
-          className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2
-            whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium shadow-md
-            bg-foreground text-background
-            opacity-0 group-hover:opacity-100 transition-opacity duration-150
-            hidden sm:block"
-        >
-          {TOOLTIP_MSG}
-        </span>
-      </button>
-
-      {open && (
-        <div
-          className="absolute bottom-full right-0 mb-2 z-50
-            rounded-xl px-3 py-2 text-xs font-medium shadow-lg text-center
-            bg-foreground text-background sm:hidden"
-          style={{ width: "max-content", maxWidth: "220px" }}
-        >
-          {TOOLTIP_MSG}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const DIFFICULTY_EMOJI: Record<number, string> = {
-  0: "🟧",
-  1: "🟩",
-  2: "🟦",
-  3: "🟥",
+const GROUP_COLORS: Record<number, { bg: string; text: string }> = {
+  1: { bg: "bg-group-1", text: "text-group-1-fg" },
+  2: { bg: "bg-group-2", text: "text-group-2-fg" },
+  3: { bg: "bg-group-3", text: "text-group-3-fg" },
+  4: { bg: "bg-group-4", text: "text-group-4-fg" },
 };
 
-function getResultHeadline(isWon: boolean, mistakes: number): string {
-  if (isWon && mistakes === 0) return "Perfect game! 🎯";
-  if (isWon && mistakes === 1) return "Amazing 🎉";
-  if (isWon && mistakes === 2) return "Great job! 👏";
-  if (isWon && mistakes === 3) return "Clutch!!! 🙌";
-  return "Valiant effort. 💪";
-}
+const RAINBOW_GRADIENT = "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)";
 
-function getResultSubtitle(isWon: boolean, mistakes: number): string {
-  if (isWon && mistakes === 0) return "No mistakes — impressive. Come back tomorrow!";
-  if (isWon && mistakes === 1) return "Well done. Come back tomorrow!";
-  if (isWon && mistakes === 2) return "Easy does it. Come back tomorrow!";
-  if (isWon && mistakes === 3) return "Way to dig deep and find the solve. Come back tomorrow!";
-  return "Almost had it. Come back tomorrow!";
-}
-
-interface GameBoardProps {
+interface SpotTheRainbowModalProps {
+  open: boolean;
   puzzle: Puzzle;
-  settings?: GameSettings;
-  user?: User | null;
-  clearColorsTrigger?: number;
-  isArchive?: boolean;
+  onResult: (correct: boolean) => void;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false }: GameBoardProps) {
-  const showRainbow = settings?.showRainbowColors ?? true;
-  const arrangeTiles = settings?.arrangeTiles ?? false;
-  const colorCodeTiles = settings?.colorCodeTiles ?? false;
+export function SpotTheRainbowModal({ open, puzzle, onResult }: SpotTheRainbowModalProps) {
+  const [selected, setSelected] = useState<Record<number, string>>({});
+  const [phase, setPhase] = useState<"picking" | "correct">("picking");
 
-  const {
-    state,
-    remainingWords,
-    toggleWord,
-    deselectAll,
-    shuffle,
-    submitGuess,
-    shaking,
-    lastRevealedGroup,
-    oneAway,
-    rainbowWords,
-    showRainbowPopup,
-    matchedWords,
-    tileColors,
-    setTileColor,
-    clearAllColors,
-    hasAnyColor,
-    handleDragStart,
-    handleDragOver,
-    handleDrop,
-    handleTouchDragMove,
-    handleTouchDragEnd,
-    alreadyGuessed,
-  } = useGame(puzzle, { isArchive });
+  if (!open || !puzzle.rainbowHerring) return null;
 
-  useEffect(() => {
-    if (clearColorsTrigger > 0) {
-      clearAllColors();
+  const handleSelect = (groupIdx: number, word: string) => {
+    if (phase !== "picking") return;
+    setSelected(prev => ({ ...prev, [groupIdx]: word }));
+  };
+
+  const readyToSubmit = Object.keys(selected).length === puzzle.groups.length;
+
+  const handleSubmit = () => {
+    if (!readyToSubmit || !puzzle.rainbowHerring) return;
+
+    const chosenSorted = Object.values(selected).sort();
+    const correctSorted = [...puzzle.rainbowHerring].sort();
+    const isCorrect =
+      chosenSorted.length === correctSorted.length &&
+      chosenSorted.every((w, i) => w === correctSorted[i]);
+
+    if (isCorrect) {
+      setPhase("correct");
+      confetti({ particleCount: 100, spread: 80, origin: { y: 0.55 } });
+      playRainbowSound();
+      setTimeout(() => onResult(true), 2000);
+    } else {
+      onResult(false);
     }
-  }, [clearColorsTrigger]);
-
-  const [copied, setCopied] = useState(false);
-  const [showGlobalStats, setShowGlobalStats] = useState(false);
-  const [showSpotModal, setShowSpotModal] = useState(false);
-  const [bonusRainbowCorrect, setBonusRainbowCorrect] = useState<boolean | null>(null);
-  const [rainbowVisible, setRainbowVisible] = useState(false);
-  const [spotShaking, setSpotShaking] = useState(false);
-
-  // Track previous gotRainbow to detect when it first becomes true
-  const prevGotRainbow = useRef(state.gotRainbow);
-
-  // Trigger rainbow curtain when rainbow is first found mid-game
-  useEffect(() => {
-    if (state.gotRainbow && !prevGotRainbow.current) {
-      setRainbowVisible(false);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setRainbowVisible(true));
-      });
-    }
-    prevGotRainbow.current = state.gotRainbow;
-  }, [state.gotRainbow]);
-
-  // Trigger rainbow curtain when bonus rainbow is revealed after spot modal
-  useEffect(() => {
-    if (bonusRainbowCorrect !== null) {
-      setRainbowVisible(false);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setRainbowVisible(true));
-      });
-    }
-  }, [bonusRainbowCorrect]);
-
-  // Shake tiles briefly before closing spot modal and revealing result
-  const handleSpotResult = useCallback((correct: boolean) => {
-    setSpotShaking(true);
-    setTimeout(() => {
-      setSpotShaking(false);
-      setBonusRainbowCorrect(correct);
-      setShowSpotModal(false);
-    }, 500);
-  }, []);
-
-  const generateShareLines = useCallback((): string[] => {
-    const lines: string[] = [];
-    for (const attempt of state.guessHistory) {
-      if (attempt.isRainbow) {
-        lines.push("🌈");
-      } else {
-        const row = attempt.groupIndices
-          .map((gi) => {
-            const diff = puzzle.groups[gi]?.difficulty;
-            return DIFFICULTY_EMOJI[diff - 1] || "⬜";
-          })
-          .join("");
-        lines.push(row);
-      }
-    }
-    if (bonusRainbowCorrect === true) {
-      lines.push("🌈");
-    }
-    return lines;
-  }, [state.guessHistory, puzzle, bonusRainbowCorrect]);
-
-  const generateShareText = useCallback(() => {
-    const d = new Date(puzzle.date + "T12:00:00");
-    const formatted = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-    return `🧩 ${formatted}\n${generateShareLines().join("\n")}`;
-  }, [puzzle, generateShareLines]);
-
-  const handleShare = useCallback(async () => {
-    const text = generateShareText();
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [generateShareText]);
+  };
 
   return (
-    <div className="w-full max-w-lg mx-auto px-2 animate-fade-up">
-      <div className="flex items-center justify-center gap-2 mb-4">
-        <p className="text-center text-sm text-muted-foreground">
-          Find groups of four words that share something in common.
-        </p>
-        {!puzzle.rainbowHerring && (
-          <NoRainbowIndicator />
-        )}
-      </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
+      <div className="relative bg-card rounded-xl shadow-2xl p-5 w-full max-w-sm mx-4 animate-pop overflow-y-auto max-h-[90vh]">
 
-      {/* Solved groups */}
-      <div className="space-y-2 mb-2">
-
-        {/* Rainbow bar at top — curtain reveal when first found mid-game */}
-        {state.gotRainbow && puzzle.rainbowHerring && (
-          <div
-            className={`w-full rounded-lg py-3 px-4 text-center text-white ${rainbowVisible ? "animate-rainbow-curtain" : ""}`}
-            style={{
-              background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)",
-              clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
-            }}
-          >
-            <div className="font-bold text-sm uppercase tracking-wide">
-              {puzzle.rainbowCategoryName || "Rainbow 🌈"}
+        {/* Correct result */}
+        {phase === "correct" && (
+          <>
+            <h2 className="text-lg font-bold mb-1">Spot the Rainbow? 🌈</h2>
+            <div className="text-center py-8">
+              <div className="text-4xl mb-3">🌈</div>
+              <p className="text-xl font-bold">You spotted it!</p>
+              <p className="text-sm text-muted-foreground mt-1">Rainbow added to your share.</p>
             </div>
-            <div className="text-xs mt-0.5 opacity-90">
-              {[...puzzle.rainbowHerring].sort().join(", ")}
-            </div>
-          </div>
+          </>
         )}
 
-        {state.solvedGroups.map((groupIdx) => (
-          <SolvedGroup
-            key={groupIdx}
-            group={puzzle.groups[groupIdx]}
-            animate={groupIdx === lastRevealedGroup}
-          />
-        ))}
+        {/* Word selection UI */}
+        {phase === "picking" && (
+          <>
+            <h2 className="text-lg font-bold mb-1">Spot the Rainbow? 🌈</h2>
+            <p className="text-xs text-muted-foreground mb-4">
+              Pick one word from each group that shares a hidden connection.
+            </p>
 
-        {/* Rainbow gradient bar — end game, curtain reveal */}
-        {state.isComplete && !state.gotRainbow && puzzle.rainbowHerring && (
-          bonusRainbowCorrect === null ? (
+            <div className="space-y-2 mb-4">
+              {puzzle.groups.map((group, groupIdx) => {
+                const colors = GROUP_COLORS[group.difficulty] || GROUP_COLORS[1];
+                const chosenWord = selected[groupIdx];
+                return (
+                  <div key={groupIdx} className="rounded-lg overflow-hidden">
+                    {/* Group header shows category name, then chosen word once picked */}
+                    <div className={`${colors.bg} ${colors.text} px-3 py-1.5 text-center`}>
+                      <span className="text-[11px] font-bold uppercase tracking-wide opacity-75">
+                        {group.category}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1 p-1.5 bg-secondary/20">
+                      {group.words.map(word => {
+                        const isChosen = chosenWord === word;
+                        return (
+                          <button
+                            key={word}
+                            onClick={() => handleSelect(groupIdx, word)}
+                            className={`py-2 px-1 rounded-md text-xs font-semibold text-center leading-tight
+                              transition-all duration-100 active:scale-95
+                              ${isChosen
+                                ? `${colors.bg} ${colors.text} ring-2 ring-foreground/30`
+                                : "bg-tile hover:bg-secondary"
+                              }`}
+                          >
+                            {word}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
             <button
-              onClick={() => setShowSpotModal(true)}
-              className="w-full rounded-lg py-3 px-4 text-center text-white
-                hover:opacity-90 transition-opacity active:scale-[0.99]"
-              style={{ background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)" }}
+              onClick={handleSubmit}
+              disabled={!readyToSubmit}
+              className="w-full py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold
+                hover:opacity-90 transition-all duration-150 active:scale-95
+                disabled:opacity-40 disabled:cursor-default"
             >
-              <div className="font-bold text-sm uppercase tracking-wide">Spot the Rainbow? 🌈</div>
-              <div className="text-xs mt-0.5 opacity-80">Find one word from each group</div>
+              Submit
             </button>
-          ) : (
-            <div
-              className={`w-full rounded-lg py-3 px-4 text-center text-white ${rainbowVisible ? "animate-rainbow-curtain" : ""}`}
-              style={{
-                background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)",
-                clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
-              }}
-            >
-              <div className="font-bold text-sm uppercase tracking-wide">
-                {puzzle.rainbowCategoryName || "Rainbow 🌈"}
-              </div>
-              <div className="text-xs mt-0.5 opacity-90">
-                {[...puzzle.rainbowHerring].sort().join(", ")}
-              </div>
-            </div>
-          )
+          </>
         )}
       </div>
-
-      {/* Word grid — spotShaking triggers same shake as wrong guess */}
-      {remainingWords.length > 0 && (
-        <div className={`grid grid-cols-4 gap-2 ${shaking || spotShaking ? "animate-shake" : ""}`}>
-          {remainingWords.map((word, index) => (
-            <WordTile
-              key={word}
-              word={word}
-              isSelected={state.selectedWords.includes(word)}
-              isRainbow={showRainbow && rainbowWords.includes(word)}
-              isMatched={matchedWords.includes(word)}
-              onClick={() => toggleWord(word)}
-              disabled={state.isComplete || matchedWords.length > 0}
-              arrangeTiles={arrangeTiles}
-              colorCodeTiles={colorCodeTiles}
-              tileColor={tileColors[word] ?? null}
-              onColorChange={setTileColor}
-              draggable={arrangeTiles}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              onTouchDragMove={handleTouchDragMove}
-              column={(index % 4) + 1}
-              onTouchDragEnd={handleTouchDragEnd}
-              isEmojiPuzzle={puzzle.isEmojiPuzzle ?? false}
-              data-word={word}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Rainbow Spotted popup */}
-      {showRainbowPopup && (
-        <div className="flex justify-center mt-3 animate-fade-up">
-          <div className={`${showRainbow ? "rainbow-tile" : "bg-foreground"} px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg`}>
-            🌈 Rainbow Spotted!
-          </div>
-        </div>
-      )}
-
-      {/* One Away popup */}
-      {oneAway && (
-        <div className="flex justify-center mt-3 animate-fade-up">
-          <div className="bg-foreground text-background px-5 py-2 rounded-full text-sm font-semibold shadow-md">
-            One away…
-          </div>
-        </div>
-      )}
-
-      {/* Already Guessed popup */}
-      {alreadyGuessed && (
-        <div className="flex justify-center mt-3 animate-fade-up">
-          <div className="bg-foreground text-background px-5 py-2 rounded-full text-sm font-semibold shadow-md">
-            {alreadyGuessed === "oneaway" ? "Already guessed — and one away!" : "Already guessed!"}
-          </div>
-        </div>
-      )}
-
-      {/* Mistakes */}
-      <div className="mt-4">
-        <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} />
-      </div>
-
-      {/* Controls */}
-      {!state.isComplete && (
-        <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
-          <button
-            onClick={shuffle}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium
-              hover:bg-secondary transition-colors duration-150 active:scale-95"
-          >
-            <Shuffle className="w-4 h-4" /> Shuffle
-          </button>
-          <button
-            onClick={deselectAll}
-            disabled={state.selectedWords.length === 0}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium
-              hover:bg-secondary transition-colors duration-150 active:scale-95
-              disabled:opacity-40 disabled:cursor-default"
-          >
-            <X className="w-4 h-4" /> Deselect
-          </button>
-          <button
-            onClick={submitGuess}
-            disabled={state.selectedWords.length !== 4}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-medium
-              hover:opacity-90 transition-all duration-150 active:scale-95
-              disabled:opacity-40 disabled:cursor-default"
-          >
-            <Send className="w-4 h-4" /> Submit
-          </button>
-
-          {colorCodeTiles && hasAnyColor && (
-            <button
-              onClick={clearAllColors}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium
-                hover:bg-secondary transition-colors duration-150 active:scale-95"
-            >
-              <Eraser className="w-4 h-4" /> Clear Colors
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* End state */}
-      {state.isComplete && (
-        <div className="text-center mt-6 animate-fade-up">
-          <p className="text-lg font-bold">
-            {getResultHeadline(state.isWon, state.mistakes)}
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {getResultSubtitle(state.isWon, state.mistakes)}
-          </p>
-
-          {state.guessHistory.length > 0 && (
-            <div className="mt-4 space-y-3">
-              <div className="flex flex-col items-center gap-0.5">
-                {generateShareLines().map((line, i) => (
-                  <span key={i} className="text-2xl leading-tight tracking-wider">
-                    {line}
-                  </span>
-                ))}
-              </div>
-
-              <div className="flex items-center justify-center gap-3">
-                <button
-                  onClick={handleShare}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold
-                    hover:opacity-90 transition-all duration-150 active:scale-95 shadow-md"
-                >
-                  {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                  {copied ? "Copied!" : "Share Score"}
-                </button>
-                <button
-                  onClick={() => setShowGlobalStats(true)}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border text-sm font-semibold
-                    hover:bg-secondary transition-all duration-150 active:scale-95 shadow-md"
-                >
-                  <TrendingUp className="w-4 h-4" /> Global Stats
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Rating */}
-      {state.isComplete && (
-        <PuzzleRating puzzleId={puzzle.id} user={user} />
-      )}
-
-      <DailyStatsModal
-        puzzleId={puzzle.id}
-        open={showGlobalStats}
-        onClose={() => setShowGlobalStats(false)}
-        userMistakes={state.mistakes}
-        isComplete={state.isComplete}
-      />
-
-      {puzzle.rainbowHerring && (
-        <SpotTheRainbowModal
-          open={showSpotModal}
-          puzzle={puzzle}
-          onResult={handleSpotResult}
-        />
-      )}
     </div>
   );
 }
