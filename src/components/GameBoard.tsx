@@ -119,6 +119,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     shaking,
     lastRevealedGroup,
     oneAway,
+    setOneAway,
     rainbowWords,
     showRainbowPopup,
     matchedWords,
@@ -146,13 +147,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const [bonusRainbowCorrect, setBonusRainbowCorrect] = useState<boolean | null>(null);
   const [rainbowVisible, setRainbowVisible] = useState(false);
   const [spotShaking, setSpotShaking] = useState(false);
-  // Words to highlight rainbow after spot-the-rainbow correct answer
   const [bonusRainbowWords, setBonusRainbowWords] = useState<string[]>([]);
 
-  // Track previous gotRainbow to detect when it first becomes true
   const prevGotRainbow = useRef(state.gotRainbow);
 
-  // Trigger rainbow curtain when rainbow is first found mid-game
   useEffect(() => {
     if (state.gotRainbow && !prevGotRainbow.current) {
       setRainbowVisible(false);
@@ -163,7 +161,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     prevGotRainbow.current = state.gotRainbow;
   }, [state.gotRainbow]);
 
-  // Trigger rainbow curtain after bonus rainbow sequence completes
   useEffect(() => {
     if (bonusRainbowCorrect !== null) {
       setRainbowVisible(false);
@@ -173,32 +170,20 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }
   }, [bonusRainbowCorrect]);
 
-  // Full sequence when player submits Spot the Rainbow:
-  // 1. Close modal immediately
-  // 2. Shake the board (0.4s)
-  // 3. If correct: highlight rainbow words, fire confetti + sound, then curtain reveal
-  // 4. If wrong: just curtain reveal
   const handleSpotResult = useCallback((correct: boolean) => {
     setShowSpotModal(false);
-
-    // Step 1: shake
     setSpotShaking(true);
     setTimeout(() => {
       setSpotShaking(false);
-
-      // Step 2: if correct, highlight the rainbow words on the board
       if (correct && puzzle.rainbowHerring) {
         setBonusRainbowWords([...puzzle.rainbowHerring]);
         confetti({ particleCount: 100, spread: 80, origin: { y: 0.55 } });
         playRainbowSound();
       }
-
-      // Step 3: after a brief moment showing highlighted tiles, reveal the bar
       setTimeout(() => {
         setBonusRainbowCorrect(correct);
       }, correct ? 600 : 0);
-
-    }, 400); // shake duration matches animate-shake (0.4s)
+    }, 400);
   }, [puzzle.rainbowHerring]);
 
   const generateShareLines = useCallback((): string[] => {
@@ -260,7 +245,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* Solved groups */}
       <div className="space-y-2 mb-2">
 
-        {/* Rainbow bar at top — curtain reveal when first found mid-game */}
         {state.gotRainbow && puzzle.rainbowHerring && (
           <div
             className={`w-full rounded-lg py-3 px-4 text-center text-white ${rainbowVisible ? "animate-rainbow-curtain" : ""}`}
@@ -286,7 +270,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           />
         ))}
 
-        {/* Rainbow gradient bar — end game, curtain reveal */}
         {state.isComplete && !state.gotRainbow && puzzle.rainbowHerring && (
           bonusRainbowCorrect === null ? (
             <button
@@ -359,11 +342,18 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* One Away popup */}
+      {/* One Away popup — stays until player taps X or changes selection */}
       {oneAway && (
         <div className="flex justify-center mt-3 animate-fade-up">
-          <div className="bg-foreground text-background px-5 py-2 rounded-full text-sm font-semibold shadow-md">
+          <div className="bg-foreground text-background pl-5 pr-3 py-2 rounded-full text-sm font-semibold shadow-md flex items-center gap-2">
             One away…
+            <button
+              onClick={() => setOneAway(false)}
+              className="w-5 h-5 rounded-full bg-background/20 hover:bg-background/30 flex items-center justify-center transition-colors active:scale-95"
+              aria-label="Dismiss"
+            >
+              <X className="w-3 h-3" />
+            </button>
           </div>
         </div>
       )}
