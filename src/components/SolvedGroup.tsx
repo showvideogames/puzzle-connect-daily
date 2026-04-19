@@ -14,10 +14,9 @@ interface SolvedGroupProps {
 
 export function SolvedGroup({ group, animate }: SolvedGroupProps) {
   const colors = groupColors[group.difficulty] || groupColors[1];
-
   return (
     <div
-      className={`${colors.bg} ${colors.text} rounded-lg py-3 px-4 text-center ${animate ? "animate-reveal" : ""}`}
+      className={`${colors.bg} ${colors.text} rounded-lg py-3 px-4 text-center ${animate ? "animate-group-appear" : ""}`}
     >
       <div className="font-bold text-sm uppercase tracking-wide">{group.category}</div>
       <div className="text-xs mt-0.5 opacity-80">{group.words.join(", ")}</div>
