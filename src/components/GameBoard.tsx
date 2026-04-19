@@ -17,7 +17,6 @@ function NoRainbowIndicator() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Close popup when tapping outside on mobile
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent | TouchEvent) {
@@ -35,7 +34,6 @@ function NoRainbowIndicator() {
 
   return (
     <div ref={ref} className="relative flex-shrink-0" style={{ lineHeight: 0 }}>
-      {/* The icon — hover shows tooltip on desktop, tap toggles popup on mobile */}
       <button
         type="button"
         aria-label={TOOLTIP_MSG}
@@ -48,7 +46,6 @@ function NoRainbowIndicator() {
           alt="No rainbow"
           style={{ height: "48px", width: "auto", display: "block" }}
         />
-        {/* Desktop tooltip — visible on hover via group-hover, hidden on touch devices */}
         <span
           className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2
             whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium shadow-md
@@ -60,7 +57,6 @@ function NoRainbowIndicator() {
         </span>
       </button>
 
-      {/* Mobile popup — shown on tap */}
       {open && (
         <div
           className="absolute bottom-full right-0 mb-2 z-50
@@ -96,6 +92,16 @@ function getResultSubtitle(isWon: boolean, mistakes: number): string {
   if (isWon && mistakes === 2) return "Easy does it. Come back tomorrow!";
   if (isWon && mistakes === 3) return "Way to dig deep and find the solve. Come back tomorrow!";
   return "Almost had it. Come back tomorrow!";
+}
+
+// Ghost tile shown during fly-up animation
+interface FlyingTile {
+  word: string;
+  startX: number;
+  startY: number;
+  targetX: number;
+  targetY: number;
+  color: string;
 }
 
 interface GameBoardProps {
@@ -136,7 +142,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     alreadyGuessed,
   } = useGame(puzzle, { isArchive });
 
-  // When Advanced Features is toggled off, clear all tile colors instantly
   useEffect(() => {
     if (clearColorsTrigger > 0) {
       clearAllColors();
@@ -147,6 +152,66 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const [showGlobalStats, setShowGlobalStats] = useState(false);
   const [showSpotModal, setShowSpotModal] = useState(false);
   const [bonusRainbowCorrect, setBonusRainbowCorrect] = useState<boolean | null>(null);
+  const [flyingTiles, setFlyingTiles] = useState<FlyingTile[]>([]);
+  const [rainbowVisible, setRainbowVisible] = useState(false);
+
+  // Ref to the top of the solved groups area — flying tiles aim here
+  const solvedAreaRef = useRef<HTMLDivElement>(null);
+
+  // Track previous gotRainbow to detect when it first becomes true
+  const prevGotRainbow = useRef(state.gotRainbow);
+
+  // Trigger rainbow curtain when rainbow is first found mid-game
+  useEffect(() => {
+    if (state.gotRainbow && !prevGotRainbow.current) {
+      setRainbowVisible(false);
+      // Small delay so the element mounts before animating
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setRainbowVisible(true));
+      });
+    }
+    prevGotRainbow.current = state.gotRainbow;
+  }, [state.gotRainbow]);
+
+  // When matchedWords changes to a non-empty array, trigger fly-up animation
+  useEffect(() => {
+    if (matchedWords.length === 0) return;
+
+    // Find the target Y position (top of solved area)
+    const solvedRect = solvedAreaRef.current?.getBoundingClientRect();
+    if (!solvedRect) return;
+
+    const targetX = solvedRect.left + solvedRect.width / 2;
+    const targetY = solvedRect.bottom; // bottom of solved stack = where new bar appears
+
+    // Find which group these words belong to for color
+    const groupIdx = puzzle.groups.findIndex(g =>
+      g.words.every(w => matchedWords.includes(w))
+    );
+    const groupColors: Record<number, string> = {
+      1: "hsl(25 90% 68%)",
+      2: "hsl(130 45% 58%)",
+      3: "hsl(200 75% 68%)",
+      4: "hsl(0 75% 72%)",
+    };
+    const difficulty = puzzle.groups[groupIdx]?.difficulty ?? 1;
+    const color = groupColors[difficulty] || groupColors[1];
+
+    // Measure each matched tile's position
+    const tiles: FlyingTile[] = matchedWords.map(word => {
+      const el = document.querySelector(`[data-word="${word}"]`) as HTMLElement | null;
+      const rect = el?.getBoundingClientRect();
+      const startX = rect ? rect.left + rect.width / 2 : targetX;
+      const startY = rect ? rect.top + rect.height / 2 : targetY;
+      return { word, startX, startY, targetX, targetY, color };
+    });
+
+    setFlyingTiles(tiles);
+
+    // Clean up flying tiles after animation completes
+    const cleanup = setTimeout(() => setFlyingTiles([]), 600);
+    return () => clearTimeout(cleanup);
+  }, [matchedWords, puzzle.groups]);
 
   const generateShareLines = useCallback((): string[] => {
     const lines: string[] = [];
@@ -163,7 +228,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         lines.push(row);
       }
     }
-    // Rainbow found via bonus modal → 🌈 at the bottom
     if (bonusRainbowCorrect === true) {
       lines.push("🌈");
     }
@@ -205,13 +269,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         )}
       </div>
 
-      {/* Solved groups */}
-      <div className="space-y-2 mb-2">
-        {/* Rainbow bar at top — appears as soon as the rainbow is found */}
+      {/* Solved groups — ref used to measure target for fly-up */}
+      <div className="space-y-2 mb-2" ref={solvedAreaRef}>
+
+        {/* Rainbow bar at top — curtain reveal when first found mid-game */}
         {state.gotRainbow && puzzle.rainbowHerring && (
           <div
-            className="w-full rounded-lg py-3 px-4 text-center text-white"
-            style={{ background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)" }}
+            className={`w-full rounded-lg py-3 px-4 text-center text-white ${rainbowVisible ? "animate-rainbow-curtain" : ""}`}
+            style={{
+              background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)",
+              clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
+            }}
           >
             <div className="font-bold text-sm uppercase tracking-wide">
               {puzzle.rainbowCategoryName || "Rainbow 🌈"}
@@ -230,10 +298,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           />
         ))}
 
-        {/* Rainbow gradient bar — shown when game is over and rainbow was missed */}
+        {/* Rainbow gradient bar — end game, curtain reveal */}
         {state.isComplete && !state.gotRainbow && puzzle.rainbowHerring && (
           bonusRainbowCorrect === null ? (
-            // Prompt — same two-line structure as SolvedGroup for identical height
             <button
               onClick={() => setShowSpotModal(true)}
               className="w-full rounded-lg py-3 px-4 text-center text-white
@@ -244,14 +311,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               <div className="text-xs mt-0.5 opacity-80">Find one word from each group</div>
             </button>
           ) : (
-            // Revealed — shows after modal closes whether correct or wrong
             <div
-              className="w-full rounded-lg py-3 px-4 text-center text-white"
+              className="w-full rounded-lg py-3 px-4 text-center text-white animate-rainbow-curtain"
               style={{ background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)" }}
             >
               <div className="font-bold text-sm uppercase tracking-wide">
-              {puzzle.rainbowCategoryName || "Rainbow 🌈"}
-            </div>
+                {puzzle.rainbowCategoryName || "Rainbow 🌈"}
+              </div>
               <div className="text-xs mt-0.5 opacity-90">
                 {[...puzzle.rainbowHerring].sort().join(", ")}
               </div>
@@ -289,6 +355,40 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           ))}
         </div>
       )}
+
+      {/* Flying ghost tiles — fixed position, animate from grid to solved area */}
+      {flyingTiles.map((tile) => {
+        const dx = tile.targetX - tile.startX;
+        const dy = tile.targetY - tile.startY;
+        return (
+          <div
+            key={tile.word}
+            className="animate-tile-fly pointer-events-none"
+            style={{
+              position: "fixed",
+              left: tile.startX - 40,
+              top: tile.startY - 28,
+              width: 80,
+              height: 56,
+              borderRadius: 8,
+              background: tile.color,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 11,
+              fontWeight: 700,
+              color: "white",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              zIndex: 100,
+              "--fly-x": `${dx}px`,
+              "--fly-y": `${dy}px`,
+            } as React.CSSProperties}
+          >
+            {tile.word}
+          </div>
+        );
+      })}
 
       {/* Rainbow Spotted popup */}
       {showRainbowPopup && (
@@ -351,7 +451,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <Send className="w-4 h-4" /> Submit
           </button>
 
-          {/* Clear Colors button — only when Color-Code Tiles on AND at least one tile is colored */}
           {colorCodeTiles && hasAnyColor && (
             <button
               onClick={clearAllColors}
@@ -401,7 +500,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   <TrendingUp className="w-4 h-4" /> Global Stats
                 </button>
               </div>
-
             </div>
           )}
         </div>
