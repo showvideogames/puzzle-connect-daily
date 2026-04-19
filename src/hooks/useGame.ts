@@ -344,7 +344,8 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
 
     const guessGroupIndices = state.selectedWords.map((w) => getWordGroupIndex(w));
 
-    // Rainbow herring detection — shake first for suspense, then reveal
+    // Rainbow herring detection — wiggle just the 4 selected tiles (same as correct guess),
+    // then reveal the rainbow bar after the animation
     if (
       puzzle.rainbowHerring &&
       puzzle.rainbowHerring.length === 4 &&
@@ -353,9 +354,10 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
       const selected = [...state.selectedWords].sort();
       const herring = [...puzzle.rainbowHerring].sort();
       if (selected.every((w, i) => w === herring[i])) {
-        setShaking(true);
+        // Use matchedWords to trigger the same tile wiggle as a correct category guess
+        setMatchedWords([...state.selectedWords]);
         setTimeout(() => {
-          setShaking(false);
+          setMatchedWords([]);
           setRainbowWords(state.selectedWords);
           setShowRainbowPopup(true);
           playRainbowSound();
@@ -367,7 +369,7 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
             isRainbow: true,
           };
           setState((s) => ({ ...s, selectedWords: [], gotRainbow: true, guessHistory: [...s.guessHistory, attempt] }));
-        }, 400);
+        }, 700);
         return;
       }
     }
