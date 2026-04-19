@@ -126,7 +126,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isVisibleRef = useRef<boolean>(true);
 
-  // Active timer — pauses when tab is hidden, resumes when visible
   useEffect(() => {
     if (state.isComplete) {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -230,18 +229,13 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
   }, []);
 
   // Mobile touch drag handlers
-  // Uses document.elementFromPoint to find which tile the finger is over
   const handleTouchDragMove = useCallback((x: number, y: number) => {
     const el = document.elementFromPoint(x, y);
     if (!el) return;
-
-    // Walk up the DOM to find a button with a data-word attribute
     const tileEl = el.closest("[data-word]") as HTMLElement | null;
     if (!tileEl) return;
-
     const targetWord = tileEl.dataset.word;
     if (!targetWord || !draggedWord || targetWord === draggedWord) return;
-
     setShuffledWords((prev) => {
       const result = [...prev];
       const fromIdx = result.indexOf(draggedWord);
@@ -328,7 +322,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
     playCelebrationSound();
   }, [playCelebrationSound]);
 
-  // Converts solved group indices to color names for solve_order tracking
   const getSolveOrder = useCallback((solvedGroups: number[]): string[] => {
     const colorNames = ["orange", "green", "blue", "red"];
     return solvedGroups.map((groupIdx) => {
@@ -359,6 +352,7 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
 
     const guessGroupIndices = state.selectedWords.map((w) => getWordGroupIndex(w));
 
+    // Rainbow herring detection — shake first for suspense, then reveal
     if (
       puzzle.rainbowHerring &&
       puzzle.rainbowHerring.length === 4 &&
@@ -367,17 +361,22 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
       const selected = [...state.selectedWords].sort();
       const herring = [...puzzle.rainbowHerring].sort();
       if (selected.every((w, i) => w === herring[i])) {
-        setRainbowWords(state.selectedWords);
-        setShowRainbowPopup(true);
-        playRainbowSound();
-        setTimeout(() => setShowRainbowPopup(false), 3000);
-        const attempt: GuessAttempt = {
-          words: [...state.selectedWords],
-          groupIndices: guessGroupIndices,
-          isCorrect: false,
-          isRainbow: true,
-        };
-        setState((s) => ({ ...s, selectedWords: [], gotRainbow: true, guessHistory: [...s.guessHistory, attempt] }));
+        // Shake for suspense (0.4s) then reveal the rainbow
+        setShaking(true);
+        setTimeout(() => {
+          setShaking(false);
+          setRainbowWords(state.selectedWords);
+          setShowRainbowPopup(true);
+          playRainbowSound();
+          setTimeout(() => setShowRainbowPopup(false), 3000);
+          const attempt: GuessAttempt = {
+            words: [...state.selectedWords],
+            groupIndices: guessGroupIndices,
+            isCorrect: false,
+            isRainbow: true,
+          };
+          setState((s) => ({ ...s, selectedWords: [], gotRainbow: true, guessHistory: [...s.guessHistory, attempt] }));
+        }, 400);
         return;
       }
     }
