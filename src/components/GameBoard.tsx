@@ -74,25 +74,25 @@ function NoRainbowIndicator() {
 }
 
 const DIFFICULTY_EMOJI: Record<number, string> = {
-  0: "🟧",
-  1: "🟩",
-  2: "🟦",
-  3: "🟥",
+  0: "🧡",
+  1: "💚",
+  2: "💙",
+  3: "💗",
 };
 
 function getResultHeadline(isWon: boolean, mistakes: number): string {
   if (isWon && mistakes === 0) return "Perfect game! 🎯";
-  if (isWon && mistakes === 1) return "Amazing 🎉";
+  if (isWon && mistakes === 1) return "Amazing! 🎉";
   if (isWon && mistakes === 2) return "Great job! 👏";
   if (isWon && mistakes === 3) return "Clutch!!! 🙌";
-  return "Valiant effort. 💪";
+  return "Valiant effort 💪";
 }
 
 function getResultSubtitle(isWon: boolean, mistakes: number): string {
   if (isWon && mistakes === 0) return "No mistakes — impressive. Come back tomorrow!";
   if (isWon && mistakes === 1) return "Well done. Come back tomorrow!";
   if (isWon && mistakes === 2) return "Easy does it. Come back tomorrow!";
-  if (isWon && mistakes === 3) return "Way to dig deep and find the solve. Come back tomorrow!";
+  if (isWon && mistakes === 3) return "Way to dig deep and not give up. Come back tomorrow!";
   return "Almost had it. Come back tomorrow!";
 }
 
