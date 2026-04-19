@@ -200,25 +200,6 @@
   animation: rainbow-shift 3s ease-in-out infinite;
 }
 
-/* ── Fly-up animation: ghost tiles fly from grid to solved area ── */
-@keyframes tile-fly-up {
-  0% {
-    transform: translate(var(--fly-x), var(--fly-y)) scale(1);
-    opacity: 1;
-  }
-  80% {
-    opacity: 1;
-  }
-  100% {
-    transform: translate(0px, 0px) scale(0.85);
-    opacity: 0;
-  }
-}
-
-.animate-tile-fly {
-  animation: tile-fly-up 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
 /* ── Rainbow curtain reveal: wipes in left to right ── */
 @keyframes rainbow-curtain {
   0% { clip-path: inset(0 100% 0 0); }
@@ -229,7 +210,7 @@
   animation: rainbow-curtain 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* ── SolvedGroup fade-in after tiles arrive ── */
+/* ── SolvedGroup fade-in ── */
 @keyframes group-appear {
   0% { opacity: 0; transform: scaleY(0.85); }
   100% { opacity: 1; transform: scaleY(1); }
