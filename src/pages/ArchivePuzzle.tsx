@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { GameBoard } from "@/components/GameBoard";
@@ -6,6 +6,7 @@ import { GameHeader } from "@/components/GameHeader";
 import { TutorialModal } from "@/components/TutorialModal";
 import { StatsModal } from "@/components/StatsModal";
 import { SettingsModal } from "@/components/SettingsModal";
+import { HintModal } from "@/components/HintModal";
 import { getPuzzleById } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
@@ -47,7 +48,7 @@ function buildEmojiRow(words: string[], puzzle: Puzzle): string {
 
 function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: Puzzle; user: User | null }) {
   const [expanded, setExpanded] = useState(false);
-  const [session, setSession] = useState<PreviousSession | null | undefined>(undefined); // undefined = loading
+  const [session, setSession] = useState<PreviousSession | null | undefined>(undefined);
   const [guessEvents, setGuessEvents] = useState<GuessEvent[]>([]);
 
   useEffect(() => {
@@ -64,7 +65,6 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
       .then(({ data }) => {
         if (!data) { setSession(null); return; }
         setSession(data as PreviousSession);
-        // Fetch guess events for the grid
         supabase
           .from("guess_events")
           .select("guess_number, words, correct")
@@ -74,7 +74,6 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
       });
   }, [puzzleId, user]);
 
-  // Nothing to show
   if (session === undefined || session === null) return null;
 
   const formattedDate = new Date(session.created_at).toLocaleDateString("en-US", {
@@ -96,7 +95,6 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
 
       {expanded && (
         <div className="mt-2 rounded-xl border border-border bg-card px-4 py-4 space-y-3 animate-fade-up">
-          {/* Emoji grid */}
           {emojiLines.length > 0 && (
             <div className="flex flex-col items-center gap-0.5">
               {emojiLines.map((line, i) => (
@@ -104,8 +102,6 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
               ))}
             </div>
           )}
-
-          {/* Stats row */}
           <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground flex-wrap">
             <span>
               {session.mistakes === 0 ? "No mistakes" : `${session.mistakes} mistake${session.mistakes === 1 ? "" : "s"}`}
@@ -128,6 +124,8 @@ export default function ArchivePuzzle() {
   const [error, setError] = useState(false);
   const [activeModal, setActiveModal] = useState<ModalName>(null);
   const [settings, setSettings] = useState<GameSettings>(loadSettings);
+  const [showHintModal, setShowHintModal] = useState(false);
+  const [hintsUsed, setHintsUsed] = useState(false);
 
   const handleSettingsChange = (s: GameSettings) => {
     setSettings(s);
@@ -160,18 +158,23 @@ export default function ArchivePuzzle() {
       .catch(() => { setError(true); setLoading(false); });
   }, [puzzleId]);
 
+  const handleHintConfirm = useCallback(() => {
+    setHintsUsed(true);
+    setShowHintModal(false);
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       <GameHeader
         onStatsClick={() => setActiveModal("stats")}
         onHowToPlayClick={() => setActiveModal("help")}
         onSettingsClick={() => setActiveModal("settings")}
+        onHintClick={() => setShowHintModal(true)}
         user={user}
         onSignOut={() => supabase.auth.signOut()}
       />
       <div className="w-full max-w-lg border-b border-border mb-4" />
 
-      {/* Back link + puzzle date */}
       <div className="w-full max-w-lg px-4 mb-3">
         <button
           onClick={() => navigate("/archive")}
@@ -202,7 +205,7 @@ export default function ArchivePuzzle() {
         </div>
       ) : puzzle ? (
         <>
-          <GameBoard puzzle={puzzle} settings={settings} user={user} isArchive />
+          <GameBoard puzzle={puzzle} settings={settings} user={user} isArchive hintsUsed={hintsUsed} />
           {puzzleId && (
             <PreviousResult puzzleId={puzzleId} puzzle={puzzle} user={user} />
           )}
@@ -216,6 +219,11 @@ export default function ArchivePuzzle() {
         onClose={() => setActiveModal(null)}
         settings={settings}
         onSettingsChange={handleSettingsChange}
+      />
+      <HintModal
+        open={showHintModal}
+        onClose={() => setShowHintModal(false)}
+        onConfirm={handleHintConfirm}
       />
     </div>
   );
