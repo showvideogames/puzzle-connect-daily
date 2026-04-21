@@ -15,6 +15,36 @@ import { playRainbowSound } from "@/lib/sounds";
 
 const TOOLTIP_MSG = "This puzzle has no Rainbow category.";
 
+// Extract all trailing emojis from a category name
+// e.g. "NBA Teams 🏀" → "🏀", "Fast Food 🍔🍟" → "🍔🍟", "No emoji" → ""
+function extractTrailingEmojis(str: string): string {
+  try {
+    const segmenter = new Intl.Segmenter();
+    const segments = [...segmenter.segment(str)].map(s => s.segment);
+    const emojiRegex = /\p{Emoji}/u;
+    const result: string[] = [];
+    for (let i = segments.length - 1; i >= 0; i--) {
+      const seg = segments[i].trim();
+      if (seg === "") continue;
+      if (emojiRegex.test(seg)) {
+        result.unshift(seg);
+      } else {
+        break;
+      }
+    }
+    return result.join("");
+  } catch {
+    return "";
+  }
+}
+
+const DIFFICULTY_SQUARE: Record<number, string> = {
+  1: "🟧",
+  2: "🟩",
+  3: "🟦",
+  4: "🟥",
+};
+
 function NoRainbowIndicator() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -102,9 +132,10 @@ interface GameBoardProps {
   user?: User | null;
   clearColorsTrigger?: number;
   isArchive?: boolean;
+  hintsUsed?: boolean;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, hintsUsed = false }: GameBoardProps) {
   const showRainbow = settings?.showRainbowColors ?? true;
   const arrangeTiles = settings?.arrangeTiles ?? false;
   const colorCodeTiles = settings?.colorCodeTiles ?? false;
@@ -148,6 +179,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const [rainbowVisible, setRainbowVisible] = useState(false);
   const [spotShaking, setSpotShaking] = useState(false);
   const [bonusRainbowWords, setBonusRainbowWords] = useState<string[]>([]);
+  const [hintVisible, setHintVisible] = useState(true);
 
   const prevGotRainbow = useRef(state.gotRainbow);
 
@@ -170,6 +202,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }
   }, [bonusRainbowCorrect]);
 
+  // Show hint pill when hints are first used
+  useEffect(() => {
+    if (hintsUsed) setHintVisible(true);
+  }, [hintsUsed]);
+
   const handleSpotResult = useCallback((correct: boolean) => {
     setShowSpotModal(false);
     setSpotShaking(true);
@@ -186,11 +223,38 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }, 400);
   }, [puzzle.rainbowHerring]);
 
+  // Build hint emojis: sorted by difficulty, then rainbow
+  const hintItems = useCallback(() => {
+    const sorted = [...puzzle.groups].sort((a, b) => a.difficulty - b.difficulty);
+    const items = sorted.map(g => ({
+      square: DIFFICULTY_SQUARE[g.difficulty] || "⬜",
+      emoji: extractTrailingEmojis(g.category),
+    }));
+    if (puzzle.rainbowHerring && puzzle.rainbowCategoryName) {
+      items.push({
+        square: "🌈",
+        emoji: extractTrailingEmojis(puzzle.rainbowCategoryName),
+      });
+    }
+    return items;
+  }, [puzzle]);
+
   const generateShareLines = useCallback((): string[] => {
     const lines: string[] = [];
+
+    // 💡 always goes first if hints were used
+    if (hintsUsed) {
+      lines.push("💡");
+    }
+
     for (const attempt of state.guessHistory) {
       if (attempt.isRainbow) {
-        lines.push("🌈");
+        // If hints used, combine 💡 and 🌈 on same row if rainbow was found early
+        if (hintsUsed && lines.length === 1) {
+          lines[0] = "💡🌈";
+        } else {
+          lines.push("🌈");
+        }
       } else {
         const row = attempt.groupIndices
           .map((gi) => {
@@ -205,7 +269,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       lines.push("🌈");
     }
     return lines;
-  }, [state.guessHistory, puzzle, bonusRainbowCorrect]);
+  }, [state.guessHistory, puzzle, bonusRainbowCorrect, hintsUsed]);
 
   const generateShareText = useCallback(() => {
     const d = new Date(puzzle.date + "T12:00:00");
@@ -244,7 +308,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
       {/* Solved groups */}
       <div className="space-y-2 mb-2">
-
         {state.gotRainbow && puzzle.rainbowHerring && (
           <div
             className={`w-full rounded-lg py-3 px-4 text-center text-white ${rainbowVisible ? "animate-rainbow-curtain" : ""}`}
@@ -342,7 +405,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* One Away popup — stays until player taps X or changes selection */}
+      {/* One Away popup */}
       {oneAway && (
         <div className="flex justify-center mt-3 animate-fade-up">
           <div className="bg-foreground text-background pl-5 pr-3 py-2 rounded-full text-sm font-semibold shadow-md flex items-center gap-2">
@@ -408,6 +471,35 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 hover:bg-secondary transition-colors duration-150 active:scale-95"
             >
               <Eraser className="w-4 h-4" /> Clear Colors
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Hint pill — shown below controls when hints are used */}
+      {hintsUsed && (
+        <div className="mt-4 flex justify-center">
+          {hintVisible ? (
+            <div className="bg-secondary rounded-full px-4 py-2.5 flex items-center gap-3 flex-wrap justify-center animate-fade-up">
+              {hintItems().map((item, i) => (
+                <span key={i} className="flex items-center gap-1 text-2xl leading-none">
+                  {item.square}{item.emoji}
+                </span>
+              ))}
+              <button
+                onClick={() => setHintVisible(false)}
+                className="ml-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5 rounded-full hover:bg-muted"
+              >
+                Hide
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setHintVisible(true)}
+              className="text-2xl leading-none hover:scale-110 transition-transform active:scale-95"
+              aria-label="Show hints"
+            >
+              💡
             </button>
           )}
         </div>
