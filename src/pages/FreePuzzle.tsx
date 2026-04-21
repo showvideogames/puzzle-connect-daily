@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { GameBoard } from "@/components/GameBoard";
@@ -6,6 +6,7 @@ import { GameHeader } from "@/components/GameHeader";
 import { TutorialModal } from "@/components/TutorialModal";
 import { StatsModal } from "@/components/StatsModal";
 import { SettingsModal } from "@/components/SettingsModal";
+import { HintModal } from "@/components/HintModal";
 import { getPuzzleById } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
@@ -22,6 +23,8 @@ export default function FreePuzzle() {
   const [error, setError] = useState(false);
   const [activeModal, setActiveModal] = useState<ModalName>(null);
   const [settings, setSettings] = useState<GameSettings>(loadSettings);
+  const [showHintModal, setShowHintModal] = useState(false);
+  const [hintsUsed, setHintsUsed] = useState(false);
 
   const handleSettingsChange = (s: GameSettings) => {
     setSettings(s);
@@ -33,7 +36,6 @@ export default function FreePuzzle() {
     document.documentElement.classList.toggle("dark", settings.darkMode);
   }, [settings.darkMode]);
 
-  // Auth — optional, free puzzles work for anyone
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
@@ -55,18 +57,23 @@ export default function FreePuzzle() {
       .catch(() => { setError(true); setLoading(false); });
   }, [puzzleId]);
 
+  const handleHintConfirm = useCallback(() => {
+    setHintsUsed(true);
+    setShowHintModal(false);
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       <GameHeader
         onStatsClick={() => setActiveModal("stats")}
         onHowToPlayClick={() => setActiveModal("help")}
         onSettingsClick={() => setActiveModal("settings")}
+        onHintClick={() => setShowHintModal(true)}
         user={user}
         onSignOut={() => supabase.auth.signOut()}
       />
       <div className="w-full max-w-lg border-b border-border mb-4" />
 
-      {/* Back link + puzzle date */}
       <div className="w-full max-w-lg px-4 mb-3">
         <button
           onClick={() => navigate("/")}
@@ -100,7 +107,7 @@ export default function FreePuzzle() {
           </div>
         </div>
       ) : puzzle ? (
-        <GameBoard puzzle={puzzle} settings={settings} user={user} isArchive />
+        <GameBoard puzzle={puzzle} settings={settings} user={user} isArchive hintsUsed={hintsUsed} />
       ) : null}
 
       <StatsModal open={activeModal === "stats"} onClose={() => setActiveModal(null)} />
@@ -110,6 +117,11 @@ export default function FreePuzzle() {
         onClose={() => setActiveModal(null)}
         settings={settings}
         onSettingsChange={handleSettingsChange}
+      />
+      <HintModal
+        open={showHintModal}
+        onClose={() => setShowHintModal(false)}
+        onConfirm={handleHintConfirm}
       />
     </div>
   );
