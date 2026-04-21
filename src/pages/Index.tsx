@@ -4,6 +4,7 @@ import { GameBoard } from "@/components/GameBoard";
 import { StatsModal } from "@/components/StatsModal";
 import { TutorialModal } from "@/components/TutorialModal";
 import { SettingsModal } from "@/components/SettingsModal";
+import { HintModal } from "@/components/HintModal";
 import { getTodaysPuzzle } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
@@ -22,6 +23,8 @@ export default function Index() {
   const [user, setUser] = useState<User | null>(null);
   const [settings, setSettings] = useState<GameSettings>(loadSettings);
   const [clearColorsTrigger, setClearColorsTrigger] = useState(0);
+  const [showHintModal, setShowHintModal] = useState(false);
+  const [hintsUsed, setHintsUsed] = useState(false);
 
   const openModal = useCallback((name: ModalName) => setActiveModal(name), []);
   const closeModal = useCallback(() => setActiveModal(null), []);
@@ -30,18 +33,15 @@ export default function Index() {
     setSettings(newSettings);
     saveSettings(newSettings);
     document.documentElement.classList.toggle("dark", newSettings.darkMode);
-    // If Color-Code Tiles just got turned off, tell GameBoard to clear all colors
     if (!newSettings.colorCodeTiles) {
       setClearColorsTrigger((n) => n + 1);
     }
   }, []);
 
-  // Apply dark mode once on mount
   useEffect(() => {
     document.documentElement.classList.toggle("dark", settings.darkMode);
   }, [settings.darkMode]);
 
-  // Auth state
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
@@ -49,7 +49,6 @@ export default function Index() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Load puzzle
   useEffect(() => {
     const timeout = setTimeout(() => {
       setError(true);
@@ -71,7 +70,6 @@ export default function Index() {
     return () => clearTimeout(timeout);
   }, []);
 
-  // Auto-show tutorial on first visit
   useEffect(() => {
     try {
       const seen = localStorage.getItem(TUTORIAL_SEEN_KEY);
@@ -92,12 +90,18 @@ export default function Index() {
     supabase.auth.signOut();
   }, []);
 
+  const handleHintConfirm = useCallback(() => {
+    setHintsUsed(true);
+    setShowHintModal(false);
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       <GameHeader
         onStatsClick={() => openModal("stats")}
         onHowToPlayClick={() => openModal("help")}
         onSettingsClick={() => openModal("settings")}
+        onHintClick={() => setShowHintModal(true)}
         user={user}
         onSignOut={handleSignOut}
       />
@@ -115,7 +119,13 @@ export default function Index() {
           </div>
         </div>
       ) : puzzle ? (
-        <GameBoard puzzle={puzzle} settings={settings} user={user} clearColorsTrigger={clearColorsTrigger} />
+        <GameBoard
+          puzzle={puzzle}
+          settings={settings}
+          user={user}
+          clearColorsTrigger={clearColorsTrigger}
+          hintsUsed={hintsUsed}
+        />
       ) : (
         <div className="flex-1 flex items-center justify-center text-center px-4">
           <div>
@@ -135,6 +145,11 @@ export default function Index() {
         onClose={closeModal}
         settings={settings}
         onSettingsChange={handleSettingsChange}
+      />
+      <HintModal
+        open={showHintModal}
+        onClose={() => setShowHintModal(false)}
+        onConfirm={handleHintConfirm}
       />
     </div>
   );
