@@ -14,8 +14,8 @@ const COLOR_CIRCLES: { key: string; circle: string }[] = [
   { key: "red",    circle: "bg-red-500"    },
 ];
 
-// Count visible characters/emojis using Intl.Segmenter (handles multi-codepoint emojis correctly)
-// Falls back to simple length check if Segmenter is not available
+// Count visible characters/emojis using Intl.Segmenter
+// Handles multi-codepoint emojis correctly (e.g. 👨‍👩‍👧‍👦 = 1)
 function countVisibleChars(str: string): number {
   try {
     const segmenter = new Intl.Segmenter();
@@ -23,6 +23,16 @@ function countVisibleChars(str: string): number {
   } catch {
     return str.length;
   }
+}
+
+// Dynamic font size for emoji puzzle mode — scales down so content always fits the tile
+function getEmojiFontSize(charCount: number): string {
+  if (charCount <= 2) return "3rem";
+  if (charCount === 3) return "2.2rem";
+  if (charCount === 4) return "1.8rem";
+  if (charCount === 5) return "1.4rem";
+  if (charCount === 6) return "1.1rem";
+  return "0.9rem";
 }
 
 interface WordTileProps {
@@ -74,9 +84,8 @@ export function WordTile({
   const isTouchDragging = useRef(false);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
 
-  // Emoji puzzle font size — shrink by 20% if 3 or more visible characters
   const emojiFontSize = isEmojiPuzzle
-    ? countVisibleChars(word) >= 3 ? "2.4rem" : "3rem"
+    ? getEmojiFontSize(countVisibleChars(word))
     : undefined;
 
   useEffect(() => {
