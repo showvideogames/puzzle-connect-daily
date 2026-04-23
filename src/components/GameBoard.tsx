@@ -267,12 +267,25 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     if (data?.current_streak) {
       setStreakCount(data.current_streak);
       setShowStreak(true);
+    } else {
+      // Retry once after 2 more seconds in case write was slow
+      setTimeout(async () => {
+        try {
+          const { data: retryData } = userId
+            ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).single()
+            : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).single();
+          if (retryData?.current_streak) {
+            setStreakCount(retryData.current_streak);
+            setShowStreak(true);
+          }
+        } catch {}
+      }, 2000);
     }
   } catch {
     // Silently fail — streak is a bonus, not critical
   }
 };
-setTimeout(() => { void fetchStreak(); }, 800);
+setTimeout(() => { void fetchStreak(); }, 1000);
     }
     prevIsWon.current = state.isWon;
   }, [state.isWon, isArchive]);
