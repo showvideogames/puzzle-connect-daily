@@ -56,6 +56,40 @@ function clearProgress(puzzleId: string) {
   } catch {}
 }
 
+const DIFFICULTY_HEART: Record<number, string> = {
+  1: "🧡",
+  2: "💚",
+  3: "💙",
+  4: "💗",
+};
+
+// Build the share grid string from guess history — same format as the share screen
+function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle, hintsUsed: boolean): string {
+  const lines: string[] = [];
+
+  if (hintsUsed) lines.push("💡");
+
+  for (const attempt of guessHistory) {
+    if (attempt.isRainbow) {
+      if (hintsUsed && lines.length === 1) {
+        lines[0] = "💡🌈";
+      } else {
+        lines.push("🌈");
+      }
+    } else {
+      const row = attempt.groupIndices
+        .map((gi) => {
+          const diff = puzzle.groups[gi]?.difficulty;
+          return DIFFICULTY_HEART[diff] || "⬜";
+        })
+        .join("");
+      lines.push(row);
+    }
+  }
+
+  return lines.join("\n");
+}
+
 export function useGame(
   puzzle: Puzzle,
   { isArchive = false, hintsUsed = false }: { isArchive?: boolean; hintsUsed?: boolean } = {}
@@ -150,11 +184,8 @@ export function useGame(
     };
   }, [state.isComplete]);
 
-  // Dismiss "One away" when selected words change
   useEffect(() => {
-    if (oneAway) {
-      setOneAway(false);
-    }
+    if (oneAway) setOneAway(false);
   }, [state.selectedWords]);
 
   useEffect(() => {
@@ -306,20 +337,8 @@ export function useGame(
     const duration = 2000;
     const end = Date.now() + duration;
     const frame = () => {
-      confetti({
-        particleCount: 3,
-        angle: 60,
-        spread: 55,
-        origin: { x: 0, y: 0.7 },
-        colors: ['#4CAF50', '#FF9800', '#2196F3', '#E91E63'],
-      });
-      confetti({
-        particleCount: 3,
-        angle: 120,
-        spread: 55,
-        origin: { x: 1, y: 0.7 },
-        colors: ['#4CAF50', '#FF9800', '#2196F3', '#E91E63'],
-      });
+      confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0, y: 0.7 }, colors: ['#4CAF50', '#FF9800', '#2196F3', '#E91E63'] });
+      confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1, y: 0.7 }, colors: ['#4CAF50', '#FF9800', '#2196F3', '#E91E63'] });
       if (Date.now() < end) requestAnimationFrame(frame);
     };
     frame();
@@ -343,9 +362,7 @@ export function useGame(
     );
     if (isDuplicate) {
       const isOneAway = puzzle.groups.some(
-        (g, idx) =>
-          !state.solvedGroups.includes(idx) &&
-          g.words.filter((w) => state.selectedWords.includes(w)).length === 3
+        (g, idx) => !state.solvedGroups.includes(idx) && g.words.filter((w) => state.selectedWords.includes(w)).length === 3
       );
       setAlreadyGuessed(isOneAway ? "oneaway" : "plain");
       setTimeout(() => setAlreadyGuessed(null), 2000);
@@ -355,11 +372,7 @@ export function useGame(
     const guessGroupIndices = state.selectedWords.map((w) => getWordGroupIndex(w));
 
     // Rainbow herring detection
-    if (
-      puzzle.rainbowHerring &&
-      puzzle.rainbowHerring.length === 4 &&
-      rainbowWords.length === 0
-    ) {
+    if (puzzle.rainbowHerring && puzzle.rainbowHerring.length === 4 && rainbowWords.length === 0) {
       const selected = [...state.selectedWords].sort();
       const herring = [...puzzle.rainbowHerring].sort();
       if (selected.every((w, i) => w === herring[i])) {
@@ -383,9 +396,7 @@ export function useGame(
     }
 
     const matchedGroupIndex = puzzle.groups.findIndex(
-      (g, idx) =>
-        !state.solvedGroups.includes(idx) &&
-        g.words.every((w) => state.selectedWords.includes(w))
+      (g, idx) => !state.solvedGroups.includes(idx) && g.words.every((w) => state.selectedWords.includes(w))
     );
 
     if (matchedGroupIndex !== -1) {
@@ -422,6 +433,9 @@ export function useGame(
           fireConfetti();
           vibrateCelebration();
 
+          const fullGuessHistory = [...state.guessHistory, attempt];
+          const shareGrid = buildShareGrid(fullGuessHistory, puzzle, hintsUsed);
+
           const winStatsParams = {
             puzzleId: puzzle.id,
             won: true,
@@ -430,7 +444,8 @@ export function useGame(
             foundRainbow: state.gotRainbow,
             solveOrder: getSolveOrder(newSolved),
             hintsUsed,
-            guessHistory: [...state.guessHistory, attempt].map((g) => ({
+            shareGrid,
+            guessHistory: fullGuessHistory.map((g) => ({
               words: g.words,
               correct: g.isCorrect,
               group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
@@ -457,7 +472,7 @@ export function useGame(
             solvedGroups: newSolved,
             finalSolvedGroups: allGroupIndices,
             mistakes: state.mistakes,
-            guessHistory: [...state.guessHistory, attempt],
+            guessHistory: fullGuessHistory,
             gotRainbow: state.gotRainbow,
             shuffledWords: [],
             rainbowWords,
@@ -477,18 +492,14 @@ export function useGame(
       };
 
       const isOneAway = puzzle.groups.some(
-        (g, idx) =>
-          !state.solvedGroups.includes(idx) &&
-          g.words.filter((w) => state.selectedWords.includes(w)).length === 3
+        (g, idx) => !state.solvedGroups.includes(idx) && g.words.filter((w) => state.selectedWords.includes(w)).length === 3
       );
 
       setShaking(true);
       vibrateError();
       setTimeout(() => setShaking(false), 400);
 
-      if (isOneAway) {
-        setOneAway(true);
-      }
+      if (isOneAway) setOneAway(true);
 
       const newMistakes = state.mistakes + 1;
       const isLost = newMistakes >= MAX_MISTAKES;
@@ -504,6 +515,9 @@ export function useGame(
       if (isLost) {
         markPlayed(puzzle.id);
 
+        const fullGuessHistory = [...state.guessHistory, attempt];
+        const shareGrid = buildShareGrid(fullGuessHistory, puzzle, hintsUsed);
+
         const lossStatsParams = {
           puzzleId: puzzle.id,
           won: false,
@@ -512,7 +526,8 @@ export function useGame(
           foundRainbow: state.gotRainbow,
           solveOrder: getSolveOrder(state.solvedGroups),
           hintsUsed,
-          guessHistory: [...state.guessHistory, attempt].map((g) => ({
+          shareGrid,
+          guessHistory: fullGuessHistory.map((g) => ({
             words: g.words,
             correct: g.isCorrect,
             group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
@@ -539,31 +554,22 @@ export function useGame(
           .sort((a, b) => a.diff - b.diff)
           .map((item) => item.idx);
 
-        const unsolvedIndices = sortedIndices.filter(
-          (idx) => !state.solvedGroups.includes(idx)
-        );
-
-        const finalSolvedGroups = [
-          ...state.solvedGroups,
-          ...unsolvedIndices,
-        ];
+        const unsolvedIndices = sortedIndices.filter((idx) => !state.solvedGroups.includes(idx));
+        const finalSolvedGroups = [...state.solvedGroups, ...unsolvedIndices];
 
         unsolvedIndices.forEach((groupIdx, i) => {
           setTimeout(() => {
             const solvedWords = puzzle.groups[groupIdx].words;
             setLastRevealedGroup(groupIdx);
             setShuffledWords((prev) => prev.filter((w) => !solvedWords.includes(w)));
-            setState((s) => ({
-              ...s,
-              solvedGroups: [...s.solvedGroups, groupIdx],
-            }));
+            setState((s) => ({ ...s, solvedGroups: [...s.solvedGroups, groupIdx] }));
 
             if (i === unsolvedIndices.length - 1) {
               saveProgress(puzzle.id, {
                 solvedGroups: finalSolvedGroups,
                 finalSolvedGroups,
                 mistakes: newMistakes,
-                guessHistory: [...state.guessHistory, attempt],
+                guessHistory: fullGuessHistory,
                 gotRainbow: state.gotRainbow,
                 shuffledWords: [],
                 rainbowWords,
