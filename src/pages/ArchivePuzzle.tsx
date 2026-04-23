@@ -121,11 +121,7 @@ export default function ArchivePuzzle() {
   const [settings, setSettings] = useState<GameSettings>(loadSettings);
   const [showHintModal, setShowHintModal] = useState(false);
   const [hintsUsed, setHintsUsed] = useState(false);
-  const [isPuzzleComplete, setIsPuzzleComplete] = useState(() => {
-    try {
-      return Object.keys(localStorage).filter(k => k.startsWith("connections-progress-")).some(k => JSON.parse(localStorage.getItem(k) || "{}").isComplete === true);
-    } catch { return false; }
-  });
+  const [isPuzzleComplete, setIsPuzzleComplete] = useState(false);
   const [showSillyGoose, setShowSillyGoose] = useState(false);
 
   const handleSettingsChange = (s: GameSettings) => {
