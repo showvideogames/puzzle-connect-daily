@@ -126,32 +126,27 @@ function getResultSubtitle(isWon: boolean, mistakes: number): string {
   return "Almost had it. Come back tomorrow!";
 }
 
-// Streak celebration popup
-function StreakCelebration({ streak, onDone }: { streak: number; onDone: () => void }) {
+// Streak celebration — counts up to final number, then stays on screen permanently
+function StreakCelebration({ streak }: { streak: number }) {
   const [displayNum, setDisplayNum] = useState(Math.max(1, streak - 1));
-  const [phase, setPhase] = useState<"counting" | "big" | "fading">("counting");
+  const [phase, setPhase] = useState<"counting" | "big" | "done">("counting");
 
   useEffect(() => {
-    // Count up to the new streak number
     if (displayNum < streak) {
       const t = setTimeout(() => setDisplayNum(n => n + 1), 120);
       return () => clearTimeout(t);
     } else {
-      // Reached final number — go big briefly then fade
       setPhase("big");
-      const bigTimer = setTimeout(() => setPhase("fading"), 1200);
-      const doneTimer = setTimeout(() => onDone(), 2400);
-      return () => { clearTimeout(bigTimer); clearTimeout(doneTimer); };
+      const t = setTimeout(() => setPhase("done"), 600);
+      return () => clearTimeout(t);
     }
-  }, [displayNum, streak, onDone]);
-
-  const scale = phase === "big" ? "scale-125" : phase === "fading" ? "scale-100 opacity-0" : "scale-100";
+  }, [displayNum, streak]);
 
   return (
     <div className="flex justify-center mt-4 animate-fade-up">
       <div
         className={`flex items-center gap-2 bg-card border border-border rounded-full px-5 py-2.5 shadow-lg
-          transition-all duration-500 ${scale}`}
+          transition-all duration-300 ${phase === "big" ? "scale-125" : "scale-100"}`}
       >
         <Flame className="w-7 h-7 text-orange-500" />
         <span
@@ -161,7 +156,7 @@ function StreakCelebration({ streak, onDone }: { streak: number; onDone: () => v
           {displayNum}
         </span>
         <span className="text-sm font-semibold text-muted-foreground">
-          {streak === 1 ? "day streak!" : "day streak!"}
+          day streak!
         </span>
       </div>
     </div>
@@ -258,7 +253,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   useEffect(() => {
     if (state.isWon && !prevIsWon.current && !isArchive && !streakFetchedRef.current) {
       streakFetchedRef.current = true;
-      // Small delay so win animation plays first
+      // Wait 800ms — enough for win animation, short enough to feel timely
       setTimeout(async () => {
         try {
           const deviceId = getDeviceId();
@@ -276,7 +271,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         } catch {
           // Silently fail — streak is a bonus, not critical
         }
-      }, 3000);
+      }, 800);
     }
     prevIsWon.current = state.isWon;
   }, [state.isWon, isArchive]);
@@ -576,12 +571,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* Streak celebration — appears after winning, counts up, then fades */}
+      {/* Streak celebration — appears after winning, stays on screen */}
       {showStreak && streakCount !== null && (
-        <StreakCelebration
-          streak={streakCount}
-          onDone={() => setShowStreak(false)}
-        />
+        <StreakCelebration streak={streakCount} />
       )}
 
       {/* End state */}
