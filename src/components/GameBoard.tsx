@@ -276,7 +276,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         } catch {
           // Silently fail — streak is a bonus, not critical
         }
-      }, 1200);
+      }, 3000);
     }
     prevIsWon.current = state.isWon;
   }, [state.isWon, isArchive]);
