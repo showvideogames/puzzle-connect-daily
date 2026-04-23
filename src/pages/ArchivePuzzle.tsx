@@ -172,12 +172,21 @@ useEffect(() => {
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
+ useEffect(() => {
     if (!puzzleId) { setError(true); setLoading(false); return; }
     getPuzzleById(puzzleId)
       .then((p) => {
-        if (!p) setError(true);
-        else setPuzzle(p);
+        if (!p) { setError(true); setLoading(false); return; }
+        // Clear completed progress before GameBoard mounts so it starts fresh
+        try {
+          const key = `connections-progress-${puzzleId}`;
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const data = JSON.parse(raw);
+            if (data.isComplete === true) localStorage.removeItem(key);
+          }
+        } catch {}
+        setPuzzle(p);
         setLoading(false);
       })
       .catch(() => { setError(true); setLoading(false); });
