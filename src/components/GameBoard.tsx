@@ -221,7 +221,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const [bonusRainbowWords, setBonusRainbowWords] = useState<string[]>([]);
   const [hintVisible, setHintVisible] = useState(true);
 
-  // Streak state — fetched on mount, shown after 500ms delay on win
+  // Streak state — fetched on mount, shown after 250ms delay on win
   const [streakBefore, setStreakBefore] = useState<number | null>(null);
   const [showStreak, setShowStreak] = useState(false);
   const prevIsWon = useRef(state.isWon);
