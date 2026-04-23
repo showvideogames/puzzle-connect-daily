@@ -7,7 +7,7 @@ import { MistakeDots } from "./MistakeDots";
 import { DailyStatsModal } from "./DailyStatsModal";
 import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { PuzzleRating } from "./PuzzleRating";
-import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser } from "lucide-react";
+import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser, Flame } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
@@ -153,11 +153,7 @@ function StreakCelebration({ streak, onDone }: { streak: number; onDone: () => v
         className={`flex items-center gap-2 bg-card border border-border rounded-full px-5 py-2.5 shadow-lg
           transition-all duration-500 ${scale}`}
       >
-        <img
-          src="/__Fire Icon (2).png"
-          alt="streak"
-          style={{ width: 28, height: 28, objectFit: "contain" }}
-        />
+        <Flame className="w-7 h-7 text-orange-500" />
         <span
           className="font-bold tabular-nums transition-all duration-150"
           style={{ fontSize: phase === "big" ? "1.6rem" : "1.3rem" }}
