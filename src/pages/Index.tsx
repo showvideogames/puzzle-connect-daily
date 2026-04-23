@@ -25,6 +25,8 @@ export default function Index() {
   const [clearColorsTrigger, setClearColorsTrigger] = useState(0);
   const [showHintModal, setShowHintModal] = useState(false);
   const [hintsUsed, setHintsUsed] = useState(false);
+  const [isPuzzleComplete, setIsPuzzleComplete] = useState(false);
+  const [showSillyGoose, setShowSillyGoose] = useState(false);
 
   const openModal = useCallback((name: ModalName) => setActiveModal(name), []);
   const closeModal = useCallback(() => setActiveModal(null), []);
@@ -95,17 +97,36 @@ export default function Index() {
     setShowHintModal(false);
   }, []);
 
+  // Header hint button — routes to silly goose if puzzle is complete
+  const handleHeaderHintClick = useCallback(() => {
+    if (isPuzzleComplete) {
+      setShowSillyGoose(true);
+      setTimeout(() => setShowSillyGoose(false), 3000);
+    } else {
+      setShowHintModal(true);
+    }
+  }, [isPuzzleComplete]);
+
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       <GameHeader
         onStatsClick={() => openModal("stats")}
         onHowToPlayClick={() => openModal("help")}
         onSettingsClick={() => openModal("settings")}
-        onHintClick={() => setShowHintModal(true)}
+        onHintClick={handleHeaderHintClick}
         user={user}
         onSignOut={handleSignOut}
       />
       <div className="w-full max-w-lg border-b border-border mb-4" />
+
+      {/* Silly goose toast — shown when hint tapped after puzzle complete */}
+      {showSillyGoose && (
+        <div className="w-full max-w-lg px-2 mb-2 animate-fade-up">
+          <div className="bg-foreground text-background px-5 py-2.5 rounded-full text-sm font-semibold shadow-md text-center">
+            You don't need hints! You already beat the puzzle, ya silly goose 🦆
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
@@ -126,6 +147,7 @@ export default function Index() {
           clearColorsTrigger={clearColorsTrigger}
           hintsUsed={hintsUsed}
           onHintClick={() => setShowHintModal(true)}
+          onComplete={() => setIsPuzzleComplete(true)}
         />
       ) : (
         <div className="flex-1 flex items-center justify-center text-center px-4">
