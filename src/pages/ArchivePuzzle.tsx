@@ -27,6 +27,7 @@ interface PreviousSession {
   won: boolean;
   mistakes: number;
   found_rainbow: boolean;
+  hints_used: boolean;
   created_at: string;
 }
 
@@ -34,6 +35,7 @@ interface GuessEvent {
   guess_number: number;
   words: string[];
   correct: boolean;
+  is_rainbow?: boolean;
 }
 
 function buildEmojiRow(words: string[], puzzle: Puzzle): string {
@@ -55,7 +57,7 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
     if (!user) { setSession(null); return; }
     supabase
       .from("game_sessions")
-      .select("id, won, mistakes, found_rainbow, created_at")
+      .select("id, won, mistakes, found_rainbow, hints_used, created_at")
       .eq("puzzle_id", puzzleId)
       .eq("user_id", user.id)
       .order("id", { ascending: true })
@@ -78,7 +80,17 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
   const formattedDate = new Date(session.created_at).toLocaleDateString("en-US", {
     month: "long", day: "numeric", year: "numeric",
   });
-  const emojiLines = guessEvents.map((e) => buildEmojiRow(e.words, puzzle));
+
+  // Build emoji lines — prepend 💡 on row 2 if hints were used
+  const rawLines = guessEvents.map((e) => buildEmojiRow(e.words, puzzle));
+  const emojiLines: string[] = [];
+  if (session.hints_used && rawLines.length > 0) {
+    emojiLines.push(rawLines[0]);
+    emojiLines.push("💡");
+    emojiLines.push(...rawLines.slice(1));
+  } else {
+    emojiLines.push(...rawLines);
+  }
 
   return (
     <div className="w-full max-w-lg px-4 mt-6">
@@ -87,7 +99,7 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
         className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border
           bg-card hover:bg-secondary transition-colors text-sm font-medium"
       >
-        <span>See your last result 👀</span>
+        <span>Reveal your original result 🙈</span>
         {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
       </button>
       {expanded && (
@@ -102,6 +114,7 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
           <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground flex-wrap">
             <span>{session.mistakes === 0 ? "No mistakes" : `${session.mistakes} mistake${session.mistakes === 1 ? "" : "s"}`}</span>
             {session.found_rainbow && <span>🌈 Rainbow found</span>}
+            {session.hints_used && <span>💡 Hints used</span>}
             <span>Played {formattedDate}</span>
           </div>
         </div>
@@ -123,6 +136,14 @@ export default function ArchivePuzzle() {
   const [hintsUsed, setHintsUsed] = useState(false);
   const [isPuzzleComplete, setIsPuzzleComplete] = useState(false);
   const [showSillyGoose, setShowSillyGoose] = useState(false);
+
+  // Clear localStorage progress for this puzzle on mount so it always starts fresh
+  useEffect(() => {
+    if (!puzzleId) return;
+    try {
+      localStorage.removeItem(`connections-progress-${puzzleId}`);
+    } catch {}
+  }, [puzzleId]);
 
   const handleSettingsChange = (s: GameSettings) => {
     setSettings(s);
