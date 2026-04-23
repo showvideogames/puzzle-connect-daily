@@ -127,7 +127,7 @@ export default function Index() {
       {showSillyGoose && (
         <div className="w-full max-w-lg px-2 mb-2 animate-fade-up">
           <div className="bg-foreground text-background px-5 py-2.5 rounded-full text-sm font-semibold shadow-md text-center">
-            You don't need hints! You already beat the puzzle, ya silly goose 🦆
+            You don't need hints! You already beat the puzzle silly goose 🦆
           </div>
         </div>
       )}
