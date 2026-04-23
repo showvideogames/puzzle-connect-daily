@@ -60,7 +60,7 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange }: Set
           <div className="border-t border-border pt-4 space-y-4">
             <p className="text-lg font-bold flex items-center gap-2">
               Advanced Features
-              <span className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+              <span className="text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground px-2.5 py-1 rounded-full">
                 Beta
               </span>
             </p>
