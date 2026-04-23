@@ -137,13 +137,20 @@ export default function ArchivePuzzle() {
   const [isPuzzleComplete, setIsPuzzleComplete] = useState(false);
   const [showSillyGoose, setShowSillyGoose] = useState(false);
 
-  // Clear localStorage progress for this puzzle on mount so it always starts fresh
-  useEffect(() => {
-    if (!puzzleId) return;
-    try {
-      localStorage.removeItem(`connections-progress-${puzzleId}`);
-    } catch {}
-  }, [puzzleId]);
+  // Clear localStorage only if puzzle was already completed — so it starts fresh for replay
+useEffect(() => {
+  if (!puzzleId) return;
+  try {
+    const key = `connections-progress-${puzzleId}`;
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data.isComplete === true) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {}
+}, [puzzleId]);
 
   const handleSettingsChange = (s: GameSettings) => {
     setSettings(s);
