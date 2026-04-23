@@ -126,7 +126,7 @@ function getResultSubtitle(isWon: boolean, mistakes: number): string {
   return "Almost had it. Come back tomorrow!";
 }
 
-// Streak celebration — counts up to final number, then stays on screen permanently
+// Streak celebration — counts up to final number, stays on screen permanently
 function StreakCelebration({ streak }: { streak: number }) {
   const [displayNum, setDisplayNum] = useState(Math.max(1, streak - 1));
   const [phase, setPhase] = useState<"counting" | "big" | "done">("counting");
@@ -170,9 +170,10 @@ interface GameBoardProps {
   clearColorsTrigger?: number;
   isArchive?: boolean;
   hintsUsed?: boolean;
+  onHintClick?: () => void;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, hintsUsed = false }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, hintsUsed = false, onHintClick }: GameBoardProps) {
   const showRainbow = settings?.showRainbowColors ?? true;
   const arrangeTiles = settings?.arrangeTiles ?? false;
   const colorCodeTiles = settings?.colorCodeTiles ?? false;
@@ -213,19 +214,48 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const [showGlobalStats, setShowGlobalStats] = useState(false);
   const [showSpotModal, setShowSpotModal] = useState(false);
   const [bonusRainbowCorrect, setBonusRainbowCorrect] = useState<boolean | null>(null);
-  const [rainbowVisible, setRainbowVisible] = useState(false);
+  // If rainbow already found on mount (e.g. page refresh), show it immediately without animation
+  const [rainbowVisible, setRainbowVisible] = useState(state.gotRainbow);
   const [spotShaking, setSpotShaking] = useState(false);
   const [bonusRainbowWords, setBonusRainbowWords] = useState<string[]>([]);
   const [hintVisible, setHintVisible] = useState(true);
+  const [sillyGoose, setSillyGoose] = useState(false);
 
-  // Streak celebration state
-  const [streakCount, setStreakCount] = useState<number | null>(null);
+  // Streak state — fetched once on mount, shown instantly on win
+  const [streakBefore, setStreakBefore] = useState<number | null>(null);
   const [showStreak, setShowStreak] = useState(false);
-  const streakFetchedRef = useRef(false);
-
-  const prevGotRainbow = useRef(state.gotRainbow);
   const prevIsWon = useRef(state.isWon);
 
+  const prevGotRainbow = useRef(state.gotRainbow);
+
+  // Fetch streak on mount (before win) so we know the current number
+  useEffect(() => {
+    if (isArchive) return;
+    const fetchStreakBefore = async () => {
+      try {
+        const deviceId = getDeviceId();
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        const userId = authUser?.id ?? null;
+        const { data } = userId
+          ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).single()
+          : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).single();
+        if (data?.current_streak != null) {
+          setStreakBefore(data.current_streak);
+        }
+      } catch {}
+    };
+    void fetchStreakBefore();
+  }, [isArchive]);
+
+  // Show streak animation immediately when player wins
+  useEffect(() => {
+    if (state.isWon && !prevIsWon.current && !isArchive) {
+      setShowStreak(true);
+    }
+    prevIsWon.current = state.isWon;
+  }, [state.isWon, isArchive]);
+
+  // Rainbow curtain — only animate when it first becomes true mid-game
   useEffect(() => {
     if (state.gotRainbow && !prevGotRainbow.current) {
       setRainbowVisible(false);
@@ -248,47 +278,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   useEffect(() => {
     if (hintsUsed) setHintVisible(true);
   }, [hintsUsed]);
-
-  // Fetch streak and show celebration when player wins (not on archive)
-  useEffect(() => {
-    if (state.isWon && !prevIsWon.current && !isArchive && !streakFetchedRef.current) {
-      streakFetchedRef.current = true;
-      // Wait 800ms — enough for win animation, short enough to feel timely
-      const fetchStreak = async () => {
-  try {
-    const deviceId = getDeviceId();
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    const userId = authUser?.id ?? null;
-
-    const { data } = userId
-      ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).single()
-      : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).single();
-
-    if (data?.current_streak) {
-      setStreakCount(data.current_streak);
-      setShowStreak(true);
-    } else {
-      // Retry once after 2 more seconds in case write was slow
-      setTimeout(async () => {
-        try {
-          const { data: retryData } = userId
-            ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).single()
-            : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).single();
-          if (retryData?.current_streak) {
-            setStreakCount(retryData.current_streak);
-            setShowStreak(true);
-          }
-        } catch {}
-      }, 2000);
-    }
-  } catch {
-    // Silently fail — streak is a bonus, not critical
-  }
-};
-setTimeout(() => { void fetchStreak(); }, 1000);
-    }
-    prevIsWon.current = state.isWon;
-  }, [state.isWon, isArchive]);
 
   const handleSpotResult = useCallback((correct: boolean) => {
     setShowSpotModal(false);
@@ -321,13 +310,21 @@ setTimeout(() => { void fetchStreak(); }, 1000);
     return items;
   }, [puzzle]);
 
+  // Hint button handler — silly goose if already complete
+  const handleHintClick = useCallback(() => {
+    if (state.isComplete) {
+      setSillyGoose(true);
+      setTimeout(() => setSillyGoose(false), 3000);
+      return;
+    }
+    onHintClick?.();
+  }, [state.isComplete, onHintClick]);
+
   const generateShareLines = useCallback((): string[] => {
     const lines: string[] = [];
-
     if (hintsUsed) {
       lines.push("💡");
     }
-
     for (const attempt of state.guessHistory) {
       if (attempt.isRainbow) {
         if (hintsUsed && lines.length === 1) {
@@ -374,6 +371,9 @@ setTimeout(() => { void fetchStreak(); }, 1000);
       setTimeout(() => setCopied(false), 2000);
     }
   }, [generateShareText]);
+
+  // Streak to display: streakBefore + 1 (since they just won and it will be updated)
+  const streakToShow = streakBefore != null ? streakBefore + 1 : 1;
 
   return (
     <div className="w-full max-w-lg mx-auto px-2 animate-fade-up">
@@ -510,6 +510,15 @@ setTimeout(() => { void fetchStreak(); }, 1000);
         </div>
       )}
 
+      {/* Silly goose popup — shown when hints button tapped after completing */}
+      {sillyGoose && (
+        <div className="flex justify-center mt-3 animate-fade-up">
+          <div className="bg-foreground text-background px-5 py-2 rounded-full text-sm font-semibold shadow-md text-center">
+            You don't need hints! You already beat the puzzle, ya silly goose 🦆
+          </div>
+        </div>
+      )}
+
       {/* Mistakes */}
       <div className="mt-4">
         <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} />
@@ -585,9 +594,9 @@ setTimeout(() => { void fetchStreak(); }, 1000);
         </div>
       )}
 
-      {/* Streak celebration — appears after winning, stays on screen */}
-      {showStreak && streakCount !== null && (
-        <StreakCelebration streak={streakCount} />
+      {/* Streak celebration — fires instantly on win, stays on screen */}
+      {showStreak && (
+        <StreakCelebration streak={streakToShow} />
       )}
 
       {/* End state */}
