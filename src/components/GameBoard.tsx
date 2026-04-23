@@ -254,24 +254,25 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     if (state.isWon && !prevIsWon.current && !isArchive && !streakFetchedRef.current) {
       streakFetchedRef.current = true;
       // Wait 800ms — enough for win animation, short enough to feel timely
-      setTimeout(async () => {
-        try {
-          const deviceId = getDeviceId();
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          const userId = authUser?.id ?? null;
+      const fetchStreak = async () => {
+  try {
+    const deviceId = getDeviceId();
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    const userId = authUser?.id ?? null;
 
-          const { data } = userId
-            ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).single()
-            : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).single();
+    const { data } = userId
+      ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).single()
+      : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).single();
 
-          if (data?.current_streak) {
-            setStreakCount(data.current_streak);
-            setShowStreak(true);
-          }
-        } catch {
-          // Silently fail — streak is a bonus, not critical
-        }
-      }, 800);
+    if (data?.current_streak) {
+      setStreakCount(data.current_streak);
+      setShowStreak(true);
+    }
+  } catch {
+    // Silently fail — streak is a bonus, not critical
+  }
+};
+setTimeout(() => { void fetchStreak(); }, 800);
     }
     prevIsWon.current = state.isWon;
   }, [state.isWon, isArchive]);
