@@ -30,12 +30,9 @@ interface SaveGameStatsParams {
   guessHistory: GuessEvent[];
   skipStreak?: boolean;
   hintsUsed?: boolean;
+  shareGrid?: string;
 }
 
-/**
- * Returns true if this user (by user_id if logged in, device_id otherwise)
- * already has a game_sessions row for the given puzzle.
- */
 export async function hasExistingSession(puzzleId: string): Promise<boolean> {
   try {
     const deviceId = getDeviceId();
@@ -61,6 +58,7 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
     guessHistory,
     skipStreak = false,
     hintsUsed = false,
+    shareGrid = "",
   } = params;
 
   try {
@@ -68,7 +66,6 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
     const { data: { user } } = await supabase.auth.getUser();
     const userId = user?.id ?? null;
 
-    // 1. Insert game session
     const { data: session, error: sessionError } = await supabase
       .from("game_sessions")
       .insert({
@@ -81,6 +78,7 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
         found_rainbow: foundRainbow,
         solve_order: solveOrder,
         hints_used: hintsUsed,
+        share_grid: shareGrid,
       })
       .select("id")
       .single();
@@ -90,7 +88,6 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
       return;
     }
 
-    // 2. Insert guess events
     if (guessHistory.length > 0) {
       const guessRows = guessHistory.map((guess, index) => ({
         game_session_id: session.id,
@@ -99,17 +96,10 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
         correct: guess.correct,
         group_name: guess.group_name,
       }));
-
-      const { error: guessError } = await supabase
-        .from("guess_events")
-        .insert(guessRows);
-
-      if (guessError) {
-        console.error("Failed to save guess events:", guessError);
-      }
+      const { error: guessError } = await supabase.from("guess_events").insert(guessRows);
+      if (guessError) console.error("Failed to save guess events:", guessError);
     }
 
-    // 3. Update puzzle aggregates
     const { data: existing } = await supabase
       .from("puzzle_aggregates")
       .select("*")
@@ -124,19 +114,16 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
     const newAvgTime = (prevAvgTime * (totalPlays - 1) + activeTimeSeconds) / totalPlays;
     const firstSolve = solveOrder[0] ?? null;
 
-    await supabase
-      .from("puzzle_aggregates")
-      .upsert({
-        puzzle_id: puzzleId,
-        total_plays: totalPlays,
-        total_wins: totalWins,
-        avg_mistakes: newAvgMistakes,
-        avg_time_seconds: newAvgTime,
-        most_common_first_solve: firstSolve,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "puzzle_id" });
+    await supabase.from("puzzle_aggregates").upsert({
+      puzzle_id: puzzleId,
+      total_plays: totalPlays,
+      total_wins: totalWins,
+      avg_mistakes: newAvgMistakes,
+      avg_time_seconds: newAvgTime,
+      most_common_first_solve: firstSolve,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "puzzle_id" });
 
-    // 4. Update streak (skipped for archive puzzles)
     if (!skipStreak) {
       await updateStreak(userId, deviceId);
     }
@@ -149,11 +136,9 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
 async function updateStreak(userId: string | null, deviceId: string): Promise<void> {
   try {
     const today = new Date().toLocaleDateString("en-CA");
-
     const query = userId
       ? supabase.from("user_streaks").select("*").eq("user_id", userId).single()
       : supabase.from("user_streaks").select("*").eq("device_id", deviceId).single();
-
     const { data: existing } = await query;
 
     if (!existing) {
@@ -173,26 +158,18 @@ async function updateStreak(userId: string | null, deviceId: string): Promise<vo
     const yesterdayStr = yesterday.toLocaleDateString("en-CA");
 
     let newStreak = existing.current_streak;
-
-    if (lastPlayed === today) {
-      return;
-    } else if (lastPlayed === yesterdayStr) {
-      newStreak = existing.current_streak + 1;
-    } else {
-      newStreak = 1;
-    }
+    if (lastPlayed === today) return;
+    else if (lastPlayed === yesterdayStr) newStreak = existing.current_streak + 1;
+    else newStreak = 1;
 
     const newLongest = Math.max(newStreak, existing.longest_streak);
 
-    await supabase
-      .from("user_streaks")
-      .update({
-        current_streak: newStreak,
-        longest_streak: newLongest,
-        last_played_date: today,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", existing.id);
+    await supabase.from("user_streaks").update({
+      current_streak: newStreak,
+      longest_streak: newLongest,
+      last_played_date: today,
+      updated_at: new Date().toISOString(),
+    }).eq("id", existing.id);
 
   } catch (err) {
     console.error("updateStreak error:", err);
