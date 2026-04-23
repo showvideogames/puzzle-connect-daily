@@ -25,6 +25,12 @@ export default function FreePuzzle() {
   const [settings, setSettings] = useState<GameSettings>(loadSettings);
   const [showHintModal, setShowHintModal] = useState(false);
   const [hintsUsed, setHintsUsed] = useState(false);
+  const [isPuzzleComplete, setIsPuzzleComplete] = useState(() => {
+    try {
+      return Object.keys(localStorage).filter(k => k.startsWith("connections-progress-")).some(k => JSON.parse(localStorage.getItem(k) || "{}").isComplete === true);
+    } catch { return false; }
+  });
+  const [showSillyGoose, setShowSillyGoose] = useState(false);
 
   const handleSettingsChange = (s: GameSettings) => {
     setSettings(s);
@@ -62,17 +68,34 @@ export default function FreePuzzle() {
     setShowHintModal(false);
   }, []);
 
+  const handleHeaderHintClick = useCallback(() => {
+    if (isPuzzleComplete) {
+      setShowSillyGoose(true);
+      setTimeout(() => setShowSillyGoose(false), 3000);
+    } else {
+      setShowHintModal(true);
+    }
+  }, [isPuzzleComplete]);
+
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       <GameHeader
         onStatsClick={() => setActiveModal("stats")}
         onHowToPlayClick={() => setActiveModal("help")}
         onSettingsClick={() => setActiveModal("settings")}
-        onHintClick={() => setShowHintModal(true)}
+        onHintClick={handleHeaderHintClick}
         user={user}
         onSignOut={() => supabase.auth.signOut()}
       />
       <div className="w-full max-w-lg border-b border-border mb-4" />
+
+      {showSillyGoose && (
+        <div className="w-full max-w-lg px-2 mb-2 animate-fade-up">
+          <div className="bg-foreground text-background px-5 py-2.5 rounded-full text-sm font-semibold shadow-md text-center">
+            You don't need hints! You already beat the puzzle, ya silly goose 🦆
+          </div>
+        </div>
+      )}
 
       <div className="w-full max-w-lg px-4 mb-3">
         <button
@@ -110,6 +133,7 @@ export default function FreePuzzle() {
           isArchive
           hintsUsed={hintsUsed}
           onHintClick={() => setShowHintModal(true)}
+          onComplete={() => setIsPuzzleComplete(true)}
         />
       ) : null}
 
