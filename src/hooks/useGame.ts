@@ -56,7 +56,10 @@ function clearProgress(puzzleId: string) {
   } catch {}
 }
 
-export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boolean } = {}) {
+export function useGame(
+  puzzle: Puzzle,
+  { isArchive = false, hintsUsed = false }: { isArchive?: boolean; hintsUsed?: boolean } = {}
+) {
   const MAX_MISTAKES = 4;
 
   const allWords = useMemo(
@@ -351,7 +354,7 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
 
     const guessGroupIndices = state.selectedWords.map((w) => getWordGroupIndex(w));
 
-    // Rainbow herring detection — wiggle just the 4 selected tiles then reveal
+    // Rainbow herring detection
     if (
       puzzle.rainbowHerring &&
       puzzle.rainbowHerring.length === 4 &&
@@ -426,6 +429,7 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
             activeTimeSeconds: activeSecondsRef.current,
             foundRainbow: state.gotRainbow,
             solveOrder: getSolveOrder(newSolved),
+            hintsUsed,
             guessHistory: [...state.guessHistory, attempt].map((g) => ({
               words: g.words,
               correct: g.isCorrect,
@@ -483,7 +487,6 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
       setTimeout(() => setShaking(false), 400);
 
       if (isOneAway) {
-        // No auto-dismiss — stays until player taps X or changes selection
         setOneAway(true);
       }
 
@@ -508,6 +511,7 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
           activeTimeSeconds: activeSecondsRef.current,
           foundRainbow: state.gotRainbow,
           solveOrder: getSolveOrder(state.solvedGroups),
+          hintsUsed,
           guessHistory: [...state.guessHistory, attempt].map((g) => ({
             words: g.words,
             correct: g.isCorrect,
@@ -572,7 +576,7 @@ export function useGame(puzzle: Puzzle, { isArchive = false }: { isArchive?: boo
         });
       }
     }
-  }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, fireConfetti, tileColors]);
+  }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, fireConfetti, tileColors, hintsUsed]);
 
   const remainingWords = useMemo(() => {
     const solvedWords = state.solvedGroups.flatMap((i) => puzzle.groups[i].words);
