@@ -28,14 +28,12 @@ interface PreviousSession {
   mistakes: number;
   found_rainbow: boolean;
   hints_used: boolean;
-  created_at: string;
 }
 
 interface GuessEvent {
   guess_number: number;
   words: string[];
   correct: boolean;
-  is_rainbow?: boolean;
 }
 
 function buildEmojiRow(words: string[], puzzle: Puzzle): string {
@@ -48,16 +46,22 @@ function buildEmojiRow(words: string[], puzzle: Puzzle): string {
     .join("");
 }
 
-function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: Puzzle; user: User | null }) {
+function PreviousResult({ puzzleId, puzzle, user }: {
+  puzzleId: string;
+  puzzle: Puzzle;
+  user: User | null | undefined;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [session, setSession] = useState<PreviousSession | null | undefined>(undefined);
   const [guessEvents, setGuessEvents] = useState<GuessEvent[]>([]);
 
   useEffect(() => {
-    if (!user) { setSession(null); return; }
+    if (user === undefined) return; // still loading auth — wait
+    if (user === null) { setSession(null); return; } // not logged in
+
     supabase
       .from("game_sessions")
-      .select("id, won, mistakes, found_rainbow, hints_used, created_at")
+      .select("id, won, mistakes, found_rainbow, hints_used")
       .eq("puzzle_id", puzzleId)
       .eq("user_id", user.id)
       .order("id", { ascending: true })
@@ -75,11 +79,10 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
       });
   }, [puzzleId, user]);
 
-  if (session === undefined || session === null) return null;
-
-  const formattedDate = new Date(session.created_at).toLocaleDateString("en-US", {
-    month: "long", day: "numeric", year: "numeric",
-  });
+  // Still waiting for auth to resolve
+  if (session === undefined) return null;
+  // Not logged in or no session found
+  if (session === null) return null;
 
   // Build emoji lines — prepend 💡 on row 2 if hints were used
   const rawLines = guessEvents.map((e) => buildEmojiRow(e.words, puzzle));
@@ -115,7 +118,6 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
             <span>{session.mistakes === 0 ? "No mistakes" : `${session.mistakes} mistake${session.mistakes === 1 ? "" : "s"}`}</span>
             {session.found_rainbow && <span>🌈 Rainbow found</span>}
             {session.hints_used && <span>💡 Hints used</span>}
-            <span>Played {formattedDate}</span>
           </div>
         </div>
       )}
@@ -126,7 +128,8 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
 export default function ArchivePuzzle() {
   const { puzzleId } = useParams<{ puzzleId: string }>();
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
+  // undefined = still loading, null = not logged in, User = logged in
+  const [user, setUser] = useState<User | null | undefined>(undefined);
   const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -136,21 +139,6 @@ export default function ArchivePuzzle() {
   const [hintsUsed, setHintsUsed] = useState(false);
   const [isPuzzleComplete, setIsPuzzleComplete] = useState(false);
   const [showSillyGoose, setShowSillyGoose] = useState(false);
-
-  // Clear localStorage only if puzzle was already completed — so it starts fresh for replay
-useEffect(() => {
-  if (!puzzleId) return;
-  try {
-    const key = `connections-progress-${puzzleId}`;
-    const raw = localStorage.getItem(key);
-    if (raw) {
-      const data = JSON.parse(raw);
-      if (data.isComplete === true) {
-        localStorage.removeItem(key);
-      }
-    }
-  } catch {}
-}, [puzzleId]);
 
   const handleSettingsChange = (s: GameSettings) => {
     setSettings(s);
@@ -163,21 +151,22 @@ useEffect(() => {
   }, [settings.darkMode]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Get current session immediately, then listen for changes
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
     return () => subscription.unsubscribe();
   }, []);
 
- useEffect(() => {
+  useEffect(() => {
     if (!puzzleId) { setError(true); setLoading(false); return; }
     getPuzzleById(puzzleId)
       .then((p) => {
         if (!p) { setError(true); setLoading(false); return; }
-        // Clear completed progress before GameBoard mounts so it starts fresh
+        // Clear completed progress before GameBoard mounts so it always starts fresh
         try {
           const key = `connections-progress-${puzzleId}`;
           const raw = localStorage.getItem(key);
@@ -213,7 +202,7 @@ useEffect(() => {
         onHowToPlayClick={() => setActiveModal("help")}
         onSettingsClick={() => setActiveModal("settings")}
         onHintClick={handleHeaderHintClick}
-        user={user}
+        user={user ?? null}
         onSignOut={() => supabase.auth.signOut()}
       />
       <div className="w-full max-w-lg border-b border-border mb-4" />
@@ -259,7 +248,7 @@ useEffect(() => {
           <GameBoard
             puzzle={puzzle}
             settings={settings}
-            user={user}
+            user={user ?? null}
             isArchive
             hintsUsed={hintsUsed}
             onHintClick={() => setShowHintModal(true)}
