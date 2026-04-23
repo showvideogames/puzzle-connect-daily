@@ -220,3 +220,37 @@
   animation: group-appear 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   transform-origin: top;
 }
+
+/* ── Spot the Rainbow button: breathe pulse + shimmer ── */
+@keyframes rainbow-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+@keyframes rainbow-shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+.animate-rainbow-breathe {
+  animation: rainbow-breathe 2.5s ease-in-out infinite;
+}
+
+.animate-rainbow-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.animate-rainbow-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: rainbow-shimmer 3s ease-in-out infinite;
+}
