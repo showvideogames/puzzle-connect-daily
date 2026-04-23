@@ -11,16 +11,8 @@ import { getPuzzleById } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import type { User } from "@supabase/supabase-js";
-import { ChevronDown, ChevronUp } from "lucide-react";
 
 type ModalName = "stats" | "help" | "settings" | null;
-
-const DIFFICULTY_EMOJI: Record<number, string> = {
-  0: "🟧",
-  1: "🟩",
-  2: "🟦",
-  3: "🟥",
-};
 
 interface PreviousSession {
   id: string;
@@ -28,40 +20,23 @@ interface PreviousSession {
   mistakes: number;
   found_rainbow: boolean;
   hints_used: boolean;
+  share_grid: string | null;
 }
 
-interface GuessEvent {
-  guess_number: number;
-  words: string[];
-  correct: boolean;
-}
-
-function buildEmojiRow(words: string[], puzzle: Puzzle): string {
-  return words
-    .map((word) => {
-      const group = puzzle.groups.find((g) => g.words.includes(word));
-      if (!group) return "⬜";
-      return DIFFICULTY_EMOJI[group.difficulty - 1] ?? "⬜";
-    })
-    .join("");
-}
-
-function PreviousResult({ puzzleId, puzzle, user }: {
+function PreviousResult({ puzzleId, user }: {
   puzzleId: string;
-  puzzle: Puzzle;
   user: User | null | undefined;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [session, setSession] = useState<PreviousSession | null | undefined>(undefined);
-  const [guessEvents, setGuessEvents] = useState<GuessEvent[]>([]);
 
   useEffect(() => {
-    if (user === undefined) return; // still loading auth — wait
-    if (user === null) { setSession(null); return; } // not logged in
+    if (user === undefined) return;
+    if (user === null) { setSession(null); return; }
 
     supabase
       .from("game_sessions")
-      .select("id, won, mistakes, found_rainbow, hints_used")
+      .select("id, won, mistakes, found_rainbow, hints_used, share_grid")
       .eq("puzzle_id", puzzleId)
       .eq("user_id", user.id)
       .order("id", { ascending: true })
@@ -70,49 +45,33 @@ function PreviousResult({ puzzleId, puzzle, user }: {
       .then(({ data }) => {
         if (!data) { setSession(null); return; }
         setSession(data as PreviousSession);
-        supabase
-          .from("guess_events")
-          .select("guess_number, words, correct")
-          .eq("game_session_id", data.id)
-          .order("guess_number", { ascending: true })
-          .then(({ data: events }) => setGuessEvents((events ?? []) as GuessEvent[]));
       });
   }, [puzzleId, user]);
 
-  // Still waiting for auth to resolve
-  if (session === undefined) return null;
-  // Not logged in or no session found
-  if (session === null) return null;
+  if (session === undefined || session === null) return null;
 
-  // Build emoji lines — prepend 💡 on row 2 if hints were used
-  const rawLines = guessEvents.map((e) => buildEmojiRow(e.words, puzzle));
-  const emojiLines: string[] = [];
-  if (session.hints_used && rawLines.length > 0) {
-    emojiLines.push(rawLines[0]);
-    emojiLines.push("💡");
-    emojiLines.push(...rawLines.slice(1));
-  } else {
-    emojiLines.push(...rawLines);
-  }
+  const gridLines = session.share_grid ? session.share_grid.split("\n") : [];
 
   return (
-    <div className="w-full max-w-lg px-4 mt-6">
+    <div className="w-full max-w-lg px-4 mt-6 flex flex-col items-center">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border
-          bg-card hover:bg-secondary transition-colors text-sm font-medium"
+        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border
+          bg-card hover:bg-secondary transition-colors text-sm font-semibold shadow-sm"
       >
-        <span>Reveal your original result 🙈</span>
-        {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        {expanded ? "Hide original result 🙈" : "Reveal your original result 🙈"}
       </button>
+
       {expanded && (
-        <div className="mt-2 rounded-xl border border-border bg-card px-4 py-4 space-y-3 animate-fade-up">
-          {emojiLines.length > 0 && (
+        <div className="mt-3 rounded-xl border border-border bg-card px-6 py-4 space-y-3 animate-fade-up w-full">
+          {gridLines.length > 0 ? (
             <div className="flex flex-col items-center gap-0.5">
-              {emojiLines.map((line, i) => (
+              {gridLines.map((line, i) => (
                 <span key={i} className="text-2xl leading-tight tracking-wider">{line}</span>
               ))}
             </div>
+          ) : (
+            <p className="text-center text-sm text-muted-foreground">No grid available for this result.</p>
           )}
           <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground flex-wrap">
             <span>{session.mistakes === 0 ? "No mistakes" : `${session.mistakes} mistake${session.mistakes === 1 ? "" : "s"}`}</span>
@@ -128,7 +87,6 @@ function PreviousResult({ puzzleId, puzzle, user }: {
 export default function ArchivePuzzle() {
   const { puzzleId } = useParams<{ puzzleId: string }>();
   const navigate = useNavigate();
-  // undefined = still loading, null = not logged in, User = logged in
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -151,7 +109,6 @@ export default function ArchivePuzzle() {
   }, [settings.darkMode]);
 
   useEffect(() => {
-    // Get current session immediately, then listen for changes
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
@@ -254,7 +211,7 @@ export default function ArchivePuzzle() {
             onHintClick={() => setShowHintModal(true)}
             onComplete={() => setIsPuzzleComplete(true)}
           />
-          {puzzleId && <PreviousResult puzzleId={puzzleId} puzzle={puzzle} user={user} />}
+          {puzzleId && <PreviousResult puzzleId={puzzleId} user={user} />}
         </>
       ) : null}
 
