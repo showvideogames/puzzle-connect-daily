@@ -105,7 +105,7 @@ export default function Index() {
   const handleHeaderHintClick = useCallback(() => {
     if (isPuzzleComplete) {
       setShowSillyGoose(true);
-      setTimeout(() => setShowSillyGoose(false), 3000);
+      setTimeout(() => setShowSillyGoose(false), 5000);
     } else {
       setShowHintModal(true);
     }
