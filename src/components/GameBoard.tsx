@@ -203,7 +203,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     handleTouchDragMove,
     handleTouchDragEnd,
     alreadyGuessed,
-  } = useGame(puzzle, { isArchive });
+ } = useGame(puzzle, { isArchive, hintsUsed });
 
   useEffect(() => {
     if (clearColorsTrigger > 0) {
