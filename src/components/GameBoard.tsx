@@ -12,11 +12,11 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
+import { supabase } from "@/integrations/supabase/client";
+import { getDeviceId } from "@/lib/gameStats";
 
 const TOOLTIP_MSG = "This puzzle has no Rainbow category.";
 
-// Extract all trailing emojis from a category name
-// e.g. "NBA Teams 🏀" → "🏀", "Fast Food 🍔🍟" → "🍔🍟", "No emoji" → ""
 function extractTrailingEmojis(str: string): string {
   try {
     const segmenter = new Intl.Segmenter();
@@ -126,6 +126,52 @@ function getResultSubtitle(isWon: boolean, mistakes: number): string {
   return "Almost had it. Come back tomorrow!";
 }
 
+// Streak celebration popup
+function StreakCelebration({ streak, onDone }: { streak: number; onDone: () => void }) {
+  const [displayNum, setDisplayNum] = useState(Math.max(1, streak - 1));
+  const [phase, setPhase] = useState<"counting" | "big" | "fading">("counting");
+
+  useEffect(() => {
+    // Count up to the new streak number
+    if (displayNum < streak) {
+      const t = setTimeout(() => setDisplayNum(n => n + 1), 120);
+      return () => clearTimeout(t);
+    } else {
+      // Reached final number — go big briefly then fade
+      setPhase("big");
+      const bigTimer = setTimeout(() => setPhase("fading"), 1200);
+      const doneTimer = setTimeout(() => onDone(), 2400);
+      return () => { clearTimeout(bigTimer); clearTimeout(doneTimer); };
+    }
+  }, [displayNum, streak, onDone]);
+
+  const scale = phase === "big" ? "scale-125" : phase === "fading" ? "scale-100 opacity-0" : "scale-100";
+
+  return (
+    <div className="flex justify-center mt-4 animate-fade-up">
+      <div
+        className={`flex items-center gap-2 bg-card border border-border rounded-full px-5 py-2.5 shadow-lg
+          transition-all duration-500 ${scale}`}
+      >
+        <img
+          src="/__Fire Icon (2).png"
+          alt="streak"
+          style={{ width: 28, height: 28, objectFit: "contain" }}
+        />
+        <span
+          className="font-bold tabular-nums transition-all duration-150"
+          style={{ fontSize: phase === "big" ? "1.6rem" : "1.3rem" }}
+        >
+          {displayNum}
+        </span>
+        <span className="text-sm font-semibold text-muted-foreground">
+          {streak === 1 ? "day streak!" : "day streak!"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 interface GameBoardProps {
   puzzle: Puzzle;
   settings?: GameSettings;
@@ -181,7 +227,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const [bonusRainbowWords, setBonusRainbowWords] = useState<string[]>([]);
   const [hintVisible, setHintVisible] = useState(true);
 
+  // Streak celebration state
+  const [streakCount, setStreakCount] = useState<number | null>(null);
+  const [showStreak, setShowStreak] = useState(false);
+  const streakFetchedRef = useRef(false);
+
   const prevGotRainbow = useRef(state.gotRainbow);
+  const prevIsWon = useRef(state.isWon);
 
   useEffect(() => {
     if (state.gotRainbow && !prevGotRainbow.current) {
@@ -202,10 +254,36 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }
   }, [bonusRainbowCorrect]);
 
-  // Show hint pill when hints are first used
   useEffect(() => {
     if (hintsUsed) setHintVisible(true);
   }, [hintsUsed]);
+
+  // Fetch streak and show celebration when player wins (not on archive)
+  useEffect(() => {
+    if (state.isWon && !prevIsWon.current && !isArchive && !streakFetchedRef.current) {
+      streakFetchedRef.current = true;
+      // Small delay so win animation plays first
+      setTimeout(async () => {
+        try {
+          const deviceId = getDeviceId();
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          const userId = authUser?.id ?? null;
+
+          const { data } = userId
+            ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).single()
+            : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).single();
+
+          if (data?.current_streak) {
+            setStreakCount(data.current_streak);
+            setShowStreak(true);
+          }
+        } catch {
+          // Silently fail — streak is a bonus, not critical
+        }
+      }, 1200);
+    }
+    prevIsWon.current = state.isWon;
+  }, [state.isWon, isArchive]);
 
   const handleSpotResult = useCallback((correct: boolean) => {
     setShowSpotModal(false);
@@ -223,7 +301,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }, 400);
   }, [puzzle.rainbowHerring]);
 
-  // Build hint emojis: sorted by difficulty, then rainbow
   const hintItems = useCallback(() => {
     const sorted = [...puzzle.groups].sort((a, b) => a.difficulty - b.difficulty);
     const items = sorted.map(g => ({
@@ -242,14 +319,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const generateShareLines = useCallback((): string[] => {
     const lines: string[] = [];
 
-    // 💡 always goes first if hints were used
     if (hintsUsed) {
       lines.push("💡");
     }
 
     for (const attempt of state.guessHistory) {
       if (attempt.isRainbow) {
-        // If hints used, combine 💡 and 🌈 on same row if rainbow was found early
         if (hintsUsed && lines.length === 1) {
           lines[0] = "💡🌈";
         } else {
@@ -476,7 +551,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* Hint pill — shown below controls when hints are used */}
+      {/* Hint pill */}
       {hintsUsed && (
         <div className="mt-4 flex justify-center">
           {hintVisible ? (
@@ -503,6 +578,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             </button>
           )}
         </div>
+      )}
+
+      {/* Streak celebration — appears after winning, counts up, then fades */}
+      {showStreak && streakCount !== null && (
+        <StreakCelebration
+          streak={streakCount}
+          onDone={() => setShowStreak(false)}
+        />
       )}
 
       {/* End state */}
