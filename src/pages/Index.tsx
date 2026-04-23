@@ -125,6 +125,7 @@ export default function Index() {
           user={user}
           clearColorsTrigger={clearColorsTrigger}
           hintsUsed={hintsUsed}
+          onHintClick={() => setShowHintModal(true)}
         />
       ) : (
         <div className="flex-1 flex items-center justify-center text-center px-4">
