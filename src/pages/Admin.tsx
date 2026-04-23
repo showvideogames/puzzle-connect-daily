@@ -69,6 +69,18 @@ export default function Admin() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
+  // Mobile detection for tap-to-swap
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // Tap-to-swap state for mobile tile reordering
+  const [selectedTileIdx, setSelectedTileIdx] = useState<number | null>(null);
+
   // Puzzle form
   const [puzzleDate, setPuzzleDate] = useState("");
   const [puzzleTitle, setPuzzleTitle] = useState("");
@@ -100,7 +112,7 @@ export default function Admin() {
   const [expandedStatsId, setExpandedStatsId] = useState<string | null>(null);
   const [puzzleStats, setPuzzleStats] = useState<Record<string, any>>({});
 
-  // Restore draft on mount (only if not editing an existing puzzle)
+  // Restore draft on mount
   useEffect(() => {
     if (isAdmin) {
       void loadPuzzles();
@@ -121,7 +133,6 @@ export default function Admin() {
     }
   }, [isAdmin]);
 
-  // Build current draft data from state
   const getCurrentDraft = useCallback((): DraftData => ({
     puzzleDate,
     puzzleTitle,
@@ -136,9 +147,7 @@ export default function Admin() {
     editingId,
   }), [puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, rainbowCategoryName, isEmojiPuzzle, isFreePuzzle, freePuzzleOrder, editingId]);
 
-  // Called onBlur from any field — saves draft silently
   const handleBlurSave = useCallback(() => {
-    // Only save drafts for new puzzles, not edits (edits are already in the DB)
     if (!editingId) {
       saveDraft(getCurrentDraft());
     }
@@ -249,7 +258,6 @@ export default function Admin() {
     setWordOrder([...allWords]);
   }
 
-  // Derive the live preview order: dragged tile moves to hoverIdx, others shift around it
   function computeTilePreview(order: string[], from: number, to: number): string[] {
     if (from === to) return order;
     const next = [...order];
@@ -265,6 +273,7 @@ export default function Admin() {
 
   const ghostWord = dragTileIdx !== null ? wordOrder[dragTileIdx] : null;
 
+  // Desktop drag handlers
   function handleTileDragStart(vIdx: number) {
     setDragTileIdx(vIdx);
     setHoverIdx(vIdx);
@@ -288,20 +297,19 @@ export default function Admin() {
     setHoverIdx(null);
   }
 
-  function handleTileTouchStart(vIdx: number) {
-    touchDragTileIdx.current = vIdx;
-  }
-
-  function handleTileTouchEnd(e: React.TouchEvent) {
-    const touch = e.changedTouches[0];
-    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-    const tileEl = el?.closest("[data-tile-idx]");
-    const targetIdx = tileEl ? parseInt(tileEl.getAttribute("data-tile-idx")!, 10) : null;
-    if (touchDragTileIdx.current !== null && targetIdx !== null) {
-      setWordOrder(computeTilePreview(wordOrder, touchDragTileIdx.current, targetIdx));
+  // Mobile tap-to-swap handler
+  function handleTileTap(vIdx: number) {
+    if (selectedTileIdx === null) {
+      // First tap — select this tile
+      setSelectedTileIdx(vIdx);
+    } else if (selectedTileIdx === vIdx) {
+      // Tap same tile — deselect
+      setSelectedTileIdx(null);
+    } else {
+      // Tap different tile — swap and deselect
+      setWordOrder(computeTilePreview(wordOrder, selectedTileIdx, vIdx));
+      setSelectedTileIdx(null);
     }
-    touchDragTileIdx.current = null;
-    setHoverIdx(null);
   }
 
   async function handleSave() {
@@ -504,7 +512,6 @@ export default function Admin() {
     );
   }
 
-  // Login screen
   if (!user) {
     if (showForgotPassword) {
       return (
@@ -611,7 +618,6 @@ export default function Admin() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 mt-6 space-y-8">
-        {/* Draft restored notice */}
         {draftRestored && (
           <div className="flex items-center justify-between rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm">
             <span className="text-muted-foreground">✏️ Draft restored from your last session.</span>
@@ -624,7 +630,6 @@ export default function Admin() {
           </div>
         )}
 
-        {/* Puzzle Editor */}
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">{editingId ? "Edit Puzzle" : "Create New Puzzle"}</h2>
 
@@ -717,7 +722,11 @@ export default function Admin() {
               </div>
               {wordOrder.length === 16 && (
                 <>
-                  <p className="text-xs text-muted-foreground">Drag tiles to reorder them. This is how the puzzle will appear to players before they shuffle.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isMobile
+                      ? "Tap a tile to select it, then tap another to swap them."
+                      : "Drag tiles to reorder them. This is how the puzzle will appear to players before they shuffle."}
+                  </p>
                   <div className="grid grid-cols-4 gap-2">
                     {tileDisplayOrder.map((word, vIdx) => {
                       const groupIdx = groups.findIndex((g) =>
@@ -730,21 +739,26 @@ export default function Admin() {
                         "bg-[hsl(var(--group-4)/0.3)]",
                       ];
                       const isGhost = word === ghostWord;
+                      const isSelected = isMobile && selectedTileIdx === vIdx;
+
                       return (
                         <div
                           key={word}
                           data-tile-idx={vIdx}
-                          draggable
-                          onDragStart={() => handleTileDragStart(vIdx)}
-                          onDragOver={(e) => handleTileDragOver(e, vIdx)}
-                          onDrop={handleTileDrop}
-                          onDragEnd={handleTileDragEnd}
-                          onTouchStart={() => handleTileTouchStart(vIdx)}
-                          onTouchEnd={handleTileTouchEnd}
+                          // Desktop: drag handlers
+                          draggable={!isMobile}
+                          onDragStart={!isMobile ? () => handleTileDragStart(vIdx) : undefined}
+                          onDragOver={!isMobile ? (e) => handleTileDragOver(e, vIdx) : undefined}
+                          onDrop={!isMobile ? handleTileDrop : undefined}
+                          onDragEnd={!isMobile ? handleTileDragEnd : undefined}
+                          // Mobile: tap handler
+                          onClick={isMobile ? () => handleTileTap(vIdx) : undefined}
                           className={`rounded-lg px-2 py-3 text-xs font-semibold uppercase tracking-wide text-center
-                            transition-all duration-100 cursor-grab active:cursor-grabbing select-none
+                            transition-all duration-100 select-none
+                            ${isMobile ? "cursor-pointer active:scale-95" : "cursor-grab active:cursor-grabbing"}
                             ${diffColors[groupIdx] || "bg-muted"}
                             ${isGhost ? "opacity-30 ring-2 ring-primary ring-dashed" : ""}
+                            ${isSelected ? "ring-2 ring-primary scale-105 shadow-md" : ""}
                           `}
                         >
                           {word}
@@ -752,6 +766,12 @@ export default function Admin() {
                       );
                     })}
                   </div>
+                  {/* Mobile: show deselect hint when a tile is selected */}
+                  {isMobile && selectedTileIdx !== null && (
+                    <p className="text-xs text-center text-primary font-medium animate-fade-up">
+                      Now tap another tile to swap, or tap the same tile to cancel
+                    </p>
+                  )}
                 </>
               )}
             </div>
@@ -818,7 +838,6 @@ export default function Admin() {
                 checked={isPublished}
                 onChange={(e) => {
                   setIsPublished(e.target.checked);
-                  // Save draft immediately on checkbox change since there's no blur event
                   if (!editingId) {
                     saveDraft({ ...getCurrentDraft(), isPublished: e.target.checked });
                   }
@@ -886,10 +905,8 @@ export default function Admin() {
           </div>
         </section>
 
-        {/* Existing puzzles list */}
         <ArchiveAccessManager />
 
-        {/* All Puzzles */}
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">All Puzzles ({puzzles.length})</h2>
           {puzzles.length === 0 && (
