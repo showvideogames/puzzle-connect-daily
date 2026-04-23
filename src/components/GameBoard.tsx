@@ -221,7 +221,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const [bonusRainbowWords, setBonusRainbowWords] = useState<string[]>([]);
   const [hintVisible, setHintVisible] = useState(true);
 
-  // Streak state — fetched on mount, shown after 250ms delay on win
+  // Streak state — fetched on mount, shown after 150ms delay on win
   const [streakBefore, setStreakBefore] = useState<number | null>(null);
   const [showStreak, setShowStreak] = useState(false);
   const prevIsWon = useRef(state.isWon);
@@ -416,7 +416,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <button
               onClick={() => setShowSpotModal(true)}
               className="w-full rounded-lg py-3 px-4 text-center text-white
-                hover:opacity-90 transition-opacity active:scale-[0.99]"
+  hover:opacity-90 transition-opacity active:scale-[0.99]
+  animate-rainbow-breathe animate-rainbow-shimmer"
               style={{ background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)" }}
             >
               <div className="font-bold text-sm uppercase tracking-wide">Spot the Rainbow? 🌈</div>
