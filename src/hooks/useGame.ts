@@ -107,7 +107,7 @@ export function useGame(
       mistakes: 0,
       maxMistakes: MAX_MISTAKES,
       selectedWords: [],
-      isComplete: hasPlayedToday(puzzle.id),
+      isComplete: isArchive ? false : hasPlayedToday(puzzle.id),
       isWon: false,
       guessHistory: [],
       gotRainbow: false,
