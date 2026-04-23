@@ -97,17 +97,20 @@ export default function FreePuzzle() {
         <div className="flex-1 flex items-center justify-center text-center px-4">
           <div>
             <p className="text-lg font-medium">Puzzle not found.</p>
-            <button
-              onClick={() => navigate("/")}
-              className="text-sm mt-2 underline underline-offset-2"
-              style={{ color: "hsl(var(--muted-foreground))" }}
-            >
+            <button onClick={() => navigate("/")} className="text-sm mt-2 underline underline-offset-2" style={{ color: "hsl(var(--muted-foreground))" }}>
               Back to home
             </button>
           </div>
         </div>
       ) : puzzle ? (
-        <GameBoard puzzle={puzzle} settings={settings} user={user} isArchive hintsUsed={hintsUsed} />
+        <GameBoard
+          puzzle={puzzle}
+          settings={settings}
+          user={user}
+          isArchive
+          hintsUsed={hintsUsed}
+          onHintClick={() => setShowHintModal(true)}
+        />
       ) : null}
 
       <StatsModal open={activeModal === "stats"} onClose={() => setActiveModal(null)} />
