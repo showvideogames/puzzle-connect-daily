@@ -53,7 +53,6 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
 
   useEffect(() => {
     if (!user) { setSession(null); return; }
-
     supabase
       .from("game_sessions")
       .select("id, won, mistakes, found_rainbow, created_at")
@@ -79,7 +78,6 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
   const formattedDate = new Date(session.created_at).toLocaleDateString("en-US", {
     month: "long", day: "numeric", year: "numeric",
   });
-
   const emojiLines = guessEvents.map((e) => buildEmojiRow(e.words, puzzle));
 
   return (
@@ -92,7 +90,6 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
         <span>See your last result 👀</span>
         {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
       </button>
-
       {expanded && (
         <div className="mt-2 rounded-xl border border-border bg-card px-4 py-4 space-y-3 animate-fade-up">
           {emojiLines.length > 0 && (
@@ -103,9 +100,7 @@ function PreviousResult({ puzzleId, puzzle, user }: { puzzleId: string; puzzle: 
             </div>
           )}
           <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground flex-wrap">
-            <span>
-              {session.mistakes === 0 ? "No mistakes" : `${session.mistakes} mistake${session.mistakes === 1 ? "" : "s"}`}
-            </span>
+            <span>{session.mistakes === 0 ? "No mistakes" : `${session.mistakes} mistake${session.mistakes === 1 ? "" : "s"}`}</span>
             {session.found_rainbow && <span>🌈 Rainbow found</span>}
             <span>Played {formattedDate}</span>
           </div>
@@ -205,10 +200,15 @@ export default function ArchivePuzzle() {
         </div>
       ) : puzzle ? (
         <>
-          <GameBoard puzzle={puzzle} settings={settings} user={user} isArchive hintsUsed={hintsUsed} />
-          {puzzleId && (
-            <PreviousResult puzzleId={puzzleId} puzzle={puzzle} user={user} />
-          )}
+          <GameBoard
+            puzzle={puzzle}
+            settings={settings}
+            user={user}
+            isArchive
+            hintsUsed={hintsUsed}
+            onHintClick={() => setShowHintModal(true)}
+          />
+          {puzzleId && <PreviousResult puzzleId={puzzleId} puzzle={puzzle} user={user} />}
         </>
       ) : null}
 
