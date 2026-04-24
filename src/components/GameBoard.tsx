@@ -126,7 +126,6 @@ function getResultSubtitle(isWon: boolean, mistakes: number): string {
   return "Almost had it. Come back tomorrow!";
 }
 
-// Streak celebration — counts up to final number, stays on screen permanently
 function StreakCelebration({ streak }: { streak: number }) {
   const [displayNum, setDisplayNum] = useState(Math.max(1, streak - 1));
   const [phase, setPhase] = useState<"counting" | "big" | "done">("counting");
@@ -203,32 +202,31 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     handleTouchDragMove,
     handleTouchDragEnd,
     alreadyGuessed,
- } = useGame(puzzle, { isArchive, hintsUsed });
+  } = useGame(puzzle, { isArchive, hintsUsed });
+
+  // Track if puzzle was already complete when component first mounted
+  // Used to hide redundant UI (dots, headline) when viewing a completed puzzle
+  const wasAlreadyComplete = useRef(state.isComplete);
 
   useEffect(() => {
-    if (clearColorsTrigger > 0) {
-      clearAllColors();
-    }
+    if (clearColorsTrigger > 0) clearAllColors();
   }, [clearColorsTrigger]);
 
   const [copied, setCopied] = useState(false);
   const [showGlobalStats, setShowGlobalStats] = useState(false);
   const [showSpotModal, setShowSpotModal] = useState(false);
   const [bonusRainbowCorrect, setBonusRainbowCorrect] = useState<boolean | null>(null);
-  // If rainbow already found on mount (page refresh), show immediately without animation
   const [rainbowVisible, setRainbowVisible] = useState(state.gotRainbow);
   const [spotShaking, setSpotShaking] = useState(false);
   const [bonusRainbowWords, setBonusRainbowWords] = useState<string[]>([]);
   const [hintVisible, setHintVisible] = useState(true);
 
-  // Streak state — fetched on mount, shown after 150ms delay on win
   const [streakBefore, setStreakBefore] = useState<number | null>(null);
   const [showStreak, setShowStreak] = useState(false);
   const prevIsWon = useRef(state.isWon);
   const prevIsComplete = useRef(state.isComplete);
   const prevGotRainbow = useRef(state.gotRainbow);
 
-  // Fetch streak on mount so we know the number before the win
   useEffect(() => {
     if (isArchive) return;
     const fetchStreakBefore = async () => {
@@ -239,15 +237,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         const { data } = userId
           ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).single()
           : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).single();
-        if (data?.current_streak != null) {
-          setStreakBefore(data.current_streak);
-        }
+        if (data?.current_streak != null) setStreakBefore(data.current_streak);
       } catch {}
     };
     void fetchStreakBefore();
   }, [isArchive]);
 
-  // Show streak animation 500ms after winning
   useEffect(() => {
     if (state.isWon && !prevIsWon.current && !isArchive) {
       setTimeout(() => setShowStreak(true), 500);
@@ -255,7 +250,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     prevIsWon.current = state.isWon;
   }, [state.isWon, isArchive]);
 
-  // Notify parent when puzzle completes (for hint button routing)
   useEffect(() => {
     if (state.isComplete && !prevIsComplete.current) {
       onComplete?.();
@@ -263,13 +257,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     prevIsComplete.current = state.isComplete;
   }, [state.isComplete, onComplete]);
 
-  // Rainbow curtain — only animate when first found mid-game
   useEffect(() => {
     if (state.gotRainbow && !prevGotRainbow.current) {
       setRainbowVisible(false);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setRainbowVisible(true));
-      });
+      requestAnimationFrame(() => requestAnimationFrame(() => setRainbowVisible(true)));
     }
     prevGotRainbow.current = state.gotRainbow;
   }, [state.gotRainbow]);
@@ -277,9 +268,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   useEffect(() => {
     if (bonusRainbowCorrect !== null) {
       setRainbowVisible(false);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setRainbowVisible(true));
-      });
+      requestAnimationFrame(() => requestAnimationFrame(() => setRainbowVisible(true)));
     }
   }, [bonusRainbowCorrect]);
 
@@ -297,9 +286,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         confetti({ particleCount: 100, spread: 80, origin: { y: 0.55 } });
         playRainbowSound();
       }
-      setTimeout(() => {
-        setBonusRainbowCorrect(correct);
-      }, correct ? 600 : 0);
+      setTimeout(() => setBonusRainbowCorrect(correct), correct ? 600 : 0);
     }, 400);
   }, [puzzle.rainbowHerring]);
 
@@ -320,9 +307,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   const generateShareLines = useCallback((): string[] => {
     const lines: string[] = [];
-    if (hintsUsed) {
-      lines.push("💡");
-    }
+    if (hintsUsed) lines.push("💡");
     for (const attempt of state.guessHistory) {
       if (attempt.isRainbow) {
         if (hintsUsed && lines.length === 1) {
@@ -340,9 +325,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         lines.push(row);
       }
     }
-    if (bonusRainbowCorrect === true) {
-      lines.push("🌈");
-    }
+    if (bonusRainbowCorrect === true) lines.push("🌈");
     return lines;
   }, [state.guessHistory, puzzle, bonusRainbowCorrect, hintsUsed]);
 
@@ -370,7 +353,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }
   }, [generateShareText]);
 
-  // Streak to display: streakBefore + 1 (they just won, streak will increment)
   const streakToShow = streakBefore != null ? streakBefore + 1 : 1;
 
   return (
@@ -379,9 +361,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         <p className="text-center text-sm text-muted-foreground">
           Find groups of four words that share something in common.
         </p>
-        {!puzzle.rainbowHerring && (
-          <NoRainbowIndicator />
-        )}
+        {!puzzle.rainbowHerring && <NoRainbowIndicator />}
       </div>
 
       {/* Solved groups */}
@@ -416,8 +396,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <button
               onClick={() => setShowSpotModal(true)}
               className="w-full rounded-lg py-3 px-4 text-center text-white
-  hover:opacity-90 transition-opacity active:scale-[0.99]
-  animate-rainbow-breathe animate-rainbow-shimmer"
+                hover:opacity-90 transition-opacity active:scale-[0.99]
+                animate-rainbow-breathe animate-rainbow-shimmer"
               style={{ background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)" }}
             >
               <div className="font-bold text-sm uppercase tracking-wide">Spot the Rainbow? 🌈</div>
@@ -509,10 +489,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* Mistakes */}
-      <div className="mt-4">
-        <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} />
-      </div>
+      {/* Mistakes dots — hidden when viewing an already-completed puzzle */}
+      {!wasAlreadyComplete.current && (
+        <div className="mt-4">
+          <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} />
+        </div>
+      )}
 
       {/* Controls */}
       {!state.isComplete && (
@@ -542,7 +524,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           >
             <Send className="w-4 h-4" /> Submit
           </button>
-
           {colorCodeTiles && hasAnyColor && (
             <button
               onClick={clearAllColors}
@@ -584,20 +565,22 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* Streak celebration — 500ms delay after winning, stays on screen */}
-      {showStreak && (
-        <StreakCelebration streak={streakToShow} />
-      )}
+      {/* Streak celebration */}
+      {showStreak && <StreakCelebration streak={streakToShow} />}
 
-      {/* End state */}
+      {/* End state — hide headline/subtitle when viewing already-completed puzzle */}
       {state.isComplete && (
         <div className="text-center mt-6 animate-fade-up">
-          <p className="text-lg font-bold">
-            {getResultHeadline(state.isWon, state.mistakes)}
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {getResultSubtitle(state.isWon, state.mistakes)}
-          </p>
+          {!wasAlreadyComplete.current && (
+            <>
+              <p className="text-lg font-bold">
+                {getResultHeadline(state.isWon, state.mistakes)}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {getResultSubtitle(state.isWon, state.mistakes)}
+              </p>
+            </>
+          )}
 
           {state.guessHistory.length > 0 && (
             <div className="mt-4 space-y-3">
@@ -608,7 +591,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   </span>
                 ))}
               </div>
-
               <div className="flex items-center justify-center gap-3">
                 <button
                   onClick={handleShare}
@@ -632,9 +614,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       )}
 
       {/* Rating */}
-      {state.isComplete && (
-        <PuzzleRating puzzleId={puzzle.id} user={user} />
-      )}
+      {state.isComplete && <PuzzleRating puzzleId={puzzle.id} user={user} />}
 
       <DailyStatsModal
         puzzleId={puzzle.id}
