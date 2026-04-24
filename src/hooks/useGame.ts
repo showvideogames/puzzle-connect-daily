@@ -63,12 +63,9 @@ const DIFFICULTY_HEART: Record<number, string> = {
   4: "💗",
 };
 
-// Build the share grid string from guess history — same format as the share screen
 function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle, hintsUsed: boolean): string {
   const lines: string[] = [];
-
   if (hintsUsed) lines.push("💡");
-
   for (const attempt of guessHistory) {
     if (attempt.isRainbow) {
       if (hintsUsed && lines.length === 1) {
@@ -86,7 +83,6 @@ function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle, hintsUsed:
       lines.push(row);
     }
   }
-
   return lines.join("\n");
 }
 
@@ -141,7 +137,7 @@ export function useGame(
       mistakes: 0,
       maxMistakes: MAX_MISTAKES,
       selectedWords: [],
-      isComplete: isArchive ? false : hasPlayedToday(puzzle.id),
+      isComplete: hasPlayedToday(puzzle.id),
       isWon: false,
       guessHistory: [],
       gotRainbow: false,
