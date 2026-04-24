@@ -201,13 +201,14 @@ export default function Admin() {
     setGroups((g) => g.map((gr, i) => (i === idx ? { ...gr, [field]: value } : gr)));
   }
 
-  function swapGroups(a: number, b: number) {
-    if (a === b) return;
-    setGroups((prev) => {
-      const next = [...prev];
-      [next[a], next[b]] = [next[b], next[a]];
-      return next;
-    });
+ function swapGroups(a: number, b: number) {
+  if (a === b) return;
+  setGroups((prev) => {
+    const next = [...prev];
+    [next[a], next[b]] = [next[b], next[a]];
+    // Reassign difficulties to match position
+    return next.map((g, i) => ({ ...g, difficulty: (i + 1) as 1 | 2 | 3 | 4 }));
+  });
     setRainbowHerring((prev) => {
       const next = [...prev];
       [next[a], next[b]] = [next[b], next[a]];
