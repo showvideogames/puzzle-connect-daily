@@ -14,76 +14,6 @@ import type { User } from "@supabase/supabase-js";
 
 type ModalName = "stats" | "help" | "settings" | null;
 
-interface PreviousSession {
-  id: string;
-  won: boolean;
-  mistakes: number;
-  found_rainbow: boolean;
-  hints_used: boolean;
-  share_grid: string | null;
-}
-
-function PreviousResult({ puzzleId, user }: {
-  puzzleId: string;
-  user: User | null | undefined;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [session, setSession] = useState<PreviousSession | null | undefined>(undefined);
-
-  useEffect(() => {
-    if (user === undefined) return;
-    if (user === null) { setSession(null); return; }
-
-    supabase
-      .from("game_sessions")
-      .select("id, won, mistakes, found_rainbow, hints_used, share_grid")
-      .eq("puzzle_id", puzzleId)
-      .eq("user_id", user.id)
-      .order("id", { ascending: true })
-      .limit(1)
-      .single()
-      .then(({ data }) => {
-        if (!data) { setSession(null); return; }
-        setSession(data as PreviousSession);
-      });
-  }, [puzzleId, user]);
-
-  if (session === undefined || session === null) return null;
-
-  const gridLines = session.share_grid ? session.share_grid.split("\n") : [];
-
-  return (
-    <div className="w-full max-w-lg px-4 mt-6 flex flex-col items-center">
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border
-          bg-card hover:bg-secondary transition-colors text-sm font-semibold shadow-sm"
-      >
-        {expanded ? "Hide original result 🙈" : "Reveal your original result 🙈"}
-      </button>
-
-      {expanded && (
-        <div className="mt-3 rounded-xl border border-border bg-card px-6 py-4 space-y-3 animate-fade-up w-full">
-          {gridLines.length > 0 ? (
-            <div className="flex flex-col items-center gap-0.5">
-              {gridLines.map((line, i) => (
-                <span key={i} className="text-2xl leading-tight tracking-wider">{line}</span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-center text-sm text-muted-foreground">No grid available for this result.</p>
-          )}
-          <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground flex-wrap">
-            <span>{session.mistakes === 0 ? "No mistakes" : `${session.mistakes} mistake${session.mistakes === 1 ? "" : "s"}`}</span>
-            {session.found_rainbow && <span>🌈 Rainbow found</span>}
-            {session.hints_used && <span>💡 Hints used</span>}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function ArchivePuzzle() {
   const { puzzleId } = useParams<{ puzzleId: string }>();
   const navigate = useNavigate();
@@ -123,15 +53,6 @@ export default function ArchivePuzzle() {
     getPuzzleById(puzzleId)
       .then((p) => {
         if (!p) { setError(true); setLoading(false); return; }
-        // Clear completed progress before GameBoard mounts so it always starts fresh
-        try {
-          const key = `connections-progress-${puzzleId}`;
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const data = JSON.parse(raw);
-            if (data.isComplete === true) localStorage.removeItem(key);
-          }
-        } catch {}
         setPuzzle(p);
         setLoading(false);
       })
@@ -201,18 +122,15 @@ export default function ArchivePuzzle() {
           </div>
         </div>
       ) : puzzle ? (
-        <>
-          <GameBoard
-            puzzle={puzzle}
-            settings={settings}
-            user={user ?? null}
-            isArchive
-            hintsUsed={hintsUsed}
-            onHintClick={() => setShowHintModal(true)}
-            onComplete={() => setIsPuzzleComplete(true)}
-          />
-          {puzzleId && <PreviousResult puzzleId={puzzleId} user={user} />}
-        </>
+        <GameBoard
+          puzzle={puzzle}
+          settings={settings}
+          user={user ?? null}
+          isArchive
+          hintsUsed={hintsUsed}
+          onHintClick={() => setShowHintModal(true)}
+          onComplete={() => setIsPuzzleComplete(true)}
+        />
       ) : null}
 
       <StatsModal open={activeModal === "stats"} onClose={() => setActiveModal(null)} />
