@@ -80,6 +80,7 @@ export default function ArchivePuzzle() {
         onHowToPlayClick={() => setActiveModal("help")}
         onSettingsClick={() => setActiveModal("settings")}
         onHintClick={handleHeaderHintClick}
+        showHint={true}
         user={user ?? null}
         onSignOut={() => supabase.auth.signOut()}
       />
