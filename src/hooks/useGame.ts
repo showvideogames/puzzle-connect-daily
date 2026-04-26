@@ -2,7 +2,6 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Puzzle, GameState, GuessAttempt } from "@/lib/types";
 import { hasPlayedToday, markPlayed, recordGameResult } from "@/lib/stats";
 import { vibrateSuccess, vibrateError, vibrateCelebration } from "@/lib/haptics";
-import { submitGlobalStats } from "@/lib/globalStats";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
 import { saveGameStats, hasExistingSession } from "@/lib/gameStats";
@@ -453,13 +452,11 @@ export function useGame(
               if (await hasExistingSession(puzzle.id)) return;
               recordGameResult(true, state.mistakes);
               saveResultToDb(true, state.mistakes);
-              submitGlobalStats(puzzle.id, state.mistakes);
               saveGameStats({ ...winStatsParams, skipStreak: true });
             })();
           } else {
             recordGameResult(true, state.mistakes);
             saveResultToDb(true, state.mistakes);
-            submitGlobalStats(puzzle.id, state.mistakes);
             saveGameStats(winStatsParams);
           }
 
@@ -535,13 +532,11 @@ export function useGame(
             if (await hasExistingSession(puzzle.id)) return;
             recordGameResult(false, newMistakes);
             saveResultToDb(false, newMistakes);
-            submitGlobalStats(puzzle.id, 4);
             saveGameStats({ ...lossStatsParams, skipStreak: true });
           })();
         } else {
           recordGameResult(false, newMistakes);
           saveResultToDb(false, newMistakes);
-          submitGlobalStats(puzzle.id, 4);
           saveGameStats(lossStatsParams);
         }
 
