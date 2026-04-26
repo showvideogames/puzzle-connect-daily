@@ -66,6 +66,7 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
     const { data: { user } } = await supabase.auth.getUser();
     const userId = user?.id ?? null;
 
+    // 1. Save game session
     const { data: session, error: sessionError } = await supabase
       .from("game_sessions")
       .insert({
@@ -88,6 +89,7 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
       return;
     }
 
+    // 2. Save individual guess events
     if (guessHistory.length > 0) {
       const guessRows = guessHistory.map((guess, index) => ({
         game_session_id: session.id,
@@ -100,30 +102,19 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
       if (guessError) console.error("Failed to save guess events:", guessError);
     }
 
-    const { data: existing } = await supabase
-      .from("puzzle_aggregates")
-      .select("*")
-      .eq("puzzle_id", puzzleId)
-      .single();
-
-    const totalPlays = (existing?.total_plays ?? 0) + 1;
-    const totalWins = (existing?.total_wins ?? 0) + (won ? 1 : 0);
-    const prevAvgMistakes = existing?.avg_mistakes ?? 0;
-    const newAvgMistakes = (prevAvgMistakes * (totalPlays - 1) + mistakes) / totalPlays;
-    const prevAvgTime = existing?.avg_time_seconds ?? 0;
-    const newAvgTime = (prevAvgTime * (totalPlays - 1) + activeTimeSeconds) / totalPlays;
+    // 3. Update puzzle aggregates via secure RPC
+    //    (the database does the math — no client-side tampering possible)
     const firstSolve = solveOrder[0] ?? null;
+    const { error: rpcError } = await supabase.rpc("increment_puzzle_aggregate", {
+      _puzzle_id: puzzleId,
+      _won: won,
+      _mistakes: mistakes,
+      _time_seconds: activeTimeSeconds,
+      _first_solve: firstSolve,
+    });
+    if (rpcError) console.error("Failed to update puzzle aggregates:", rpcError);
 
-    await supabase.from("puzzle_aggregates").upsert({
-      puzzle_id: puzzleId,
-      total_plays: totalPlays,
-      total_wins: totalWins,
-      avg_mistakes: newAvgMistakes,
-      avg_time_seconds: newAvgTime,
-      most_common_first_solve: firstSolve,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "puzzle_id" });
-
+    // 4. Update streak
     if (!skipStreak) {
       await updateStreak(userId, deviceId);
     }
