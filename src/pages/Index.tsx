@@ -114,6 +114,7 @@ export default function Index() {
         onHowToPlayClick={() => openModal("help")}
         onSettingsClick={() => openModal("settings")}
         onHintClick={handleHeaderHintClick}
+        showHint={true}
         user={user}
         onSignOut={handleSignOut}
       />
