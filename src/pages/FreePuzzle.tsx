@@ -80,6 +80,7 @@ export default function FreePuzzle() {
         onHowToPlayClick={() => setActiveModal("help")}
         onSettingsClick={() => setActiveModal("settings")}
         onHintClick={handleHeaderHintClick}
+        showHint={true}
         user={user}
         onSignOut={() => supabase.auth.signOut()}
       />
