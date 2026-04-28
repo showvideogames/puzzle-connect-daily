@@ -106,12 +106,11 @@ function GiftBox({
           {puzzle.free_puzzle_order}
         </div>
       ) : (
-        // Unopened: gift box with pop animation on click
+        // Unopened: custom present icon, no border or background
         <div
-          className="w-full rounded-xl flex items-center justify-center text-3xl border border-border"
+          className="w-full flex items-center justify-center"
           style={{
             aspectRatio: "1",
-            background: "hsl(var(--secondary))",
             transform: popping
               ? "scale(0) translateY(-18px) rotate(12deg)"
               : "scale(1) translateY(0) rotate(0deg)",
@@ -120,7 +119,12 @@ function GiftBox({
               "transform 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97), opacity 0.35s ease-out",
           }}
         >
-          🎁
+          <img
+            src="/present-icon.png"
+            alt="Gift box"
+            className="w-full h-full object-contain"
+            draggable={false}
+          />
         </div>
       )}
       {/* Order number label — only on unopened boxes */}
