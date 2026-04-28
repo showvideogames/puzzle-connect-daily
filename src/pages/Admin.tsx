@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, LogOut, Save, Eye, EyeOff, ArrowLeft, Pencil, BarChart3, RotateCcw, GripVertical } from "lucide-react";
+import { Plus, Trash2, LogOut, Save, Eye, EyeOff, ArrowLeft, Pencil, BarChart3, RotateCcw, GripVertical, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ArchiveAccessManager } from "@/components/ArchiveAccessManager";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ interface GroupForm {
 }
 
 const DRAFT_KEY = "admin-puzzle-draft";
+const PUZZLES_PER_PAGE = 50;
 
 const emptyGroup = (): GroupForm => ({ category: "", words: "", difficulty: 1 });
 const parseWords = (value: string) =>
@@ -23,6 +24,13 @@ const parseWords = (value: string) =>
     .split(",")
     .map((w) => w.trim().toUpperCase())
     .filter(Boolean);
+
+/** Formats "2026-04-28" as "April 28, 2026" */
+function formatDateDisplay(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
 
 interface DraftData {
   puzzleDate: string;
@@ -59,6 +67,177 @@ function clearDraft() {
     localStorage.removeItem(DRAFT_KEY);
   } catch {}
 }
+
+// ─── Mini Calendar ──────────────────────────────────────────────────────────
+
+const MINI_DAYS = ["S", "M", "T", "W", "T", "F", "S"];
+const MINI_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+interface MiniCalendarProps {
+  puzzles: any[];
+  onDateClick: (dateStr: string) => void;
+}
+
+function MiniCalendar({ puzzles, onDateClick }: MiniCalendarProps) {
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+
+  // Build lookup: date string → "published" | "draft"
+  const statusByDate = useMemo(() => {
+    const map: Record<string, "published" | "draft"> = {};
+    for (const p of puzzles) {
+      map[p.date] = p.is_published ? "published" : "draft";
+    }
+    return map;
+  }, [puzzles]);
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11); }
+    else setViewMonth((m) => m - 1);
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewYear((y) => y + 1); setViewMonth(0); }
+    else setViewMonth((m) => m + 1);
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3" style={{ maxWidth: "280px" }}>
+      {/* Month navigation */}
+      <div className="flex items-center justify-between mb-2">
+        <button onClick={prevMonth} className="p-1 rounded hover:bg-secondary transition-colors" aria-label="Previous month">
+          <ChevronLeft className="w-3.5 h-3.5" />
+        </button>
+        <span className="text-xs font-semibold">{MINI_MONTHS[viewMonth]} {viewYear}</span>
+        <button onClick={nextMonth} className="p-1 rounded hover:bg-secondary transition-colors" aria-label="Next month">
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Day headers */}
+      <div className="grid grid-cols-7 mb-0.5">
+        {MINI_DAYS.map((d, i) => (
+          <div key={i} className="text-center py-0.5" style={{ fontSize: "9px", fontWeight: 600, color: "hsl(var(--muted-foreground))" }}>
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7 gap-0.5">
+        {Array.from({ length: totalCells }).map((_, i) => {
+          const dayNum = i - firstDay + 1;
+          if (dayNum < 1 || dayNum > daysInMonth) return <div key={i} />;
+
+          const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+          const status = statusByDate[dateStr];
+
+          return (
+            <button
+              key={i}
+              onClick={() => onDateClick(dateStr)}
+              className="flex items-center justify-center rounded transition-colors hover:ring-1 hover:ring-primary/30"
+              style={{
+                width: "100%",
+                aspectRatio: "1",
+                fontSize: "10px",
+                fontWeight: 500,
+                background: status === "published"
+                  ? "hsl(142 71% 45% / 0.2)"
+                  : status === "draft"
+                  ? "hsl(45 93% 47% / 0.25)"
+                  : "transparent",
+                color: status
+                  ? "hsl(var(--foreground))"
+                  : "hsl(var(--muted-foreground))",
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              {dayNum}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-3 mt-2 pt-2 border-t border-border">
+        <div className="flex items-center gap-1">
+          <div className="w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(142 71% 45% / 0.35)" }} />
+          <span style={{ fontSize: "9px", color: "hsl(var(--muted-foreground))" }}>Published</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-2.5 h-2.5 rounded-sm" style={{ background: "hsl(45 93% 47% / 0.4)" }} />
+          <span style={{ fontSize: "9px", color: "hsl(var(--muted-foreground))" }}>Draft</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Pagination ─────────────────────────────────────────────────────────────
+
+interface PaginationProps {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}
+
+function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) {
+  if (totalPages <= 1) return null;
+
+  // Build page numbers with ellipsis
+  const pages: (number | "...")[] = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+      pages.push(i);
+    } else if (pages[pages.length - 1] !== "...") {
+      pages.push("...");
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-1 mt-4">
+      <button
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="px-2 py-1 text-xs rounded hover:bg-secondary transition-colors disabled:opacity-30"
+      >
+        ‹ Prev
+      </button>
+      {pages.map((p, i) =>
+        p === "..." ? (
+          <span key={`ellipsis-${i}`} className="px-1.5 py-1 text-xs text-muted-foreground">…</span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => onPageChange(p)}
+            className={`px-2.5 py-1 text-xs rounded transition-colors ${
+              p === currentPage
+                ? "bg-foreground text-background font-semibold"
+                : "hover:bg-secondary text-muted-foreground"
+            }`}
+          >
+            {p}
+          </button>
+        )
+      )}
+      <button
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="px-2 py-1 text-xs rounded hover:bg-secondary transition-colors disabled:opacity-30"
+      >
+        Next ›
+      </button>
+    </div>
+  );
+}
+
+// ─── Main Admin Component ───────────────────────────────────────────────────
 
 export default function Admin() {
   const { user, loading, isAdmin, signIn, signOut } = useAuth();
@@ -111,6 +290,19 @@ export default function Admin() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedStatsId, setExpandedStatsId] = useState<string | null>(null);
   const [puzzleStats, setPuzzleStats] = useState<Record<string, any>>({});
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(puzzles.length / PUZZLES_PER_PAGE));
+  const paginatedPuzzles = useMemo(() => {
+    const start = (currentPage - 1) * PUZZLES_PER_PAGE;
+    return puzzles.slice(start, start + PUZZLES_PER_PAGE);
+  }, [puzzles, currentPage]);
+
+  // Reset to page 1 if puzzles change and current page is out of range
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(1);
+  }, [totalPages, currentPage]);
 
   // Restore draft on mount
   useEffect(() => {
@@ -301,15 +493,23 @@ export default function Admin() {
   // Mobile tap-to-swap handler
   function handleTileTap(vIdx: number) {
     if (selectedTileIdx === null) {
-      // First tap — select this tile
       setSelectedTileIdx(vIdx);
     } else if (selectedTileIdx === vIdx) {
-      // Tap same tile — deselect
       setSelectedTileIdx(null);
     } else {
-      // Tap different tile — swap and deselect
       setWordOrder(computeTilePreview(wordOrder, selectedTileIdx, vIdx));
       setSelectedTileIdx(null);
+    }
+  }
+
+  // Calendar date click — populate the date field in the form
+  function handleCalendarDateClick(dateStr: string) {
+    const existingPuzzle = puzzles.find((p) => p.date === dateStr);
+    if (existingPuzzle) {
+      editPuzzle(existingPuzzle);
+    } else {
+      setPuzzleDate(dateStr);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }
 
@@ -746,13 +946,11 @@ export default function Admin() {
                         <div
                           key={word}
                           data-tile-idx={vIdx}
-                          // Desktop: drag handlers
                           draggable={!isMobile}
                           onDragStart={!isMobile ? () => handleTileDragStart(vIdx) : undefined}
                           onDragOver={!isMobile ? (e) => handleTileDragOver(e, vIdx) : undefined}
                           onDrop={!isMobile ? handleTileDrop : undefined}
                           onDragEnd={!isMobile ? handleTileDragEnd : undefined}
-                          // Mobile: tap handler
                           onClick={isMobile ? () => handleTileTap(vIdx) : undefined}
                           className={`rounded-lg px-2 py-3 text-xs font-semibold uppercase tracking-wide text-center
                             transition-all duration-100 select-none
@@ -767,7 +965,6 @@ export default function Admin() {
                       );
                     })}
                   </div>
-                  {/* Mobile: show deselect hint when a tile is selected */}
                   {isMobile && selectedTileIdx !== null && (
                     <p className="text-xs text-center text-primary font-medium animate-fade-up">
                       Now tap another tile to swap, or tap the same tile to cancel
@@ -908,20 +1105,26 @@ export default function Admin() {
 
         <ArchiveAccessManager />
 
+        {/* Mini calendar + puzzle list */}
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">All Puzzles ({puzzles.length})</h2>
+
+          {puzzles.length > 0 && (
+            <MiniCalendar puzzles={puzzles} onDateClick={handleCalendarDateClick} />
+          )}
+
           {puzzles.length === 0 && (
             <p className="text-sm text-muted-foreground">No puzzles yet. Create your first one above!</p>
           )}
           <div className="space-y-2">
-            {puzzles.map((p) => (
+            {paginatedPuzzles.map((p) => (
               <div
                 key={p.id}
                 className="rounded-lg border border-border bg-card overflow-hidden"
               >
                 <div className="flex items-center justify-between p-3">
                   <div>
-                    <span className="font-medium">{p.date}</span>
+                    <span className="font-medium">{formatDateDisplay(p.date)}</span>
                     {p.title && <span className="text-muted-foreground ml-2">— {p.title}</span>}
                     <span className={`ml-3 text-xs font-medium px-2 py-0.5 rounded-full ${p.is_published ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
                       {p.is_published ? "Published" : "Draft"}
@@ -974,6 +1177,12 @@ export default function Admin() {
               </div>
             ))}
           </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
         </section>
       </main>
     </div>
