@@ -291,6 +291,9 @@ export default function Admin() {
   const [expandedStatsId, setExpandedStatsId] = useState<string | null>(null);
   const [puzzleStats, setPuzzleStats] = useState<Record<string, any>>({});
 
+  // Calendar visibility
+  const [calendarOpen, setCalendarOpen] = useState(true);
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(puzzles.length / PUZZLES_PER_PAGE));
@@ -497,7 +500,12 @@ export default function Admin() {
     } else if (selectedTileIdx === vIdx) {
       setSelectedTileIdx(null);
     } else {
-      setWordOrder(computeTilePreview(wordOrder, selectedTileIdx, vIdx));
+      // True swap — the two tiles exchange positions
+      setWordOrder((prev) => {
+        const next = [...prev];
+        [next[selectedTileIdx], next[vIdx]] = [next[vIdx], next[selectedTileIdx]];
+        return next;
+      });
       setSelectedTileIdx(null);
     }
   }
@@ -508,6 +516,7 @@ export default function Admin() {
     if (existingPuzzle) {
       editPuzzle(existingPuzzle);
     } else {
+      resetForm();
       setPuzzleDate(dateStr);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -831,6 +840,21 @@ export default function Admin() {
           </div>
         )}
 
+        {/* Mini calendar at top */}
+        {puzzles.length > 0 && (
+          <div>
+            <button
+              onClick={() => setCalendarOpen((v) => !v)}
+              className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors mb-2 inline-flex items-center gap-1"
+            >
+              {calendarOpen ? "▾ Hide calendar" : "▸ Show calendar"}
+            </button>
+            {calendarOpen && (
+              <MiniCalendar puzzles={puzzles} onDateClick={handleCalendarDateClick} />
+            )}
+          </div>
+        )}
+
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">{editingId ? "Edit Puzzle" : "Create New Puzzle"}</h2>
 
@@ -1108,10 +1132,6 @@ export default function Admin() {
         {/* Mini calendar + puzzle list */}
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">All Puzzles ({puzzles.length})</h2>
-
-          {puzzles.length > 0 && (
-            <MiniCalendar puzzles={puzzles} onDateClick={handleCalendarDateClick} />
-          )}
 
           {puzzles.length === 0 && (
             <p className="text-sm text-muted-foreground">No puzzles yet. Create your first one above!</p>
