@@ -445,58 +445,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         )}
       </div>
 
-      {/* Color Palette Mode buttons */}
-      {colorPaletteMode && remainingWords.length > 0 && (
-        <div className="flex items-center justify-center gap-2 mb-3">
-          <button
-            onClick={() => setPaletteMode("select")}
-            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
-              ${paletteMode === "select"
-                ? "bg-foreground text-background ring-2 ring-foreground ring-offset-2 ring-offset-background"
-                : "bg-secondary hover:bg-secondary/80"
-              }`}
-            aria-label="Select mode"
-          >
-            <MousePointer2 className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setPaletteMode("orange")}
-            className={`w-10 h-10 rounded-lg bg-orange-400 hover:scale-110 transition-all
-              ${paletteMode === "orange" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
-            aria-label="Orange paint"
-          />
-          <button
-            onClick={() => setPaletteMode("green")}
-            className={`w-10 h-10 rounded-lg bg-green-500 hover:scale-110 transition-all
-              ${paletteMode === "green" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
-            aria-label="Green paint"
-          />
-          <button
-            onClick={() => setPaletteMode("blue")}
-            className={`w-10 h-10 rounded-lg bg-blue-500 hover:scale-110 transition-all
-              ${paletteMode === "blue" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
-            aria-label="Blue paint"
-          />
-          <button
-            onClick={() => setPaletteMode("red")}
-            className={`w-10 h-10 rounded-lg bg-red-500 hover:scale-110 transition-all
-              ${paletteMode === "red" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
-            aria-label="Red paint"
-          />
-          <button
-            onClick={() => setPaletteMode("eraser")}
-            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
-              ${paletteMode === "eraser"
-                ? "bg-foreground text-background ring-2 ring-foreground ring-offset-2 ring-offset-background"
-                : "bg-secondary hover:bg-secondary/80"
-              }`}
-            aria-label="Eraser"
-          >
-            <Eraser className="w-5 h-5" />
-          </button>
-        </div>
-      )}
-
       {/* Word grid */}
       {remainingWords.length > 0 && (
         <div className={`grid grid-cols-4 gap-2 ${shaking || spotShaking ? "animate-shake" : ""}`}>
@@ -610,6 +558,58 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               <Eraser className="w-4 h-4" /> Clear Colors
             </button>
           )}
+        </div>
+      )}
+
+      {/* Color Palette Mode buttons - MOVED BELOW CONTROLS */}
+      {colorPaletteMode && remainingWords.length > 0 && (
+        <div className="flex items-center justify-center gap-2 mt-3">
+          <button
+            onClick={() => setPaletteMode("select")}
+            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
+              ${paletteMode === "select"
+                ? "bg-foreground text-background ring-2 ring-foreground ring-offset-2 ring-offset-background"
+                : "bg-secondary hover:bg-secondary/80"
+              }`}
+            aria-label="Select mode"
+          >
+            <MousePointer2 className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setPaletteMode("orange")}
+            className={`w-10 h-10 rounded-lg bg-orange-400 hover:scale-110 transition-all
+              ${paletteMode === "orange" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+            aria-label="Orange paint"
+          />
+          <button
+            onClick={() => setPaletteMode("green")}
+            className={`w-10 h-10 rounded-lg bg-green-500 hover:scale-110 transition-all
+              ${paletteMode === "green" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+            aria-label="Green paint"
+          />
+          <button
+            onClick={() => setPaletteMode("blue")}
+            className={`w-10 h-10 rounded-lg bg-blue-500 hover:scale-110 transition-all
+              ${paletteMode === "blue" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+            aria-label="Blue paint"
+          />
+          <button
+            onClick={() => setPaletteMode("red")}
+            className={`w-10 h-10 rounded-lg bg-red-500 hover:scale-110 transition-all
+              ${paletteMode === "red" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+            aria-label="Red paint"
+          />
+          <button
+            onClick={() => setPaletteMode("eraser")}
+            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
+              ${paletteMode === "eraser"
+                ? "bg-foreground text-background ring-2 ring-foreground ring-offset-2 ring-offset-background"
+                : "bg-secondary hover:bg-secondary/80"
+              }`}
+            aria-label="Eraser"
+          >
+            <Eraser className="w-5 h-5" />
+          </button>
         </div>
       )}
 
