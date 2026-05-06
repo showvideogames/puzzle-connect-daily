@@ -44,6 +44,8 @@ interface WordTileProps {
   isMatched?: boolean;
   arrangeTiles?: boolean;
   colorCodeTiles?: boolean;
+  colorPaletteMode?: boolean;
+  isPaintMode?: boolean;
   tileColor?: string | null;
   onColorChange?: (word: string, color: string | null) => void;
   draggable?: boolean;
@@ -65,6 +67,8 @@ export function WordTile({
   isMatched,
   arrangeTiles = false,
   colorCodeTiles = false,
+  colorPaletteMode = false,
+  isPaintMode = false,
   tileColor = null,
   onColorChange,
   draggable = false,
@@ -134,11 +138,13 @@ export function WordTile({
   const handleClick = useCallback(() => {
     if (isTouchDragging.current) return;
 
-    if (!colorCodeTiles) {
+    // Color Palette Mode or not using color features at all
+    if (!colorCodeTiles || colorPaletteMode) {
       onClick();
       return;
     }
 
+    // Color-Code Tiles mode: double-tap logic
     const now = Date.now();
     const timeSinceLastTap = now - lastTapRef.current;
     lastTapRef.current = now;
@@ -155,7 +161,7 @@ export function WordTile({
         onClick();
       }, 250);
     }
-  }, [colorCodeTiles, onClick]);
+  }, [colorCodeTiles, colorPaletteMode, onClick]);
 
   const handleColorSelect = useCallback((color: string | null) => {
     onColorChange?.(word, color === tileColor ? null : color);
@@ -170,6 +176,7 @@ export function WordTile({
     ${disabled ? "opacity-50 cursor-default" : ""}
   `;
 
+  // Add border to colored tiles in Color Palette Mode (same as rainbow tiles)
   const stateClasses = isMatched
     ? "bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
@@ -177,7 +184,7 @@ export function WordTile({
       : isSelected
         ? "bg-tile-selected text-tile-selected-fg shadow-md scale-[0.97]"
         : colorStyle
-          ? `${colorStyle.bg} hover:shadow-sm active:scale-95`
+          ? `${colorStyle.bg} hover:shadow-sm active:scale-95 ${colorPaletteMode ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background" : ""}`
           : "bg-tile hover:shadow-sm active:scale-95";
 
   return (
