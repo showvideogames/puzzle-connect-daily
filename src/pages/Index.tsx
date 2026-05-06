@@ -35,7 +35,7 @@ export default function Index() {
     setSettings(newSettings);
     saveSettings(newSettings);
     document.documentElement.classList.toggle("dark", newSettings.darkMode);
-    if (!newSettings.colorCodeTiles) {
+    if (!newSettings.colorCodeTiles && !newSettings.colorPaletteMode) {
       setClearColorsTrigger((n) => n + 1);
     }
   }, []);
