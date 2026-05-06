@@ -40,6 +40,7 @@ interface DraftData {
   wordOrder: string[];
   rainbowHerring: (string | null)[];
   rainbowCategoryName: string;
+  rainbowWordOrder: string[];
   isEmojiPuzzle: boolean;
   isFreePuzzle: boolean;
   freePuzzleOrder: number | null;
@@ -285,6 +286,12 @@ export default function Admin() {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const touchDragTileIdx = useRef<number | null>(null);
 
+  // Rainbow word reordering
+  const [rainbowWordOrder, setRainbowWordOrder] = useState<string[]>([]);
+  const [dragRainbowIdx, setDragRainbowIdx] = useState<number | null>(null);
+  const [hoverRainbowIdx, setHoverRainbowIdx] = useState<number | null>(null);
+  const [selectedRainbowIdx, setSelectedRainbowIdx] = useState<number | null>(null);
+
   // Existing puzzles list
   const [puzzles, setPuzzles] = useState<any[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -320,6 +327,7 @@ export default function Admin() {
         setWordOrder(draft.wordOrder);
         setRainbowHerring(draft.rainbowHerring);
         setRainbowCategoryName(draft.rainbowCategoryName ?? "");
+        setRainbowWordOrder(draft.rainbowWordOrder ?? []);
         setIsEmojiPuzzle(draft.isEmojiPuzzle ?? false);
         setIsFreePuzzle(draft.isFreePuzzle ?? false);
         setFreePuzzleOrder(draft.freePuzzleOrder ?? null);
@@ -327,6 +335,15 @@ export default function Admin() {
       }
     }
   }, [isAdmin]);
+
+  // Update rainbow word order whenever rainbow herring changes
+  useEffect(() => {
+    if (rainbowHerring.every(Boolean)) {
+      setRainbowWordOrder(rainbowHerring.filter(Boolean) as string[]);
+    } else {
+      setRainbowWordOrder([]);
+    }
+  }, [rainbowHerring]);
 
   const getCurrentDraft = useCallback((): DraftData => ({
     puzzleDate,
@@ -336,11 +353,12 @@ export default function Admin() {
     wordOrder,
     rainbowHerring,
     rainbowCategoryName,
+    rainbowWordOrder,
     isEmojiPuzzle,
     isFreePuzzle,
     freePuzzleOrder,
     editingId,
-  }), [puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, rainbowCategoryName, isEmojiPuzzle, isFreePuzzle, freePuzzleOrder, editingId]);
+  }), [puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, rainbowCategoryName, rainbowWordOrder, isEmojiPuzzle, isFreePuzzle, freePuzzleOrder, editingId]);
 
   const handleBlurSave = useCallback(() => {
     if (!editingId) {
@@ -522,6 +540,54 @@ export default function Admin() {
     }
   }
 
+  // Rainbow word reordering handlers
+  function handleRainbowDragStart(vIdx: number) {
+    setDragRainbowIdx(vIdx);
+    setHoverRainbowIdx(vIdx);
+  }
+
+  function handleRainbowDragOver(e: React.DragEvent, vIdx: number) {
+    e.preventDefault();
+    setHoverRainbowIdx(vIdx);
+  }
+
+  function handleRainbowDrop() {
+    if (dragRainbowIdx !== null && hoverRainbowIdx !== null) {
+      const preview = computeTilePreview(rainbowWordOrder, dragRainbowIdx, hoverRainbowIdx);
+      setRainbowWordOrder(preview);
+    }
+    setDragRainbowIdx(null);
+    setHoverRainbowIdx(null);
+  }
+
+  function handleRainbowDragEnd() {
+    setDragRainbowIdx(null);
+    setHoverRainbowIdx(null);
+  }
+
+  function handleRainbowTap(vIdx: number) {
+    if (selectedRainbowIdx === null) {
+      setSelectedRainbowIdx(vIdx);
+    } else if (selectedRainbowIdx === vIdx) {
+      setSelectedRainbowIdx(null);
+    } else {
+      // True swap
+      setRainbowWordOrder((prev) => {
+        const next = [...prev];
+        [next[selectedRainbowIdx], next[vIdx]] = [next[vIdx], next[selectedRainbowIdx]];
+        return next;
+      });
+      setSelectedRainbowIdx(null);
+    }
+  }
+
+  const rainbowDisplayOrder =
+    dragRainbowIdx !== null && hoverRainbowIdx !== null
+      ? computeTilePreview(rainbowWordOrder, dragRainbowIdx, hoverRainbowIdx)
+      : rainbowWordOrder;
+
+  const ghostRainbow = dragRainbowIdx !== null ? rainbowWordOrder[dragRainbowIdx] : null;
+
   async function handleSave() {
     if (loading) {
       toast.error("Still restoring your session. Please try again in a second.");
@@ -567,7 +633,8 @@ export default function Admin() {
     setSaving(true);
     try {
       let puzzleId = editingId;
-      const rainbowArr = rainbowHerring.every(Boolean) ? (rainbowHerring as string[]) : null;
+      // Use rainbowWordOrder if it has been customized, otherwise fall back to rainbowHerring
+      const rainbowArr = rainbowWordOrder.length === 4 ? rainbowWordOrder : (rainbowHerring.every(Boolean) ? (rainbowHerring as string[]) : null);
 
       if (editingId) {
         const { error } = await supabase
@@ -651,6 +718,7 @@ export default function Admin() {
     setWordOrder([]);
     setRainbowHerring([null, null, null, null]);
     setRainbowCategoryName("");
+    setRainbowWordOrder([]);
     setIsEmojiPuzzle(false);
     setIsFreePuzzle(false);
     setFreePuzzleOrder(null);
@@ -679,8 +747,10 @@ export default function Admin() {
     setWordOrder(p.word_order || []);
     if (p.rainbow_herring && p.rainbow_herring.length === 4) {
       setRainbowHerring(p.rainbow_herring);
+      setRainbowWordOrder(p.rainbow_herring); // Set the custom order from saved data
     } else {
       setRainbowHerring([null, null, null, null]);
+      setRainbowWordOrder([]);
     }
     setRainbowCategoryName(p.rainbow_category_name || "");
     setIsEmojiPuzzle(p.is_emoji_puzzle ?? false);
@@ -1043,12 +1113,62 @@ export default function Admin() {
                 })}
               </div>
               {rainbowHerring.every(w => w) && (
-                <div className="flex gap-2 flex-wrap">
-                  <span className="text-xs text-muted-foreground">Selected:</span>
-                  {rainbowHerring.map((w, i) => (
-                    <span key={i} className="rainbow-tile text-white text-xs font-semibold px-2 py-0.5 rounded">{w}</span>
-                  ))}
-                </div>
+                <>
+                  <div className="flex gap-2 flex-wrap">
+                    <span className="text-xs text-muted-foreground">Selected:</span>
+                    {rainbowHerring.map((w, i) => (
+                      <span key={i} className="rainbow-tile text-white text-xs font-semibold px-2 py-0.5 rounded">{w}</span>
+                    ))}
+                  </div>
+
+                  {/* Rainbow Word Order Editor */}
+                  <div className="space-y-2 pt-2 border-t border-border/50">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-semibold">Display Order</h4>
+                      <button
+                        onClick={() => setRainbowWordOrder(rainbowHerring.filter(Boolean) as string[])}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Reset to default
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {isMobile
+                        ? "Tap to select, then tap another to swap."
+                        : "Drag to reorder how the rainbow words will appear when solved."}
+                    </p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {rainbowDisplayOrder.map((word, vIdx) => {
+                        const isGhost = word === ghostRainbow;
+                        const isSelected = isMobile && selectedRainbowIdx === vIdx;
+                        return (
+                          <div
+                            key={word}
+                            draggable={!isMobile}
+                            onDragStart={!isMobile ? () => handleRainbowDragStart(vIdx) : undefined}
+                            onDragOver={!isMobile ? (e) => handleRainbowDragOver(e, vIdx) : undefined}
+                            onDrop={!isMobile ? handleRainbowDrop : undefined}
+                            onDragEnd={!isMobile ? handleRainbowDragEnd : undefined}
+                            onClick={isMobile ? () => handleRainbowTap(vIdx) : undefined}
+                            className={`rainbow-tile text-white rounded-lg px-2 py-2 text-xs font-semibold uppercase tracking-wide text-center
+                              transition-all duration-100 select-none
+                              ${isMobile ? "cursor-pointer active:scale-95" : "cursor-grab active:cursor-grabbing"}
+                              ${isGhost ? "opacity-30 ring-2 ring-white ring-dashed" : ""}
+                              ${isSelected ? "ring-2 ring-white scale-105 shadow-lg" : ""}
+                            `}
+                          >
+                            {word}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {isMobile && selectedRainbowIdx !== null && (
+                      <p className="text-xs text-center text-primary font-medium animate-fade-up">
+                        Tap another word to swap positions
+                      </p>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           )}
