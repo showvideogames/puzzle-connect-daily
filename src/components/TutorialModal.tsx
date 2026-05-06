@@ -6,27 +6,27 @@ import { X, Send, Shuffle } from "lucide-react";
 const RAINBOW_WORDS = ["ORANGE", "GREEN", "BLUE", "RED"];
 
 const TUTORIAL_GROUPS = [
-  {
-    category: "Things That Are Round",
-    words: ["ORANGE", "BASEBALL", "GLOBE", "WHEEL"],
+{
+    category: "Feeling Down",
+     words: ["BLUE", "GLOOMY", "MELANCHOLY", "SAD"],
     difficulty: 1,
     color: "bg-amber-500",
   },
   {
-    category: "Feeling Down",
-    words: ["BLUE", "SAD", "GLOOMY", "MELANCHOLY"],
+    category: "Things That Are Round",
+    words: ["BASEBALL", "GLOBE", "ORANGE", "WHEEL"],
     difficulty: 2,
     color: "bg-green-600",
   },
   {
-    category: "Characteristics of Elmo",
-    words: ["RED", "FUZZY", "PUPPET", "TICKLISH"],
+    category: "Characteristics Of Elmo",
+    words: ["FUZZY", "RED", "PUPPET", "TICKLISH"],
     difficulty: 3,
     color: "bg-blue-500",
   },
   {
     category: "Words Before 'Day'",
-    words: ["GREEN", "DOOMS", "SNOW", "VALENTINE'S"],
+    words: ["DOOMS", "GREEN", "SNOW", "VALENTINE'S"],
     difficulty: 4,
     color: "bg-red-500",
   },
@@ -396,11 +396,11 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
               <div>
                 <h3 className="text-lg font-bold mb-2">Welcome to Rainbow Categories!</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Every puzzle has <strong>5 categories</strong> — 4 normal ones, and a hidden{" "}
+                  Most puzzles have <strong>5 categories</strong> — 4 normal ones, and a hidden{" "}
                   <strong>Rainbow</strong>.
                 </p>
                 <p className="text-sm text-muted-foreground leading-relaxed mt-2">
-                  The Rainbow is <strong>one word from each group</strong> that share a secret
+                  The Rainbow is <strong>one word from each category</strong> that share a secret
                   connection. Can you spot the Rainbow?
                 </p>
               </div>
