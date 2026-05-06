@@ -1,10 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
 const COLOR_STYLES: Record<string, { bg: string; ring: string }> = {
-  orange: { bg: "bg-orange-400/40 dark:bg-orange-600/40", ring: "ring-orange-400" },
-  green:  { bg: "bg-green-500/40 dark:bg-green-600/40",  ring: "ring-green-400"  },
-  blue:   { bg: "bg-blue-500/40 dark:bg-blue-600/40",   ring: "ring-blue-400"   },
-  red:    { bg: "bg-red-500/40 dark:bg-red-600/40",    ring: "ring-red-400"    },
+  orange: { bg: "bg-orange-400/25 dark:bg-orange-600/25", ring: "ring-orange-400" },
+  green:  { bg: "bg-green-500/25 dark:bg-green-600/25",  ring: "ring-green-400"  },
+  blue:   { bg: "bg-blue-500/25 dark:bg-blue-600/25",   ring: "ring-blue-400"   },
+  red:    { bg: "bg-red-500/25 dark:bg-red-600/25",    ring: "ring-red-400"    },
 };
 
 const COLOR_CIRCLES: { key: string; circle: string }[] = [
