@@ -7,6 +7,7 @@ export interface GameSettings {
   hapticEnabled: boolean;
   arrangeTiles: boolean;
   colorCodeTiles: boolean;
+  colorPaletteMode: boolean;
 }
 
 const defaults: GameSettings = {
@@ -16,6 +17,7 @@ const defaults: GameSettings = {
   hapticEnabled: true,
   arrangeTiles: false,
   colorCodeTiles: false,
+  colorPaletteMode: false,
 };
 
 export function loadSettings(): GameSettings {
