@@ -176,15 +176,15 @@ export function WordTile({
     ${disabled ? "opacity-50 cursor-default" : ""}
   `;
 
-  // Add border to colored tiles in Color Palette Mode (same as rainbow tiles)
+  // Border logic: Show black border ONLY when selected
   const stateClasses = isMatched
     ? "bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
       ? `rainbow-tile text-white shadow-md ${isSelected ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background scale-[0.97]" : ""}`
       : isSelected
-        ? "bg-tile-selected text-tile-selected-fg shadow-md scale-[0.97]"
+        ? "bg-tile-selected text-tile-selected-fg shadow-md scale-[0.97] ring-[3px] ring-foreground ring-offset-2 ring-offset-background"
         : colorStyle
-          ? `${colorStyle.bg} hover:shadow-sm active:scale-95 ${colorPaletteMode ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background" : ""}`
+          ? `${colorStyle.bg} hover:shadow-sm active:scale-95`
           : "bg-tile hover:shadow-sm active:scale-95";
 
   return (
