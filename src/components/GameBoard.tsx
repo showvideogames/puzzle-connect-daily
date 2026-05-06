@@ -7,7 +7,7 @@ import { MistakeDots } from "./MistakeDots";
 import { DailyStatsModal } from "./DailyStatsModal";
 import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { PuzzleRating } from "./PuzzleRating";
-import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser, Flame } from "lucide-react";
+import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2 } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
@@ -162,6 +162,8 @@ function StreakCelebration({ streak }: { streak: number }) {
   );
 }
 
+type PaletteMode = "select" | "orange" | "green" | "blue" | "red" | "eraser";
+
 interface GameBoardProps {
   puzzle: Puzzle;
   settings?: GameSettings;
@@ -177,6 +179,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const showRainbow = settings?.showRainbowColors ?? true;
   const arrangeTiles = settings?.arrangeTiles ?? false;
   const colorCodeTiles = settings?.colorCodeTiles ?? false;
+  const colorPaletteMode = settings?.colorPaletteMode ?? false;
 
   const {
     state,
@@ -208,9 +211,18 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // Used to hide redundant UI (dots, headline) when viewing a completed puzzle
   const wasAlreadyComplete = useRef(state.isComplete);
 
+  const [paletteMode, setPaletteMode] = useState<PaletteMode>("select");
+
   useEffect(() => {
     if (clearColorsTrigger > 0) clearAllColors();
   }, [clearColorsTrigger]);
+
+  // Reset palette mode when Color Palette Mode is turned off
+  useEffect(() => {
+    if (!colorPaletteMode) {
+      setPaletteMode("select");
+    }
+  }, [colorPaletteMode]);
 
   const [copied, setCopied] = useState(false);
   const [showGlobalStats, setShowGlobalStats] = useState(false);
@@ -353,6 +365,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }
   }, [generateShareText]);
 
+  const handleTileClick = useCallback((word: string) => {
+    if (!colorPaletteMode || paletteMode === "select") {
+      toggleWord(word);
+    } else if (paletteMode === "eraser") {
+      setTileColor(word, null);
+    } else {
+      // Painting mode: orange, green, blue, red
+      setTileColor(word, paletteMode);
+    }
+  }, [colorPaletteMode, paletteMode, toggleWord, setTileColor]);
+
   const streakToShow = streakBefore != null ? streakBefore + 1 : 1;
 
   return (
@@ -422,6 +445,58 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         )}
       </div>
 
+      {/* Color Palette Mode buttons */}
+      {colorPaletteMode && remainingWords.length > 0 && (
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <button
+            onClick={() => setPaletteMode("select")}
+            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
+              ${paletteMode === "select"
+                ? "bg-foreground text-background ring-2 ring-foreground ring-offset-2 ring-offset-background"
+                : "bg-secondary hover:bg-secondary/80"
+              }`}
+            aria-label="Select mode"
+          >
+            <MousePointer2 className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setPaletteMode("orange")}
+            className={`w-10 h-10 rounded-lg bg-orange-400 hover:scale-110 transition-all
+              ${paletteMode === "orange" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+            aria-label="Orange paint"
+          />
+          <button
+            onClick={() => setPaletteMode("green")}
+            className={`w-10 h-10 rounded-lg bg-green-500 hover:scale-110 transition-all
+              ${paletteMode === "green" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+            aria-label="Green paint"
+          />
+          <button
+            onClick={() => setPaletteMode("blue")}
+            className={`w-10 h-10 rounded-lg bg-blue-500 hover:scale-110 transition-all
+              ${paletteMode === "blue" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+            aria-label="Blue paint"
+          />
+          <button
+            onClick={() => setPaletteMode("red")}
+            className={`w-10 h-10 rounded-lg bg-red-500 hover:scale-110 transition-all
+              ${paletteMode === "red" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+            aria-label="Red paint"
+          />
+          <button
+            onClick={() => setPaletteMode("eraser")}
+            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
+              ${paletteMode === "eraser"
+                ? "bg-foreground text-background ring-2 ring-foreground ring-offset-2 ring-offset-background"
+                : "bg-secondary hover:bg-secondary/80"
+              }`}
+            aria-label="Eraser"
+          >
+            <Eraser className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
       {/* Word grid */}
       {remainingWords.length > 0 && (
         <div className={`grid grid-cols-4 gap-2 ${shaking || spotShaking ? "animate-shake" : ""}`}>
@@ -435,7 +510,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 bonusRainbowWords.includes(word)
               }
               isMatched={matchedWords.includes(word)}
-              onClick={() => toggleWord(word)}
+              onClick={() => handleTileClick(word)}
               disabled={state.isComplete || matchedWords.length > 0}
               arrangeTiles={arrangeTiles}
               colorCodeTiles={colorCodeTiles}
@@ -449,6 +524,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               column={(index % 4) + 1}
               onTouchDragEnd={handleTouchDragEnd}
               isEmojiPuzzle={puzzle.isEmojiPuzzle ?? false}
+              colorPaletteMode={colorPaletteMode}
+              isPaintMode={colorPaletteMode && paletteMode !== "select"}
               data-word={word}
             />
           ))}
@@ -524,7 +601,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           >
             <Send className="w-4 h-4" /> Submit
           </button>
-          {colorCodeTiles && hasAnyColor && (
+          {(colorCodeTiles || colorPaletteMode) && hasAnyColor && (
             <button
               onClick={clearAllColors}
               className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium
