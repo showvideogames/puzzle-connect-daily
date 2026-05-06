@@ -378,7 +378,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               {puzzle.rainbowCategoryName || "Rainbow 🌈"}
             </div>
             <div className="text-xs mt-0.5 opacity-90">
-              {[...puzzle.rainbowHerring].sort().join(", ")}
+              {puzzle.rainbowHerring.join(", ")}
             </div>
           </div>
         )}
@@ -415,7 +415,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 {puzzle.rainbowCategoryName || "Rainbow 🌈"}
               </div>
               <div className="text-xs mt-0.5 opacity-90">
-                {[...puzzle.rainbowHerring].sort().join(", ")}
+                {puzzle.rainbowHerring.join(", ")}
               </div>
             </div>
           )
