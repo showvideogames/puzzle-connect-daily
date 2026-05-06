@@ -6,12 +6,14 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { GameSettings } from "@/lib/settings";
+
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
   settings: GameSettings;
   onSettingsChange: (settings: GameSettings) => void;
 }
+
 export function SettingsModal({ open, onClose, settings, onSettingsChange }: SettingsModalProps) {
   const items = [
     {
@@ -35,6 +37,23 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange }: Set
       key: "hapticEnabled" as const,
     },
   ];
+
+  const handleColorCodeToggle = (checked: boolean) => {
+    onSettingsChange({
+      ...settings,
+      colorCodeTiles: checked,
+      colorPaletteMode: checked ? false : settings.colorPaletteMode,
+    });
+  };
+
+  const handleColorPaletteToggle = (checked: boolean) => {
+    onSettingsChange({
+      ...settings,
+      colorPaletteMode: checked,
+      colorCodeTiles: checked ? false : settings.colorCodeTiles,
+    });
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
@@ -87,9 +106,19 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange }: Set
               </div>
               <Switch
                 checked={settings.colorCodeTiles}
-                onCheckedChange={(checked) =>
-                  onSettingsChange({ ...settings, colorCodeTiles: checked })
-                }
+                onCheckedChange={handleColorCodeToggle}
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <div>
+                <p className="text-sm font-medium">Color Palette Mode</p>
+                <p className="text-xs text-muted-foreground">
+                  Tap colors to paint tiles instantly
+                </p>
+              </div>
+              <Switch
+                checked={settings.colorPaletteMode}
+                onCheckedChange={handleColorPaletteToggle}
               />
             </label>
           </div>
