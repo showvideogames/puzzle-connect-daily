@@ -176,15 +176,17 @@ export function WordTile({
     ${disabled ? "opacity-50 cursor-default" : ""}
   `;
 
-  // Border logic: Show black border ONLY when selected
+  // Selection styling:
+  // - Rainbow/colored tiles: black border when selected, keep their color
+  // - Normal tiles: gray background only when selected (no border)
   const stateClasses = isMatched
     ? "bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
       ? `rainbow-tile text-white shadow-md ${isSelected ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background scale-[0.97]" : ""}`
-      : isSelected
-        ? "bg-tile-selected text-tile-selected-fg shadow-md scale-[0.97] ring-[3px] ring-foreground ring-offset-2 ring-offset-background"
-        : colorStyle
-          ? `${colorStyle.bg} hover:shadow-sm active:scale-95`
+      : colorStyle
+        ? `${colorStyle.bg} hover:shadow-sm active:scale-95 ${isSelected ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background scale-[0.97]" : ""}`
+        : isSelected
+          ? "bg-tile-selected text-tile-selected-fg shadow-md scale-[0.97]"
           : "bg-tile hover:shadow-sm active:scale-95";
 
   return (
