@@ -133,6 +133,8 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     maxStreak: 0,
     lastPlayedDate: null,
     guessDistribution: [0, 0, 0, 0, 0],
+    rainbowSpotRate: null,
+    hardestFirstCount: 0,
   };
 
   try {
@@ -146,18 +148,28 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     const { data: streak } = await streakQuery;
 
     const sessionsQuery = userId
-      ? supabase.from("game_sessions").select("won, mistakes").eq("user_id", userId)
-      : supabase.from("game_sessions").select("won, mistakes").eq("device_id", deviceId);
+      ? supabase.from("game_sessions").select("won, mistakes, found_rainbow, solve_order, puzzles(rainbow_herring)").eq("user_id", userId)
+      : supabase.from("game_sessions").select("won, mistakes, found_rainbow, solve_order, puzzles(rainbow_herring)").eq("device_id", deviceId);
     const { data: sessions } = await sessionsQuery;
 
     const rows = sessions ?? [];
     const guessDistribution: number[] = [0, 0, 0, 0, 0];
     let gamesWon = 0;
+    let rainbowEligible = 0;
+    let rainbowFound = 0;
+    // "red" = difficulty 4, the hardest group
+    let hardestFirstCount = 0;
     for (const r of rows) {
       if (r.won) {
         gamesWon++;
         guessDistribution[Math.min(r.mistakes ?? 0, 4)]++;
       }
+      const herring = (r as any).puzzles?.rainbow_herring;
+      if (Array.isArray(herring) && herring.length === 4) {
+        rainbowEligible++;
+        if (r.found_rainbow) rainbowFound++;
+      }
+      if (Array.isArray(r.solve_order) && r.solve_order[0] === "red") hardestFirstCount++;
     }
 
     return {
@@ -167,6 +179,8 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
       maxStreak: streak?.longest_streak ?? 0,
       lastPlayedDate: streak?.last_played_date ?? null,
       guessDistribution,
+      rainbowSpotRate: rainbowEligible > 0 ? Math.round((rainbowFound / rainbowEligible) * 100) : null,
+      hardestFirstCount,
     };
   } catch (err) {
     console.error("loadStatsFromSupabase error:", err);
