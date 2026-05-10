@@ -1,21 +1,17 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, LogOut, Save, Eye, EyeOff, ArrowLeft, Pencil, BarChart3, RotateCcw, GripVertical, ChevronLeft, ChevronRight } from "lucide-react";
+import { LogOut, Save, ArrowLeft, RotateCcw, GripVertical, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ArchiveAccessManager } from "@/components/ArchiveAccessManager";
+import { AdminLogin, AdminNoAccess } from "@/components/admin/AdminLogin";
+import { PuzzleListItem } from "@/components/admin/PuzzleListItem";
+import { useDraftPersistence, type GroupForm, type DraftData } from "@/hooks/useDraftPersistence";
 import { toast } from "sonner";
 
-interface GroupForm {
-  category: string;
-  words: string;
-  difficulty: 1 | 2 | 3 | 4;
-}
-
-const DRAFT_KEY = "admin-puzzle-draft";
 const PUZZLES_PER_PAGE = 50;
 
 const emptyGroup = (): GroupForm => ({ category: "", words: "", difficulty: 1 });
@@ -24,50 +20,6 @@ const parseWords = (value: string) =>
     .split(",")
     .map((w) => w.trim().toUpperCase())
     .filter(Boolean);
-
-/** Formats "2026-04-28" as "April 28, 2026" */
-function formatDateDisplay(dateStr: string): string {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-}
-
-interface DraftData {
-  puzzleDate: string;
-  puzzleTitle: string;
-  groups: GroupForm[];
-  isPublished: boolean;
-  wordOrder: string[];
-  rainbowHerring: (string | null)[];
-  rainbowCategoryName: string;
-  rainbowWordOrder: string[];
-  isEmojiPuzzle: boolean;
-  isFreePuzzle: boolean;
-  freePuzzleOrder: number | null;
-  editingId: string | null;
-}
-
-function saveDraft(data: DraftData) {
-  try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
-  } catch {}
-}
-
-function loadDraft(): DraftData | null {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as DraftData;
-  } catch {
-    return null;
-  }
-}
-
-function clearDraft() {
-  try {
-    localStorage.removeItem(DRAFT_KEY);
-  } catch {}
-}
 
 // ─── Mini Calendar ──────────────────────────────────────────────────────────
 
@@ -241,13 +193,7 @@ function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) 
 // ─── Main Admin Component ───────────────────────────────────────────────────
 
 export default function Admin() {
-  const { user, loading, isAdmin, signIn, signOut } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
+  const { user, loading, isAdmin, signOut } = useAuth();
 
   // Mobile detection for tap-to-swap
   const [isMobile, setIsMobile] = useState(false);
@@ -278,7 +224,6 @@ export default function Admin() {
   const [isPublished, setIsPublished] = useState(false);
   const [saving, setSaving] = useState(false);
   const [wordOrder, setWordOrder] = useState<string[]>([]);
-  const [draftRestored, setDraftRestored] = useState(false);
   const [dragGroupIdx, setDragGroupIdx] = useState<number | null>(null);
   const [dragOverGroupIdx, setDragOverGroupIdx] = useState<number | null>(null);
   const touchDragGroupIdx = useRef<number | null>(null);
@@ -314,26 +259,8 @@ export default function Admin() {
     if (currentPage > totalPages) setCurrentPage(1);
   }, [totalPages, currentPage]);
 
-  // Restore draft on mount
   useEffect(() => {
-    if (isAdmin) {
-      void loadPuzzles();
-      const draft = loadDraft();
-      if (draft && !draft.editingId) {
-        setPuzzleDate(draft.puzzleDate);
-        setPuzzleTitle(draft.puzzleTitle);
-        setGroups(draft.groups);
-        setIsPublished(draft.isPublished);
-        setWordOrder(draft.wordOrder);
-        setRainbowHerring(draft.rainbowHerring);
-        setRainbowCategoryName(draft.rainbowCategoryName ?? "");
-        setRainbowWordOrder(draft.rainbowWordOrder ?? []);
-        setIsEmojiPuzzle(draft.isEmojiPuzzle ?? false);
-        setIsFreePuzzle(draft.isFreePuzzle ?? false);
-        setFreePuzzleOrder(draft.freePuzzleOrder ?? null);
-        setDraftRestored(true);
-      }
-    }
+    if (isAdmin) void loadPuzzles();
   }, [isAdmin]);
 
   // Update rainbow word order whenever rainbow herring changes
@@ -345,7 +272,7 @@ export default function Admin() {
     }
   }, [rainbowHerring]);
 
-  const getCurrentDraft = useCallback((): DraftData => ({
+  const draftValues: DraftData = {
     puzzleDate,
     puzzleTitle,
     groups,
@@ -358,13 +285,26 @@ export default function Admin() {
     isFreePuzzle,
     freePuzzleOrder,
     editingId,
-  }), [puzzleDate, puzzleTitle, groups, isPublished, wordOrder, rainbowHerring, rainbowCategoryName, rainbowWordOrder, isEmojiPuzzle, isFreePuzzle, freePuzzleOrder, editingId]);
+  };
 
-  const handleBlurSave = useCallback(() => {
-    if (!editingId) {
-      saveDraft(getCurrentDraft());
-    }
-  }, [editingId, getCurrentDraft]);
+  const { draftRestored, setDraftRestored, saveDraft, clearDraft, getCurrentDraft, handleBlurSave } = useDraftPersistence({
+    enabled: isAdmin,
+    editingId,
+    values: draftValues,
+    applyDraft: (draft) => {
+      setPuzzleDate(draft.puzzleDate);
+      setPuzzleTitle(draft.puzzleTitle);
+      setGroups(draft.groups);
+      setIsPublished(draft.isPublished);
+      setWordOrder(draft.wordOrder);
+      setRainbowHerring(draft.rainbowHerring);
+      setRainbowCategoryName(draft.rainbowCategoryName ?? "");
+      setRainbowWordOrder(draft.rainbowWordOrder ?? []);
+      setIsEmojiPuzzle(draft.isEmojiPuzzle ?? false);
+      setIsFreePuzzle(draft.isFreePuzzle ?? false);
+      setFreePuzzleOrder(draft.freePuzzleOrder ?? null);
+    },
+  });
 
   async function loadPuzzles() {
     const { data, error } = await supabase
@@ -380,34 +320,6 @@ export default function Admin() {
     }
 
     setPuzzles(data || []);
-  }
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setLoginLoading(true);
-    if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) toast.error(error.message);
-      else toast.success("Account created! Ask an existing admin to grant you the admin role.");
-    } else {
-      const { error } = await signIn(email, password);
-      if (error) toast.error(error.message);
-    }
-    setLoginLoading(false);
-  }
-
-  async function handleForgotPassword(e: React.FormEvent) {
-    e.preventDefault();
-    setLoginLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) {
-      toast.error(error.message);
-    } else {
-      setResetSent(true);
-    }
-    setLoginLoading(false);
   }
 
   function updateGroup(idx: number, field: keyof GroupForm, value: string | number) {
@@ -792,88 +704,8 @@ export default function Admin() {
     );
   }
 
-  if (!user) {
-    if (showForgotPassword) {
-      return (
-        <div className="min-h-screen flex items-center justify-center px-4">
-          <div className="w-full max-w-sm space-y-6">
-            <div>
-              <button onClick={() => { setShowForgotPassword(false); setResetSent(false); }} className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1 mb-6">
-                <ArrowLeft className="w-4 h-4" /> Back to login
-              </button>
-              <h1 className="text-2xl font-bold tracking-tight">Reset Password</h1>
-              <p className="text-sm text-muted-foreground mt-1">Enter your email and we'll send you a reset link.</p>
-            </div>
-            {resetSent ? (
-              <div className="rounded-lg border border-border bg-card p-4 text-center space-y-2">
-                <p className="font-medium">Check your email</p>
-                <p className="text-sm text-muted-foreground">We sent a password reset link to <strong>{email}</strong>.</p>
-              </div>
-            ) : (
-              <form onSubmit={handleForgotPassword} className="space-y-4">
-                <div>
-                  <Label htmlFor="reset-email">Email</Label>
-                  <Input id="reset-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                </div>
-                <Button type="submit" className="w-full" disabled={loginLoading}>
-                  {loginLoading ? "Sending…" : "Send Reset Link"}
-                </Button>
-              </form>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="w-full max-w-sm space-y-6">
-          <div>
-            <Link to="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1 mb-6">
-              <ArrowLeft className="w-4 h-4" /> Back to game
-            </Link>
-            <h1 className="text-2xl font-bold tracking-tight">{isSignUp ? "Create Admin Account" : "Admin Login"}</h1>
-            <p className="text-sm text-muted-foreground mt-1">{isSignUp ? "Sign up, then ask an admin to grant you access." : "Sign in to manage puzzles."}</p>
-          </div>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            </div>
-            <div>
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            </div>
-            <Button type="submit" className="w-full" disabled={loginLoading}>
-              {loginLoading ? (isSignUp ? "Creating account…" : "Signing in…") : (isSignUp ? "Sign Up" : "Sign In")}
-            </Button>
-            {!isSignUp && (
-              <button type="button" onClick={() => setShowForgotPassword(true)} className="text-sm text-muted-foreground hover:text-foreground transition-colors w-full text-center">
-                Forgot your password?
-              </button>
-            )}
-            <button type="button" onClick={() => setIsSignUp(!isSignUp)} className="text-sm text-muted-foreground hover:text-foreground transition-colors w-full text-center">
-              {isSignUp ? "Already have an account? Sign in" : "Need an account? Sign up"}
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="text-center space-y-4">
-          <p className="text-lg font-medium">You don't have admin access.</p>
-          <p className="text-sm text-muted-foreground">Contact the site owner to get access.</p>
-          <Button variant="outline" onClick={() => signOut()}>
-            <LogOut className="w-4 h-4 mr-2" /> Sign Out
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  if (!user) return <AdminLogin />;
+  if (!isAdmin) return <AdminNoAccess />;
 
   const difficultyLabels = ["Easiest", "Easy", "Hard", "Hardest"];
   const difficultyColors = [
@@ -1258,63 +1090,16 @@ export default function Admin() {
           )}
           <div className="space-y-2">
             {paginatedPuzzles.map((p) => (
-              <div
+              <PuzzleListItem
                 key={p.id}
-                className="rounded-lg border border-border bg-card overflow-hidden"
-              >
-                <div className="flex items-center justify-between p-3">
-                  <div>
-                    <span className="font-medium">{formatDateDisplay(p.date)}</span>
-                    {p.title && <span className="text-muted-foreground ml-2">— {p.title}</span>}
-                    <span className={`ml-3 text-xs font-medium px-2 py-0.5 rounded-full ${p.is_published ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
-                      {p.is_published ? "Published" : "Draft"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => toggleStats(p.id)} title="View stats">
-                      <BarChart3 className={`w-4 h-4 ${expandedStatsId === p.id ? "text-primary" : ""}`} />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => togglePublish(p.id, p.is_published)} title={p.is_published ? "Unpublish" : "Publish"}>
-                      {p.is_published ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => editPuzzle(p)}>
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => deletePuzzle(p.id)}>
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-                {expandedStatsId === p.id && (
-                  <div className="border-t border-border px-4 py-3 bg-secondary/30">
-                    {!puzzleStats[p.id] ? (
-                      <p className="text-sm text-muted-foreground animate-pulse">Loading stats…</p>
-                    ) : puzzleStats[p.id].total_players === 0 ? (
-                      <p className="text-sm text-muted-foreground">No completions yet.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="flex gap-6 text-sm">
-                          <div><span className="font-semibold">{puzzleStats[p.id].total_players}</span> <span className="text-muted-foreground">players</span></div>
-                          <div><span className="font-semibold">{puzzleStats[p.id].wins}</span> <span className="text-muted-foreground">wins</span></div>
-                          <div><span className="font-semibold">{puzzleStats[p.id].losses}</span> <span className="text-muted-foreground">losses</span></div>
-                          <div><span className="font-semibold">{puzzleStats[p.id].total_players > 0 ? Math.round((puzzleStats[p.id].wins / puzzleStats[p.id].total_players) * 100) : 0}%</span> <span className="text-muted-foreground">win rate</span></div>
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-muted-foreground mb-1">Mistakes when winning:</p>
-                          <div className="flex gap-4 text-xs">
-                            {[0, 1, 2, 3].map((m) => (
-                              <div key={m} className="flex items-center gap-1">
-                                <span className="text-muted-foreground">{m}:</span>
-                                <span className="font-semibold">{puzzleStats[p.id].guess_distribution?.[String(m)] || 0}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                puzzle={p}
+                expanded={expandedStatsId === p.id}
+                stats={puzzleStats[p.id]}
+                onToggleStats={toggleStats}
+                onTogglePublish={togglePublish}
+                onEdit={editPuzzle}
+                onDelete={deletePuzzle}
+              />
             ))}
           </div>
 
