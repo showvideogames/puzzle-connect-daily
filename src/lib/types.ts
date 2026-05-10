@@ -24,6 +24,8 @@ export interface GameStats {
   maxStreak: number;
   lastPlayedDate: string | null;
   guessDistribution: number[]; // mistakes 0-4
+  rainbowSpotRate: number | null; // % of rainbow-eligible games where rainbow was found; null if no eligible games
+  hardestFirstCount: number; // games where solve_order[0] === "red" (difficulty 4)
 }
 
 export interface GuessAttempt {

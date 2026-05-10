@@ -88,6 +88,24 @@ export function StatsModal({ open, onClose }: StatsModalProps) {
                 );
               })}
             </div>
+
+            {stats.gamesPlayed > 0 && (
+              <>
+                <h3 className="text-sm font-semibold text-center mt-6 mb-2">Advanced Stats</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span>🌈 Rainbow Spot Rate</span>
+                    <span className="font-semibold tabular-nums">
+                      {stats.rainbowSpotRate === null ? "—" : `${stats.rainbowSpotRate}%`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>🟥 Hardest First</span>
+                    <span className="font-semibold tabular-nums">{stats.hardestFirstCount} times</span>
+                  </div>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
