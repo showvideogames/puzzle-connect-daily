@@ -1,6 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Puzzle, GameState, GuessAttempt } from "@/lib/types";
-import { hasPlayedToday, markPlayed, recordGameResult } from "@/lib/stats";
 import { vibrateSuccess, vibrateError, vibrateCelebration } from "@/lib/haptics";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
@@ -136,12 +135,23 @@ export function useGame(
       mistakes: 0,
       maxMistakes: MAX_MISTAKES,
       selectedWords: [],
-      isComplete: hasPlayedToday(puzzle.id),
+      isComplete: false,
       isWon: false,
       guessHistory: [],
       gotRainbow: false,
     };
   });
+
+  useEffect(() => {
+    if (saved) return;
+    let cancelled = false;
+    hasExistingSession(puzzle.id).then((played) => {
+      if (!cancelled && played) {
+        setState((s) => ({ ...s, isComplete: true }));
+      }
+    });
+    return () => { cancelled = true; };
+  }, [puzzle.id, saved]);
 
   const [shaking, setShaking] = useState(false);
   const [lastRevealedGroup, setLastRevealedGroup] = useState<number | null>(null);
@@ -424,7 +434,6 @@ export function useGame(
         }));
 
         if (isWon) {
-          markPlayed(puzzle.id);
           fireConfetti();
           vibrateCelebration();
 
@@ -450,12 +459,10 @@ export function useGame(
           if (isArchive) {
             void (async () => {
               if (await hasExistingSession(puzzle.id)) return;
-              recordGameResult(true, state.mistakes);
               saveResultToDb(true, state.mistakes);
               saveGameStats({ ...winStatsParams, skipStreak: true });
             })();
           } else {
-            recordGameResult(true, state.mistakes);
             saveResultToDb(true, state.mistakes);
             saveGameStats(winStatsParams);
           }
@@ -506,8 +513,6 @@ export function useGame(
       }));
 
       if (isLost) {
-        markPlayed(puzzle.id);
-
         const fullGuessHistory = [...state.guessHistory, attempt];
         const shareGrid = buildShareGrid(fullGuessHistory, puzzle, hintsUsed);
 
@@ -530,12 +535,10 @@ export function useGame(
         if (isArchive) {
           void (async () => {
             if (await hasExistingSession(puzzle.id)) return;
-            recordGameResult(false, newMistakes);
             saveResultToDb(false, newMistakes);
             saveGameStats({ ...lossStatsParams, skipStreak: true });
           })();
         } else {
-          recordGameResult(false, newMistakes);
           saveResultToDb(false, newMistakes);
           saveGameStats(lossStatsParams);
         }
