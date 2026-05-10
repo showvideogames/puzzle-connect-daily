@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogOut, Save, ArrowLeft, RotateCcw, GripVertical, ChevronLeft, ChevronRight } from "lucide-react";
+import { LogOut, Save, ArrowLeft, RotateCcw, ArrowLeftRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ArchiveAccessManager } from "@/components/ArchiveAccessManager";
 import { AdminLogin, AdminNoAccess } from "@/components/admin/AdminLogin";
@@ -195,17 +195,10 @@ function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) 
 export default function Admin() {
   const { user, loading, isAdmin, signOut } = useAuth();
 
-  // Mobile detection for tap-to-swap
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 640);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
-
-  // Tap-to-swap state for mobile tile reordering
+  // Tap-to-swap selection state
+  const [selectedGroupIdx, setSelectedGroupIdx] = useState<number | null>(null);
   const [selectedTileIdx, setSelectedTileIdx] = useState<number | null>(null);
+  const [selectedRainbowIdx, setSelectedRainbowIdx] = useState<number | null>(null);
 
   // Puzzle form
   const [puzzleDate, setPuzzleDate] = useState("");
@@ -224,18 +217,9 @@ export default function Admin() {
   const [isPublished, setIsPublished] = useState(false);
   const [saving, setSaving] = useState(false);
   const [wordOrder, setWordOrder] = useState<string[]>([]);
-  const [dragGroupIdx, setDragGroupIdx] = useState<number | null>(null);
-  const [dragOverGroupIdx, setDragOverGroupIdx] = useState<number | null>(null);
-  const touchDragGroupIdx = useRef<number | null>(null);
-  const [dragTileIdx, setDragTileIdx] = useState<number | null>(null);
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  const touchDragTileIdx = useRef<number | null>(null);
 
   // Rainbow word reordering
   const [rainbowWordOrder, setRainbowWordOrder] = useState<string[]>([]);
-  const [dragRainbowIdx, setDragRainbowIdx] = useState<number | null>(null);
-  const [hoverRainbowIdx, setHoverRainbowIdx] = useState<number | null>(null);
-  const [selectedRainbowIdx, setSelectedRainbowIdx] = useState<number | null>(null);
 
   // Existing puzzles list
   const [puzzles, setPuzzles] = useState<any[]>([]);
@@ -341,39 +325,15 @@ export default function Admin() {
     });
   }
 
-  function handleGroupDragStart(i: number) {
-    setDragGroupIdx(i);
-  }
-
-  function handleGroupDragOver(e: React.DragEvent, i: number) {
-    e.preventDefault();
-    setDragOverGroupIdx(i);
-  }
-
-  function handleGroupDrop(i: number) {
-    if (dragGroupIdx !== null) swapGroups(dragGroupIdx, i);
-    setDragGroupIdx(null);
-    setDragOverGroupIdx(null);
-  }
-
-  function handleGroupDragEnd() {
-    setDragGroupIdx(null);
-    setDragOverGroupIdx(null);
-  }
-
-  function handleGroupTouchStart(i: number) {
-    touchDragGroupIdx.current = i;
-  }
-
-  function handleGroupTouchEnd(e: React.TouchEvent) {
-    const touch = e.changedTouches[0];
-    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-    const groupEl = el?.closest("[data-group-idx]");
-    const targetIdx = groupEl ? parseInt(groupEl.getAttribute("data-group-idx")!, 10) : null;
-    if (touchDragGroupIdx.current !== null && targetIdx !== null) {
-      swapGroups(touchDragGroupIdx.current, targetIdx);
+  function handleGroupTap(i: number) {
+    if (selectedGroupIdx === null) {
+      setSelectedGroupIdx(i);
+    } else if (selectedGroupIdx === i) {
+      setSelectedGroupIdx(null);
+    } else {
+      swapGroups(selectedGroupIdx, i);
+      setSelectedGroupIdx(null);
     }
-    touchDragGroupIdx.current = null;
   }
 
   // Compute all words from groups
@@ -384,53 +344,12 @@ export default function Admin() {
     setWordOrder([...allWords]);
   }
 
-  function computeTilePreview(order: string[], from: number, to: number): string[] {
-    if (from === to) return order;
-    const next = [...order];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    return next;
-  }
-
-  const tileDisplayOrder =
-    dragTileIdx !== null && hoverIdx !== null
-      ? computeTilePreview(wordOrder, dragTileIdx, hoverIdx)
-      : wordOrder;
-
-  const ghostWord = dragTileIdx !== null ? wordOrder[dragTileIdx] : null;
-
-  // Desktop drag handlers
-  function handleTileDragStart(vIdx: number) {
-    setDragTileIdx(vIdx);
-    setHoverIdx(vIdx);
-  }
-
-  function handleTileDragOver(e: React.DragEvent, vIdx: number) {
-    e.preventDefault();
-    setHoverIdx(vIdx);
-  }
-
-  function handleTileDrop() {
-    if (dragTileIdx !== null && hoverIdx !== null) {
-      setWordOrder(computeTilePreview(wordOrder, dragTileIdx, hoverIdx));
-    }
-    setDragTileIdx(null);
-    setHoverIdx(null);
-  }
-
-  function handleTileDragEnd() {
-    setDragTileIdx(null);
-    setHoverIdx(null);
-  }
-
-  // Mobile tap-to-swap handler
   function handleTileTap(vIdx: number) {
     if (selectedTileIdx === null) {
       setSelectedTileIdx(vIdx);
     } else if (selectedTileIdx === vIdx) {
       setSelectedTileIdx(null);
     } else {
-      // True swap — the two tiles exchange positions
       setWordOrder((prev) => {
         const next = [...prev];
         [next[selectedTileIdx], next[vIdx]] = [next[vIdx], next[selectedTileIdx]];
@@ -452,38 +371,12 @@ export default function Admin() {
     }
   }
 
-  // Rainbow word reordering handlers
-  function handleRainbowDragStart(vIdx: number) {
-    setDragRainbowIdx(vIdx);
-    setHoverRainbowIdx(vIdx);
-  }
-
-  function handleRainbowDragOver(e: React.DragEvent, vIdx: number) {
-    e.preventDefault();
-    setHoverRainbowIdx(vIdx);
-  }
-
-  function handleRainbowDrop() {
-    if (dragRainbowIdx !== null && hoverRainbowIdx !== null) {
-      const preview = computeTilePreview(rainbowWordOrder, dragRainbowIdx, hoverRainbowIdx);
-      setRainbowWordOrder(preview);
-    }
-    setDragRainbowIdx(null);
-    setHoverRainbowIdx(null);
-  }
-
-  function handleRainbowDragEnd() {
-    setDragRainbowIdx(null);
-    setHoverRainbowIdx(null);
-  }
-
   function handleRainbowTap(vIdx: number) {
     if (selectedRainbowIdx === null) {
       setSelectedRainbowIdx(vIdx);
     } else if (selectedRainbowIdx === vIdx) {
       setSelectedRainbowIdx(null);
     } else {
-      // True swap
       setRainbowWordOrder((prev) => {
         const next = [...prev];
         [next[selectedRainbowIdx], next[vIdx]] = [next[vIdx], next[selectedRainbowIdx]];
@@ -492,13 +385,6 @@ export default function Admin() {
       setSelectedRainbowIdx(null);
     }
   }
-
-  const rainbowDisplayOrder =
-    dragRainbowIdx !== null && hoverRainbowIdx !== null
-      ? computeTilePreview(rainbowWordOrder, dragRainbowIdx, hoverRainbowIdx)
-      : rainbowWordOrder;
-
-  const ghostRainbow = dragRainbowIdx !== null ? rainbowWordOrder[dragRainbowIdx] : null;
 
   async function handleSave() {
     if (loading) {
@@ -783,35 +669,31 @@ export default function Admin() {
             </div>
           </div>
 
+          <p className="text-xs text-muted-foreground">
+            Tap the swap icon to select a group, then tap another to swap them.
+          </p>
           <div className="space-y-3">
             {groups.map((g, i) => {
-              const isDragging = dragGroupIdx === i;
-              const isDropTarget = dragOverGroupIdx === i && dragGroupIdx !== i;
+              const isSelected = selectedGroupIdx === i;
               return (
                 <div
                   key={i}
-                  data-group-idx={i}
-                  onDragOver={(e) => handleGroupDragOver(e, i)}
-                  onDrop={() => handleGroupDrop(i)}
                   className={`rounded-lg p-4 space-y-2 ${difficultyColors[i]} bg-opacity-30 transition-all duration-150
-                    ${isDragging ? "opacity-40" : ""}
-                    ${isDropTarget ? "ring-2 ring-primary ring-offset-1 scale-[1.01]" : ""}
+                    ${isSelected ? "ring-2 ring-primary ring-offset-1 scale-[1.01]" : ""}
                   `}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Group {i + 1} — {difficultyLabels[i]}
                     </span>
-                    <span
-                      draggable
-                      onDragStart={() => handleGroupDragStart(i)}
-                      onDragEnd={handleGroupDragEnd}
-                      onTouchStart={() => handleGroupTouchStart(i)}
-                      onTouchEnd={handleGroupTouchEnd}
-                      className="cursor-grab active:cursor-grabbing touch-none p-1 -m-1"
+                    <button
+                      type="button"
+                      onClick={() => handleGroupTap(i)}
+                      aria-label={`Select group ${i + 1} to swap`}
+                      className="cursor-pointer active:scale-95 p-1 -m-1 rounded hover:bg-secondary transition-colors"
                     >
-                      <GripVertical className="w-4 h-4 text-muted-foreground/50" />
-                    </span>
+                      <ArrowLeftRight className="w-4 h-4 text-muted-foreground/70" />
+                    </button>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -850,12 +732,10 @@ export default function Admin() {
               {wordOrder.length === 16 && (
                 <>
                   <p className="text-xs text-muted-foreground">
-                    {isMobile
-                      ? "Tap a tile to select it, then tap another to swap them."
-                      : "Drag tiles to reorder them. This is how the puzzle will appear to players before they shuffle."}
+                    Tap a tile to select it, then tap another to swap them.
                   </p>
                   <div className="grid grid-cols-4 gap-2">
-                    {tileDisplayOrder.map((word, vIdx) => {
+                    {wordOrder.map((word, vIdx) => {
                       const groupIdx = groups.findIndex((g) =>
                         g.words.split(",").map((w) => w.trim().toUpperCase()).includes(word)
                       );
@@ -865,24 +745,15 @@ export default function Admin() {
                         "bg-[hsl(var(--group-3)/0.3)]",
                         "bg-[hsl(var(--group-4)/0.3)]",
                       ];
-                      const isGhost = word === ghostWord;
-                      const isSelected = isMobile && selectedTileIdx === vIdx;
+                      const isSelected = selectedTileIdx === vIdx;
 
                       return (
                         <div
                           key={word}
-                          data-tile-idx={vIdx}
-                          draggable={!isMobile}
-                          onDragStart={!isMobile ? () => handleTileDragStart(vIdx) : undefined}
-                          onDragOver={!isMobile ? (e) => handleTileDragOver(e, vIdx) : undefined}
-                          onDrop={!isMobile ? handleTileDrop : undefined}
-                          onDragEnd={!isMobile ? handleTileDragEnd : undefined}
-                          onClick={isMobile ? () => handleTileTap(vIdx) : undefined}
+                          onClick={() => handleTileTap(vIdx)}
                           className={`rounded-lg px-2 py-3 text-xs font-semibold uppercase tracking-wide text-center
-                            transition-all duration-100 select-none
-                            ${isMobile ? "cursor-pointer active:scale-95" : "cursor-grab active:cursor-grabbing"}
+                            transition-all duration-100 select-none cursor-pointer active:scale-95
                             ${diffColors[groupIdx] || "bg-muted"}
-                            ${isGhost ? "opacity-30 ring-2 ring-primary ring-dashed" : ""}
                             ${isSelected ? "ring-2 ring-primary scale-105 shadow-md" : ""}
                           `}
                         >
@@ -891,11 +762,6 @@ export default function Admin() {
                       );
                     })}
                   </div>
-                  {isMobile && selectedTileIdx !== null && (
-                    <p className="text-xs text-center text-primary font-medium animate-fade-up">
-                      Now tap another tile to swap, or tap the same tile to cancel
-                    </p>
-                  )}
                 </>
               )}
             </div>
@@ -965,27 +831,17 @@ export default function Admin() {
                       </button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {isMobile
-                        ? "Tap to select, then tap another to swap."
-                        : "Drag to reorder how the rainbow words will appear when solved."}
+                      Tap to select, then tap another to swap.
                     </p>
                     <div className="grid grid-cols-4 gap-2">
-                      {rainbowDisplayOrder.map((word, vIdx) => {
-                        const isGhost = word === ghostRainbow;
-                        const isSelected = isMobile && selectedRainbowIdx === vIdx;
+                      {rainbowWordOrder.map((word, vIdx) => {
+                        const isSelected = selectedRainbowIdx === vIdx;
                         return (
                           <div
                             key={word}
-                            draggable={!isMobile}
-                            onDragStart={!isMobile ? () => handleRainbowDragStart(vIdx) : undefined}
-                            onDragOver={!isMobile ? (e) => handleRainbowDragOver(e, vIdx) : undefined}
-                            onDrop={!isMobile ? handleRainbowDrop : undefined}
-                            onDragEnd={!isMobile ? handleRainbowDragEnd : undefined}
-                            onClick={isMobile ? () => handleRainbowTap(vIdx) : undefined}
+                            onClick={() => handleRainbowTap(vIdx)}
                             className={`rainbow-tile text-white rounded-lg px-2 py-2 text-xs font-semibold uppercase tracking-wide text-center
-                              transition-all duration-100 select-none
-                              ${isMobile ? "cursor-pointer active:scale-95" : "cursor-grab active:cursor-grabbing"}
-                              ${isGhost ? "opacity-30 ring-2 ring-white ring-dashed" : ""}
+                              transition-all duration-100 select-none cursor-pointer active:scale-95
                               ${isSelected ? "ring-2 ring-white scale-105 shadow-lg" : ""}
                             `}
                           >
@@ -994,11 +850,6 @@ export default function Admin() {
                         );
                       })}
                     </div>
-                    {isMobile && selectedRainbowIdx !== null && (
-                      <p className="text-xs text-center text-primary font-medium animate-fade-up">
-                        Tap another word to swap positions
-                      </p>
-                    )}
                   </div>
                 </>
               )}
