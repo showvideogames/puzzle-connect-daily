@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
+const DOUBLE_TAP_DELAY_MS = 250;
+
 const COLOR_STYLES: Record<string, { bg: string; ring: string }> = {
   orange: { bg: "bg-orange-400/35 dark:bg-orange-600/35", ring: "ring-orange-400" },
   green:  { bg: "bg-green-500/35 dark:bg-green-600/35",  ring: "ring-green-400"  },
@@ -149,7 +151,7 @@ export function WordTile({
     const timeSinceLastTap = now - lastTapRef.current;
     lastTapRef.current = now;
 
-    if (timeSinceLastTap < 250) {
+    if (timeSinceLastTap < DOUBLE_TAP_DELAY_MS) {
       if (singleTapTimer.current) {
         clearTimeout(singleTapTimer.current);
         singleTapTimer.current = null;
@@ -159,7 +161,7 @@ export function WordTile({
       singleTapTimer.current = setTimeout(() => {
         singleTapTimer.current = null;
         onClick();
-      }, 250);
+      }, DOUBLE_TAP_DELAY_MS);
     }
   }, [colorCodeTiles, colorPaletteMode, onClick]);
 

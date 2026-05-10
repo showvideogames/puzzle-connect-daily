@@ -112,6 +112,19 @@ function SolvedGroupBanner({
   );
 }
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p style={{
+      fontSize: "11px",
+      fontWeight: 600,
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
+      color: "hsl(var(--muted-foreground))",
+      marginBottom: "6px",
+    }}>{children}</p>
+  );
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 interface TutorialModalProps {
@@ -292,14 +305,7 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
           {tab === "rules" && (
             <div className="py-4 space-y-5">
               <section>
-                <p style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "hsl(var(--muted-foreground))",
-                  marginBottom: "6px",
-                }}>The Goal</p>
+                <SectionLabel>The Goal</SectionLabel>
                 <p className="text-sm leading-relaxed">
                   Find four groups of four words that share something in common. Each word belongs to exactly one group.
                 </p>
@@ -308,14 +314,7 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
               <div style={{ height: "1px", background: "hsl(var(--border))" }} />
 
               <section>
-                <p style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "hsl(var(--muted-foreground))",
-                  marginBottom: "6px",
-                }}>The Categories</p>
+                <SectionLabel>The Categories</SectionLabel>
                 <p className="text-sm leading-relaxed mb-3">
                   There are four difficulty levels, color-coded from easiest to hardest:
                 </p>
@@ -337,14 +336,7 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
               <div style={{ height: "1px", background: "hsl(var(--border))" }} />
 
               <section>
-                <p style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "hsl(var(--muted-foreground))",
-                  marginBottom: "6px",
-                }}>The Rainbow</p>
+                <SectionLabel>The Rainbow</SectionLabel>
                 <p className="text-sm leading-relaxed">
                   Every puzzle has a hidden 5th category — the <strong>Rainbow</strong>. One word from each of the four groups shares a secret connection. Find and submit all four Rainbow words before solving the main groups.
                 </p>
@@ -357,14 +349,7 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
               <div style={{ height: "1px", background: "hsl(var(--border))" }} />
 
               <section>
-                <p style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "hsl(var(--muted-foreground))",
-                  marginBottom: "6px",
-                }}>Mistakes</p>
+                <SectionLabel>Mistakes</SectionLabel>
                 <p className="text-sm leading-relaxed">
                   You have <strong>4 mistakes</strong> before the puzzle ends. If you select 3 words from the same group, you'll get a <strong>"One Away"</strong> hint.
                 </p>
@@ -373,14 +358,7 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
               <div style={{ height: "1px", background: "hsl(var(--border))" }} />
 
               <section>
-                <p style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "hsl(var(--muted-foreground))",
-                  marginBottom: "6px",
-                }}>New Puzzles</p>
+                <SectionLabel>New Puzzles</SectionLabel>
                 <p className="text-sm leading-relaxed">
                   A new puzzle drops every day. Past puzzles are available in the archive.
                 </p>
