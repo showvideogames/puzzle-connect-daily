@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { GameStats } from "./types";
 
 // Gets or creates a stable device ID for anonymous players
 export function getDeviceId(): string {
@@ -121,6 +122,55 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
 
   } catch (err) {
     console.error("saveGameStats error:", err);
+  }
+}
+
+export async function loadStatsFromSupabase(): Promise<GameStats> {
+  const empty: GameStats = {
+    gamesPlayed: 0,
+    gamesWon: 0,
+    currentStreak: 0,
+    maxStreak: 0,
+    lastPlayedDate: null,
+    guessDistribution: [0, 0, 0, 0, 0],
+  };
+
+  try {
+    const deviceId = getDeviceId();
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id ?? null;
+
+    const streakQuery = userId
+      ? supabase.from("user_streaks").select("current_streak, longest_streak, last_played_date").eq("user_id", userId).maybeSingle()
+      : supabase.from("user_streaks").select("current_streak, longest_streak, last_played_date").eq("device_id", deviceId).maybeSingle();
+    const { data: streak } = await streakQuery;
+
+    const sessionsQuery = userId
+      ? supabase.from("game_sessions").select("won, mistakes").eq("user_id", userId)
+      : supabase.from("game_sessions").select("won, mistakes").eq("device_id", deviceId);
+    const { data: sessions } = await sessionsQuery;
+
+    const rows = sessions ?? [];
+    const guessDistribution: number[] = [0, 0, 0, 0, 0];
+    let gamesWon = 0;
+    for (const r of rows) {
+      if (r.won) {
+        gamesWon++;
+        guessDistribution[Math.min(r.mistakes ?? 0, 4)]++;
+      }
+    }
+
+    return {
+      gamesPlayed: rows.length,
+      gamesWon,
+      currentStreak: streak?.current_streak ?? 0,
+      maxStreak: streak?.longest_streak ?? 0,
+      lastPlayedDate: streak?.last_played_date ?? null,
+      guessDistribution,
+    };
+  } catch (err) {
+    console.error("loadStatsFromSupabase error:", err);
+    return empty;
   }
 }
 
