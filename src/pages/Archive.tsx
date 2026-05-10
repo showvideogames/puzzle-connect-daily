@@ -12,6 +12,29 @@ import { playGiftOpenSound } from "@/lib/sounds";
 import confetti from "canvas-confetti";
 import type { User } from "@supabase/supabase-js";
 
+function StarIcon({
+  size = 22,
+  fill = "none",
+  stroke = "hsl(var(--muted-foreground))",
+}: {
+  size?: number;
+  fill?: string;
+  stroke?: string;
+}) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <polygon
+        points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
+        fill={fill}
+        stroke={stroke}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 interface ArchivePuzzle {
   id: string;
   date: string;
@@ -475,16 +498,11 @@ export default function Archive() {
                   {dayNum}
                 </span>
                 {result ? (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                    <polygon
-                      points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
-                      fill={result.won ? "#f59e0b" : "none"}
-                      stroke={result.won ? "#f59e0b" : "hsl(var(--muted-foreground))"}
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <StarIcon
+                    size={22}
+                    fill={result.won ? "#f59e0b" : "none"}
+                    stroke={result.won ? "#f59e0b" : "hsl(var(--muted-foreground))"}
+                  />
                 ) : (
                   <div style={{ width: "22px", height: "22px" }} />
                 )}
@@ -496,29 +514,11 @@ export default function Archive() {
         {/* Legend */}
         <div className="flex items-center gap-4 mt-4 justify-center">
           <div className="flex items-center gap-1.5">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <polygon
-                points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
-                fill="#f59e0b"
-                stroke="#f59e0b"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <StarIcon size={13} fill="#f59e0b" stroke="#f59e0b" />
             <span style={{ fontSize: "11px", color: "hsl(var(--muted-foreground))" }}>Won</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <polygon
-                points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
-                fill="none"
-                stroke="hsl(var(--muted-foreground))"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <StarIcon size={13} />
             <span style={{ fontSize: "11px", color: "hsl(var(--muted-foreground))" }}>Played</span>
           </div>
         </div>
