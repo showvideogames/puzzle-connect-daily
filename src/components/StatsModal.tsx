@@ -8,8 +8,6 @@ interface StatsModalProps {
   onClose: () => void;
 }
 
-const times = (n: number) => `${n} ${n === 1 ? "time" : "times"}`;
-
 export function StatsModal({ open, onClose }: StatsModalProps) {
   const [stats, setStats] = useState<GameStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -104,11 +102,11 @@ export function StatsModal({ open, onClose }: StatsModalProps) {
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center justify-between">
                       <span>🌈 Rainbows Spotted</span>
-                      <span className="font-semibold tabular-nums">{times(stats.rainbowSpottedCount)}</span>
+                      <span className="font-semibold tabular-nums">{stats.rainbowSpottedCount}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span>🟥 Hardest Category First</span>
-                      <span className="font-semibold tabular-nums">{times(stats.hardestFirstCount)}</span>
+                      <span className="font-semibold tabular-nums">{stats.hardestFirstCount}</span>
                     </div>
                   </div>
                 )}

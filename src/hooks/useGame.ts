@@ -54,11 +54,11 @@ function clearProgress(puzzleId: string) {
   } catch {}
 }
 
-const DIFFICULTY_HEART: Record<number, string> = {
-  1: "🧡",
-  2: "💚",
-  3: "💙",
-  4: "💗",
+const DIFFICULTY_SQUARE: Record<number, string> = {
+  1: "🟧",
+  2: "🟩",
+  3: "🟦",
+  4: "🟥",
 };
 
 function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle, hintsUsed: boolean): string {
@@ -75,7 +75,7 @@ function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle, hintsUsed:
       const row = attempt.groupIndices
         .map((gi) => {
           const diff = puzzle.groups[gi]?.difficulty;
-          return DIFFICULTY_HEART[diff] || "⬜";
+          return DIFFICULTY_SQUARE[diff] || "⬜";
         })
         .join("");
       lines.push(row);

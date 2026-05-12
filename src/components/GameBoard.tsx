@@ -103,13 +103,6 @@ function NoRainbowIndicator() {
   );
 }
 
-const DIFFICULTY_EMOJI: Record<number, string> = {
-  0: "🧡",
-  1: "💚",
-  2: "💙",
-  3: "💗",
-};
-
 function getResultHeadline(isWon: boolean, mistakes: number): string {
   if (isWon && mistakes === 0) return "Perfect game! 🎯";
   if (isWon && mistakes === 1) return "Amazing! 🎉";
@@ -331,7 +324,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         const row = attempt.groupIndices
           .map((gi) => {
             const diff = puzzle.groups[gi]?.difficulty;
-            return DIFFICULTY_EMOJI[diff - 1] || "⬜";
+            return DIFFICULTY_SQUARE[diff] || "⬜";
           })
           .join("");
         lines.push(row);
