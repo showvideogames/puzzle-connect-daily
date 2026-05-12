@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { X } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { GameBoard } from "@/components/GameBoard";
@@ -67,7 +68,6 @@ export default function ArchivePuzzle() {
   const handleHeaderHintClick = useCallback(() => {
     if (isPuzzleComplete) {
       setShowSillyGoose(true);
-      setTimeout(() => setShowSillyGoose(false), 3000);
     } else {
       setShowHintModal(true);
     }
@@ -88,8 +88,15 @@ export default function ArchivePuzzle() {
 
       {showSillyGoose && (
         <div className="w-full max-w-lg px-2 mb-2 animate-fade-up">
-          <div className="bg-foreground text-background px-5 py-2.5 rounded-full text-sm font-semibold shadow-md text-center">
-            You don't need hints! You already beat the puzzle, ya silly goose 🦆
+          <div className="bg-foreground text-background pl-5 pr-2 py-2.5 rounded-full text-sm font-semibold shadow-md flex items-center justify-between gap-3">
+            <span className="flex-1 text-center">You don't need hints! You already beat the puzzle, ya silly goose 🦆</span>
+            <button
+              onClick={() => setShowSillyGoose(false)}
+              aria-label="Dismiss"
+              className="flex-shrink-0 p-1 rounded-full hover:bg-background/10 active:scale-95 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
