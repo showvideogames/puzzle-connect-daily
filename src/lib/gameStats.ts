@@ -40,7 +40,7 @@ export async function hasExistingSession(puzzleId: string): Promise<boolean> {
     const { data: { user } } = await supabase.auth.getUser();
     const userId = user?.id ?? null;
     const { data } = userId
-      ? await supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId).eq("user_id", userId).limit(1).maybeSingle()
+      ? await supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId).or(`user_id.eq.${userId},device_id.eq.${deviceId}`).limit(1).maybeSingle()
       : await supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId).eq("device_id", deviceId).limit(1).maybeSingle();
     return !!data;
   } catch {
@@ -134,6 +134,7 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     lastPlayedDate: null,
     guessDistribution: [0, 0, 0, 0, 0],
     rainbowSpotRate: null,
+    rainbowSpottedCount: 0,
     hardestFirstCount: 0,
   };
 
@@ -143,29 +144,50 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     const userId = user?.id ?? null;
 
     const streakQuery = userId
-      ? supabase.from("user_streaks").select("current_streak, longest_streak, last_played_date").eq("user_id", userId).maybeSingle()
-      : supabase.from("user_streaks").select("current_streak, longest_streak, last_played_date").eq("device_id", deviceId).maybeSingle();
-    const { data: streak } = await streakQuery;
+      ? supabase.from("user_streaks").select("current_streak, longest_streak, last_played_date, user_id").or(`user_id.eq.${userId},device_id.eq.${deviceId}`)
+      : supabase.from("user_streaks").select("current_streak, longest_streak, last_played_date, user_id").eq("device_id", deviceId);
+    const { data: streakRows } = await streakQuery;
+    // Prefer the row tied to the logged-in user; tiebreak on longest streak
+    const streak = (streakRows ?? []).slice().sort((a, b) => {
+      if (a.user_id && !b.user_id) return -1;
+      if (!a.user_id && b.user_id) return 1;
+      return (b.longest_streak ?? 0) - (a.longest_streak ?? 0);
+    })[0] ?? null;
 
     const sessionsQuery = userId
-      ? supabase.from("game_sessions").select("won, mistakes, found_rainbow, solve_order, puzzles(rainbow_herring)").eq("user_id", userId)
-      : supabase.from("game_sessions").select("won, mistakes, found_rainbow, solve_order, puzzles(rainbow_herring)").eq("device_id", deviceId);
+      ? supabase.from("game_sessions").select("puzzle_id, won, mistakes, found_rainbow, solve_order").or(`user_id.eq.${userId},device_id.eq.${deviceId}`)
+      : supabase.from("game_sessions").select("puzzle_id, won, mistakes, found_rainbow, solve_order").eq("device_id", deviceId);
     const { data: sessions } = await sessionsQuery;
 
     const rows = sessions ?? [];
+
+    // Separate query: which of these puzzles actually had a rainbow herring?
+    const puzzleIds = Array.from(new Set(rows.map((r) => r.puzzle_id).filter(Boolean)));
+    const rainbowPuzzleIds = new Set<string>();
+    if (puzzleIds.length > 0) {
+      const { data: puzzleRows } = await supabase
+        .from("puzzles")
+        .select("id, rainbow_herring")
+        .in("id", puzzleIds);
+      for (const p of puzzleRows ?? []) {
+        const herring = (p as any).rainbow_herring;
+        if (Array.isArray(herring) && herring.length === 4) {
+          rainbowPuzzleIds.add(p.id);
+        }
+      }
+    }
+
     const guessDistribution: number[] = [0, 0, 0, 0, 0];
     let gamesWon = 0;
     let rainbowEligible = 0;
     let rainbowFound = 0;
-    // "red" = difficulty 4, the hardest group
     let hardestFirstCount = 0;
     for (const r of rows) {
       if (r.won) {
         gamesWon++;
         guessDistribution[Math.min(r.mistakes ?? 0, 4)]++;
       }
-      const herring = (r as any).puzzles?.rainbow_herring;
-      if (Array.isArray(herring) && herring.length === 4) {
+      if (r.puzzle_id && rainbowPuzzleIds.has(r.puzzle_id)) {
         rainbowEligible++;
         if (r.found_rainbow) rainbowFound++;
       }
@@ -180,6 +202,7 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
       lastPlayedDate: streak?.last_played_date ?? null,
       guessDistribution,
       rainbowSpotRate: rainbowEligible > 0 ? Math.round((rainbowFound / rainbowEligible) * 100) : null,
+      rainbowSpottedCount: rainbowFound,
       hardestFirstCount,
     };
   } catch (err) {
@@ -191,10 +214,23 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
 async function updateStreak(userId: string | null, deviceId: string): Promise<void> {
   try {
     const today = new Date().toLocaleDateString("en-CA");
-    const query = userId
-      ? supabase.from("user_streaks").select("*").eq("user_id", userId).single()
-      : supabase.from("user_streaks").select("*").eq("device_id", deviceId).single();
-    const { data: existing } = await query;
+    let existing: any = null;
+    if (userId) {
+      const r1 = await supabase.from("user_streaks").select("*").eq("user_id", userId).maybeSingle();
+      existing = r1.data;
+      if (!existing) {
+        const r2 = await supabase.from("user_streaks").select("*").eq("device_id", deviceId).maybeSingle();
+        existing = r2.data;
+        // Claim orphaned anonymous row for this user
+        if (existing && !existing.user_id) {
+          await supabase.from("user_streaks").update({ user_id: userId }).eq("id", existing.id);
+          existing.user_id = userId;
+        }
+      }
+    } else {
+      const r = await supabase.from("user_streaks").select("*").eq("device_id", deviceId).maybeSingle();
+      existing = r.data;
+    }
 
     if (!existing) {
       await supabase.from("user_streaks").insert({

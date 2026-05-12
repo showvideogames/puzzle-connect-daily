@@ -8,9 +8,12 @@ interface StatsModalProps {
   onClose: () => void;
 }
 
+const times = (n: number) => `${n} ${n === 1 ? "time" : "times"}`;
+
 export function StatsModal({ open, onClose }: StatsModalProps) {
   const [stats, setStats] = useState<GameStats | null>(null);
   const [loading, setLoading] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -91,19 +94,24 @@ export function StatsModal({ open, onClose }: StatsModalProps) {
 
             {stats.gamesPlayed > 0 && (
               <>
-                <h3 className="text-sm font-semibold text-center mt-6 mb-2">Advanced Stats</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span>🌈 Rainbow Spot Rate</span>
-                    <span className="font-semibold tabular-nums">
-                      {stats.rainbowSpotRate === null ? "—" : `${stats.rainbowSpotRate}%`}
-                    </span>
+                <button
+                  onClick={() => setAdvancedOpen((v) => !v)}
+                  className="mt-6 mb-2 w-full text-sm font-semibold text-center hover:text-primary transition-colors"
+                >
+                  Advanced Stats {advancedOpen ? "▴" : "▾"}
+                </button>
+                {advancedOpen && (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span>🌈 Rainbows Spotted</span>
+                      <span className="font-semibold tabular-nums">{times(stats.rainbowSpottedCount)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>🟥 Hardest Category First</span>
+                      <span className="font-semibold tabular-nums">{times(stats.hardestFirstCount)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span>🟥 Hardest First</span>
-                    <span className="font-semibold tabular-nums">{stats.hardestFirstCount} times</span>
-                  </div>
-                </div>
+                )}
               </>
             )}
           </>

@@ -25,6 +25,7 @@ export interface GameStats {
   lastPlayedDate: string | null;
   guessDistribution: number[]; // mistakes 0-4
   rainbowSpotRate: number | null; // % of rainbow-eligible games where rainbow was found; null if no eligible games
+  rainbowSpottedCount: number; // raw count of games where rainbow was found
   hardestFirstCount: number; // games where solve_order[0] === "red" (difficulty 4)
 }
 
