@@ -56,6 +56,7 @@ function mapPuzzle(data: any): Puzzle {
   return {
     id: data.id,
     date: data.date,
+    title: data.title ?? null,
     groups,
     wordOrder: data.word_order || null,
     rainbowHerring: data.rainbow_herring || null,
