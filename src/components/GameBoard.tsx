@@ -336,7 +336,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   const generateShareText = useCallback(() => {
     const header = puzzle.title
-      ? `Rainbow Categories — ${puzzle.title}`
+      ? `Rainbow Categories ${puzzle.title}`
       : "Rainbow Categories";
     return `${header}\n\n${generateShareLines().join("\n")}\n\nwww.rainbowcategories.com`;
   }, [puzzle, generateShareLines]);
