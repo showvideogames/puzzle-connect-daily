@@ -342,9 +342,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   }, [state.guessHistory, puzzle, bonusRainbowCorrect, hintsUsed]);
 
   const generateShareText = useCallback(() => {
-    const d = new Date(puzzle.date + "T12:00:00");
-    const formatted = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-    return `🧩 ${formatted}\n${generateShareLines().join("\n")}`;
+    const header = puzzle.title
+      ? `Rainbow Categories — ${puzzle.title}`
+      : "Rainbow Categories";
+    return `${header}\n\n${generateShareLines().join("\n")}\n\nwww.rainbowcategories.com`;
   }, [puzzle, generateShareLines]);
 
   const handleShare = useCallback(async () => {
