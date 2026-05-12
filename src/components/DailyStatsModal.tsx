@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { X, TrendingUp, Users } from "lucide-react";
 
@@ -36,7 +37,7 @@ export function DailyStatsModal({ puzzleId, open, onClose, userMistakes, isCompl
     ? Math.round((stats.wins / stats.total_players) * 100)
     : 0;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-card rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4 animate-pop">
@@ -125,6 +126,7 @@ export function DailyStatsModal({ puzzleId, open, onClose, userMistakes, isCompl
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
