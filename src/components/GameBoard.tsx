@@ -229,7 +229,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const [streakBefore, setStreakBefore] = useState<number | null>(null);
   const [showStreak, setShowStreak] = useState(false);
   const prevIsWon = useRef(state.isWon);
-  const prevIsComplete = useRef(state.isComplete);
+  const prevIsComplete = useRef(false);
   const prevGotRainbow = useRef(state.gotRainbow);
 
   useEffect(() => {
