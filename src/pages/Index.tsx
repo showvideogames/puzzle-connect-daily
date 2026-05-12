@@ -147,7 +147,7 @@ export default function Index() {
           user={user}
           clearColorsTrigger={clearColorsTrigger}
           hintsUsed={hintsUsed}
-          onHintClick={() => setShowHintModal(true)}
+          onHintClick={handleHeaderHintClick}
           onComplete={() => setIsPuzzleComplete(true)}
         />
       ) : (

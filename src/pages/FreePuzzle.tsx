@@ -129,7 +129,7 @@ export default function FreePuzzle() {
           user={user}
           isArchive
           hintsUsed={hintsUsed}
-          onHintClick={() => setShowHintModal(true)}
+          onHintClick={handleHeaderHintClick}
           onComplete={() => setIsPuzzleComplete(true)}
         />
       ) : null}

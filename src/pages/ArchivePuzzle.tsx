@@ -129,7 +129,7 @@ export default function ArchivePuzzle() {
           user={user ?? null}
           isArchive
           hintsUsed={hintsUsed}
-          onHintClick={() => setShowHintModal(true)}
+          onHintClick={handleHeaderHintClick}
           onComplete={() => setIsPuzzleComplete(true)}
         />
       ) : null}
