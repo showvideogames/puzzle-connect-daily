@@ -34,7 +34,7 @@ export function SillySaturdayModal({ isEmojiPuzzle, puzzleId }: SillySaturdayMod
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+      style={{ backdropFilter: "blur(4px)" }}
     >
       <div
         className="relative w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-pop"
