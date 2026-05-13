@@ -14,6 +14,7 @@ import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/gameStats";
+import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { trackEvent } from "@/lib/analytics";
 
 const TOOLTIP_MSG = "This puzzle has no Rainbow category.";
@@ -110,6 +111,28 @@ function getResultHeadline(isWon: boolean, mistakes: number): string {
   if (isWon && mistakes === 2) return "Great job! 👏";
   if (isWon && mistakes === 3) return "Clutch!!! 🙌";
   return "Valiant effort 💪";
+}
+
+function RainbowWordsRow({ words }: { words: string[] }) {
+  return (
+    <div className="text-xs mt-0.5 opacity-90 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
+      {words.map((w, i) => (
+        <span key={`${w}-${i}`} className="inline-flex items-center">
+          {isCustomEmoji(w) ? (
+            <img
+              src={customEmojiUrl(w)}
+              alt={customEmojiName(w) ?? ""}
+              draggable={false}
+              style={{ height: "28px", width: "auto", objectFit: "contain" }}
+            />
+          ) : (
+            w
+          )}
+          {i < words.length - 1 && <span>,</span>}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function getResultSubtitle(isWon: boolean, mistakes: number): string {
@@ -408,9 +431,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <div className="font-bold text-sm uppercase tracking-wide">
               {puzzle.rainbowCategoryName || "Rainbow 🌈"}
             </div>
-            <div className="text-xs mt-0.5 opacity-90">
-              {puzzle.rainbowHerring.join(", ")}
-            </div>
+            <RainbowWordsRow words={puzzle.rainbowHerring} />
           </div>
         )}
 
@@ -445,9 +466,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               <div className="font-bold text-sm uppercase tracking-wide">
                 {puzzle.rainbowCategoryName || "Rainbow 🌈"}
               </div>
-              <div className="text-xs mt-0.5 opacity-90">
-                {puzzle.rainbowHerring.join(", ")}
-              </div>
+              <RainbowWordsRow words={puzzle.rainbowHerring} />
             </div>
           )
         )}
