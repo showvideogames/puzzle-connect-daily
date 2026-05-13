@@ -14,6 +14,7 @@ import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/gameStats";
+import { trackEvent } from "@/lib/analytics";
 
 const TOOLTIP_MSG = "This puzzle has no Rainbow category.";
 
@@ -204,6 +205,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // Used to hide redundant UI (dots, headline) when viewing a completed puzzle
   const wasAlreadyComplete = useRef(state.isComplete);
 
+  useEffect(() => {
+    trackEvent("puzzle_started", { puzzle_id: puzzle.id, is_archive: isArchive });
+  }, [puzzle.id, isArchive]);
+
   const [paletteMode, setPaletteMode] = useState<PaletteMode>("select");
 
   useEffect(() => {
@@ -257,10 +262,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   useEffect(() => {
     if (state.isComplete && !prevIsComplete.current) {
+      if (!wasAlreadyComplete.current) {
+        trackEvent("puzzle_completed", {
+          won: state.isWon,
+          mistakes: state.mistakes,
+          found_rainbow: state.gotRainbow,
+        });
+      }
       onComplete?.();
     }
     prevIsComplete.current = state.isComplete;
-  }, [state.isComplete, onComplete]);
+  }, [state.isComplete, state.isWon, state.mistakes, state.gotRainbow, onComplete]);
 
   useEffect(() => {
     if (state.gotRainbow && !prevGotRainbow.current) {
@@ -272,6 +284,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   useEffect(() => {
     if (bonusRainbowCorrect !== null) {
+      if (bonusRainbowCorrect === true) trackEvent("rainbow_found", { source: "bonus_modal" });
       setRainbowVisible(false);
       requestAnimationFrame(() => requestAnimationFrame(() => setRainbowVisible(true)));
     }
@@ -342,6 +355,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   }, [puzzle, generateShareLines]);
 
   const handleShare = useCallback(async () => {
+    trackEvent("share_clicked");
     const text = generateShareText();
     try {
       await navigator.clipboard.writeText(text);

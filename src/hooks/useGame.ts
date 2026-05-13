@@ -5,6 +5,7 @@ import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
 import { saveGameStats, hasExistingSession } from "@/lib/gameStats";
 import { playRainbowSound } from "@/lib/sounds";
+import { trackEvent } from "@/lib/analytics";
 
 function shuffleArray<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -394,6 +395,7 @@ export function useGame(
             isCorrect: false,
             isRainbow: true,
           };
+          trackEvent("rainbow_found", { source: "in_game" });
           setState((s) => ({ ...s, selectedWords: [], gotRainbow: true, guessHistory: [...s.guessHistory, attempt] }));
         }, 700);
         return;
@@ -420,6 +422,7 @@ export function useGame(
       setTimeout(() => {
         setMatchedWords([]);
         setLastRevealedGroup(groupIdx);
+        trackEvent("category_solved", { difficulty: puzzle.groups[groupIdx].difficulty });
         setShuffledWords((prev) => prev.filter((w) => !solvedWords.includes(w)));
 
         const newSolved = [...state.solvedGroups, groupIdx];
