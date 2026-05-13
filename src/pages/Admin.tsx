@@ -16,10 +16,14 @@ import { toast } from "sonner";
 const PUZZLES_PER_PAGE = 50;
 
 const emptyGroup = (): GroupForm => ({ category: "", words: "", difficulty: 1 });
+const normalizeWord = (w: string): string => {
+  const trimmed = w.trim();
+  return /^img:/i.test(trimmed) ? trimmed.toLowerCase() : trimmed.toUpperCase();
+};
 const parseWords = (value: string) =>
   value
     .split(",")
-    .map((w) => w.trim().toUpperCase())
+    .map(normalizeWord)
     .filter(Boolean);
 
 // ─── Mini Calendar ──────────────────────────────────────────────────────────
@@ -738,7 +742,7 @@ export default function Admin() {
                   <div className="grid grid-cols-4 gap-2">
                     {wordOrder.map((word, vIdx) => {
                       const groupIdx = groups.findIndex((g) =>
-                        g.words.split(",").map((w) => w.trim().toUpperCase()).includes(word)
+                        g.words.split(",").map(normalizeWord).includes(word)
                       );
                       const diffColors = [
                         "bg-[hsl(var(--group-1)/0.3)]",
@@ -786,7 +790,7 @@ export default function Admin() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {groups.map((g, i) => {
-                  const groupWords = g.words.split(",").map((w) => w.trim().toUpperCase()).filter(Boolean);
+                  const groupWords = g.words.split(",").map(normalizeWord).filter(Boolean);
                   return (
                     <div key={i}>
                       <Label className="text-xs">{g.category || `Group ${i + 1}`}</Label>
