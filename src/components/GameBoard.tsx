@@ -6,6 +6,7 @@ import { SolvedGroup } from "./SolvedGroup";
 import { MistakeDots } from "./MistakeDots";
 import { DailyStatsModal } from "./DailyStatsModal";
 import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
+import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
 import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2 } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -719,6 +720,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
       {/* Rating */}
       {state.isComplete && <PuzzleRating puzzleId={puzzle.id} user={user} />}
+
+      <SillySaturdayModal isEmojiPuzzle={!!puzzle.isEmojiPuzzle} puzzleId={puzzle.id} />
 
       <DailyStatsModal
         puzzleId={puzzle.id}
