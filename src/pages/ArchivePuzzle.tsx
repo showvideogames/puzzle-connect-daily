@@ -11,6 +11,7 @@ import { HintModal } from "@/components/HintModal";
 import { getPuzzleById } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
+import { trackEvent } from "@/lib/analytics";
 import type { User } from "@supabase/supabase-js";
 
 type ModalName = "stats" | "help" | "settings" | null;
@@ -61,6 +62,7 @@ export default function ArchivePuzzle() {
   }, [puzzleId]);
 
   const handleHintConfirm = useCallback(() => {
+    trackEvent("hint_used");
     setHintsUsed(true);
     setShowHintModal(false);
   }, []);

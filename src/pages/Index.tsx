@@ -9,6 +9,7 @@ import { HintModal } from "@/components/HintModal";
 import { getTodaysPuzzle } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
+import { trackEvent } from "@/lib/analytics";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
@@ -94,6 +95,7 @@ export default function Index() {
   }, []);
 
   const handleHintConfirm = useCallback(() => {
+    trackEvent("hint_used");
     setHintsUsed(true);
     setShowHintModal(false);
   }, []);
