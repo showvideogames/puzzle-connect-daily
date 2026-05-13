@@ -9,7 +9,8 @@ import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
 import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2 } from "lucide-react";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useImagePreload } from "@/hooks/useImagePreload";
 import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
@@ -225,6 +226,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     alreadyGuessed,
   } = useGame(puzzle, { isArchive, hintsUsed });
 
+  // Preload custom emoji images so they don't pop in after the board renders
+  const imagesToPreload = useMemo(() => {
+    const words = [
+      ...puzzle.groups.flatMap((g) => g.words),
+      ...(puzzle.rainbowHerring ?? []),
+    ];
+    return words.filter(isCustomEmoji).map((w) => customEmojiUrl(w));
+  }, [puzzle]);
+  const imagesReady = useImagePreload(imagesToPreload);
+
   // Track if puzzle was already complete when component first mounted
   // Used to hide redundant UI (dots, headline) when viewing a completed puzzle
   const wasAlreadyComplete = useRef(state.isComplete);
@@ -411,6 +422,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const streakToShow = streakBefore != null ? streakBefore + 1 : 1;
 
   return (
+    <>
+      {!imagesReady ? (
+        <div className="w-full max-w-lg mx-auto px-2 flex flex-col items-center justify-center py-20">
+          <img
+            src="/rainbow-categories.png"
+            alt="Rainbow Categories"
+            className="h-16 w-auto mb-4 opacity-80"
+          />
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
     <div className="w-full max-w-lg mx-auto px-2 animate-fade-up">
       <div className="flex items-center justify-center gap-2 mb-4">
         <p className="text-center text-sm text-muted-foreground">
@@ -721,8 +743,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* Rating */}
       {state.isComplete && <PuzzleRating puzzleId={puzzle.id} user={user} />}
 
-      <SillySaturdayModal isEmojiPuzzle={!!puzzle.isEmojiPuzzle} puzzleId={puzzle.id} />
-
       <DailyStatsModal
         puzzleId={puzzle.id}
         open={showGlobalStats}
@@ -739,5 +759,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         />
       )}
     </div>
+      )}
+
+      {/* Silly Saturday modal — rendered outside the preload gate so it appears immediately */}
+      <SillySaturdayModal isEmojiPuzzle={!!puzzle.isEmojiPuzzle} puzzleId={puzzle.id} />
+    </>
   );
 }
