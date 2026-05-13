@@ -52,7 +52,28 @@ export function CustomEmojiManager() {
   }, []);
 
   const handleDelete = useCallback(async (filename: string) => {
-    if (!confirm(`Delete ${filename}? This cannot be undone.`)) return;
+    const name = filename.replace(/\.png$/i, "");
+    const reference = `img:${name}`;
+
+    // Check usage in puzzle_groups (words array)
+    const { data: usageRows, error: usageError } = await supabase
+      .from("puzzle_groups")
+      .select("puzzle_id")
+      .contains("words", [reference]);
+
+    if (usageError) {
+      toast.error(`Could not check usage: ${usageError.message}`);
+      return;
+    }
+
+    const puzzleCount = new Set((usageRows ?? []).map((r) => r.puzzle_id)).size;
+
+    const message = puzzleCount > 0
+      ? `This emoji is used in ${puzzleCount} puzzle${puzzleCount === 1 ? "" : "s"}. Deleting it will break those tiles. Are you sure?`
+      : `Delete ${filename}? This cannot be undone.`;
+
+    if (!confirm(message)) return;
+
     const { error } = await supabase.storage.from(BUCKET).remove([filename]);
     if (error) {
       toast.error(`Delete failed: ${error.message}`);
@@ -86,7 +107,7 @@ export function CustomEmojiManager() {
     const { error } = await supabase.storage.from(BUCKET).upload(
       `${cleanName}.png`,
       selectedFile,
-      { upsert: false, contentType: "image/png" },
+      { upsert: true, contentType: "image/png" },
     );
     setUploading(false);
 
@@ -149,7 +170,7 @@ export function CustomEmojiManager() {
             return (
               <div key={f.name} className="border border-border rounded-lg p-3 bg-card flex flex-col items-center gap-2">
                 <img
-                  src={customEmojiUrl(name)}
+                  src={customEmojiUrl(name, true)}
                   alt={name}
                   className="h-16 w-16 object-contain"
                   draggable={false}
