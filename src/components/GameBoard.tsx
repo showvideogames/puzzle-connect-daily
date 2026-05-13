@@ -425,11 +425,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     <>
       {!imagesReady ? (
         <div className="w-full max-w-lg mx-auto px-2 flex flex-col items-center justify-center py-20">
-          <img
-            src="/rainbow-categories.png"
-            alt="Rainbow Categories"
-            className="h-16 w-auto mb-4 opacity-80"
-          />
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
