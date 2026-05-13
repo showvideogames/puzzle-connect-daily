@@ -40,7 +40,6 @@ export function SillySaturdayModal({ isEmojiPuzzle, puzzleId }: SillySaturdayMod
         className="relative w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-pop"
         style={{
           background: "hsl(var(--card))",
-          border: "1px solid hsl(var(--border))",
         }}
       >
         <div className="px-6 py-7 text-center space-y-4">
