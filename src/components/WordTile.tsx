@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 
 const DOUBLE_TAP_DELAY_MS = 250;
 
@@ -90,7 +91,8 @@ export function WordTile({
   const isTouchDragging = useRef(false);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
 
-  const emojiFontSize = isEmojiPuzzle
+  const isImage = isCustomEmoji(word);
+  const emojiFontSize = isEmojiPuzzle && !isImage
     ? getEmojiFontSize(countVisibleChars(word))
     : undefined;
 
@@ -212,7 +214,23 @@ export function WordTile({
           ...(word.includes(" ") ? {} : { whiteSpace: "nowrap" }),
         }}
       >
-        {word.includes(" ") ? (
+        {isImage ? (
+          <img
+            src={customEmojiUrl(word)}
+            alt={customEmojiName(word) ?? ""}
+            draggable={false}
+            style={{
+              maxHeight: "48px",
+              maxWidth: "100%",
+              width: "auto",
+              height: "auto",
+              objectFit: "contain",
+              display: "block",
+              margin: "0 auto",
+              pointerEvents: "none",
+            }}
+          />
+        ) : word.includes(" ") ? (
           <span style={{ display: "block", maxWidth: "80px", wordBreak: "break-word", overflowWrap: "break-word", lineHeight: 1.2 }}>
             {word}
           </span>

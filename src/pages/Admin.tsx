@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { LogOut, Save, ArrowLeft, RotateCcw, ArrowLeftRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ArchiveAccessManager } from "@/components/ArchiveAccessManager";
+import { CustomEmojiManager } from "@/components/admin/CustomEmojiManager";
 import { AdminLogin, AdminNoAccess } from "@/components/admin/AdminLogin";
 import { PuzzleListItem } from "@/components/admin/PuzzleListItem";
 import { useDraftPersistence, type GroupForm, type DraftData } from "@/hooks/useDraftPersistence";
@@ -931,6 +932,8 @@ export default function Admin() {
         </section>
 
         <ArchiveAccessManager />
+
+        <CustomEmojiManager />
 
         {/* Mini calendar + puzzle list */}
         <section className="space-y-4">
