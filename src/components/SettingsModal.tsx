@@ -6,18 +6,16 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { GameSettings } from "@/lib/settings";
-import { Mail } from "lucide-react";
-
-const FEEDBACK_MAILTO = `mailto:samwestgames@gmail.com?subject=${encodeURIComponent("Rainbow Categories Feedback")}&body=${encodeURIComponent("(Please describe your feedback, bug report, or suggestion here.)")}`;
 
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
   settings: GameSettings;
   onSettingsChange: (settings: GameSettings) => void;
+  onOpenFeedback?: () => void;
 }
 
-export function SettingsModal({ open, onClose, settings, onSettingsChange }: SettingsModalProps) {
+export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback }: SettingsModalProps) {
   const items = [
     {
       label: "Dark Mode",
@@ -129,12 +127,12 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange }: Set
           {/* Feedback */}
           <div className="border-t border-border pt-4">
             <button
-              onClick={() => window.open(FEEDBACK_MAILTO, "_blank")}
+              onClick={() => { onClose(); onOpenFeedback?.(); }}
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg
                 border border-border text-sm font-medium text-muted-foreground
                 hover:bg-secondary hover:text-foreground transition-colors active:scale-95"
             >
-              <Mail className="w-4 h-4" /> Send Feedback
+              Send Feedback
             </button>
           </div>
         </div>

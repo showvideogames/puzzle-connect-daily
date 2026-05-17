@@ -5,6 +5,7 @@ import { GameHeader } from "@/components/GameHeader";
 import { TutorialModal } from "@/components/TutorialModal";
 import { StatsModal } from "@/components/StatsModal";
 import { SettingsModal } from "@/components/SettingsModal";
+import { FeedbackModal } from "@/components/FeedbackModal";
 import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { PlayerAuth } from "@/components/PlayerAuth";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
@@ -52,7 +53,7 @@ interface FreePuzzleItem {
   free_puzzle_order: number;
 }
 
-type ModalName = "stats" | "help" | "settings" | null;
+type ModalName = "stats" | "help" | "settings" | "feedback" | null;
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -381,6 +382,12 @@ export default function Archive() {
         onClose={() => setActiveModal(null)}
         settings={settings}
         onSettingsChange={handleSettingsChange}
+        onOpenFeedback={() => setActiveModal("feedback")}
+      />
+      <FeedbackModal
+        open={activeModal === "feedback"}
+        onClose={() => setActiveModal(null)}
+        user={null}
       />
     </>
   );

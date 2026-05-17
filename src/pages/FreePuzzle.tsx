@@ -7,6 +7,7 @@ import { GameHeader } from "@/components/GameHeader";
 import { TutorialModal } from "@/components/TutorialModal";
 import { StatsModal } from "@/components/StatsModal";
 import { SettingsModal } from "@/components/SettingsModal";
+import { FeedbackModal } from "@/components/FeedbackModal";
 import { HintModal } from "@/components/HintModal";
 import { getPuzzleById } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
@@ -14,7 +15,7 @@ import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
 import type { User } from "@supabase/supabase-js";
 
-type ModalName = "stats" | "help" | "settings" | null;
+type ModalName = "stats" | "help" | "settings" | "feedback" | null;
 
 export default function FreePuzzle() {
   const { puzzleId } = useParams<{ puzzleId: string }>();
@@ -150,6 +151,12 @@ export default function FreePuzzle() {
         onClose={() => setActiveModal(null)}
         settings={settings}
         onSettingsChange={handleSettingsChange}
+        onOpenFeedback={() => setActiveModal("feedback")}
+      />
+      <FeedbackModal
+        open={activeModal === "feedback"}
+        onClose={() => setActiveModal(null)}
+        user={user}
       />
       <HintModal
         open={showHintModal}

@@ -5,6 +5,7 @@ import { GameBoard } from "@/components/GameBoard";
 import { StatsModal } from "@/components/StatsModal";
 import { TutorialModal } from "@/components/TutorialModal";
 import { SettingsModal } from "@/components/SettingsModal";
+import { FeedbackModal } from "@/components/FeedbackModal";
 import { HintModal } from "@/components/HintModal";
 import { getTodaysPuzzle } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
@@ -15,7 +16,7 @@ import type { User } from "@supabase/supabase-js";
 
 const TUTORIAL_SEEN_KEY = "tutorial-seen";
 
-type ModalName = "stats" | "help" | "settings" | null;
+type ModalName = "stats" | "help" | "settings" | "feedback" | null;
 
 export default function Index() {
   const [activeModal, setActiveModal] = useState<ModalName>(null);
@@ -178,6 +179,12 @@ export default function Index() {
         onClose={closeModal}
         settings={settings}
         onSettingsChange={handleSettingsChange}
+        onOpenFeedback={() => setActiveModal("feedback")}
+      />
+      <FeedbackModal
+        open={activeModal === "feedback"}
+        onClose={closeModal}
+        user={user}
       />
       <HintModal
         open={showHintModal}
