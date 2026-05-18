@@ -8,6 +8,7 @@ import { LogOut, Save, ArrowLeft, RotateCcw, ArrowLeftRight, ChevronLeft, Chevro
 import { Link } from "react-router-dom";
 import { ArchiveAccessManager } from "@/components/ArchiveAccessManager";
 import { CustomEmojiManager } from "@/components/admin/CustomEmojiManager";
+import { FeedbackList } from "@/components/admin/FeedbackList";
 import { AdminLogin, AdminNoAccess } from "@/components/admin/AdminLogin";
 import { PuzzleListItem } from "@/components/admin/PuzzleListItem";
 import { useDraftPersistence, type GroupForm, type DraftData } from "@/hooks/useDraftPersistence";
@@ -938,6 +939,8 @@ export default function Admin() {
         <ArchiveAccessManager />
 
         <CustomEmojiManager />
+
+        <FeedbackList />
 
         {/* Mini calendar + puzzle list */}
         <section className="space-y-4">
