@@ -8,6 +8,7 @@ import { TutorialModal } from "@/components/TutorialModal";
 import { StatsModal } from "@/components/StatsModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
+import { SEO } from "@/components/SEO";
 import { HintModal } from "@/components/HintModal";
 import { getPuzzleById } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
@@ -76,8 +77,17 @@ export default function ArchivePuzzle() {
     }
   }, [isPuzzleComplete]);
 
+  const puzzleLabel = puzzle?.title?.trim() || puzzleId || "";
+
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
+      {puzzleLabel && (
+        <SEO
+          title={`Puzzle ${puzzleLabel} — Rainbow Categories Archive`}
+          description={`Play Puzzle ${puzzleLabel} from the Rainbow Categories archive. A daily word puzzle with a hidden twist.`}
+          path={`/archive/${puzzleId}`}
+        />
+      )}
       <GameHeader
         onStatsClick={() => setActiveModal("stats")}
         onHowToPlayClick={() => setActiveModal("help")}

@@ -6,6 +6,7 @@ import { TutorialModal } from "@/components/TutorialModal";
 import { StatsModal } from "@/components/StatsModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
+import { SEO } from "@/components/SEO";
 import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { PlayerAuth } from "@/components/PlayerAuth";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
@@ -347,6 +348,11 @@ export default function Archive() {
 
   const pageHeader = (
     <>
+      <SEO
+        title="Puzzle Archive — Rainbow Categories"
+        description={`Browse and play every Rainbow Categories puzzle ever made. ${roundedPuzzleCount >= 50 ? `${roundedPuzzleCount}+ ` : ""}daily word puzzles in the archive.`}
+        path="/archive"
+      />
       <GameHeader
         onStatsClick={() => setActiveModal("stats")}
         onHowToPlayClick={() => setActiveModal("help")}
