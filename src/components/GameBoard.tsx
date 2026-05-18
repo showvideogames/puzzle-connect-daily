@@ -698,23 +698,28 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                     ? " — One Away"
                     : "";
                 return (
-                  <div key={i} className="text-xs text-muted-foreground flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
-                    {sorted.map((w, j) => (
-                      <span key={`${w}-${j}`} className="inline-flex items-center">
-                        {isCustomEmoji(w) ? (
-                          <img
-                            src={customEmojiUrl(w)}
-                            alt={customEmojiName(w) ?? ""}
-                            draggable={false}
-                            style={{ height: "18px", width: "auto", objectFit: "contain" }}
-                          />
-                        ) : (
-                          w
-                        )}
-                        {j < sorted.length - 1 && <span>,</span>}
-                      </span>
-                    ))}
-                    {suffix && <span>{suffix}</span>}
+                  <div key={i} className="text-xs text-muted-foreground grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                    <div />
+                    <div className="flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
+                      {sorted.map((w, j) => (
+                        <span key={`${w}-${j}`} className="inline-flex items-center">
+                          {isCustomEmoji(w) ? (
+                            <img
+                              src={customEmojiUrl(w)}
+                              alt={customEmojiName(w) ?? ""}
+                              draggable={false}
+                              style={{ height: "18px", width: "auto", objectFit: "contain" }}
+                            />
+                          ) : (
+                            w
+                          )}
+                          {j < sorted.length - 1 && <span>,</span>}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="text-left">
+                      {suffix && <span>{suffix.replace(/^ — /, "— ")}</span>}
+                    </div>
                   </div>
                 );
               })}
