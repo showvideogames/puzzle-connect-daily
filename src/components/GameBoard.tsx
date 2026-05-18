@@ -211,6 +211,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     lastRevealedGroup,
     oneAway,
     setOneAway,
+    almostRainbow,
+    setAlmostRainbow,
     rainbowWords,
     showRainbowPopup,
     matchedWords,
@@ -235,6 +237,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     return words.filter(isCustomEmoji).map((w) => customEmojiUrl(w));
   }, [puzzle]);
   const imagesReady = useImagePreload(imagesToPreload);
+
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const incorrectGuesses = useMemo(
+    () => state.guessHistory.filter((a) => !a.isCorrect && !a.isRainbow),
+    [state.guessHistory],
+  );
 
   // Track if puzzle was already complete when component first mounted
   // Used to hide redundant UI (dots, headline) when viewing a completed puzzle
@@ -586,8 +594,21 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* One Away popup */}
-      {oneAway && (
+      {/* Almost 🌈 takes priority over One Away */}
+      {almostRainbow ? (
+        <div className="flex justify-center mt-3 animate-fade-up">
+          <div className="bg-foreground text-background pl-5 pr-3 py-2 rounded-full text-sm font-semibold shadow-md flex items-center gap-2">
+            Almost 🌈
+            <button
+              onClick={() => setAlmostRainbow(false)}
+              className="w-5 h-5 rounded-full bg-background/20 hover:bg-background/30 flex items-center justify-center transition-colors active:scale-95"
+              aria-label="Dismiss"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      ) : oneAway ? (
         <div className="flex justify-center mt-3 animate-fade-up">
           <div className="bg-foreground text-background pl-5 pr-3 py-2 rounded-full text-sm font-semibold shadow-md flex items-center gap-2">
             One away…
@@ -600,7 +621,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             </button>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Already Guessed popup */}
       {alreadyGuessed && (
@@ -654,6 +675,50 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             >
               <Eraser className="w-4 h-4" /> Clear Colors
             </button>
+          )}
+        </div>
+      )}
+
+      {/* Guess History (Beta) */}
+      {settings?.guessHistory && incorrectGuesses.length > 0 && (
+        <div className="mt-3">
+          <button
+            onClick={() => setHistoryExpanded((v) => !v)}
+            className="w-full text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors py-1"
+          >
+            Guess History {historyExpanded ? "▴" : "▾"}
+          </button>
+          {historyExpanded && (
+            <div className="mt-2 space-y-1">
+              {incorrectGuesses.map((g, i) => {
+                const sorted = [...g.words].sort((a, b) => a.localeCompare(b));
+                const suffix = g.isAlmostRainbow
+                  ? " — Almost 🌈"
+                  : g.isOneAway
+                    ? " — One Away"
+                    : "";
+                return (
+                  <div key={i} className="text-xs text-muted-foreground flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
+                    {sorted.map((w, j) => (
+                      <span key={`${w}-${j}`} className="inline-flex items-center">
+                        {isCustomEmoji(w) ? (
+                          <img
+                            src={customEmojiUrl(w)}
+                            alt={customEmojiName(w) ?? ""}
+                            draggable={false}
+                            style={{ height: "18px", width: "auto", objectFit: "contain" }}
+                          />
+                        ) : (
+                          w
+                        )}
+                        {j < sorted.length - 1 && <span>,</span>}
+                      </span>
+                    ))}
+                    {suffix && <span>{suffix}</span>}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}

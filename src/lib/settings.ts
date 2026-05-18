@@ -8,6 +8,7 @@ export interface GameSettings {
   arrangeTiles: boolean;
   colorCodeTiles: boolean;
   colorPaletteMode: boolean;
+  guessHistory: boolean;
 }
 
 const defaults: GameSettings = {
@@ -18,6 +19,7 @@ const defaults: GameSettings = {
   arrangeTiles: false,
   colorCodeTiles: false,
   colorPaletteMode: false,
+  guessHistory: false,
 };
 
 export function loadSettings(): GameSettings {

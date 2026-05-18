@@ -34,6 +34,8 @@ export interface GuessAttempt {
   groupIndices: number[]; // which group each word belongs to (by difficulty)
   isCorrect: boolean;
   isRainbow?: boolean;
+  isOneAway?: boolean;
+  isAlmostRainbow?: boolean;
 }
 
 export interface GameState {
