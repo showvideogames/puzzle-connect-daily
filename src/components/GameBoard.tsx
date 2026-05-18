@@ -698,11 +698,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                     ? " — One Away"
                     : "";
                 return (
-                  <div key={i} className="text-xs text-muted-foreground grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <div key={i} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                     <div />
-                    <div className="flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
+                    <div className="flex items-center justify-center flex-wrap gap-1.5">
                       {sorted.map((w, j) => (
-                        <span key={`${w}-${j}`} className="inline-flex items-center">
+                        <span
+                          key={`${w}-${j}`}
+                          className="inline-flex items-center bg-secondary text-foreground rounded-full px-3 py-1 text-sm font-medium"
+                        >
                           {isCustomEmoji(w) ? (
                             <img
                               src={customEmojiUrl(w)}
@@ -713,11 +716,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                           ) : (
                             w
                           )}
-                          {j < sorted.length - 1 && <span>,</span>}
                         </span>
                       ))}
                     </div>
-                    <div className="text-left">
+                    <div className="text-left text-xs text-muted-foreground">
                       {suffix && <span>{suffix.replace(/^ — /, "— ")}</span>}
                     </div>
                   </div>
