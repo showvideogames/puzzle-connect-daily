@@ -122,6 +122,20 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                 onCheckedChange={handleColorPaletteToggle}
               />
             </label>
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <div>
+                <p className="text-sm font-medium">Guess History</p>
+                <p className="text-xs text-muted-foreground">
+                  See your previous incorrect guesses below the board.
+                </p>
+              </div>
+              <Switch
+                checked={settings.guessHistory}
+                onCheckedChange={(checked) =>
+                  onSettingsChange({ ...settings, guessHistory: checked })
+                }
+              />
+            </label>
           </div>
 
           {/* Feedback */}

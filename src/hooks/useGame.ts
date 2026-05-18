@@ -157,6 +157,7 @@ export function useGame(
   const [shaking, setShaking] = useState(false);
   const [lastRevealedGroup, setLastRevealedGroup] = useState<number | null>(null);
   const [oneAway, setOneAway] = useState(false);
+  const [almostRainbow, setAlmostRainbow] = useState(false);
   const [alreadyGuessed, setAlreadyGuessed] = useState<"plain" | "oneaway" | null>(null);
   const [rainbowWords, setRainbowWords] = useState<string[]>(saved?.rainbowWords ?? []);
   const [showRainbowPopup, setShowRainbowPopup] = useState(false);
@@ -192,6 +193,7 @@ export function useGame(
 
   useEffect(() => {
     if (oneAway) setOneAway(false);
+    if (almostRainbow) setAlmostRainbow(false);
   }, [state.selectedWords]);
 
   useEffect(() => {
@@ -488,21 +490,31 @@ export function useGame(
 
       return;
     } else {
-      const attempt: GuessAttempt = {
-        words: [...state.selectedWords],
-        groupIndices: guessGroupIndices,
-        isCorrect: false,
-      };
+      const rainbowHerring = puzzle.rainbowHerring ?? [];
+      const rainbowHits = state.selectedWords.filter((w) => rainbowHerring.includes(w)).length;
+      const isAlmostRainbow =
+        rainbowHerring.length === 4 &&
+        rainbowWords.length === 0 &&
+        rainbowHits === 3;
 
       const isOneAway = puzzle.groups.some(
         (g, idx) => !state.solvedGroups.includes(idx) && g.words.filter((w) => state.selectedWords.includes(w)).length === 3
       );
 
+      const attempt: GuessAttempt = {
+        words: [...state.selectedWords],
+        groupIndices: guessGroupIndices,
+        isCorrect: false,
+        isOneAway: isOneAway && !isAlmostRainbow,
+        isAlmostRainbow,
+      };
+
       setShaking(true);
       vibrateError();
       setTimeout(() => setShaking(false), 400);
 
-      if (isOneAway) setOneAway(true);
+      if (isAlmostRainbow) setAlmostRainbow(true);
+      else if (isOneAway) setOneAway(true);
 
       const newMistakes = state.mistakes + 1;
       const isLost = newMistakes >= MAX_MISTAKES;
@@ -597,6 +609,8 @@ export function useGame(
     lastRevealedGroup,
     oneAway,
     setOneAway,
+    almostRainbow,
+    setAlmostRainbow,
     rainbowWords,
     showRainbowPopup,
     matchedWords,
