@@ -6,6 +6,7 @@ import { StatsModal } from "@/components/StatsModal";
 import { TutorialModal } from "@/components/TutorialModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
+import { SEO } from "@/components/SEO";
 import { HintModal } from "@/components/HintModal";
 import { getTodaysPuzzle } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
@@ -112,6 +113,11 @@ export default function Index() {
 
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
+      <SEO
+        title="Rainbow Categories — A Daily Word Puzzle Game with a Hidden Twist"
+        description="Free daily word puzzle game. Sort 16 words into 4 categories and find the hidden rainbow within. A creative twist on word categorization games."
+        path="/"
+      />
       <GameHeader
         onStatsClick={() => openModal("stats")}
         onHowToPlayClick={() => openModal("help")}
