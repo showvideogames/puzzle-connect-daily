@@ -31,10 +31,13 @@ function PersonIcon({ filled }: { filled: boolean }) {
   );
 }
 
+type AuthView = "signin" | "signup" | "forgot";
+
 export function PlayerAuth({ user, onSignOut }: PlayerAuthProps) {
   const [showAuth, setShowAuth] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [view, setView] = useState<AuthView>("signin");
+  const [resetSent, setResetSent] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -178,67 +181,130 @@ export function PlayerAuth({ user, onSignOut }: PlayerAuthProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
-            onClick={() => setShowAuth(false)}
+            onClick={() => { setShowAuth(false); setView("signin"); setResetSent(false); }}
           />
           <div className="relative bg-card rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4">
             <h2 className="text-lg font-bold text-center mb-1">
-              {isSignUp ? "Create Account" : "Sign In"}
+              {view === "signup" ? "Create Account" : view === "forgot" ? "Reset your password" : "Sign In"}
             </h2>
             <p className="text-xs text-muted-foreground text-center mb-4">
-              {isSignUp
+              {view === "signup"
                 ? "Sign up to track your stats and streaks."
-                : "Sign in to see puzzle stats."}
+                : view === "forgot"
+                  ? "Enter your email and we'll send you a reset link."
+                  : "Sign in to see puzzle stats."}
             </p>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setLoading(true);
-                if (isSignUp) {
-                  const { error } = await supabase.auth.signUp({ email, password });
-                  if (error) toast.error(error.message);
-                  else { toast.success("Account created!"); setShowAuth(false); }
-                } else {
-                  const { error } = await supabase.auth.signInWithPassword({ email, password });
-                  if (error) toast.error(error.message);
-                  else setShowAuth(false);
-                }
-                setLoading(false);
-              }}
-              className="space-y-3"
-            >
-              <div>
-                <Label htmlFor="player-email" className="text-xs">Email</Label>
-                <Input
-                  id="player-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="h-9 text-sm"
-                />
-              </div>
-              <div>
-                <Label htmlFor="player-pw" className="text-xs">Password</Label>
-                <Input
-                  id="player-pw"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="h-9 text-sm"
-                />
-              </div>
-              <Button type="submit" className="w-full h-9 text-sm" disabled={loading}>
-                {loading ? "…" : isSignUp ? "Sign Up" : "Sign In"}
-              </Button>
-              <button
-                type="button"
-                onClick={() => setIsSignUp(!isSignUp)}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center"
+
+            {view === "forgot" ? (
+              resetSent ? (
+                <div className="space-y-4 text-center">
+                  <p className="text-sm">Check your email for a reset link.</p>
+                  <button
+                    type="button"
+                    onClick={() => { setView("signin"); setResetSent(false); }}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    ← Back to sign in
+                  </button>
+                </div>
+              ) : (
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    setLoading(true);
+                    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                      redirectTo: "https://rainbowcategories.com/reset-password",
+                    });
+                    setLoading(false);
+                    if (error) toast.error(error.message);
+                    else setResetSent(true);
+                  }}
+                  className="space-y-3"
+                >
+                  <div>
+                    <Label htmlFor="player-email" className="text-xs">Email</Label>
+                    <Input
+                      id="player-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <Button type="submit" className="w-full h-9 text-sm" disabled={loading}>
+                    {loading ? "…" : "Send reset link"}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setView("signin")}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center"
+                  >
+                    ← Back to sign in
+                  </button>
+                </form>
+              )
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setLoading(true);
+                  if (view === "signup") {
+                    const { error } = await supabase.auth.signUp({ email, password });
+                    if (error) toast.error(error.message);
+                    else { toast.success("Account created!"); setShowAuth(false); }
+                  } else {
+                    const { error } = await supabase.auth.signInWithPassword({ email, password });
+                    if (error) toast.error(error.message);
+                    else setShowAuth(false);
+                  }
+                  setLoading(false);
+                }}
+                className="space-y-3"
               >
-                {isSignUp ? "Already have an account? Sign in" : "Need an account? Sign up"}
-              </button>
-            </form>
+                <div>
+                  <Label htmlFor="player-email" className="text-xs">Email</Label>
+                  <Input
+                    id="player-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="player-pw" className="text-xs">Password</Label>
+                  <Input
+                    id="player-pw"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="h-9 text-sm"
+                  />
+                  {view === "signin" && (
+                    <button
+                      type="button"
+                      onClick={() => setView("forgot")}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-right mt-1"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <Button type="submit" className="w-full h-9 text-sm" disabled={loading}>
+                  {loading ? "…" : view === "signup" ? "Sign Up" : "Sign In"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setView(view === "signup" ? "signin" : "signup")}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center"
+                >
+                  {view === "signup" ? "Already have an account? Sign in" : "Need an account? Sign up"}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}
