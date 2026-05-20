@@ -6,6 +6,7 @@ import { TutorialModal } from "@/components/TutorialModal";
 import { StatsModal } from "@/components/StatsModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SEO } from "@/components/SEO";
 import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { PlayerAuth } from "@/components/PlayerAuth";
@@ -350,7 +351,7 @@ export default function Archive() {
     <>
       <SEO
         title="Puzzle Archive — Rainbow Categories"
-        description={`Browse and play every Rainbow Categories puzzle ever made. ${roundedPuzzleCount >= 50 ? `${roundedPuzzleCount}+ ` : ""}daily word puzzles in the archive.`}
+        description={`Browse and play every Rainbow Categories puzzle ever made. ${displayCount >= 50 ? `${displayCount}+ ` : ""}daily word puzzles in the archive.`}
         path="/archive"
       />
       <GameHeader
@@ -678,6 +679,7 @@ export default function Archive() {
         )}
       </div>
       {modals}
+      <SiteFooter />
     </div>
   );
 }

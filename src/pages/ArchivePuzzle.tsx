@@ -8,6 +8,7 @@ import { TutorialModal } from "@/components/TutorialModal";
 import { StatsModal } from "@/components/StatsModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SEO } from "@/components/SEO";
 import { HintModal } from "@/components/HintModal";
 import { getPuzzleById } from "@/lib/puzzles";
@@ -173,6 +174,7 @@ export default function ArchivePuzzle() {
         onClose={() => setShowHintModal(false)}
         onConfirm={handleHintConfirm}
       />
+      <SiteFooter />
     </div>
   );
 }

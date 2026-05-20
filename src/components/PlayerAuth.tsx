@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -343,6 +344,14 @@ export function PlayerAuth({ user, onSignOut }: PlayerAuthProps) {
                 <Button type="submit" className="w-full h-9 text-sm" disabled={loading}>
                   {loading ? "…" : view === "signup" ? "Sign Up" : "Sign In"}
                 </Button>
+                {view === "signup" && (
+                  <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
+                    By signing up, you agree to our{" "}
+                    <Link to="/terms" className="underline hover:text-foreground">Terms of Service</Link>
+                    {" "}and{" "}
+                    <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>.
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={() => setView(view === "signup" ? "signin" : "signup")}
