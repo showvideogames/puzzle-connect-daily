@@ -7,6 +7,7 @@ import { TutorialModal } from "@/components/TutorialModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { SEO } from "@/components/SEO";
+import { SiteFooter } from "@/components/SiteFooter";
 import { HintModal } from "@/components/HintModal";
 import { getTodaysPuzzle } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
@@ -197,6 +198,7 @@ export default function Index() {
         onClose={() => setShowHintModal(false)}
         onConfirm={handleHintConfirm}
       />
+      <SiteFooter />
     </div>
   );
 }

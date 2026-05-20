@@ -9,6 +9,8 @@ import Archive from "./pages/Archive.tsx";
 import ArchivePuzzle from "./pages/ArchivePuzzle.tsx";
 import FreePuzzle from "./pages/FreePuzzle.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
+import Privacy from "./pages/Privacy.tsx";
+import Terms from "./pages/Terms.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -26,6 +28,8 @@ const App = () => (
           <Route path="/archive/:puzzleId" element={<ArchivePuzzle />} />
           <Route path="/free/:puzzleId" element={<FreePuzzle />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -8,6 +8,7 @@ import { TutorialModal } from "@/components/TutorialModal";
 import { StatsModal } from "@/components/StatsModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
+import { SiteFooter } from "@/components/SiteFooter";
 import { HintModal } from "@/components/HintModal";
 import { getPuzzleById } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
@@ -163,6 +164,7 @@ export default function FreePuzzle() {
         onClose={() => setShowHintModal(false)}
         onConfirm={handleHintConfirm}
       />
+      <SiteFooter />
     </div>
   );
 }
