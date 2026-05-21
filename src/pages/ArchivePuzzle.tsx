@@ -87,6 +87,19 @@ export default function ArchivePuzzle() {
 
   const puzzleLabel = puzzle?.title?.trim() || puzzleId || "";
 
+  const handleBackToArchive = () => {
+    try {
+      const ref = new URL(document.referrer);
+      if (ref.origin === window.location.origin && ref.pathname === "/archive") {
+        navigate(-1);
+        return;
+      }
+    } catch {
+      // fall through to fallback
+    }
+    navigate("/archive");
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       {puzzleLabel && (
@@ -130,14 +143,14 @@ export default function ArchivePuzzle() {
               className="bg-foreground text-background text-xs font-semibold rounded-full px-3 py-1.5
                 hover:opacity-90 transition-opacity active:scale-95"
             >
-              Today's Puzzle
+              Today's Puzzle →
             </button>
             <button
-              onClick={() => navigate("/archive")}
+              onClick={handleBackToArchive}
               className="border border-border text-foreground text-xs font-semibold rounded-full px-3 py-1.5
                 hover:bg-secondary transition-colors active:scale-95"
             >
-              ← All Puzzles
+              ← Back to Archive
             </button>
           </div>
           <span className="text-xs text-muted-foreground inline-flex items-center gap-1 pt-1.5">

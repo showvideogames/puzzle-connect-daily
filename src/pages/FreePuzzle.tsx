@@ -84,6 +84,19 @@ export default function FreePuzzle() {
     }
   }, [isPuzzleComplete]);
 
+  const handleBackToArchive = () => {
+    try {
+      const ref = new URL(document.referrer);
+      if (ref.origin === window.location.origin && ref.pathname === "/archive") {
+        navigate(-1);
+        return;
+      }
+    } catch {
+      // fall through to fallback
+    }
+    navigate("/archive");
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       <GameHeader
@@ -113,18 +126,44 @@ export default function FreePuzzle() {
       )}
 
       <div className="w-full max-w-lg px-4 mb-3">
-        <button
-          onClick={() => navigate("/")}
-          className="text-xs hover:opacity-70 transition-opacity inline-flex items-center gap-1"
-          style={{ color: "hsl(var(--muted-foreground))" }}
-        >
-          ← Back to today's puzzle
-        </button>
-        {puzzle && (
-          <p className="text-xs mt-0.5" style={{ color: "hsl(var(--muted-foreground))" }}>
-            {puzzle.date}
-          </p>
-        )}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => navigate("/")}
+              className="bg-foreground text-background text-xs font-semibold rounded-full px-3 py-1.5
+                hover:opacity-90 transition-opacity active:scale-95"
+            >
+              Today's Puzzle →
+            </button>
+            <button
+              onClick={handleBackToArchive}
+              className="border border-border text-foreground text-xs font-semibold rounded-full px-3 py-1.5
+                hover:bg-secondary transition-colors active:scale-95"
+            >
+              ← Back to Archive
+            </button>
+          </div>
+          <span className="text-xs text-muted-foreground inline-flex items-center gap-1 pt-1.5">
+            <span>🗄️</span> Archive
+          </span>
+        </div>
+
+        {puzzle && (() => {
+          const d = new Date(puzzle.date + "T12:00:00");
+          const formattedDate = d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+          const titleText = puzzle.title?.trim()
+            ? `Puzzle ${puzzle.title.trim()}`
+            : formattedDate;
+          const showDateSubtitle = !!puzzle.title?.trim();
+          return (
+            <div className="mt-4 text-center">
+              <h1 className="text-2xl font-bold tracking-tight">{titleText}</h1>
+              {showDateSubtitle && (
+                <p className="text-sm text-muted-foreground mt-0.5">{formattedDate}</p>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {loading ? (
