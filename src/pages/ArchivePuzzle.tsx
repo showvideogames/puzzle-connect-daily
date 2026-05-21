@@ -123,18 +123,44 @@ export default function ArchivePuzzle() {
       )}
 
       <div className="w-full max-w-lg px-4 mb-3">
-        <button
-          onClick={() => navigate("/archive")}
-          className="text-xs hover:opacity-70 transition-opacity inline-flex items-center gap-1"
-          style={{ color: "hsl(var(--muted-foreground))" }}
-        >
-          ← Back to archive
-        </button>
-        {puzzle && (
-          <p className="text-xs mt-0.5" style={{ color: "hsl(var(--muted-foreground))" }}>
-            {puzzle.date}
-          </p>
-        )}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => navigate("/")}
+              className="bg-foreground text-background text-xs font-semibold rounded-full px-3 py-1.5
+                hover:opacity-90 transition-opacity active:scale-95"
+            >
+              Today's Puzzle
+            </button>
+            <button
+              onClick={() => navigate("/archive")}
+              className="border border-border text-foreground text-xs font-semibold rounded-full px-3 py-1.5
+                hover:bg-secondary transition-colors active:scale-95"
+            >
+              ← All Puzzles
+            </button>
+          </div>
+          <span className="text-xs text-muted-foreground inline-flex items-center gap-1 pt-1.5">
+            <span>🗄️</span> Archive
+          </span>
+        </div>
+
+        {puzzle && (() => {
+          const d = new Date(puzzle.date + "T12:00:00");
+          const formattedDate = d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+          const titleText = puzzle.title?.trim()
+            ? `Puzzle ${puzzle.title.trim()}`
+            : formattedDate;
+          const showDateSubtitle = !!puzzle.title?.trim();
+          return (
+            <div className="mt-4 text-center">
+              <h1 className="text-2xl font-bold tracking-tight">{titleText}</h1>
+              {showDateSubtitle && (
+                <p className="text-sm text-muted-foreground mt-0.5">{formattedDate}</p>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {loading ? (
