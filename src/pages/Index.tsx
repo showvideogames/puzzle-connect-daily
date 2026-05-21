@@ -43,11 +43,16 @@ export default function Index() {
   const [landingDismissed, setLandingDismissed] = useState(false);
   const [landingAuthOpen, setLandingAuthOpen] = useState(false);
 
-  // Compute eligibility synchronously on every render so there's no
-  // flash in either direction. If the puzzle hasn't loaded yet, the
-  // `puzzle && showLanding` gate further down keeps anything from rendering.
+  // Compute eligibility synchronously on every render so there's no flash
+  // in either direction. While the puzzle is still loading we *optimistically*
+  // show the landing (rainbow background already paints from the static
+  // index.html, so users see continuous color rather than a white screen).
+  // Once the puzzle data arrives we recheck — if the user should skip the
+  // landing (already seen it today or has an in-progress session), we flip
+  // straight to the board.
   const isLandingEligible = useMemo(() => {
-    if (!puzzle) return false;
+    if (error) return false;
+    if (!puzzle) return true;
     try {
       if (localStorage.getItem(LANDING_KEY_PREFIX + puzzle.date)) return false;
     } catch {
@@ -55,7 +60,7 @@ export default function Index() {
     }
     if (hasInProgressGame(puzzle.id)) return false;
     return true;
-  }, [puzzle]);
+  }, [puzzle, error]);
 
   const showLanding = isLandingEligible && !landingDismissed;
 
@@ -166,7 +171,7 @@ export default function Index() {
     }
   }, [isPuzzleComplete]);
 
-  if (puzzle && showLanding) {
+  if (showLanding) {
     return (
       <>
         <SEO
@@ -225,11 +230,7 @@ export default function Index() {
         </div>
       )}
 
-      {loading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-muted-foreground animate-pulse">Loading puzzle…</p>
-        </div>
-      ) : error ? (
+      {error ? (
         <div className="flex-1 flex items-center justify-center text-center px-4">
           <div>
             <p className="text-lg font-medium">Something went wrong.</p>
