@@ -189,12 +189,13 @@ interface GameBoardProps {
   user?: User | null;
   clearColorsTrigger?: number;
   isArchive?: boolean;
-  hintsUsed?: boolean;
+  smallHintUsed?: boolean;
+  fullHintUsed?: boolean;
   onHintClick?: () => void;
   onComplete?: () => void;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, hintsUsed = false, onHintClick, onComplete }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete }: GameBoardProps) {
   const showRainbow = settings?.showRainbowColors ?? true;
   const arrangeTiles = settings?.arrangeTiles ?? false;
   const colorCodeTiles = settings?.colorCodeTiles ?? false;
@@ -226,7 +227,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     handleTouchDragMove,
     handleTouchDragEnd,
     alreadyGuessed,
-  } = useGame(puzzle, { isArchive, hintsUsed });
+  } = useGame(puzzle, { isArchive, smallHintUsed, fullHintUsed });
 
   // Preload custom emoji images so they don't pop in after the board renders
   const imagesToPreload = useMemo(() => {
@@ -334,8 +335,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   }, [bonusRainbowCorrect]);
 
   useEffect(() => {
-    if (hintsUsed) setHintVisible(true);
-  }, [hintsUsed]);
+    if (fullHintUsed) setHintVisible(true);
+  }, [fullHintUsed]);
 
   const handleSpotResult = useCallback((correct: boolean) => {
     setShowSpotModal(false);
@@ -368,11 +369,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   const generateShareLines = useCallback((): string[] => {
     const lines: string[] = [];
-    if (hintsUsed) lines.push("💡");
+    const hintPrefix = (smallHintUsed ? "💡" : "") + (fullHintUsed ? "🔦" : "");
+    if (hintPrefix) lines.push(hintPrefix);
     for (const attempt of state.guessHistory) {
       if (attempt.isRainbow) {
-        if (hintsUsed && lines.length === 1) {
-          lines[0] = "💡🌈";
+        if (hintPrefix && lines.length === 1) {
+          lines[0] = `${hintPrefix}🌈`;
         } else {
           lines.push("🌈");
         }
@@ -388,7 +390,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }
     if (bonusRainbowCorrect === true) lines.push("🌈");
     return lines;
-  }, [state.guessHistory, puzzle, bonusRainbowCorrect, hintsUsed]);
+  }, [state.guessHistory, puzzle, bonusRainbowCorrect, smallHintUsed, fullHintUsed]);
 
   const generateShareText = useCallback(() => {
     const header = puzzle.title
@@ -731,7 +733,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       )}
 
       {/* Hint pill */}
-      {hintsUsed && (
+      {fullHintUsed && (
         <div className="mt-4 flex justify-center">
           {hintVisible ? (
             <div className="bg-secondary rounded-full px-4 py-2.5 flex items-center gap-3 flex-wrap justify-center animate-fade-up">

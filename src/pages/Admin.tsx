@@ -16,7 +16,7 @@ import { toast } from "sonner";
 
 const PUZZLES_PER_PAGE = 50;
 
-const emptyGroup = (): GroupForm => ({ category: "", words: "", difficulty: 1 });
+const emptyGroup = (): GroupForm => ({ category: "", words: "", difficulty: 1, hintWord: "" });
 const normalizeWord = (w: string): string => {
   const trimmed = w.trim();
   return /^img:/i.test(trimmed) ? trimmed.toLowerCase() : trimmed.toUpperCase();
@@ -211,6 +211,7 @@ export default function Admin() {
   const [puzzleTitle, setPuzzleTitle] = useState("");
   const [rainbowHerring, setRainbowHerring] = useState<(string | null)[]>([null, null, null, null]);
   const [rainbowCategoryName, setRainbowCategoryName] = useState("");
+  const [rainbowHintWord, setRainbowHintWord] = useState("");
   const [isEmojiPuzzle, setIsEmojiPuzzle] = useState(false);
   const [isFreePuzzle, setIsFreePuzzle] = useState(false);
   const [freePuzzleOrder, setFreePuzzleOrder] = useState<number | null>(null);
@@ -270,6 +271,7 @@ export default function Admin() {
     wordOrder,
     rainbowHerring,
     rainbowCategoryName,
+    rainbowHintWord,
     rainbowWordOrder,
     isEmojiPuzzle,
     isFreePuzzle,
@@ -289,6 +291,7 @@ export default function Admin() {
       setWordOrder(draft.wordOrder);
       setRainbowHerring(draft.rainbowHerring);
       setRainbowCategoryName(draft.rainbowCategoryName ?? "");
+      setRainbowHintWord(draft.rainbowHintWord ?? "");
       setRainbowWordOrder(draft.rainbowWordOrder ?? []);
       setIsEmojiPuzzle(draft.isEmojiPuzzle ?? false);
       setIsFreePuzzle(draft.isFreePuzzle ?? false);
@@ -413,6 +416,7 @@ export default function Admin() {
       words: parseWords(g.words),
       difficulty: g.difficulty,
       sort_order: index,
+      hint_word: g.hintWord.trim() || null,
     }));
 
     for (let i = 0; i < normalizedGroups.length; i++) {
@@ -450,6 +454,7 @@ export default function Admin() {
             word_order: wordOrder.length === 16 ? wordOrder : null,
             rainbow_herring: rainbowArr,
             rainbow_category_name: rainbowCategoryName.trim() || null,
+            rainbow_hint_word: rainbowHintWord.trim() || null,
             is_emoji_puzzle: isEmojiPuzzle,
             is_free_puzzle: isFreePuzzle,
             free_puzzle_order: isFreePuzzle ? freePuzzleOrder : null,
@@ -470,6 +475,7 @@ export default function Admin() {
             word_order: wordOrder.length === 16 ? wordOrder : null,
             rainbow_herring: rainbowArr,
             rainbow_category_name: rainbowCategoryName.trim() || null,
+            rainbow_hint_word: rainbowHintWord.trim() || null,
             is_emoji_puzzle: isEmojiPuzzle,
             is_free_puzzle: isFreePuzzle,
             free_puzzle_order: isFreePuzzle ? freePuzzleOrder : null,
@@ -487,6 +493,7 @@ export default function Admin() {
           words: group.words,
           difficulty: group.difficulty,
           sort_order: group.sort_order,
+          hint_word: group.hint_word,
         }))
       );
       if (groupError) throw groupError;
@@ -522,6 +529,7 @@ export default function Admin() {
     setWordOrder([]);
     setRainbowHerring([null, null, null, null]);
     setRainbowCategoryName("");
+    setRainbowHintWord("");
     setRainbowWordOrder([]);
     setIsEmojiPuzzle(false);
     setIsFreePuzzle(false);
@@ -546,6 +554,7 @@ export default function Admin() {
         category: g.category,
         words: g.words.join(", "),
         difficulty: g.difficulty as 1 | 2 | 3 | 4,
+        hintWord: g.hint_word ?? "",
       }))
     );
     setWordOrder(p.word_order || []);
@@ -557,6 +566,7 @@ export default function Admin() {
       setRainbowWordOrder([]);
     }
     setRainbowCategoryName(p.rainbow_category_name || "");
+    setRainbowHintWord(p.rainbow_hint_word || "");
     setIsEmojiPuzzle(p.is_emoji_puzzle ?? false);
     setIsFreePuzzle(p.is_free_puzzle ?? false);
     setFreePuzzleOrder(p.free_puzzle_order ?? null);
@@ -721,6 +731,15 @@ export default function Admin() {
                       />
                     </div>
                   </div>
+                  <div>
+                    <Label className="text-xs">Hint Word (optional)</Label>
+                    <Input
+                      value={g.hintWord}
+                      onChange={(e) => updateGroup(i, "hintWord", e.target.value)}
+                      onBlur={handleBlurSave}
+                      placeholder="Extra example word shown as a Small Hint"
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -786,6 +805,17 @@ export default function Admin() {
                   onChange={(e) => setRainbowCategoryName(e.target.value)}
                   onBlur={handleBlurSave}
                   placeholder="e.g. Synonyms for Fast ⏱️"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Rainbow Hint Word (optional)</Label>
+                <input
+                  type="text"
+                  value={rainbowHintWord}
+                  onChange={(e) => setRainbowHintWord(e.target.value)}
+                  onBlur={handleBlurSave}
+                  placeholder="Extra example word shown as a Small Hint"
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
                 />
               </div>

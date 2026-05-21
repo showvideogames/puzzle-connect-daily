@@ -181,6 +181,7 @@ export type Database = {
         Row: {
           category: string
           difficulty: number
+          hint_word: string | null
           id: string
           puzzle_id: string
           sort_order: number
@@ -189,6 +190,7 @@ export type Database = {
         Insert: {
           category: string
           difficulty: number
+          hint_word?: string | null
           id?: string
           puzzle_id: string
           sort_order?: number
@@ -197,6 +199,7 @@ export type Database = {
         Update: {
           category?: string
           difficulty?: number
+          hint_word?: string | null
           id?: string
           puzzle_id?: string
           sort_order?: number
@@ -296,6 +299,7 @@ export type Database = {
           is_published: boolean
           rainbow_category_name: string | null
           rainbow_herring: string[] | null
+          rainbow_hint_word: string | null
           title: string | null
           updated_at: string
           word_order: string[] | null
@@ -311,6 +315,7 @@ export type Database = {
           is_published?: boolean
           rainbow_category_name?: string | null
           rainbow_herring?: string[] | null
+          rainbow_hint_word?: string | null
           title?: string | null
           updated_at?: string
           word_order?: string[] | null
@@ -326,6 +331,7 @@ export type Database = {
           is_published?: boolean
           rainbow_category_name?: string | null
           rainbow_herring?: string[] | null
+          rainbow_hint_word?: string | null
           title?: string | null
           updated_at?: string
           word_order?: string[] | null

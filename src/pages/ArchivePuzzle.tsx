@@ -29,7 +29,8 @@ export default function ArchivePuzzle() {
   const [activeModal, setActiveModal] = useState<ModalName>(null);
   const [settings, setSettings] = useState<GameSettings>(loadSettings);
   const [showHintModal, setShowHintModal] = useState(false);
-  const [hintsUsed, setHintsUsed] = useState(false);
+  const [smallHintUsed, setSmallHintUsed] = useState(false);
+  const [fullHintUsed, setFullHintUsed] = useState(false);
   const [isPuzzleComplete, setIsPuzzleComplete] = useState(false);
   const [showSillyGoose, setShowSillyGoose] = useState(false);
 
@@ -64,10 +65,16 @@ export default function ArchivePuzzle() {
       .catch(() => { setError(true); setLoading(false); });
   }, [puzzleId]);
 
-  const handleHintConfirm = useCallback(() => {
+  const handleSmallHint = useCallback(() => {
+    trackEvent("hint_small_used");
     trackEvent("hint_used");
-    setHintsUsed(true);
-    setShowHintModal(false);
+    setSmallHintUsed(true);
+  }, []);
+
+  const handleFullHint = useCallback(() => {
+    trackEvent("hint_full_used");
+    trackEvent("hint_used");
+    setFullHintUsed(true);
   }, []);
 
   const handleHeaderHintClick = useCallback(() => {
@@ -149,7 +156,8 @@ export default function ArchivePuzzle() {
           settings={settings}
           user={user ?? null}
           isArchive
-          hintsUsed={hintsUsed}
+          smallHintUsed={smallHintUsed}
+          fullHintUsed={fullHintUsed}
           onHintClick={handleHeaderHintClick}
           onComplete={() => setIsPuzzleComplete(true)}
         />
@@ -172,7 +180,9 @@ export default function ArchivePuzzle() {
       <HintModal
         open={showHintModal}
         onClose={() => setShowHintModal(false)}
-        onConfirm={handleHintConfirm}
+        onSmallHint={handleSmallHint}
+        onFullHint={handleFullHint}
+        puzzle={puzzle}
       />
       <SiteFooter />
     </div>

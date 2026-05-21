@@ -29,7 +29,8 @@ export default function Index() {
   const [settings, setSettings] = useState<GameSettings>(loadSettings);
   const [clearColorsTrigger, setClearColorsTrigger] = useState(0);
   const [showHintModal, setShowHintModal] = useState(false);
-  const [hintsUsed, setHintsUsed] = useState(false);
+  const [smallHintUsed, setSmallHintUsed] = useState(false);
+  const [fullHintUsed, setFullHintUsed] = useState(false);
   const [isPuzzleComplete, setIsPuzzleComplete] = useState(false);
   const [showSillyGoose, setShowSillyGoose] = useState(false);
 
@@ -97,10 +98,16 @@ export default function Index() {
     supabase.auth.signOut();
   }, []);
 
-  const handleHintConfirm = useCallback(() => {
+  const handleSmallHint = useCallback(() => {
+    trackEvent("hint_small_used");
     trackEvent("hint_used");
-    setHintsUsed(true);
-    setShowHintModal(false);
+    setSmallHintUsed(true);
+  }, []);
+
+  const handleFullHint = useCallback(() => {
+    trackEvent("hint_full_used");
+    trackEvent("hint_used");
+    setFullHintUsed(true);
   }, []);
 
   // Header hint button — routes to silly goose if puzzle is complete
@@ -163,7 +170,8 @@ export default function Index() {
           settings={settings}
           user={user}
           clearColorsTrigger={clearColorsTrigger}
-          hintsUsed={hintsUsed}
+          smallHintUsed={smallHintUsed}
+          fullHintUsed={fullHintUsed}
           onHintClick={handleHeaderHintClick}
           onComplete={() => setIsPuzzleComplete(true)}
         />
@@ -196,7 +204,9 @@ export default function Index() {
       <HintModal
         open={showHintModal}
         onClose={() => setShowHintModal(false)}
-        onConfirm={handleHintConfirm}
+        onSmallHint={handleSmallHint}
+        onFullHint={handleFullHint}
+        puzzle={puzzle}
       />
       <SiteFooter />
     </div>
