@@ -51,6 +51,7 @@ function mapPuzzle(data: any): Puzzle {
       category: g.category,
       words: g.words as string[],
       difficulty: g.difficulty as 1 | 2 | 3 | 4,
+      hintWord: g.hint_word ?? null,
     }));
 
   return {
@@ -61,6 +62,7 @@ function mapPuzzle(data: any): Puzzle {
     wordOrder: data.word_order || null,
     rainbowHerring: data.rainbow_herring || null,
     rainbowCategoryName: data.rainbow_category_name || null,
+    rainbowHintWord: data.rainbow_hint_word ?? null,
     isEmojiPuzzle: data.is_emoji_puzzle ?? false,
     isFreePuzzle: data.is_free_puzzle ?? false,
     freePuzzleOrder: data.free_puzzle_order ?? null,

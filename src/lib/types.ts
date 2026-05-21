@@ -2,6 +2,7 @@ export interface PuzzleGroup {
   category: string;
   words: string[];
   difficulty: 1 | 2 | 3 | 4; // 1=easiest, 4=hardest
+  hintWord?: string | null;
 }
 
 export interface Puzzle {
@@ -12,6 +13,7 @@ export interface Puzzle {
   wordOrder?: string[] | null;
   rainbowHerring?: string[] | null;
   rainbowCategoryName?: string | null;
+  rainbowHintWord?: string | null;
   isEmojiPuzzle?: boolean | null;
   isFreePuzzle?: boolean | null;
   freePuzzleOrder?: number | null;

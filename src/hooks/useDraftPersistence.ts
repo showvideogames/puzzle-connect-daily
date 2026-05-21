@@ -6,6 +6,7 @@ export interface GroupForm {
   category: string;
   words: string;
   difficulty: 1 | 2 | 3 | 4;
+  hintWord: string;
 }
 
 export interface DraftData {
@@ -16,6 +17,7 @@ export interface DraftData {
   wordOrder: string[];
   rainbowHerring: (string | null)[];
   rainbowCategoryName: string;
+  rainbowHintWord: string;
   rainbowWordOrder: string[];
   isEmojiPuzzle: boolean;
   isFreePuzzle: boolean;

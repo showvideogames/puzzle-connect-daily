@@ -62,13 +62,14 @@ const DIFFICULTY_SQUARE: Record<number, string> = {
   4: "🟥",
 };
 
-function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle, hintsUsed: boolean): string {
+function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle, smallHintUsed: boolean, fullHintUsed: boolean): string {
   const lines: string[] = [];
-  if (hintsUsed) lines.push("💡");
+  const hintPrefix = (smallHintUsed ? "💡" : "") + (fullHintUsed ? "🔦" : "");
+  if (hintPrefix) lines.push(hintPrefix);
   for (const attempt of guessHistory) {
     if (attempt.isRainbow) {
-      if (hintsUsed && lines.length === 1) {
-        lines[0] = "💡🌈";
+      if (hintPrefix && lines.length === 1) {
+        lines[0] = `${hintPrefix}🌈`;
       } else {
         lines.push("🌈");
       }
@@ -87,7 +88,11 @@ function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle, hintsUsed:
 
 export function useGame(
   puzzle: Puzzle,
-  { isArchive = false, hintsUsed = false }: { isArchive?: boolean; hintsUsed?: boolean } = {}
+  {
+    isArchive = false,
+    smallHintUsed = false,
+    fullHintUsed = false,
+  }: { isArchive?: boolean; smallHintUsed?: boolean; fullHintUsed?: boolean } = {}
 ) {
   const MAX_MISTAKES = 4;
 
@@ -443,7 +448,7 @@ export function useGame(
           vibrateCelebration();
 
           const fullGuessHistory = [...state.guessHistory, attempt];
-          const shareGrid = buildShareGrid(fullGuessHistory, puzzle, hintsUsed);
+          const shareGrid = buildShareGrid(fullGuessHistory, puzzle, smallHintUsed, fullHintUsed);
 
           const winStatsParams = {
             puzzleId: puzzle.id,
@@ -452,7 +457,7 @@ export function useGame(
             activeTimeSeconds: activeSecondsRef.current,
             foundRainbow: state.gotRainbow,
             solveOrder: getSolveOrder(newSolved),
-            hintsUsed,
+            hintsUsed: smallHintUsed || fullHintUsed,
             shareGrid,
             guessHistory: fullGuessHistory.map((g) => ({
               words: g.words,
@@ -529,7 +534,7 @@ export function useGame(
 
       if (isLost) {
         const fullGuessHistory = [...state.guessHistory, attempt];
-        const shareGrid = buildShareGrid(fullGuessHistory, puzzle, hintsUsed);
+        const shareGrid = buildShareGrid(fullGuessHistory, puzzle, smallHintUsed, fullHintUsed);
 
         const lossStatsParams = {
           puzzleId: puzzle.id,
@@ -591,7 +596,7 @@ export function useGame(
         });
       }
     }
-  }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, fireConfetti, tileColors, hintsUsed]);
+  }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, fireConfetti, tileColors, smallHintUsed, fullHintUsed]);
 
   const remainingWords = useMemo(() => {
     const solvedWords = state.solvedGroups.flatMap((i) => puzzle.groups[i].words);
