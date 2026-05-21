@@ -62,20 +62,40 @@
   <body>
     <div id="root">
       <noscript>You need JavaScript enabled to play Rainbow Categories.</noscript>
-      <div style="max-width:600px;margin:2rem auto;padding:1rem;font-family:system-ui,-apple-system,sans-serif;color:#444;font-size:14px;line-height:1.5;">
-        <header>
-          <h1 style="font-size:1.5rem;font-weight:600;margin:0 0 0.25rem;color:#222;">Rainbow Categories</h1>
-          <p style="margin:0 0 1.5rem;color:#666;">A daily word puzzle game with a hidden twist.</p>
-        </header>
-        <main>
-          <h2 style="font-size:1rem;font-weight:600;margin:0 0 0.5rem;color:#222;">How to Play</h2>
-          <ol style="margin:0 0 1rem;padding-left:1.25rem;">
-            <li style="margin-bottom:0.25rem;">Sort 16 words into 4 hidden categories.</li>
-            <li style="margin-bottom:0.25rem;">Find the connection — each color has a hidden theme.</li>
-            <li>Spot the Rainbow: one word from each group secretly forms a fifth category. Find all four without a mistake to spot the rainbow.</li>
-          </ol>
-          <p style="margin:0;color:#666;">A new puzzle every day. Free to play.</p>
-        </main>
+
+      <!-- Visual landing — mirrors React's LandingScreen so there's no flash before hydration -->
+      <div style="position:fixed;inset:0;background:linear-gradient(to bottom,#fb923c,#facc15,#4ade80,#60a5fa,#c084fc);display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:48px 24px;font-family:system-ui,-apple-system,sans-serif;overflow-y:auto;">
+        <div></div>
+
+        <div style="max-width:28rem;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;">
+          <img src="/rainbow-categories.png" alt="Rainbow Categories" style="height:96px;width:auto;margin-bottom:16px;" />
+          <h1 style="font-size:1.875rem;font-weight:700;letter-spacing:-0.025em;margin:0;color:#000;">Rainbow Categories</h1>
+          <p style="font-size:1rem;color:rgba(0,0,0,0.8);margin:12px 0 0;line-height:1.625;">
+            Find groups of four hidden words — then spot the secret Rainbow.
+          </p>
+          <div style="margin-top:32px;width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
+            <div style="width:100%;max-width:20rem;padding:14px 24px;border-radius:9999px;background:#000;color:#fff;font-weight:600;font-size:1rem;text-align:center;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1),0 4px 6px -4px rgba(0,0,0,0.1);">Play</div>
+          </div>
+        </div>
+
+        <!-- Invisible placeholder reserves space for the puzzle metadata React adds on hydrate -->
+        <div style="text-align:center;color:rgba(0,0,0,0.8);opacity:0;" aria-hidden="true">
+          <p style="font-size:1rem;font-weight:600;margin:0;">Puzzle</p>
+          <p style="font-size:0.875rem;margin:2px 0 0;">January 1, 2026</p>
+        </div>
+      </div>
+
+      <!-- SEO content, visually hidden but in the DOM for crawlers -->
+      <div style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;">
+        <h1>Rainbow Categories</h1>
+        <p>A daily word puzzle game with a hidden twist.</p>
+        <h2>How to Play</h2>
+        <ol>
+          <li>Sort 16 words into 4 hidden categories.</li>
+          <li>Find the connection — each color has a hidden theme.</li>
+          <li>Spot the Rainbow: one word from each group secretly forms a fifth category. Find all four without a mistake to spot the rainbow.</li>
+        </ol>
+        <p>A new puzzle every day. Free to play.</p>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
