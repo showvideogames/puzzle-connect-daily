@@ -39,10 +39,15 @@ export default function Index() {
   const [fullHintUsed, setFullHintUsed] = useState(false);
   const [isPuzzleComplete, setIsPuzzleComplete] = useState(false);
   const [showSillyGoose, setShowSillyGoose] = useState(false);
-  const [showLanding, setShowLanding] = useState(false);
+  // Default to true so returning players don't see a board flash before the
+  // landing renders. If we determine the user should skip the landing (already
+  // seen today, or mid-game), we flip it off. If the puzzle never loads, the
+  // gate below (`puzzle && showLanding`) keeps anything from rendering.
+  const [showLanding, setShowLanding] = useState(true);
   const [landingAuthOpen, setLandingAuthOpen] = useState(false);
 
-  // Decide whether to show the landing once the puzzle has loaded
+  // Skip the landing once the puzzle has loaded if we already showed it today
+  // or there's an in-progress local game session for this puzzle.
   useEffect(() => {
     if (!puzzle) return;
     const seen = (() => {
@@ -53,7 +58,7 @@ export default function Index() {
       }
     })();
     const inProgress = hasInProgressGame(puzzle.id);
-    setShowLanding(!seen && !inProgress);
+    if (seen || inProgress) setShowLanding(false);
   }, [puzzle]);
 
   // Warm the browser cache for custom emoji while the landing is visible.
