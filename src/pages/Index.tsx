@@ -1,7 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { X } from "lucide-react";
 import { GameHeader } from "@/components/GameHeader";
 import { GameBoard } from "@/components/GameBoard";
+import { LandingScreen } from "@/components/LandingScreen";
+import { PlayerAuth } from "@/components/PlayerAuth";
+import { useImagePreload } from "@/hooks/useImagePreload";
+import { hasInProgressGame } from "@/hooks/useGame";
+import { isCustomEmoji, customEmojiUrl } from "@/lib/customEmoji";
 import { StatsModal } from "@/components/StatsModal";
 import { TutorialModal } from "@/components/TutorialModal";
 import { SettingsModal } from "@/components/SettingsModal";
@@ -17,6 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
 const TUTORIAL_SEEN_KEY = "tutorial-seen";
+const LANDING_KEY_PREFIX = "landing-seen-";
 
 type ModalName = "stats" | "help" | "settings" | "feedback" | null;
 
@@ -33,6 +39,44 @@ export default function Index() {
   const [fullHintUsed, setFullHintUsed] = useState(false);
   const [isPuzzleComplete, setIsPuzzleComplete] = useState(false);
   const [showSillyGoose, setShowSillyGoose] = useState(false);
+  const [showLanding, setShowLanding] = useState(false);
+  const [landingAuthOpen, setLandingAuthOpen] = useState(false);
+
+  // Decide whether to show the landing once the puzzle has loaded
+  useEffect(() => {
+    if (!puzzle) return;
+    const seen = (() => {
+      try {
+        return !!localStorage.getItem(LANDING_KEY_PREFIX + puzzle.date);
+      } catch {
+        return false;
+      }
+    })();
+    const inProgress = hasInProgressGame(puzzle.id);
+    setShowLanding(!seen && !inProgress);
+  }, [puzzle]);
+
+  // Warm the browser cache for custom emoji while the landing is visible.
+  const preloadUrls = useMemo(() => {
+    if (!puzzle) return [] as string[];
+    return [
+      ...puzzle.groups.flatMap((g) => g.words),
+      ...(puzzle.rainbowHerring ?? []),
+    ]
+      .filter(isCustomEmoji)
+      .map((w) => customEmojiUrl(w));
+  }, [puzzle]);
+  useImagePreload(preloadUrls);
+
+  const handleLandingPlay = useCallback(() => {
+    if (!puzzle) return;
+    try {
+      localStorage.setItem(LANDING_KEY_PREFIX + puzzle.date, "1");
+    } catch {
+      // ignore
+    }
+    setShowLanding(false);
+  }, [puzzle]);
 
   const openModal = useCallback((name: ModalName) => setActiveModal(name), []);
   const closeModal = useCallback(() => setActiveModal(null), []);
@@ -118,6 +162,31 @@ export default function Index() {
       setShowHintModal(true);
     }
   }, [isPuzzleComplete]);
+
+  if (puzzle && showLanding) {
+    return (
+      <>
+        <SEO
+          title="Rainbow Categories — A Daily Word Puzzle Game with a Hidden Twist"
+          description="Free daily word puzzle game. Sort 16 words into 4 categories and find the hidden rainbow within. A creative twist on word categorization games."
+          path="/"
+        />
+        <LandingScreen
+          puzzle={puzzle}
+          user={user}
+          onPlay={handleLandingPlay}
+          onSignInClick={() => setLandingAuthOpen(true)}
+        />
+        <PlayerAuth
+          user={user}
+          onSignOut={handleSignOut}
+          hideTrigger
+          forceOpen={landingAuthOpen}
+          onForceClose={() => setLandingAuthOpen(false)}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">

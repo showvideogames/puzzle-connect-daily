@@ -10,6 +10,9 @@ import type { User as AuthUser } from "@supabase/supabase-js";
 interface PlayerAuthProps {
   user: AuthUser | null;
   onSignOut: () => void;
+  forceOpen?: boolean;
+  onForceClose?: () => void;
+  hideTrigger?: boolean;
 }
 
 function GoogleIcon() {
@@ -45,8 +48,11 @@ function PersonIcon({ filled }: { filled: boolean }) {
 
 type AuthView = "signin" | "signup" | "forgot";
 
-export function PlayerAuth({ user, onSignOut }: PlayerAuthProps) {
+export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, hideTrigger = false }: PlayerAuthProps) {
   const [showAuth, setShowAuth] = useState(false);
+  useEffect(() => {
+    if (forceOpen) setShowAuth(true);
+  }, [forceOpen]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [view, setView] = useState<AuthView>("signin");
   const [resetSent, setResetSent] = useState(false);
@@ -193,21 +199,30 @@ export function PlayerAuth({ user, onSignOut }: PlayerAuthProps) {
   }
 
   // ── Logged out ──
+  const handleModalClose = () => {
+    setShowAuth(false);
+    setView("signin");
+    setResetSent(false);
+    onForceClose?.();
+  };
+
   return (
     <>
-      <button
-        onClick={() => setShowAuth(true)}
-        className="p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95 shrink-0"
-        aria-label="Sign in"
-      >
-        <PersonIcon filled={false} />
-      </button>
+      {!hideTrigger && (
+        <button
+          onClick={() => setShowAuth(true)}
+          className="p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95 shrink-0"
+          aria-label="Sign in"
+        >
+          <PersonIcon filled={false} />
+        </button>
+      )}
 
       {showAuth && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
-            onClick={() => { setShowAuth(false); setView("signin"); setResetSent(false); }}
+            onClick={handleModalClose}
           />
           <div className="relative bg-card rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4">
             <h2 className="text-lg font-bold text-center mb-1">
@@ -300,11 +315,11 @@ export function PlayerAuth({ user, onSignOut }: PlayerAuthProps) {
                   if (view === "signup") {
                     const { error } = await supabase.auth.signUp({ email, password });
                     if (error) toast.error(error.message);
-                    else { toast.success("Account created!"); setShowAuth(false); }
+                    else { toast.success("Account created!"); handleModalClose(); }
                   } else {
                     const { error } = await supabase.auth.signInWithPassword({ email, password });
                     if (error) toast.error(error.message);
-                    else setShowAuth(false);
+                    else handleModalClose();
                   }
                   setLoading(false);
                 }}

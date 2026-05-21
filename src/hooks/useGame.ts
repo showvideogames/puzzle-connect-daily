@@ -29,8 +29,16 @@ interface SavedProgress {
   tileColors?: Record<string, string | null>;
 }
 
-function progressKey(puzzleId: string) {
+export function progressKey(puzzleId: string) {
   return `connections-progress-${puzzleId}`;
+}
+
+export function hasInProgressGame(puzzleId: string): boolean {
+  try {
+    return localStorage.getItem(progressKey(puzzleId)) !== null;
+  } catch {
+    return false;
+  }
 }
 
 function saveProgress(puzzleId: string, data: SavedProgress) {
