@@ -39,27 +39,25 @@ export default function Index() {
   const [fullHintUsed, setFullHintUsed] = useState(false);
   const [isPuzzleComplete, setIsPuzzleComplete] = useState(false);
   const [showSillyGoose, setShowSillyGoose] = useState(false);
-  // Default to true so returning players don't see a board flash before the
-  // landing renders. If we determine the user should skip the landing (already
-  // seen today, or mid-game), we flip it off. If the puzzle never loads, the
-  // gate below (`puzzle && showLanding`) keeps anything from rendering.
-  const [showLanding, setShowLanding] = useState(true);
+  // Tracks whether the user has dismissed the landing via the Play button.
+  const [landingDismissed, setLandingDismissed] = useState(false);
   const [landingAuthOpen, setLandingAuthOpen] = useState(false);
 
-  // Skip the landing once the puzzle has loaded if we already showed it today
-  // or there's an in-progress local game session for this puzzle.
-  useEffect(() => {
-    if (!puzzle) return;
-    const seen = (() => {
-      try {
-        return !!localStorage.getItem(LANDING_KEY_PREFIX + puzzle.date);
-      } catch {
-        return false;
-      }
-    })();
-    const inProgress = hasInProgressGame(puzzle.id);
-    if (seen || inProgress) setShowLanding(false);
+  // Compute eligibility synchronously on every render so there's no
+  // flash in either direction. If the puzzle hasn't loaded yet, the
+  // `puzzle && showLanding` gate further down keeps anything from rendering.
+  const isLandingEligible = useMemo(() => {
+    if (!puzzle) return false;
+    try {
+      if (localStorage.getItem(LANDING_KEY_PREFIX + puzzle.date)) return false;
+    } catch {
+      // localStorage unavailable — fall through and show landing
+    }
+    if (hasInProgressGame(puzzle.id)) return false;
+    return true;
   }, [puzzle]);
+
+  const showLanding = isLandingEligible && !landingDismissed;
 
   // Warm the browser cache for custom emoji while the landing is visible.
   const preloadUrls = useMemo(() => {
@@ -80,7 +78,7 @@ export default function Index() {
     } catch {
       // ignore
     }
-    setShowLanding(false);
+    setLandingDismissed(true);
   }, [puzzle]);
 
   const openModal = useCallback((name: ModalName) => setActiveModal(name), []);
