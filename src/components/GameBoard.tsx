@@ -425,9 +425,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       setTileColor(word, null);
     } else {
       // Painting mode: orange, green, blue, red
-      setTileColor(word, paletteMode);
+      // Clicking the same color twice clears the tile (toggle off)
+      if (tileColors[word] === paletteMode) {
+        setTileColor(word, null);
+      } else {
+        setTileColor(word, paletteMode);
+      }
     }
-  }, [colorPaletteMode, paletteMode, toggleWord, setTileColor]);
+  }, [colorPaletteMode, paletteMode, toggleWord, setTileColor, tileColors]);
 
   const streakToShow = streakBefore != null ? streakBefore + 1 : 1;
 
