@@ -5,7 +5,7 @@ import { getDeviceId } from "@/lib/gameStats";
 import { Puzzle } from "@/lib/types";
 
 interface LandingScreenProps {
-  puzzle: Puzzle;
+  puzzle: Puzzle | null;
   user: User | null;
   onPlay: () => void;
   onSignInClick: () => void;
@@ -37,12 +37,14 @@ export function LandingScreen({ puzzle, user, onPlay, onSignInClick }: LandingSc
     return () => { cancelled = true; };
   }, []);
 
-  const d = new Date(puzzle.date + "T12:00:00");
-  const formattedDate = d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  const titleText = puzzle.title?.trim()
+  const formattedDate = puzzle
+    ? new Date(puzzle.date + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    : "";
+  const titleText = puzzle?.title?.trim()
     ? `Puzzle ${puzzle.title.trim()}`
     : formattedDate;
-  const showDateSubtitle = !!puzzle.title?.trim();
+  const showDateSubtitle = !!puzzle?.title?.trim();
+  const puzzleReady = !!puzzle;
 
   return (
     <div
@@ -69,9 +71,11 @@ export function LandingScreen({ puzzle, user, onPlay, onSignInClick }: LandingSc
         <div className="mt-8 w-full flex flex-col items-center gap-3">
           <button
             onClick={onPlay}
+            disabled={!puzzleReady}
             className="w-full max-w-xs inline-flex items-center justify-center px-6 py-3.5 rounded-full
               bg-foreground text-background font-semibold text-base shadow-lg
-              hover:opacity-90 transition-opacity active:scale-95"
+              hover:opacity-90 transition-opacity active:scale-95
+              disabled:opacity-60 disabled:cursor-default disabled:hover:opacity-60"
           >
             Play
           </button>
@@ -88,15 +92,17 @@ export function LandingScreen({ puzzle, user, onPlay, onSignInClick }: LandingSc
         </div>
       </div>
 
-      {/* Puzzle metadata at the bottom */}
-      <div className="text-center text-foreground/80">
-        <p className="text-base font-semibold">{titleText}</p>
-        {showDateSubtitle && (
+      {/* Puzzle metadata at the bottom (only when data is available) */}
+      <div className="text-center text-foreground/80 transition-opacity duration-300" style={{ opacity: puzzleReady ? 1 : 0 }} aria-hidden={!puzzleReady}>
+        <p className="text-base font-semibold">{titleText || "Puzzle"}</p>
+        {showDateSubtitle ? (
           <p className="text-sm mt-0.5">{formattedDate}</p>
+        ) : (
+          <p className="text-sm mt-0.5" aria-hidden="true">&nbsp;</p>
         )}
-        {streak > 0 && (
+        {streak > 0 ? (
           <p className="text-sm font-semibold mt-2">{streak} Day Streak! 🔥</p>
-        )}
+        ) : null}
       </div>
     </div>
   );
