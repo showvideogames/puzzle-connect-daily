@@ -761,6 +761,57 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
+      {/* Small Hint tile row */}
+      {smallHintUsed && (
+        <div className="mt-4 flex flex-wrap justify-center gap-2 animate-fade-up">
+          {[...puzzle.groups]
+            .sort((a, b) => a.difficulty - b.difficulty)
+            .filter((g) => (g.hintWord ?? "").trim() !== "")
+            .map((g) => {
+              const colorClass =
+                g.difficulty === 1 ? "bg-orange-500"
+                : g.difficulty === 2 ? "bg-green-600"
+                : g.difficulty === 3 ? "bg-blue-500"
+                : "bg-red-500";
+              const word = (g.hintWord ?? "").trim();
+              return (
+                <div
+                  key={g.difficulty}
+                  className={`${colorClass} text-white text-sm font-semibold uppercase rounded-lg h-10 px-3 min-w-[60px] flex items-center justify-center`}
+                >
+                  {isCustomEmoji(word) ? (
+                    <img
+                      src={customEmojiUrl(word)}
+                      alt={customEmojiName(word) ?? ""}
+                      draggable={false}
+                      style={{ height: "28px", width: "auto", objectFit: "contain" }}
+                    />
+                  ) : (
+                    word
+                  )}
+                </div>
+              );
+            })}
+          {puzzle.rainbowHintWord && puzzle.rainbowHintWord.trim() !== "" && (
+            <div
+              className="text-white text-sm font-semibold uppercase rounded-lg h-10 px-3 min-w-[60px] flex items-center justify-center"
+              style={{ background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)" }}
+            >
+              {isCustomEmoji(puzzle.rainbowHintWord) ? (
+                <img
+                  src={customEmojiUrl(puzzle.rainbowHintWord)}
+                  alt={customEmojiName(puzzle.rainbowHintWord) ?? ""}
+                  draggable={false}
+                  style={{ height: "28px", width: "auto", objectFit: "contain" }}
+                />
+              ) : (
+                puzzle.rainbowHintWord
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Streak celebration */}
       {showStreak && <StreakCelebration streak={streakToShow} />}
 
