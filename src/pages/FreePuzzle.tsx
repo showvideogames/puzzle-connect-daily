@@ -55,13 +55,23 @@ export default function FreePuzzle() {
 
   useEffect(() => {
     if (!puzzleId) { setError(true); setLoading(false); return; }
+    const timeout = setTimeout(() => {
+      setError(true);
+      setLoading(false);
+    }, 8000);
     getPuzzleById(puzzleId)
       .then((p) => {
+        clearTimeout(timeout);
         if (!p) setError(true);
         else setPuzzle(p);
         setLoading(false);
       })
-      .catch(() => { setError(true); setLoading(false); });
+      .catch(() => {
+        clearTimeout(timeout);
+        setError(true);
+        setLoading(false);
+      });
+    return () => clearTimeout(timeout);
   }, [puzzleId]);
 
   const handleSmallHint = useCallback(() => {
