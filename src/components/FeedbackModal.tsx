@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 import { FEEDBACK_TABS, FeedbackType, submitFeedback } from "@/lib/feedback";
+
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined;
 
 interface FeedbackModalProps {
   open: boolean;
@@ -19,6 +22,8 @@ export function FeedbackModal({ open, onClose, user }: FeedbackModalProps) {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileInstance | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -26,6 +31,7 @@ export function FeedbackModal({ open, onClose, user }: FeedbackModalProps) {
       setMessage("");
       setEmail("");
       setSubmitted(false);
+      setTurnstileToken(null);
     }
   }, [open]);
 
@@ -36,26 +42,39 @@ export function FeedbackModal({ open, onClose, user }: FeedbackModalProps) {
       toast.error("Please enter a message");
       return;
     }
+    if (!turnstileToken) {
+      toast.error("Please complete the CAPTCHA");
+      return;
+    }
     setSubmitting(true);
     try {
       const { error } = await submitFeedback({
         type,
         message: message.trim(),
         email: email.trim() || null,
-        userId: user?.id ?? null,
+        turnstileToken,
       });
       if (error) {
         toast.error(`Could not submit feedback: ${error}`);
+        // Tokens are single-use — reset the widget so the user can try again.
+        turnstileRef.current?.reset();
+        setTurnstileToken(null);
         return;
       }
       setSubmitted(true);
       setTimeout(() => onClose(), 2000);
     } catch {
       toast.error("Could not submit feedback. Please try again.");
+      turnstileRef.current?.reset();
+      setTurnstileToken(null);
     } finally {
       setSubmitting(false);
     }
   };
+
+  // Silence unused-prop lint for `user` — the edge function derives user_id
+  // from the Authorization header on the request.
+  void user;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -99,7 +118,28 @@ export function FeedbackModal({ open, onClose, user }: FeedbackModalProps) {
               onChange={(e) => setEmail(e.target.value)}
             />
 
-            <Button onClick={handleSubmit} disabled={submitting || !message.trim()} className="w-full">
+            {TURNSTILE_SITE_KEY ? (
+              <div className="flex justify-center">
+                <Turnstile
+                  ref={turnstileRef}
+                  siteKey={TURNSTILE_SITE_KEY}
+                  onSuccess={(token) => setTurnstileToken(token)}
+                  onError={() => setTurnstileToken(null)}
+                  onExpire={() => setTurnstileToken(null)}
+                  options={{ theme: "auto", size: "flexible" }}
+                />
+              </div>
+            ) : (
+              <p className="text-xs text-destructive text-center">
+                CAPTCHA not configured. Set VITE_TURNSTILE_SITE_KEY.
+              </p>
+            )}
+
+            <Button
+              onClick={handleSubmit}
+              disabled={submitting || !message.trim() || !turnstileToken}
+              className="w-full"
+            >
               {submitting ? "Sending…" : "Submit"}
             </Button>
           </div>

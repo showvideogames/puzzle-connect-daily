@@ -22,16 +22,25 @@ export async function submitFeedback(input: {
   type: FeedbackType;
   message: string;
   email: string | null;
-  userId: string | null;
+  turnstileToken: string;
 }): Promise<{ error: string | null }> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
-    .from("feedback")
-    .insert({
+  const { data, error } = await supabase.functions.invoke("submit-feedback", {
+    body: {
       type: input.type,
       message: input.message,
       email: input.email,
-      user_id: input.userId,
-    });
-  return { error: error ? error.message : null };
+      turnstileToken: input.turnstileToken,
+    },
+  });
+  if (error) {
+    // FunctionsHttpError surfaces non-2xx responses; we try to extract the
+    // server-provided error message when present.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ctx = (error as any)?.context;
+    if (ctx?.json?.error) return { error: ctx.json.error as string };
+    return { error: error.message };
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (data && (data as any).error) return { error: (data as any).error as string };
+  return { error: null };
 }
