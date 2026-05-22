@@ -242,14 +242,21 @@ export function useGame(
   }, [tileColors]);
 
   const saveResultToDb = useCallback(async (won: boolean, mistakes: number) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from("game_results").upsert({
-      user_id: user.id,
-      puzzle_id: puzzle.id,
-      won,
-      mistakes,
-    }, { onConflict: "user_id,puzzle_id" });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { error } = await supabase.from("game_results").upsert({
+        user_id: user.id,
+        puzzle_id: puzzle.id,
+        won,
+        mistakes,
+      }, { onConflict: "user_id,puzzle_id" });
+      if (error) throw error;
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      console.error("saveResultToDb error:", err);
+      trackEvent("save_stats_failed", { reason });
+    }
   }, [puzzle.id]);
 
   const setTileColor = useCallback((word: string, color: string | null) => {

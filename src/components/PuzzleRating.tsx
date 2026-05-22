@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 
 const LABELS: Record<number, string> = {
@@ -64,13 +65,19 @@ export function PuzzleRating({ puzzleId, user }: PuzzleRatingProps) {
 
   const handleRate = async (stars: number) => {
     if (submitted) return;
-    setSubmitted(true);
-    setExisting(stars);
-    await supabase.from("puzzle_ratings").upsert({
-      puzzle_id: puzzleId,
-      user_id: user.id,
-      rating: stars,
-    }, { onConflict: "puzzle_id,user_id" });
+    try {
+      const { error } = await supabase.from("puzzle_ratings").upsert({
+        puzzle_id: puzzleId,
+        user_id: user.id,
+        rating: stars,
+      }, { onConflict: "puzzle_id,user_id" });
+      if (error) throw error;
+      // Only flip after the upsert succeeds
+      setSubmitted(true);
+      setExisting(stars);
+    } catch {
+      toast.error("Could not save rating. Try again?");
+    }
   };
 
   const activeRating = hovered ?? existing ?? 0;

@@ -37,19 +37,24 @@ export function FeedbackModal({ open, onClose, user }: FeedbackModalProps) {
       return;
     }
     setSubmitting(true);
-    const { error } = await submitFeedback({
-      type,
-      message: message.trim(),
-      email: email.trim() || null,
-      userId: user?.id ?? null,
-    });
-    setSubmitting(false);
-    if (error) {
-      toast.error(`Could not submit feedback: ${error}`);
-      return;
+    try {
+      const { error } = await submitFeedback({
+        type,
+        message: message.trim(),
+        email: email.trim() || null,
+        userId: user?.id ?? null,
+      });
+      if (error) {
+        toast.error(`Could not submit feedback: ${error}`);
+        return;
+      }
+      setSubmitted(true);
+      setTimeout(() => onClose(), 2000);
+    } catch {
+      toast.error("Could not submit feedback. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitted(true);
-    setTimeout(() => onClose(), 2000);
   };
 
   return (
