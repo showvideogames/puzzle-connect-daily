@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     // Derive user_id from the JWT in the Authorization header, if present.
     // Anonymous submissions are allowed too — user_id will be null.
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     let userId: string | null = null;
