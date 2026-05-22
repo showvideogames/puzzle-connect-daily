@@ -10,7 +10,7 @@ import { ArchiveAccessManager } from "@/components/ArchiveAccessManager";
 import { CustomEmojiManager } from "@/components/admin/CustomEmojiManager";
 import { FeedbackList } from "@/components/admin/FeedbackList";
 import { AdminLogin, AdminNoAccess } from "@/components/admin/AdminLogin";
-import { PuzzleListItem } from "@/components/admin/PuzzleListItem";
+import { PuzzleListItem, type RatingSummary } from "@/components/admin/PuzzleListItem";
 import { useDraftPersistence, type GroupForm, type DraftData } from "@/hooks/useDraftPersistence";
 import { toast } from "sonner";
 
@@ -233,6 +233,7 @@ export default function Admin() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedStatsId, setExpandedStatsId] = useState<string | null>(null);
   const [puzzleStats, setPuzzleStats] = useState<Record<string, any>>({});
+  const [puzzleRatings, setPuzzleRatings] = useState<Record<string, RatingSummary>>({});
 
   // Calendar visibility
   const [calendarOpen, setCalendarOpen] = useState(true);
@@ -595,6 +596,26 @@ export default function Admin() {
     if (!puzzleStats[id]) {
       const { data } = await supabase.rpc("get_puzzle_stats", { _puzzle_id: id });
       setPuzzleStats((prev) => ({ ...prev, [id]: data }));
+    }
+    if (!puzzleRatings[id]) {
+      const { data: ratingRows } = await supabase
+        .from("puzzle_ratings")
+        .select("rating")
+        .eq("puzzle_id", id);
+      const rows = (ratingRows ?? []) as { rating: number }[];
+      const breakdown: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+      let sum = 0;
+      for (const r of rows) {
+        const stars = Math.max(1, Math.min(5, Math.round(r.rating))) as 1 | 2 | 3 | 4 | 5;
+        breakdown[stars]++;
+        sum += r.rating;
+      }
+      const summary: RatingSummary = {
+        count: rows.length,
+        average: rows.length > 0 ? sum / rows.length : 0,
+        breakdown,
+      };
+      setPuzzleRatings((prev) => ({ ...prev, [id]: summary }));
     }
   }
 
@@ -986,6 +1007,7 @@ export default function Admin() {
                 puzzle={p}
                 expanded={expandedStatsId === p.id}
                 stats={puzzleStats[p.id]}
+                ratings={puzzleRatings[p.id]}
                 onToggleStats={toggleStats}
                 onTogglePublish={togglePublish}
                 onEdit={editPuzzle}

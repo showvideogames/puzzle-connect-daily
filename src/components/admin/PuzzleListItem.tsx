@@ -35,10 +35,17 @@ export interface PuzzleStats {
   guess_distribution?: Record<string, number>;
 }
 
+export interface RatingSummary {
+  count: number;
+  average: number;
+  breakdown: Record<1 | 2 | 3 | 4 | 5, number>;
+}
+
 interface PuzzleListItemProps {
   puzzle: AdminPuzzle;
   expanded: boolean;
   stats: PuzzleStats | undefined;
+  ratings: RatingSummary | undefined;
   onToggleStats: (id: string) => void;
   onTogglePublish: (id: string, current: boolean) => void;
   onEdit: (puzzle: AdminPuzzle) => void;
@@ -49,6 +56,7 @@ export function PuzzleListItem({
   puzzle: p,
   expanded,
   stats,
+  ratings,
   onToggleStats,
   onTogglePublish,
   onEdit,
@@ -80,7 +88,7 @@ export function PuzzleListItem({
         </div>
       </div>
       {expanded && (
-        <div className="border-t border-border px-4 py-3 bg-secondary/30">
+        <div className="border-t border-border px-4 py-3 bg-secondary/30 space-y-3">
           {!stats ? (
             <p className="text-sm text-muted-foreground animate-pulse">Loading stats…</p>
           ) : stats.total_players === 0 ? (
@@ -106,6 +114,36 @@ export function PuzzleListItem({
               </div>
             </div>
           )}
+
+          {/* Ratings */}
+          <div className="pt-3 border-t border-border/60">
+            {!ratings ? (
+              <p className="text-sm text-muted-foreground animate-pulse">Loading ratings…</p>
+            ) : ratings.count === 0 ? (
+              <p className="text-sm text-muted-foreground">No ratings yet</p>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex gap-6 text-sm">
+                  <div>
+                    <span className="font-semibold">{ratings.average.toFixed(1)} ★</span>{" "}
+                    <span className="text-muted-foreground">average</span>
+                  </div>
+                  <div>
+                    <span className="font-semibold">{ratings.count}</span>{" "}
+                    <span className="text-muted-foreground">{ratings.count === 1 ? "rating" : "ratings"}</span>
+                  </div>
+                </div>
+                <div className="flex gap-4 text-xs">
+                  {[1, 2, 3, 4, 5].map((stars) => (
+                    <div key={stars} className="flex items-center gap-1">
+                      <span className="text-muted-foreground">{stars}★:</span>
+                      <span className="font-semibold">{ratings.breakdown[stars as 1 | 2 | 3 | 4 | 5]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
