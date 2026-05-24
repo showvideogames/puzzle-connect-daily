@@ -558,7 +558,7 @@ export function useGame(
           activeTimeSeconds: activeSecondsRef.current,
           foundRainbow: state.gotRainbow,
           solveOrder: getSolveOrder(state.solvedGroups),
-          hintsUsed,
+          hintsUsed: smallHintUsed || fullHintUsed,
           shareGrid,
           guessHistory: fullGuessHistory.map((g) => ({
             words: g.words,
