@@ -239,7 +239,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   }, [puzzle]);
   const imagesReady = useImagePreload(imagesToPreload);
 
-  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(true);
   const incorrectGuesses = useMemo(
     () => state.guessHistory.filter((a) => !a.isCorrect && !a.isRainbow),
     [state.guessHistory],
@@ -374,9 +374,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     for (const attempt of state.guessHistory) {
       if (attempt.isRainbow) {
         if (hintPrefix && lines.length === 1) {
-          lines[0] = `${hintPrefix}🌈`;
+          lines[0] = `${hintPrefix}🌈🌈🌈🌈`;
         } else {
-          lines.push("🌈");
+          lines.push("🌈🌈🌈🌈");
         }
       } else {
         const row = attempt.groupIndices
@@ -388,7 +388,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         lines.push(row);
       }
     }
-    if (bonusRainbowCorrect === true) lines.push("🌈");
+    if (bonusRainbowCorrect === true) lines.push("🌈🌈🌈🌈");
     return lines;
   }, [state.guessHistory, puzzle, bonusRainbowCorrect, smallHintUsed, fullHintUsed]);
 
