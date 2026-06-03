@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { X } from "lucide-react";
+import { useVersionCheck } from "@/hooks/useVersionCheck";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import { GameHeader } from "@/components/GameHeader";
 import { GameBoard } from "@/components/GameBoard";
 import { LandingScreen } from "@/components/LandingScreen";
@@ -85,6 +87,8 @@ export default function Index() {
     }
     setLandingDismissed(true);
   }, [puzzle]);
+
+  const updateAvailable = useVersionCheck();
 
   const openModal = useCallback((name: ModalName) => setActiveModal(name), []);
   const closeModal = useCallback(() => setActiveModal(null), []);
@@ -198,6 +202,9 @@ export default function Index() {
 
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
+      {updateAvailable && (
+        <UpdateBanner onUpdate={() => window.location.reload()} />
+      )}
       <SEO
         title="Rainbow Categories — A Daily Word Puzzle Game with a Hidden Twist"
         description="Free daily word puzzle game. Sort 16 words into 4 categories and find the hidden rainbow within. A creative twist on word categorization games."
