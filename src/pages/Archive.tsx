@@ -400,7 +400,15 @@ export default function Archive() {
   );
 
   const calendarBlock = (
-    <div style={{ position: "relative" }}>
+    <div
+      style={{
+        position: "relative",
+        background: "hsl(var(--card))",
+        border: "1px solid hsl(var(--border))",
+        borderRadius: "16px",
+        padding: "20px",
+      }}
+    >
       {/* Calendar content — blurred for non-subscribers */}
       <div
         style={{
