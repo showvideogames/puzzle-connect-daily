@@ -42,7 +42,7 @@ export function HintModal({ open, onClose, onSmallHint, onFullHint, puzzle }: Hi
         <div className="text-center mb-5">
           <div className="text-4xl mb-3">💡</div>
           <h2 className="text-lg font-bold mb-1">Want a hint?</h2>
-          <p className="text-sm text-muted-foreground">Start small — you can always come back for more.</p>
+          <p className="text-sm text-muted-foreground">Start small, you can always come back for more.</p>
         </div>
 
         <div className="flex flex-col gap-4">

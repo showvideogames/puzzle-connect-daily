@@ -446,7 +446,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     <div className="w-full max-w-lg mx-auto px-2 animate-fade-up">
       <div className="flex items-center justify-center gap-2 mb-4">
         <p className="text-center text-sm text-muted-foreground">
-          Find groups of four words that share something in common.
+          Find four groups of four and the hidden Rainbow!
         </p>
         {!puzzle.rainbowHerring && <NoRainbowIndicator />}
       </div>
