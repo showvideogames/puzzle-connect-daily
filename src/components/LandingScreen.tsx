@@ -94,14 +94,14 @@ export function LandingScreen({ puzzle, user, onPlay, onSignInClick }: LandingSc
 
       {/* Puzzle metadata at the bottom (only when data is available) */}
       <div className="text-center text-foreground/80 transition-opacity duration-300" style={{ opacity: puzzleReady ? 1 : 0 }} aria-hidden={!puzzleReady}>
-        <p className="text-base font-semibold">{titleText || "Puzzle"}</p>
+        <p className="text-xl font-bold">{titleText || "Puzzle"}</p>
         {showDateSubtitle ? (
-          <p className="text-sm mt-0.5">{formattedDate}</p>
+          <p className="text-lg font-semibold mt-1">{formattedDate}</p>
         ) : (
-          <p className="text-sm mt-0.5" aria-hidden="true">&nbsp;</p>
+          <p className="text-lg mt-1" aria-hidden="true">&nbsp;</p>
         )}
         {streak > 0 ? (
-          <p className="text-sm font-semibold mt-2">{streak} Day Streak! 🔥</p>
+          <p className="text-xl font-bold mt-2">{streak} Win Streak! 🔥</p>
         ) : null}
       </div>
     </div>
