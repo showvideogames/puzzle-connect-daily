@@ -24,35 +24,33 @@ export function GameHeader({
   onSignOut,
 }: GameHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showSignIn, setShowSignIn] = useState(false);
 
   const drawerItemClass =
     "flex items-center gap-3 w-full px-5 py-3 text-sm font-medium hover:bg-secondary transition-colors active:scale-95 text-left";
 
   return (
     <>
-      <header className="relative flex items-center w-full max-w-lg mx-auto py-3 px-2">
-        {/* Left: hamburger */}
+      <header className="flex items-center w-full max-w-lg mx-auto py-3 px-2 gap-2">
+        {/* Left: hamburger + logo in normal flow */}
         <button
           onClick={() => setMenuOpen(true)}
-          className="p-2 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+          className="p-2 rounded-lg hover:bg-secondary transition-colors active:scale-95 shrink-0"
           aria-label="Open menu"
         >
           <Menu className="w-5 h-5 text-muted-foreground" />
         </button>
 
-        {/* Center: logo — absolutely positioned so it's always truly centered */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <Link to="/" className="pointer-events-auto active:scale-95 transition-transform" aria-label="Home">
-            <img
-              src="/textlogo.png"
-              alt="Rainbow Categories"
-              style={{ maxHeight: "28px", width: "auto" }}
-            />
-          </Link>
-        </div>
+        <Link to="/" className="active:scale-95 transition-transform shrink-0" aria-label="Home">
+          <img
+            src="/textlogo.png"
+            alt="Rainbow Categories"
+            style={{ maxHeight: "28px", width: "auto" }}
+          />
+        </Link>
 
-        {/* Right: hint + stats */}
-        <div className="ml-auto flex items-center gap-1">
+        {/* Right: archive + hint + stats */}
+        <div className="ml-auto flex items-center gap-1 shrink-0">
           {showHint && (
             <button
               onClick={onHintClick}
@@ -69,6 +67,13 @@ export function GameHeader({
           >
             <BarChart3 className="w-5 h-5 text-muted-foreground" />
           </button>
+          <Link
+            to="/archive"
+            className="p-2 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+            aria-label="Puzzle archive"
+          >
+            <Archive className="w-5 h-5 text-muted-foreground" />
+          </Link>
         </div>
       </header>
 
@@ -90,7 +95,10 @@ export function GameHeader({
         }}
       >
         {/* Drawer header */}
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid hsl(var(--border))" }}>
+        <div
+          className="flex items-center justify-between px-5 py-4 shrink-0"
+          style={{ borderBottom: "1px solid hsl(var(--border))" }}
+        >
           <img src="/textlogo.png" alt="Rainbow Categories" style={{ maxHeight: "22px", width: "auto" }} />
           <button
             onClick={() => setMenuOpen(false)}
@@ -102,7 +110,7 @@ export function GameHeader({
         </div>
 
         {/* Drawer nav */}
-        <nav className="flex flex-col py-2 flex-1">
+        <nav className="flex flex-col py-2 flex-1 overflow-y-auto">
           <button
             onClick={() => { onHowToPlayClick(); setMenuOpen(false); }}
             className={drawerItemClass}
@@ -129,12 +137,48 @@ export function GameHeader({
           )}
         </nav>
 
-        {/* Account at bottom */}
-        <div className="px-5 py-4" style={{ borderTop: "1px solid hsl(var(--border))" }}>
-          <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">Account</p>
-          <PlayerAuth user={user} onSignOut={onSignOut} />
+        {/* Account — inline, no popups */}
+        <div
+          className="px-5 py-4 shrink-0"
+          style={{ borderTop: "1px solid hsl(var(--border))" }}
+        >
+          <p
+            className="text-xs font-semibold text-muted-foreground mb-3"
+            style={{ letterSpacing: "0.06em", textTransform: "uppercase" }}
+          >
+            Account
+          </p>
+          {user ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+              <button
+                onClick={() => { onSignOut(); setMenuOpen(false); }}
+                className="w-full text-left text-sm font-medium py-1.5 px-3 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+                style={{ color: "hsl(0 84% 60%)" }}
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => { setMenuOpen(false); setShowSignIn(true); }}
+              className="w-full py-2 rounded-full text-sm font-semibold transition-colors hover:opacity-90 active:scale-95"
+              style={{ background: "hsl(var(--foreground))", color: "hsl(var(--background))" }}
+            >
+              Sign In
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Auth modal — rendered at top level, well clear of the drawer */}
+      <PlayerAuth
+        user={user}
+        onSignOut={onSignOut}
+        hideTrigger
+        forceOpen={showSignIn}
+        onForceClose={() => setShowSignIn(false)}
+      />
     </>
   );
 }
