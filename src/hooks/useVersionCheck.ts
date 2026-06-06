@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const CURRENT_VERSION = "1"; // increment this with each deploy
+const CURRENT_VERSION = "0"; // increment this with each deploy
 
 export function useVersionCheck() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
