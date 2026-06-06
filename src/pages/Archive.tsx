@@ -418,22 +418,22 @@ export default function Archive() {
         }}
       >
         {/* Month navigation */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="grid grid-cols-3 items-center mb-4">
           <button
             onClick={prevMonth}
             disabled={!canGoBack}
-            className="p-1.5 rounded-lg transition-colors hover:bg-secondary disabled:opacity-30"
+            className="p-1.5 rounded-lg transition-colors hover:bg-secondary disabled:opacity-30 justify-self-start"
             aria-label="Previous month"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <p style={{ fontSize: "14px", fontWeight: 600, letterSpacing: "0.01em" }}>
+          <p className="text-center" style={{ fontSize: "14px", fontWeight: 600, letterSpacing: "0.01em" }}>
             {MONTHS[viewMonth]} {viewYear}
           </p>
           <button
             onClick={nextMonth}
             disabled={!canGoForward}
-            className="p-1.5 rounded-lg transition-colors hover:bg-secondary disabled:opacity-30"
+            className="p-1.5 rounded-lg transition-colors hover:bg-secondary disabled:opacity-30 justify-self-end"
             aria-label="Next month"
           >
             <ChevronRight className="w-4 h-4" />
