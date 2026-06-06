@@ -407,6 +407,8 @@ export default function Archive() {
         border: "1px solid hsl(var(--border))",
         borderRadius: "16px",
         padding: "20px",
+        width: "100%",
+        minHeight: "380px",
       }}
     >
       {/* Calendar content — blurred for non-subscribers */}
