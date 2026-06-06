@@ -81,7 +81,8 @@ function WordTile({
       onClick={disabled ? undefined : onClick}
       className={`
         relative w-full rounded-lg py-3 px-2 font-bold uppercase tracking-wide
-        whitespace-nowrap text-center transition-all duration-150 select-none cursor-pointer
+        whitespace-nowrap flex items-center justify-center
+        transition-all duration-150 select-none cursor-pointer
         ${isShaking ? "animate-shake" : ""}
         ${isRainbow
           ? "rainbow-tile text-white"
