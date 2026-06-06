@@ -22,7 +22,7 @@ export function HowToPlayModal({ open, onClose }: HowToPlayModalProps) {
         <h2 className="text-lg font-bold text-center mb-4">How to Play</h2>
 
         <div className="space-y-3 text-sm text-muted-foreground">
-          <p>Find groups of four words that share something in common.</p>
+          <p>Find four groups of four and the hidden Rainbow!</p>
           <ul className="space-y-2 list-disc pl-4">
             <li>Select four words and tap <strong className="text-foreground">Submit</strong> to check if they form a group.</li>
             <li>Find all four groups without making 4 mistakes!</li>
