@@ -696,7 +696,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             Guess History {historyExpanded ? "▴" : "▾"}
           </button>
           {historyExpanded && (
-            <div className="mt-2 space-y-2">
+            <div className="mt-2 space-y-1">
               {incorrectGuesses.map((g, i) => {
                 const sorted = [...g.words].sort((a, b) => a.localeCompare(b));
                 const label = g.isAlmostRainbow
@@ -704,41 +704,30 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   : g.isOneAway
                     ? "One Away"
                     : null;
-
-                const chips = (
-                  <div className="flex flex-wrap gap-1.5">
-                    {sorted.map((w, j) => (
-                      <span
-                        key={`${w}-${j}`}
-                        className="inline-flex items-center bg-secondary text-foreground rounded-full px-3 py-1 text-sm font-medium"
-                      >
-                        {isCustomEmoji(w) ? (
-                          <img
-                            src={customEmojiUrl(w)}
-                            alt={customEmojiName(w) ?? ""}
-                            draggable={false}
-                            style={{ height: "18px", width: "auto", objectFit: "contain" }}
-                          />
-                        ) : (
-                          w
-                        )}
-                      </span>
-                    ))}
-                  </div>
-                );
-
-                return label ? (
-                  <div
-                    key={i}
-                    className="rounded-xl px-3 py-2.5"
-                    style={{ background: "hsl(var(--secondary))", border: "1px solid hsl(var(--border))" }}
-                  >
-                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">{label}</p>
-                    {chips}
-                  </div>
-                ) : (
-                  <div key={i} className="px-3 py-1">
-                    {chips}
+                return (
+                  <div key={i}>
+                    {label && (
+                      <p className="text-center text-xs text-muted-foreground mb-0.5">{label}</p>
+                    )}
+                    <div className="flex items-center justify-center flex-wrap gap-1.5">
+                      {sorted.map((w, j) => (
+                        <span
+                          key={`${w}-${j}`}
+                          className="inline-flex items-center bg-secondary text-foreground rounded-full px-3 py-1 text-sm font-medium"
+                        >
+                          {isCustomEmoji(w) ? (
+                            <img
+                              src={customEmojiUrl(w)}
+                              alt={customEmojiName(w) ?? ""}
+                              draggable={false}
+                              style={{ height: "18px", width: "auto", objectFit: "contain" }}
+                            />
+                          ) : (
+                            w
+                          )}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 );
               })}
