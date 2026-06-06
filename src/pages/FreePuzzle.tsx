@@ -139,18 +139,18 @@ export default function FreePuzzle() {
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => navigate("/")}
-              className="bg-foreground text-background text-xs font-semibold rounded-full px-3 py-1.5
-                hover:opacity-90 transition-opacity active:scale-95"
-            >
-              Today's Puzzle →
-            </button>
-            <button
               onClick={handleBackToArchive}
               className="border border-border text-foreground text-xs font-semibold rounded-full px-3 py-1.5
                 hover:bg-secondary transition-colors active:scale-95"
             >
               ← Back to Archive
+            </button>
+            <button
+              onClick={() => navigate("/")}
+              className="bg-foreground text-background text-xs font-semibold rounded-full px-3 py-1.5
+                hover:opacity-90 transition-opacity active:scale-95"
+            >
+              Today's Puzzle →
             </button>
           </div>
           <span className="text-xs text-muted-foreground inline-flex items-center gap-1 pt-1.5">
