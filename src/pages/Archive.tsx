@@ -525,7 +525,7 @@ export default function Archive() {
                     stroke={result.won ? "#f59e0b" : "hsl(var(--muted-foreground))"}
                   />
                 ) : (
-                  <div style={{ width: "22px", height: "22px" }} />
+                  <div />
                 )}
               </button>
             );
