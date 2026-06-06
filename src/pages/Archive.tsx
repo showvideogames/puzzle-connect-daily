@@ -361,12 +361,12 @@ export default function Archive() {
         user={user}
         onSignOut={() => supabase.auth.signOut()}
       />
-      <div className="w-full max-w-lg border-b border-border mb-6" />
+      <div className="w-full max-w-lg border-b border-border mb-4" />
     </>
   );
 
   const titleRow = (
-    <div className="flex items-center justify-between mb-6">
+    <div className="flex items-center justify-between mb-2">
       <h2 style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "-0.02em" }}>
         Puzzle Archive
       </h2>
@@ -481,13 +481,12 @@ export default function Archive() {
                 className="relative flex flex-col items-center rounded-lg transition-all duration-150"
                 style={{
                   aspectRatio: "1",
-                  background: isToday
-                    ? "hsl(var(--foreground))"
-                    : hasPuzzle && isPast
-                    ? "hsl(var(--secondary))"
-                    : "transparent",
+                  background:
+                    hasPuzzle && (isPast || isToday)
+                      ? "hsl(var(--secondary))"
+                      : "transparent",
                   border:
-                    hasPuzzle && isPast && !isToday
+                    hasPuzzle && (isPast || isToday)
                       ? "1px solid hsl(var(--border))"
                       : "1px solid transparent",
                   cursor: isClickable ? "pointer" : "default",
@@ -511,9 +510,7 @@ export default function Archive() {
                   style={{
                     fontSize: "14px",
                     fontWeight: isToday ? 700 : 600,
-                    color: isToday
-                      ? "hsl(var(--background))"
-                      : "hsl(var(--foreground))",
+                    color: "hsl(var(--foreground))",
                     lineHeight: 1,
                   }}
                 >
