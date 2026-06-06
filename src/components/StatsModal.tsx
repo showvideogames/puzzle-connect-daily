@@ -28,11 +28,24 @@ export function StatsModal({ open, onClose }: StatsModalProps) {
     ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100)
     : 0;
 
+  // Show 0 if the player hasn't played today or yesterday — streak has lapsed
+  // but we intentionally leave the DB value alone so it can be inspected.
+  const displayStreak = (() => {
+    if (!stats?.lastPlayedDate) return 0;
+    const today = new Date().toLocaleDateString("en-CA");
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toLocaleDateString("en-CA");
+    return (stats.lastPlayedDate === today || stats.lastPlayedDate === yesterdayStr)
+      ? stats.currentStreak
+      : 0;
+  })();
+
   const statItems = stats
     ? [
         { value: stats.gamesPlayed, label: "Played" },
         { value: winRate, label: "Win %" },
-        { value: stats.currentStreak, label: "Streak" },
+        { value: displayStreak, label: "Streak" },
         { value: stats.maxStreak, label: "Max Streak" },
       ]
     : [];
