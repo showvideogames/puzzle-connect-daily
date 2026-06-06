@@ -34,8 +34,8 @@ export function HowToPlayModal({ open, onClose }: HowToPlayModalProps) {
             <div className="flex gap-2">
               {[
                 { color: "bg-group-1", label: "Easy" },
-                { color: "bg-group-2", label: "Medium" },
                 { color: "bg-group-3", label: "Hard" },
+                { color: "bg-group-2", label: "Medium" },
                 { color: "bg-group-4", label: "Tricky" },
               ].map((d) => (
                 <div key={d.label} className="flex items-center gap-1">
