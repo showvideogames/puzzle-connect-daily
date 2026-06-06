@@ -704,31 +704,39 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   : g.isOneAway
                     ? "One Away"
                     : null;
-                return (
-                  <div key={i}>
-                    {label && (
-                      <p className="text-center text-xs text-muted-foreground mb-0.5">{label}</p>
-                    )}
-                    <div className="flex items-center justify-center flex-wrap gap-1.5">
-                      {sorted.map((w, j) => (
-                        <span
-                          key={`${w}-${j}`}
-                          className="inline-flex items-center bg-secondary text-foreground rounded-full px-3 py-1 text-sm font-medium"
-                        >
-                          {isCustomEmoji(w) ? (
-                            <img
-                              src={customEmojiUrl(w)}
-                              alt={customEmojiName(w) ?? ""}
-                              draggable={false}
-                              style={{ height: "18px", width: "auto", objectFit: "contain" }}
-                            />
-                          ) : (
-                            w
-                          )}
-                        </span>
-                      ))}
-                    </div>
+                const chips = (
+                  <div className="flex items-center justify-center flex-wrap gap-1.5">
+                    {sorted.map((w, j) => (
+                      <span
+                        key={`${w}-${j}`}
+                        className="inline-flex items-center bg-secondary text-foreground rounded-full px-3 py-1 text-sm font-medium"
+                      >
+                        {isCustomEmoji(w) ? (
+                          <img
+                            src={customEmojiUrl(w)}
+                            alt={customEmojiName(w) ?? ""}
+                            draggable={false}
+                            style={{ height: "18px", width: "auto", objectFit: "contain" }}
+                          />
+                        ) : (
+                          w
+                        )}
+                      </span>
+                    ))}
                   </div>
+                );
+
+                return label ? (
+                  <div
+                    key={i}
+                    className="rounded-xl px-3 py-2 text-center"
+                    style={{ border: "1.5px dashed hsl(var(--border))" }}
+                  >
+                    <p className="text-xs text-muted-foreground mb-1.5">{label}</p>
+                    {chips}
+                  </div>
+                ) : (
+                  <div key={i}>{chips}</div>
                 );
               })}
             </div>
