@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { GameHeader } from "@/components/GameHeader";
@@ -226,6 +226,7 @@ export default function Archive() {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const calendarCardRef = useRef<HTMLDivElement>(null);
 
   const handleSettingsChange = (s: GameSettings) => {
     setSettings(s);
@@ -298,6 +299,13 @@ export default function Archive() {
     }
     loadFree();
   }, []);
+
+  // TEMP: log card offsetWidth on mount and month change
+  useEffect(() => {
+    if (calendarCardRef.current) {
+      console.log(`[CalendarCard] ${MONTHS[viewMonth]} ${viewYear} — offsetWidth: ${calendarCardRef.current.offsetWidth}px`);
+    }
+  }, [viewMonth, viewYear]);
 
   function handleBoxOpen(order: number) {
     const next = [...openedOrders, order];
@@ -401,6 +409,7 @@ export default function Archive() {
 
   const calendarBlock = (
     <div
+      ref={calendarCardRef}
       style={{
         position: "relative",
         background: "hsl(var(--card))",
