@@ -465,7 +465,7 @@ export default function Archive() {
         <div className="grid grid-cols-7 gap-1">
           {Array.from({ length: totalCells }).map((_, i) => {
             const dayNum = i - firstDay + 1;
-            if (dayNum < 1 || dayNum > daysInMonth) return <div key={i} />;
+            if (dayNum < 1 || dayNum > daysInMonth) return <div key={i} style={{ aspectRatio: "1" }} />;
 
             const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
             const isPast = dateStr < todayStr;
@@ -480,7 +480,7 @@ export default function Archive() {
                 key={i}
                 onClick={() => handleDayClick(dateStr)}
                 disabled={!isClickable}
-                className="relative flex flex-col items-center rounded-lg transition-all duration-150"
+                className="relative w-full flex flex-col items-center rounded-lg transition-all duration-150"
                 style={{
                   aspectRatio: "1",
                   background:
