@@ -117,7 +117,7 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
 
     // 4. Update streak
     if (!skipStreak) {
-      await updateStreak(userId, deviceId);
+      await updateStreak(userId, deviceId, won);
     }
 
   } catch (err) {
@@ -211,7 +211,7 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
   }
 }
 
-async function updateStreak(userId: string | null, deviceId: string): Promise<void> {
+async function updateStreak(userId: string | null, deviceId: string, won: boolean): Promise<void> {
   try {
     const today = new Date().toLocaleDateString("en-CA");
     let existing: any = null;
@@ -248,10 +248,10 @@ async function updateStreak(userId: string | null, deviceId: string): Promise<vo
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toLocaleDateString("en-CA");
 
-    let newStreak = existing.current_streak;
     if (lastPlayed === today) return;
-    else if (lastPlayed === yesterdayStr) newStreak = existing.current_streak + 1;
-    else newStreak = 1;
+    const newStreak = won
+      ? (lastPlayed === yesterdayStr ? existing.current_streak + 1 : 1)
+      : 0;
 
     const newLongest = Math.max(newStreak, existing.longest_streak);
 
