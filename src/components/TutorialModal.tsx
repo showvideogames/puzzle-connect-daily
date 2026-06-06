@@ -50,7 +50,7 @@ type Phase = "welcome" | "rainbow-hunt" | "rainbow-revealed" | "solve-groups" | 
 // Returns the largest font size that keeps the word on one line inside a 4-col grid tile.
 // Calibrated against the modal's max-w-md container (≈80px usable text width per tile).
 function tileFontSize(word: string): string {
-  const len = word.length;
+  const len = word.replace(/'/g, "").length;
   if (len <= 6)  return "12px";
   if (len <= 8)  return "11px";
   if (len <= 10) return "9.5px";
