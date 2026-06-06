@@ -2,6 +2,11 @@ import { useState } from "react";
 import { BarChart3, Lightbulb, Menu, X, BookOpen, Archive, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PlayerAuth } from "./PlayerAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import type { User as AuthUser } from "@supabase/supabase-js";
 
 interface GameHeaderProps {
@@ -25,9 +30,32 @@ export function GameHeader({
 }: GameHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showSignIn, setShowSignIn] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const drawerItemClass =
     "flex items-center gap-3 w-full px-5 py-3 text-sm font-medium hover:bg-secondary transition-colors active:scale-95 text-left";
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setChangingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Password updated!");
+      setShowChangePassword(false);
+      setNewPassword("");
+    }
+    setChangingPassword(false);
+  }
+
+  function closeMenu() {
+    setMenuOpen(false);
+    setShowChangePassword(false);
+    setNewPassword("");
+  }
 
   return (
     <>
@@ -49,7 +77,7 @@ export function GameHeader({
           />
         </Link>
 
-        {/* Right: archive + hint + stats */}
+        {/* Right: hint + stats + archive */}
         <div className="ml-auto flex items-center gap-1 shrink-0">
           {showHint && (
             <button
@@ -81,7 +109,7 @@ export function GameHeader({
       {menuOpen && (
         <div
           className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm"
-          onClick={() => setMenuOpen(false)}
+          onClick={closeMenu}
         />
       )}
 
@@ -101,7 +129,7 @@ export function GameHeader({
         >
           <img src="/textlogo.png" alt="Rainbow Categories" style={{ maxHeight: "22px", width: "auto" }} />
           <button
-            onClick={() => setMenuOpen(false)}
+            onClick={closeMenu}
             className="p-1.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
             aria-label="Close menu"
           >
@@ -112,7 +140,7 @@ export function GameHeader({
         {/* Drawer nav */}
         <nav className="flex flex-col py-2 flex-1 overflow-y-auto">
           <button
-            onClick={() => { onHowToPlayClick(); setMenuOpen(false); }}
+            onClick={() => { onHowToPlayClick(); closeMenu(); }}
             className={drawerItemClass}
           >
             <BookOpen className="w-4 h-4 text-muted-foreground" />
@@ -120,7 +148,7 @@ export function GameHeader({
           </button>
           <Link
             to="/archive"
-            onClick={() => setMenuOpen(false)}
+            onClick={closeMenu}
             className={drawerItemClass}
           >
             <Archive className="w-4 h-4 text-muted-foreground" />
@@ -128,7 +156,7 @@ export function GameHeader({
           </Link>
           {onSettingsClick && (
             <button
-              onClick={() => { onSettingsClick(); setMenuOpen(false); }}
+              onClick={() => { onSettingsClick(); closeMenu(); }}
               className={drawerItemClass}
             >
               <Settings className="w-4 h-4 text-muted-foreground" />
@@ -137,7 +165,7 @@ export function GameHeader({
           )}
         </nav>
 
-        {/* Account — inline, no popups */}
+        {/* Account — fully inline */}
         <div
           className="px-5 py-4 shrink-0"
           style={{ borderTop: "1px solid hsl(var(--border))" }}
@@ -148,18 +176,60 @@ export function GameHeader({
           >
             Account
           </p>
+
           {user ? (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-              <button
-                onClick={() => { onSignOut(); setMenuOpen(false); }}
-                className="w-full text-left text-sm font-medium py-1.5 px-3 rounded-lg hover:bg-secondary transition-colors active:scale-95"
-                style={{ color: "hsl(0 84% 60%)" }}
-              >
-                Sign Out
-              </button>
-            </div>
+            showChangePassword ? (
+              /* Change password form */
+              <form onSubmit={handleChangePassword} className="space-y-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <button
+                    type="button"
+                    onClick={() => { setShowChangePassword(false); setNewPassword(""); }}
+                    className="text-xs hover:opacity-70 transition-opacity"
+                    style={{ color: "hsl(var(--muted-foreground))" }}
+                  >
+                    ←
+                  </button>
+                  <p className="text-sm font-semibold">Change Password</p>
+                </div>
+                <div>
+                  <Label htmlFor="drawer-new-pw" className="text-xs">New Password</Label>
+                  <Input
+                    id="drawer-new-pw"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    className="h-8 text-sm mt-1"
+                    autoFocus
+                  />
+                </div>
+                <Button type="submit" className="w-full h-8 text-xs" disabled={changingPassword}>
+                  {changingPassword ? "Updating…" : "Update Password"}
+                </Button>
+              </form>
+            ) : (
+              /* Signed-in account options */
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground truncate px-1 mb-2">{user.email}</p>
+                <button
+                  onClick={() => setShowChangePassword(true)}
+                  className="w-full text-left text-sm font-medium py-1.5 px-3 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+                >
+                  Change Password
+                </button>
+                <button
+                  onClick={() => { onSignOut(); closeMenu(); }}
+                  className="w-full text-left text-sm font-medium py-1.5 px-3 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+                  style={{ color: "hsl(0 84% 60%)" }}
+                >
+                  Sign Out
+                </button>
+              </div>
+            )
           ) : (
+            /* Logged out */
             <button
               onClick={() => { setMenuOpen(false); setShowSignIn(true); }}
               className="w-full py-2 rounded-full text-sm font-semibold transition-colors hover:opacity-90 active:scale-95"
@@ -171,14 +241,16 @@ export function GameHeader({
         </div>
       </div>
 
-      {/* Auth modal — rendered at top level, well clear of the drawer */}
-      <PlayerAuth
-        user={user}
-        onSignOut={onSignOut}
-        hideTrigger
-        forceOpen={showSignIn}
-        onForceClose={() => setShowSignIn(false)}
-      />
+      {/* Auth modal — only rendered when logged out; hideTrigger prevents any visible icon */}
+      {!user && (
+        <PlayerAuth
+          user={null}
+          onSignOut={onSignOut}
+          hideTrigger
+          forceOpen={showSignIn}
+          onForceClose={() => setShowSignIn(false)}
+        />
+      )}
     </>
   );
 }
