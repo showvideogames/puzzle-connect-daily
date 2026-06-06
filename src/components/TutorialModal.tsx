@@ -47,6 +47,16 @@ type Phase = "welcome" | "rainbow-hunt" | "rainbow-revealed" | "solve-groups" | 
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
+// Returns the largest font size that keeps the word on one line inside a 4-col grid tile.
+// Calibrated against the modal's max-w-md container (≈80px usable text width per tile).
+function tileFontSize(word: string): string {
+  const len = word.length;
+  if (len <= 6)  return "12px";
+  if (len <= 8)  return "11px";
+  if (len <= 10) return "9.5px";
+  return "8.5px";
+}
+
 function WordTile({
   word,
   isSelected,
@@ -62,12 +72,16 @@ function WordTile({
   onClick: () => void;
   disabled: boolean;
 }) {
+  const rainbowStyle = isSelected && isRainbow
+    ? { outline: "3px solid white", outlineOffset: "3px", boxShadow: "0 0 0 6px black" }
+    : {};
+
   return (
     <button
       onClick={disabled ? undefined : onClick}
       className={`
-        relative w-full rounded-lg py-3 px-2 text-xs font-bold uppercase tracking-wide
-        text-center leading-tight break-words transition-all duration-150 select-none cursor-pointer
+        relative w-full rounded-lg py-3 px-2 font-bold uppercase tracking-wide
+        whitespace-nowrap text-center transition-all duration-150 select-none cursor-pointer
         ${isShaking ? "animate-shake" : ""}
         ${isRainbow
           ? "rainbow-tile text-white"
@@ -76,11 +90,7 @@ function WordTile({
           : "bg-secondary text-foreground hover:bg-secondary/80 active:scale-95"}
         ${disabled ? "opacity-60" : ""}
       `}
-      style={isSelected && isRainbow ? {
-        outline: "3px solid white",
-        outlineOffset: "3px",
-        boxShadow: "0 0 0 6px black",
-      } : undefined}
+      style={{ fontSize: tileFontSize(word), ...rainbowStyle }}
     >
       {word}
     </button>
