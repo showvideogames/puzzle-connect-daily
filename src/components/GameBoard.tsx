@@ -696,39 +696,49 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             Guess History {historyExpanded ? "▴" : "▾"}
           </button>
           {historyExpanded && (
-            <div className="mt-2 space-y-1">
+            <div className="mt-2 space-y-2">
               {incorrectGuesses.map((g, i) => {
                 const sorted = [...g.words].sort((a, b) => a.localeCompare(b));
-                const suffix = g.isAlmostRainbow
-                  ? " — Almost 🌈"
+                const label = g.isAlmostRainbow
+                  ? "Almost 🌈"
                   : g.isOneAway
-                    ? " — One Away"
-                    : "";
-                return (
-                  <div key={i} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                    <div />
-                    <div className="flex items-center justify-center flex-wrap gap-1.5">
-                      {sorted.map((w, j) => (
-                        <span
-                          key={`${w}-${j}`}
-                          className="inline-flex items-center bg-secondary text-foreground rounded-full px-3 py-1 text-sm font-medium"
-                        >
-                          {isCustomEmoji(w) ? (
-                            <img
-                              src={customEmojiUrl(w)}
-                              alt={customEmojiName(w) ?? ""}
-                              draggable={false}
-                              style={{ height: "18px", width: "auto", objectFit: "contain" }}
-                            />
-                          ) : (
-                            w
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="text-left text-xs text-muted-foreground">
-                      {suffix && <span>{suffix.replace(/^ — /, "— ")}</span>}
-                    </div>
+                    ? "One Away"
+                    : null;
+
+                const chips = (
+                  <div className="flex flex-wrap gap-1.5">
+                    {sorted.map((w, j) => (
+                      <span
+                        key={`${w}-${j}`}
+                        className="inline-flex items-center bg-secondary text-foreground rounded-full px-3 py-1 text-sm font-medium"
+                      >
+                        {isCustomEmoji(w) ? (
+                          <img
+                            src={customEmojiUrl(w)}
+                            alt={customEmojiName(w) ?? ""}
+                            draggable={false}
+                            style={{ height: "18px", width: "auto", objectFit: "contain" }}
+                          />
+                        ) : (
+                          w
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                );
+
+                return label ? (
+                  <div
+                    key={i}
+                    className="rounded-xl px-3 py-2.5"
+                    style={{ background: "hsl(var(--secondary))", border: "1px solid hsl(var(--border))" }}
+                  >
+                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">{label}</p>
+                    {chips}
+                  </div>
+                ) : (
+                  <div key={i} className="px-3 py-1">
+                    {chips}
                   </div>
                 );
               })}
