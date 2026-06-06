@@ -3,7 +3,7 @@ import { X, Send, Shuffle } from "lucide-react";
 
 // ─── Tutorial puzzle data ───────────────────────────────────────────────────
 
-const RAINBOW_WORDS = ["ORANGE", "GREEN", "BLUE", "RED"];
+const RAINBOW_WORDS = ["BLUE", "GREEN", "ORANGE", "RED"];
 
 const TUTORIAL_GROUPS = [
 {
@@ -332,9 +332,9 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
                 <div className="space-y-2">
                   {[
                     { color: "bg-amber-500", label: "Easiest" },
+                    { color: "bg-green-600", label: "Medium" },
                     { color: "bg-blue-500", label: "Hard" },
                     { color: "bg-red-500", label: "Hardest" },
-                    { color: "bg-green-600", label: "Medium" },
                   ].map(({ color, label }) => (
                     <div key={label} className="flex items-center gap-3">
                       <div className={`w-8 h-5 rounded ${color} shrink-0`} />
