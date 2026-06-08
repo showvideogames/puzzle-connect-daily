@@ -3,12 +3,12 @@ interface MistakeDotsProps {
   max: number;
 }
 
-// All segments use the same neutral grey, regardless of mistake count
+// Left to right — matches the category color order used elsewhere in the game
 const SEGMENT_COLORS = [
-  "bg-gray-400",
-  "bg-gray-400",
-  "bg-gray-400",
-  "bg-gray-400",
+  "bg-yellow-400",
+  "bg-green-500",
+  "bg-blue-500",
+  "bg-red-500",
 ];
 
 export function MistakeDots({ mistakes, max }: MistakeDotsProps) {
