@@ -43,9 +43,9 @@ html {
 
     --radius: 0.75rem;
 
-    /* Puzzle group colors — easiest to hardest: orange, green, light blue, pink */
-    --group-1: 25 90% 68%;
-    --group-1-fg: 25 80% 18%;
+    /* Puzzle group colors — easiest to hardest: yellow, green, light blue, pink */
+    --group-1: 50 90% 68%;
+    --group-1-fg: 50 80% 18%;
     --group-2: 130 45% 58%;
     --group-2-fg: 130 50% 14%;
     --group-3: 200 75% 68%;

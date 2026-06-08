@@ -4,14 +4,14 @@ import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoj
 const DOUBLE_TAP_DELAY_MS = 250;
 
 const COLOR_STYLES: Record<string, { bg: string; ring: string }> = {
-  orange: { bg: "bg-orange-400/35 dark:bg-orange-600/35", ring: "ring-orange-400" },
+  yellow: { bg: "bg-yellow-400/35 dark:bg-yellow-600/35", ring: "ring-yellow-400" },
   green:  { bg: "bg-green-500/35 dark:bg-green-600/35",  ring: "ring-green-400"  },
   blue:   { bg: "bg-blue-500/35 dark:bg-blue-600/35",   ring: "ring-blue-400"   },
   red:    { bg: "bg-red-500/35 dark:bg-red-600/35",    ring: "ring-red-400"    },
 };
 
 const COLOR_CIRCLES: { key: string; circle: string }[] = [
-  { key: "orange", circle: "bg-orange-400" },
+  { key: "yellow", circle: "bg-yellow-400" },
   { key: "green",  circle: "bg-green-500"  },
   { key: "blue",   circle: "bg-blue-500"   },
   { key: "red",    circle: "bg-red-500"    },

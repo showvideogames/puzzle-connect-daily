@@ -43,15 +43,15 @@ function extractTrailingEmojis(str: string): string {
 }
 
 const DIFFICULTY_SQUARE: Record<number, string> = {
-  1: "🟧",
+  1: "🟨",
   2: "🟩",
   3: "🟦",
   4: "🟥",
 };
 
-// Matches the colors used by MistakeDots — orange, green, blue, red
+// Matches the colors used by MistakeDots — yellow, green, blue, red
 const DIFFICULTY_COLOR: Record<number, string> = {
-  1: "bg-orange-400",
+  1: "bg-yellow-400",
   2: "bg-green-500",
   3: "bg-blue-500",
   4: "bg-red-500",
@@ -189,7 +189,7 @@ function StreakCelebration({ streak }: { streak: number }) {
   );
 }
 
-type PaletteMode = "select" | "orange" | "green" | "blue" | "red" | "eraser";
+type PaletteMode = "select" | "yellow" | "green" | "blue" | "red" | "eraser";
 
 interface GameBoardProps {
   puzzle: Puzzle;
@@ -428,7 +428,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     } else if (paletteMode === "eraser") {
       setTileColor(word, null);
     } else {
-      // Painting mode: orange, green, blue, red
+      // Painting mode: yellow, green, blue, red
       // Clicking the same color twice clears the tile (toggle off)
       if (tileColors[word] === paletteMode) {
         setTileColor(word, null);
@@ -524,10 +524,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <MousePointer2 className="w-5 h-5" />
           </button>
           <button
-            onClick={() => setPaletteMode("orange")}
-            className={`w-10 h-10 rounded-lg bg-orange-400 hover:scale-110 transition-all
-              ${paletteMode === "orange" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
-            aria-label="Orange paint"
+            onClick={() => setPaletteMode("yellow")}
+            className={`w-10 h-10 rounded-lg bg-yellow-400 hover:scale-110 transition-all
+              ${paletteMode === "yellow" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+            aria-label="Yellow paint"
           />
           <button
             onClick={() => setPaletteMode("green")}
@@ -727,7 +727,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             .filter((g) => (g.hintWord ?? "").trim() !== "")
             .map((g) => {
               const colorClass =
-                g.difficulty === 1 ? "bg-orange-500"
+                g.difficulty === 1 ? "bg-yellow-500"
                 : g.difficulty === 2 ? "bg-green-600"
                 : g.difficulty === 3 ? "bg-blue-500"
                 : "bg-red-500";

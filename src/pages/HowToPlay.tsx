@@ -41,7 +41,7 @@ export default function HowToPlay() {
           <h2 className="text-base font-semibold">Categories</h2>
           <p>Each puzzle has four colored categories, ordered by difficulty:</p>
           <ul className="space-y-1">
-            <li><span className="inline-block w-3 h-3 rounded-sm bg-orange-400 mr-2 align-middle" /> Orange — Easiest</li>
+            <li><span className="inline-block w-3 h-3 rounded-sm bg-yellow-400 mr-2 align-middle" /> Yellow — Easiest</li>
             <li><span className="inline-block w-3 h-3 rounded-sm bg-green-500 mr-2 align-middle" /> Green — Medium</li>
             <li><span className="inline-block w-3 h-3 rounded-sm bg-blue-500 mr-2 align-middle" /> Blue — Hard</li>
             <li><span className="inline-block w-3 h-3 rounded-sm bg-red-500 mr-2 align-middle" /> Red — Very Hard</li>

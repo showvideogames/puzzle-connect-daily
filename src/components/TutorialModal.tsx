@@ -3,7 +3,7 @@ import { X, Send, Shuffle } from "lucide-react";
 
 // ─── Tutorial puzzle data ───────────────────────────────────────────────────
 
-const RAINBOW_WORDS = ["BLUE", "GREEN", "ORANGE", "RED"];
+const RAINBOW_WORDS = ["BLUE", "GREEN", "YELLOW", "RED"];
 
 const TUTORIAL_GROUPS = [
 {

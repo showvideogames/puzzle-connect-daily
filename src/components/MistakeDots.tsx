@@ -5,7 +5,7 @@ interface MistakeDotsProps {
 
 // Left to right — matches the category color order used elsewhere in the game
 const SEGMENT_COLORS = [
-  "bg-orange-400",
+  "bg-yellow-400",
   "bg-green-500",
   "bg-blue-500",
   "bg-red-500",
