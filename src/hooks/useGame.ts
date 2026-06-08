@@ -76,11 +76,7 @@ function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle, smallHintU
   if (hintPrefix) lines.push(hintPrefix);
   for (const attempt of guessHistory) {
     if (attempt.isRainbow) {
-      if (hintPrefix && lines.length === 1) {
-        lines[0] = `${hintPrefix}🌈🌈🌈🌈`;
-      } else {
-        lines.push("🌈🌈🌈🌈");
-      }
+      lines.push("🌈🌈🌈🌈");
     } else {
       const row = attempt.groupIndices
         .map((gi) => {
