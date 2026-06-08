@@ -690,64 +690,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* Guess History (Beta) */}
-      {settings?.guessHistory && incorrectGuesses.length > 0 && (
-        <div className="mt-3">
-          <button
-            onClick={() => setHistoryExpanded((v) => !v)}
-            className="w-full text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors py-1"
-          >
-            Guess History {historyExpanded ? "▴" : "▾"}
-          </button>
-          {historyExpanded && (
-            <div className="mt-2 space-y-1">
-              {incorrectGuesses.map((g, i) => {
-                const sorted = [...g.words].sort((a, b) => a.localeCompare(b));
-                const label = g.isAlmostRainbow
-                  ? "Almost 🌈"
-                  : g.isOneAway
-                    ? "One Away"
-                    : null;
-                const chips = (
-                  <div className="flex items-center justify-center flex-wrap gap-1.5">
-                    {sorted.map((w, j) => (
-                      <span
-                        key={`${w}-${j}`}
-                        className="inline-flex items-center bg-secondary text-foreground rounded-full px-3 py-1 text-sm font-medium"
-                      >
-                        {isCustomEmoji(w) ? (
-                          <img
-                            src={customEmojiUrl(w)}
-                            alt={customEmojiName(w) ?? ""}
-                            draggable={false}
-                            style={{ height: "18px", width: "auto", objectFit: "contain" }}
-                          />
-                        ) : (
-                          w
-                        )}
-                      </span>
-                    ))}
-                  </div>
-                );
-
-                return label ? (
-                  <div
-                    key={i}
-                    className="rounded-xl px-3 py-2 text-center"
-                    style={{ border: "1.5px dashed hsl(var(--border))" }}
-                  >
-                    <p className="text-xs text-muted-foreground mb-1.5">{label}</p>
-                    {chips}
-                  </div>
-                ) : (
-                  <div key={i}>{chips}</div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Hint pill */}
       {fullHintUsed && (
         <div className="mt-4 flex justify-center">
@@ -823,6 +765,64 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               ) : (
                 puzzle.rainbowHintWord
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Guess History (Beta) */}
+      {settings?.guessHistory && incorrectGuesses.length > 0 && (
+        <div className="mt-3">
+          <button
+            onClick={() => setHistoryExpanded((v) => !v)}
+            className="w-full text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors py-1"
+          >
+            Guess History {historyExpanded ? "▴" : "▾"}
+          </button>
+          {historyExpanded && (
+            <div className="mt-2 space-y-1">
+              {incorrectGuesses.map((g, i) => {
+                const sorted = [...g.words].sort((a, b) => a.localeCompare(b));
+                const label = g.isAlmostRainbow
+                  ? "Almost 🌈"
+                  : g.isOneAway
+                    ? "One Away"
+                    : null;
+                const chips = (
+                  <div className="flex items-center justify-center flex-wrap gap-1.5">
+                    {sorted.map((w, j) => (
+                      <span
+                        key={`${w}-${j}`}
+                        className="inline-flex items-center bg-secondary text-foreground rounded-full px-3 py-1 text-sm font-medium"
+                      >
+                        {isCustomEmoji(w) ? (
+                          <img
+                            src={customEmojiUrl(w)}
+                            alt={customEmojiName(w) ?? ""}
+                            draggable={false}
+                            style={{ height: "18px", width: "auto", objectFit: "contain" }}
+                          />
+                        ) : (
+                          w
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                );
+
+                return label ? (
+                  <div
+                    key={i}
+                    className="rounded-xl px-3 py-2 text-center"
+                    style={{ border: "1.5px dashed hsl(var(--border))" }}
+                  >
+                    <p className="text-xs text-muted-foreground mb-1.5">{label}</p>
+                    {chips}
+                  </div>
+                ) : (
+                  <div key={i}>{chips}</div>
+                );
+              })}
             </div>
           )}
         </div>
