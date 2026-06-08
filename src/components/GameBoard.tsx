@@ -49,6 +49,14 @@ const DIFFICULTY_SQUARE: Record<number, string> = {
   4: "🟥",
 };
 
+// Matches the colors used by MistakeDots — orange, green, blue, red
+const DIFFICULTY_COLOR: Record<number, string> = {
+  1: "bg-orange-400",
+  2: "bg-green-500",
+  3: "bg-blue-500",
+  4: "bg-red-500",
+};
+
 function NoRainbowIndicator() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -352,15 +360,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }, 400);
   }, [puzzle.rainbowHerring]);
 
-  const hintItems = useCallback(() => {
+  const hintItems = useCallback((): { color?: string; squareEmoji?: string; emoji: string }[] => {
     const sorted = [...puzzle.groups].sort((a, b) => a.difficulty - b.difficulty);
-    const items = sorted.map(g => ({
-      square: DIFFICULTY_SQUARE[g.difficulty] || "⬜",
+    const items: { color?: string; squareEmoji?: string; emoji: string }[] = sorted.map(g => ({
+      color: DIFFICULTY_COLOR[g.difficulty],
       emoji: extractTrailingEmojis(g.category),
     }));
     if (puzzle.rainbowHerring && puzzle.rainbowCategoryName) {
       items.push({
-        square: "🌈",
+        squareEmoji: "🌈",
         emoji: extractTrailingEmojis(puzzle.rainbowCategoryName),
       });
     }
@@ -748,18 +756,18 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {fullHintUsed && (
         <div className="mt-4 flex justify-center">
           {hintVisible ? (
-            <div className="bg-secondary rounded-full px-4 py-2.5 flex items-center gap-3 flex-wrap justify-center animate-fade-up">
+            <div className="flex items-center gap-3 flex-wrap justify-center animate-fade-up">
               {hintItems().map((item, i) => (
-                <span key={i} className="flex items-center gap-1 text-2xl leading-none">
-                  {item.square}{item.emoji}
+                <span key={i} className="flex items-center gap-1.5 text-2xl leading-none">
+                  {item.color ? (
+                    <span className={`inline-block w-4 h-4 rounded-sm ${item.color}`} />
+                  ) : (
+                    <span>{item.squareEmoji}</span>
+                  )}
+                  <span className="text-base text-muted-foreground">:</span>
+                  <span>{item.emoji}</span>
                 </span>
               ))}
-              <button
-                onClick={() => setHintVisible(false)}
-                className="ml-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5 rounded-full hover:bg-muted"
-              >
-                Hide
-              </button>
             </div>
           ) : (
             <button
