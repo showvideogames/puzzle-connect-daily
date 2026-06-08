@@ -235,6 +235,17 @@ export default function Admin() {
   const [puzzleStats, setPuzzleStats] = useState<Record<string, any>>({});
   const [puzzleRatings, setPuzzleRatings] = useState<Record<string, RatingSummary>>({});
 
+  // Global stats
+  const [globalStats, setGlobalStats] = useState<{
+    totalSessions: number;
+    wonSessions: number;
+    rainbowSessions: number;
+    registeredUsers: number;
+    highestCurrentStreak: number;
+    highestLongestStreak: number;
+  } | null>(null);
+  const [globalStatsLoading, setGlobalStatsLoading] = useState(false);
+
   // Calendar visibility
   const [calendarOpen, setCalendarOpen] = useState(true);
 
@@ -314,6 +325,41 @@ export default function Admin() {
     }
 
     setPuzzles(data || []);
+  }
+
+  async function loadGlobalStats() {
+    setGlobalStatsLoading(true);
+    try {
+      const [
+        { count: totalSessions },
+        { count: wonSessions },
+        { count: rainbowSessions },
+        { count: registeredUsers },
+        { data: currentStreakData },
+        { data: longestStreakData },
+      ] = await Promise.all([
+        supabase.from("game_sessions").select("*", { count: "exact", head: true }),
+        supabase.from("game_sessions").select("*", { count: "exact", head: true }).eq("won", true),
+        supabase.from("game_sessions").select("*", { count: "exact", head: true }).eq("found_rainbow", true),
+        supabase.from("user_streaks").select("*", { count: "exact", head: true }).not("user_id", "is", null),
+        supabase.from("user_streaks").select("current_streak").order("current_streak", { ascending: false }).limit(1),
+        supabase.from("user_streaks").select("longest_streak").order("longest_streak", { ascending: false }).limit(1),
+      ]);
+
+      setGlobalStats({
+        totalSessions: totalSessions ?? 0,
+        wonSessions: wonSessions ?? 0,
+        rainbowSessions: rainbowSessions ?? 0,
+        registeredUsers: registeredUsers ?? 0,
+        highestCurrentStreak: currentStreakData?.[0]?.current_streak ?? 0,
+        highestLongestStreak: longestStreakData?.[0]?.longest_streak ?? 0,
+      });
+    } catch (err) {
+      console.error("Global stats error:", err);
+      toast.error("Couldn't load global stats.");
+    } finally {
+      setGlobalStatsLoading(false);
+    }
   }
 
   function updateGroup(idx: number, field: keyof GroupForm, value: string | number) {
@@ -992,6 +1038,35 @@ export default function Admin() {
         <CustomEmojiManager />
 
         <FeedbackList />
+
+        {/* Global Stats */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Global Stats</h2>
+            <Button variant="outline" size="sm" onClick={loadGlobalStats} disabled={globalStatsLoading}>
+              {globalStatsLoading ? "Loading…" : globalStats ? "Refresh" : "Load Stats"}
+            </Button>
+          </div>
+          {globalStats && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Total Sessions", value: globalStats.totalSessions.toLocaleString() },
+                { label: "Won", value: globalStats.wonSessions.toLocaleString() },
+                { label: "Win Rate", value: globalStats.totalSessions > 0 ? `${((globalStats.wonSessions / globalStats.totalSessions) * 100).toFixed(1)}%` : "—" },
+                { label: "Rainbows Found", value: globalStats.rainbowSessions.toLocaleString() },
+                { label: "Rainbow Rate", value: globalStats.totalSessions > 0 ? `${((globalStats.rainbowSessions / globalStats.totalSessions) * 100).toFixed(1)}%` : "—" },
+                { label: "Registered Users", value: globalStats.registeredUsers.toLocaleString() },
+                { label: "Best Current Streak", value: globalStats.highestCurrentStreak.toLocaleString() },
+                { label: "Best Longest Streak", value: globalStats.highestLongestStreak.toLocaleString() },
+              ].map((stat) => (
+                <div key={stat.label} className="rounded-lg border border-border bg-card p-3 text-center">
+                  <p className="text-2xl font-bold">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* Mini calendar + puzzle list */}
         <section className="space-y-4">
