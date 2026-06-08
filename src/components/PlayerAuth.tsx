@@ -46,7 +46,7 @@ function PersonIcon({ filled }: { filled: boolean }) {
   );
 }
 
-type AuthView = "signin" | "signup" | "forgot";
+type AuthView = "signin" | "signup" | "forgot" | "confirm";
 
 export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, hideTrigger = false }: PlayerAuthProps) {
   const [showAuth, setShowAuth] = useState(false);
@@ -63,6 +63,10 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+  const [signupEmail, setSignupEmail] = useState("");
+  const [confirmError, setConfirmError] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -203,6 +207,8 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
     setShowAuth(false);
     setView("signin");
     setResetSent(false);
+    setSignupEmail("");
+    setConfirmError(false);
     onForceClose?.();
   };
 
@@ -226,39 +232,90 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
           />
           <div className="relative bg-card rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4">
             <h2 className="text-lg font-bold text-center mb-1">
-              {view === "signup" ? "Create Account" : view === "forgot" ? "Reset your password" : "Sign In"}
+              {view === "confirm" ? "Check your email" : view === "signup" ? "Create Account" : view === "forgot" ? "Reset your password" : "Sign In"}
             </h2>
             <p className="text-xs text-muted-foreground text-center mb-4">
-              {view === "signup"
-                ? "Sign up to track your stats and streaks."
-                : view === "forgot"
-                  ? "Enter your email and we'll send you a reset link."
-                  : "Sign in to see puzzle stats."}
+              {view === "confirm"
+                ? "We sent a confirmation link to verify your account."
+                : view === "signup"
+                  ? "Sign up to track your stats and streaks."
+                  : view === "forgot"
+                    ? "Enter your email and we'll send you a reset link."
+                    : "Sign in to see puzzle stats."}
             </p>
 
-            {view !== "forgot" && (
-              <>
+            {view === "confirm" ? (
+              <div className="space-y-4 text-center">
+                <p className="text-sm font-medium">{signupEmail}</p>
+
+                <Button
+                  className="w-full h-9 text-sm"
+                  disabled={confirmLoading}
+                  onClick={async () => {
+                    setConfirmLoading(true);
+                    setConfirmError(false);
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session?.user?.email_confirmed_at) {
+                      toast.success("Email confirmed!");
+                      handleModalClose();
+                    } else {
+                      setConfirmError(true);
+                    }
+                    setConfirmLoading(false);
+                  }}
+                >
+                  {confirmLoading ? "Checking…" : "I've confirmed my email"}
+                </Button>
+
+                {confirmError && (
+                  <p className="text-xs" style={{ color: "hsl(0 84% 60%)" }}>
+                    Not confirmed yet — check your inbox.
+                  </p>
+                )}
+
                 <button
                   type="button"
-                  onClick={handleGoogleSignIn}
-                  disabled={signingInGoogle || loading}
-                  className="w-full h-9 text-sm font-medium rounded-md border border-border bg-card
-                    hover:bg-secondary transition-colors active:scale-[0.98]
-                    disabled:opacity-50 disabled:cursor-default
-                    flex items-center justify-center gap-2"
+                  disabled={resending}
+                  onClick={async () => {
+                    setResending(true);
+                    const { error } = await supabase.auth.resend({
+                      type: "signup",
+                      email: signupEmail,
+                    });
+                    if (error) toast.error(error.message);
+                    else toast.success("Confirmation email resent!");
+                    setResending(false);
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                 >
-                  <GoogleIcon />
-                  {signingInGoogle ? "Redirecting…" : `Sign ${view === "signup" ? "up" : "in"} with Google`}
+                  {resending ? "Sending…" : "Resend confirmation email"}
                 </button>
-                <div className="flex items-center gap-3 my-4">
-                  <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs text-muted-foreground">or</span>
-                  <div className="flex-1 h-px bg-border" />
-                </div>
-              </>
-            )}
+              </div>
+            ) : (
+              <>
+                {view !== "forgot" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleGoogleSignIn}
+                      disabled={signingInGoogle || loading}
+                      className="w-full h-9 text-sm font-medium rounded-md border border-border bg-card
+                        hover:bg-secondary transition-colors active:scale-[0.98]
+                        disabled:opacity-50 disabled:cursor-default
+                        flex items-center justify-center gap-2"
+                    >
+                      <GoogleIcon />
+                      {signingInGoogle ? "Redirecting…" : `Sign ${view === "signup" ? "up" : "in"} with Google`}
+                    </button>
+                    <div className="flex items-center gap-3 my-4">
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-xs text-muted-foreground">or</span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
+                  </>
+                )}
 
-            {view === "forgot" ? (
+                {view === "forgot" ? (
               resetSent ? (
                 <div className="space-y-4 text-center">
                   <p className="text-sm">Check your email for a reset link.</p>
@@ -315,7 +372,7 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
                   if (view === "signup") {
                     const { error } = await supabase.auth.signUp({ email, password });
                     if (error) toast.error(error.message);
-                    else { toast.success("Account created!"); handleModalClose(); }
+                    else { setSignupEmail(email); setView("confirm"); }
                   } else {
                     const { error } = await supabase.auth.signInWithPassword({ email, password });
                     if (error) toast.error(error.message);
@@ -375,6 +432,8 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
                   {view === "signup" ? "Already have an account? Sign in" : "Need an account? Sign up"}
                 </button>
               </form>
+            )}
+              </>
             )}
           </div>
         </div>
