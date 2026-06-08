@@ -249,7 +249,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   const [historyExpanded, setHistoryExpanded] = useState(true);
   const incorrectGuesses = useMemo(
-    () => state.guessHistory.filter((a) => !a.isCorrect && !a.isRainbow),
+    () => state.guessHistory.filter((a) => !a.isCorrect && !a.isRainbow && !a.isHintMarker),
     [state.guessHistory],
   );
 
@@ -377,10 +377,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   const generateShareLines = useCallback((): string[] => {
     const lines: string[] = [];
-    const hintPrefix = (smallHintUsed ? "💡" : "") + (fullHintUsed ? "🔦" : "");
-    if (hintPrefix) lines.push(hintPrefix);
     for (const attempt of state.guessHistory) {
-      if (attempt.isRainbow) {
+      if (attempt.isHintMarker) {
+        lines.push(attempt.hintType === "small" ? "💡" : "🔦");
+      } else if (attempt.isRainbow) {
         lines.push("🌈🌈🌈🌈");
       } else {
         const row = attempt.groupIndices
@@ -394,7 +394,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }
     if (bonusRainbowCorrect === true) lines.push("🌈🌈🌈🌈");
     return lines;
-  }, [state.guessHistory, puzzle, bonusRainbowCorrect, smallHintUsed, fullHintUsed]);
+  }, [state.guessHistory, puzzle, bonusRainbowCorrect]);
 
   const generateShareText = useCallback(() => {
     const header = puzzle.title

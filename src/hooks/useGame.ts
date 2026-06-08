@@ -70,12 +70,12 @@ const DIFFICULTY_SQUARE: Record<number, string> = {
   4: "🟥",
 };
 
-function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle, smallHintUsed: boolean, fullHintUsed: boolean): string {
+function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle): string {
   const lines: string[] = [];
-  const hintPrefix = (smallHintUsed ? "💡" : "") + (fullHintUsed ? "🔦" : "");
-  if (hintPrefix) lines.push(hintPrefix);
   for (const attempt of guessHistory) {
-    if (attempt.isRainbow) {
+    if (attempt.isHintMarker) {
+      lines.push(attempt.hintType === "small" ? "💡" : "🔦");
+    } else if (attempt.isRainbow) {
       lines.push("🌈🌈🌈🌈");
     } else {
       const row = attempt.groupIndices
@@ -199,6 +199,36 @@ export function useGame(
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [state.isComplete]);
+
+  // --- Hint marker injection ---
+  // Track previous hint-boolean values so we can detect the false→true transition
+  // and insert a synthetic marker into guessHistory at the right position.
+  const prevSmallHintRef = useRef(smallHintUsed);
+  const prevFullHintRef = useRef(fullHintUsed);
+
+  const addHintMarker = useCallback((type: "small" | "full") => {
+    setState((s) => ({
+      ...s,
+      guessHistory: [
+        ...s.guessHistory,
+        { words: [], groupIndices: [], isCorrect: false, isHintMarker: true, hintType: type },
+      ],
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (smallHintUsed && !prevSmallHintRef.current) {
+      addHintMarker("small");
+    }
+    prevSmallHintRef.current = smallHintUsed;
+  }, [smallHintUsed, addHintMarker]);
+
+  useEffect(() => {
+    if (fullHintUsed && !prevFullHintRef.current) {
+      addHintMarker("full");
+    }
+    prevFullHintRef.current = fullHintUsed;
+  }, [fullHintUsed, addHintMarker]);
 
   useEffect(() => {
     if (oneAway) setOneAway(false);
@@ -459,7 +489,7 @@ export function useGame(
           vibrateCelebration();
 
           const fullGuessHistory = [...state.guessHistory, attempt];
-          const shareGrid = buildShareGrid(fullGuessHistory, puzzle, smallHintUsed, fullHintUsed);
+          const shareGrid = buildShareGrid(fullGuessHistory, puzzle);
 
           const winStatsParams = {
             puzzleId: puzzle.id,
@@ -470,7 +500,7 @@ export function useGame(
             solveOrder: getSolveOrder(newSolved),
             hintsUsed: smallHintUsed || fullHintUsed,
             shareGrid,
-            guessHistory: fullGuessHistory.map((g) => ({
+            guessHistory: fullGuessHistory.filter((g) => !g.isHintMarker).map((g) => ({
               words: g.words,
               correct: g.isCorrect,
               group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
@@ -545,7 +575,7 @@ export function useGame(
 
       if (isLost) {
         const fullGuessHistory = [...state.guessHistory, attempt];
-        const shareGrid = buildShareGrid(fullGuessHistory, puzzle, smallHintUsed, fullHintUsed);
+        const shareGrid = buildShareGrid(fullGuessHistory, puzzle);
 
         const lossStatsParams = {
           puzzleId: puzzle.id,
@@ -556,7 +586,7 @@ export function useGame(
           solveOrder: getSolveOrder(state.solvedGroups),
           hintsUsed: smallHintUsed || fullHintUsed,
           shareGrid,
-          guessHistory: fullGuessHistory.map((g) => ({
+          guessHistory: fullGuessHistory.filter((g) => !g.isHintMarker).map((g) => ({
             words: g.words,
             correct: g.isCorrect,
             group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,

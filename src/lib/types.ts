@@ -38,6 +38,8 @@ export interface GuessAttempt {
   isRainbow?: boolean;
   isOneAway?: boolean;
   isAlmostRainbow?: boolean;
+  isHintMarker?: boolean;
+  hintType?: "small" | "full";
 }
 
 export interface GameState {
