@@ -379,7 +379,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     const lines: string[] = [];
     for (const attempt of state.guessHistory) {
       if (attempt.isHintMarker) {
-        lines.push(attempt.hintType === "small" ? "💡" : "🔦");
+        const emoji = attempt.hintType === "small" ? "💡" : "🔦";
+        const last = lines[lines.length - 1];
+        if (last === "💡" || last === "🔦" || last === "💡🔦" || last === "🔦💡") {
+          lines[lines.length - 1] = last + emoji;
+        } else {
+          lines.push(emoji);
+        }
       } else if (attempt.isRainbow) {
         lines.push("🌈🌈🌈🌈");
       } else {
