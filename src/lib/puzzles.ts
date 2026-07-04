@@ -66,5 +66,6 @@ function mapPuzzle(data: any): Puzzle {
     isEmojiPuzzle: data.is_emoji_puzzle ?? false,
     isFreePuzzle: data.is_free_puzzle ?? false,
     freePuzzleOrder: data.free_puzzle_order ?? null,
+    theme: data.theme ?? null,
   };
 }

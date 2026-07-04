@@ -12,6 +12,7 @@ import { FeedbackList } from "@/components/admin/FeedbackList";
 import { AdminLogin, AdminNoAccess } from "@/components/admin/AdminLogin";
 import { PuzzleListItem, type RatingSummary } from "@/components/admin/PuzzleListItem";
 import { useDraftPersistence, type GroupForm, type DraftData } from "@/hooks/useDraftPersistence";
+import { THEME_OPTIONS } from "@/lib/themes";
 import { toast } from "sonner";
 
 const PUZZLES_PER_PAGE = 50;
@@ -212,6 +213,7 @@ export default function Admin() {
   const [rainbowHerring, setRainbowHerring] = useState<(string | null)[]>([null, null, null, null]);
   const [rainbowCategoryName, setRainbowCategoryName] = useState("");
   const [rainbowHintWord, setRainbowHintWord] = useState("");
+  const [theme, setTheme] = useState("");
   const [isEmojiPuzzle, setIsEmojiPuzzle] = useState(false);
   const [isFreePuzzle, setIsFreePuzzle] = useState(false);
   const [freePuzzleOrder, setFreePuzzleOrder] = useState<number | null>(null);
@@ -285,6 +287,7 @@ export default function Admin() {
     rainbowCategoryName,
     rainbowHintWord,
     rainbowWordOrder,
+    theme,
     isEmojiPuzzle,
     isFreePuzzle,
     freePuzzleOrder,
@@ -305,6 +308,7 @@ export default function Admin() {
       setRainbowCategoryName(draft.rainbowCategoryName ?? "");
       setRainbowHintWord(draft.rainbowHintWord ?? "");
       setRainbowWordOrder(draft.rainbowWordOrder ?? []);
+      setTheme(draft.theme ?? "");
       setIsEmojiPuzzle(draft.isEmojiPuzzle ?? false);
       setIsFreePuzzle(draft.isFreePuzzle ?? false);
       setFreePuzzleOrder(draft.freePuzzleOrder ?? null);
@@ -502,6 +506,7 @@ export default function Admin() {
             rainbow_herring: rainbowArr,
             rainbow_category_name: rainbowCategoryName.trim() || null,
             rainbow_hint_word: rainbowHintWord.trim() || null,
+            theme: theme || null,
             is_emoji_puzzle: isEmojiPuzzle,
             is_free_puzzle: isFreePuzzle,
             free_puzzle_order: isFreePuzzle ? freePuzzleOrder : null,
@@ -523,6 +528,7 @@ export default function Admin() {
             rainbow_herring: rainbowArr,
             rainbow_category_name: rainbowCategoryName.trim() || null,
             rainbow_hint_word: rainbowHintWord.trim() || null,
+            theme: theme || null,
             is_emoji_puzzle: isEmojiPuzzle,
             is_free_puzzle: isFreePuzzle,
             free_puzzle_order: isFreePuzzle ? freePuzzleOrder : null,
@@ -578,6 +584,7 @@ export default function Admin() {
     setRainbowCategoryName("");
     setRainbowHintWord("");
     setRainbowWordOrder([]);
+    setTheme("");
     setIsEmojiPuzzle(false);
     setIsFreePuzzle(false);
     setFreePuzzleOrder(null);
@@ -614,6 +621,7 @@ export default function Admin() {
     }
     setRainbowCategoryName(p.rainbow_category_name || "");
     setRainbowHintWord(p.rainbow_hint_word || "");
+    setTheme(p.theme || "");
     setIsEmojiPuzzle(p.is_emoji_puzzle ?? false);
     setIsFreePuzzle(p.is_free_puzzle ?? false);
     setFreePuzzleOrder(p.free_puzzle_order ?? null);
@@ -885,6 +893,20 @@ export default function Admin() {
                   placeholder="Extra example word shown as a Small Hint"
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
                 />
+              </div>
+              <div>
+                <Label className="text-xs">Bonus Theme</Label>
+                <select
+                  value={theme}
+                  onChange={(e) => setTheme(e.target.value)}
+                  onBlur={handleBlurSave}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
+                >
+                  {THEME_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">Swaps the bonus gradient, emoji, and copy for a holiday look. Default keeps the rainbow.</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {groups.map((g, i) => {

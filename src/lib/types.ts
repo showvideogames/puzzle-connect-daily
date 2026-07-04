@@ -17,6 +17,8 @@ export interface Puzzle {
   isEmojiPuzzle?: boolean | null;
   isFreePuzzle?: boolean | null;
   freePuzzleOrder?: number | null;
+  // Optional visual theme key for the bonus category (null = default rainbow).
+  theme?: string | null;
 }
 
 export interface GameStats {

@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId, markRainbowFoundInSession } from "@/lib/gameStats";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { trackEvent } from "@/lib/analytics";
+import { resolveTheme } from "@/lib/themes";
 
 const TOOLTIP_MSG = "This puzzle has no Rainbow category.";
 
@@ -254,6 +255,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     [state.guessHistory],
   );
 
+  // Visual theme for the bonus category (gradient/emoji/copy). Defaults to the
+  // classic rainbow when the puzzle has no theme set.
+  const theme = useMemo(() => resolveTheme(puzzle.theme), [puzzle.theme]);
+
   // Renders solved groups and the rainbow reveal in actual solve order,
   // instead of always pinning the rainbow to the top of the list.
   const boardSlots = useMemo(() => {
@@ -386,12 +391,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }));
     if (puzzle.rainbowHerring && puzzle.rainbowCategoryName) {
       items.push({
-        squareEmoji: "🌈",
+        squareEmoji: theme.emoji,
         emoji: extractTrailingEmojis(puzzle.rainbowCategoryName),
       });
     }
     return items;
-  }, [puzzle]);
+  }, [puzzle, theme]);
 
   const generateShareLines = useCallback((): string[] => {
     const lines: string[] = [];
@@ -405,7 +410,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           lines.push(emoji);
         }
       } else if (attempt.isRainbow) {
-        lines.push("🌈🌈🌈🌈");
+        lines.push(theme.shareRow);
       } else {
         const row = attempt.groupIndices
           .map((gi) => {
@@ -417,7 +422,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       }
     }
     return lines;
-  }, [state.guessHistory, puzzle]);
+  }, [state.guessHistory, puzzle, theme]);
 
   const generateShareText = useCallback(() => {
     const header = puzzle.title
@@ -473,7 +478,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     <div className="w-full max-w-lg mx-auto px-2 animate-fade-up">
       <div className="flex items-center justify-center gap-2 mb-4">
         <p className="text-center text-sm text-muted-foreground">
-          Find four groups of four and the hidden Rainbow!
+          Find four groups of four and the hidden {theme.label}!
         </p>
         {!puzzle.rainbowHerring && <NoRainbowIndicator />}
       </div>
@@ -487,12 +492,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               key="rainbow-reveal"
               className={`w-full rounded-lg py-3 px-4 text-center text-white ${rainbowVisible ? "animate-rainbow-curtain" : ""}`}
               style={{
-                background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)",
+                background: theme.gradient,
                 clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
               }}
             >
               <div className="font-bold text-sm uppercase tracking-wide">
-                {puzzle.rainbowCategoryName || "Rainbow 🌈"}
+                {puzzle.rainbowCategoryName || theme.defaultCategoryName}
               </div>
               <RainbowWordsRow words={puzzle.rainbowHerring!} />
             </div>
@@ -512,21 +517,21 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               className="w-full rounded-lg py-3 px-4 text-center text-white
                 hover:opacity-90 transition-opacity active:scale-[0.99]
                 animate-rainbow-breathe animate-rainbow-shimmer"
-              style={{ background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)" }}
+              style={{ background: theme.gradient }}
             >
-              <div className="font-bold text-sm uppercase tracking-wide">Spot the Rainbow? 🌈</div>
+              <div className="font-bold text-sm uppercase tracking-wide">{theme.spotPrompt}</div>
               <div className="text-xs mt-0.5 opacity-80">Find one word from each group</div>
             </button>
           ) : (
             <div
               className={`w-full rounded-lg py-3 px-4 text-center text-white ${rainbowVisible ? "animate-rainbow-curtain" : ""}`}
               style={{
-                background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)",
+                background: theme.gradient,
                 clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
               }}
             >
               <div className="font-bold text-sm uppercase tracking-wide">
-                {puzzle.rainbowCategoryName || "Rainbow 🌈"}
+                {puzzle.rainbowCategoryName || theme.defaultCategoryName}
               </div>
               <RainbowWordsRow words={puzzle.rainbowHerring} />
             </div>
@@ -621,11 +626,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* Rainbow Spotted popup */}
+      {/* Rainbow Spotted popup — animated rainbow-tile for the default theme,
+          static themed gradient otherwise */}
       {showRainbowPopup && (
         <div className="flex justify-center mt-3 animate-fade-up">
-          <div className={`${showRainbow ? "rainbow-tile" : "bg-foreground"} px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg`}>
-            🌈 Rainbow Spotted!
+          <div
+            className={`${showRainbow && theme.isDefault ? "rainbow-tile" : "bg-foreground"} px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg`}
+            style={showRainbow && !theme.isDefault ? { background: theme.gradient } : undefined}
+          >
+            {theme.spottedMessage}
           </div>
         </div>
       )}
@@ -634,7 +643,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {almostRainbow ? (
         <div className="flex justify-center mt-3 animate-fade-up">
           <div className="bg-foreground text-background pl-5 pr-3 py-2 rounded-full text-sm font-semibold shadow-md flex items-center gap-2">
-            Almost 🌈
+            {theme.almostMessage}
             <button
               onClick={() => setAlmostRainbow(false)}
               className="w-5 h-5 rounded-full bg-background/20 hover:bg-background/30 flex items-center justify-center transition-colors active:scale-95"
@@ -778,7 +787,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           {puzzle.rainbowHintWord && puzzle.rainbowHintWord.trim() !== "" && (
             <div
               className="text-white text-sm font-semibold uppercase rounded-lg h-10 px-3 min-w-[60px] flex items-center justify-center"
-              style={{ background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)" }}
+              style={{ background: theme.gradient }}
             >
               {isCustomEmoji(puzzle.rainbowHintWord) ? (
                 <img
@@ -809,7 +818,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               {incorrectGuesses.map((g, i) => {
                 const sorted = [...g.words].sort((a, b) => a.localeCompare(b));
                 const label = g.isAlmostRainbow
-                  ? "Almost 🌈"
+                  ? theme.almostMessage
                   : g.isOneAway
                     ? "One Away"
                     : null;

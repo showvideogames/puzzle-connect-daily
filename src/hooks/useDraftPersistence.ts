@@ -19,6 +19,7 @@ export interface DraftData {
   rainbowCategoryName: string;
   rainbowHintWord: string;
   rainbowWordOrder: string[];
+  theme: string;
   isEmojiPuzzle: boolean;
   isFreePuzzle: boolean;
   freePuzzleOrder: number | null;

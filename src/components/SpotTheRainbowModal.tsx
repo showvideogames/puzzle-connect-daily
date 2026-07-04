@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Puzzle } from "@/lib/types";
 import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
+import { resolveTheme } from "@/lib/themes";
 
 const GROUP_COLORS: Record<number, { bg: string; text: string }> = {
   1: { bg: "bg-group-1", text: "text-group-1-fg" },
@@ -20,6 +21,8 @@ export function SpotTheRainbowModal({ open, puzzle, onResult }: SpotTheRainbowMo
   const [selected, setSelected] = useState<Record<number, string>>({});
 
   if (!open || !puzzle.rainbowHerring) return null;
+
+  const theme = resolveTheme(puzzle.theme);
 
   const handleSelect = (groupIdx: number, word: string) => {
     setSelected(prev => ({ ...prev, [groupIdx]: word }));
@@ -44,7 +47,7 @@ export function SpotTheRainbowModal({ open, puzzle, onResult }: SpotTheRainbowMo
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
       <div className="relative bg-card rounded-xl shadow-2xl p-5 w-full max-w-sm mx-4 animate-pop overflow-y-auto max-h-[90vh]">
-        <h2 className="text-lg font-bold mb-1">Spot the Rainbow? 🌈</h2>
+        <h2 className="text-lg font-bold mb-1">{theme.spotPrompt}</h2>
         <p className="text-xs text-muted-foreground mb-4">
           Pick one word from each group that shares a hidden connection.
         </p>

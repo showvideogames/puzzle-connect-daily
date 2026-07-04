@@ -300,6 +300,7 @@ export type Database = {
           rainbow_category_name: string | null
           rainbow_herring: string[] | null
           rainbow_hint_word: string | null
+          theme: string | null
           title: string | null
           updated_at: string
           word_order: string[] | null
@@ -316,6 +317,7 @@ export type Database = {
           rainbow_category_name?: string | null
           rainbow_herring?: string[] | null
           rainbow_hint_word?: string | null
+          theme?: string | null
           title?: string | null
           updated_at?: string
           word_order?: string[] | null
@@ -332,6 +334,7 @@ export type Database = {
           rainbow_category_name?: string | null
           rainbow_herring?: string[] | null
           rainbow_hint_word?: string | null
+          theme?: string | null
           title?: string | null
           updated_at?: string
           word_order?: string[] | null
