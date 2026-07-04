@@ -1,79 +1,92 @@
-import { useState } from "react";
-import { Menu, X, Archive, Home } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BarChart3, BookOpen, Archive, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
+import { PlayerAuth } from "./PlayerAuth";
+import { StatsModal } from "./StatsModal";
+import { SettingsModal } from "./SettingsModal";
+import { FeedbackModal } from "./FeedbackModal";
+import { supabase } from "@/integrations/supabase/client";
+import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
+import type { User as AuthUser } from "@supabase/supabase-js";
+
+type ModalName = "stats" | "settings" | "feedback" | null;
 
 export function MinimalHeader() {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [settings, setSettings] = useState<GameSettings>(loadSettings);
+  const [activeModal, setActiveModal] = useState<ModalName>(null);
 
-  const drawerItemClass =
-    "flex items-center gap-3 w-full px-5 py-3 text-sm font-medium hover:bg-secondary transition-colors active:scale-95 text-left";
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const closeModal = () => setActiveModal(null);
+
+  function handleSettingsChange(newSettings: GameSettings) {
+    setSettings(newSettings);
+    saveSettings(newSettings);
+    document.documentElement.classList.toggle("dark", newSettings.darkMode);
+  }
 
   return (
     <>
-      <header className="relative flex items-center w-full max-w-lg mx-auto py-3 px-2">
-        {/* Left: hamburger */}
-        <button
-          onClick={() => setMenuOpen(true)}
-          className="p-2 rounded-lg hover:bg-secondary transition-colors active:scale-95"
-          aria-label="Open menu"
-        >
-          <Menu className="w-5 h-5 text-muted-foreground" />
-        </button>
+      <header className="flex items-center w-full max-w-lg mx-auto py-3 px-2 gap-2">
+        <Link to="/" className="active:scale-95 transition-transform shrink-0" aria-label="Home">
+          <img
+            src="/textlogo.png"
+            alt="Rainbow Categories"
+            style={{ maxHeight: "28px", width: "auto" }}
+          />
+        </Link>
 
-        {/* Center: logo */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <Link to="/" className="pointer-events-auto active:scale-95 transition-transform" aria-label="Home">
-            <img
-              src="/textlogo.png"
-              alt="Rainbow Categories"
-              style={{ maxHeight: "28px", width: "auto" }}
-            />
+        <div className="ml-auto flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => setActiveModal("stats")}
+            className="p-2 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+            aria-label="My stats"
+          >
+            <BarChart3 className="w-5 h-5 text-muted-foreground" />
+          </button>
+          <Link
+            to="/how-to-play"
+            className="p-2 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+            aria-label="How to play"
+          >
+            <BookOpen className="w-5 h-5 text-muted-foreground" />
           </Link>
+          <Link
+            to="/archive"
+            className="p-2 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+            aria-label="Puzzle archive"
+          >
+            <Archive className="w-5 h-5 text-muted-foreground" />
+          </Link>
+          <button
+            onClick={() => setActiveModal("settings")}
+            className="p-2 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+            aria-label="Settings"
+          >
+            <Settings className="w-5 h-5 text-muted-foreground" />
+          </button>
+          <PlayerAuth user={user} onSignOut={() => supabase.auth.signOut()} />
         </div>
-
-        {/* Right: empty spacer to balance the hamburger */}
-        <div className="ml-auto w-9" />
       </header>
 
-      {/* Drawer backdrop */}
-      {menuOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm"
-          onClick={() => setMenuOpen(false)}
-        />
-      )}
-
-      {/* Slide-in drawer */}
-      <div
-        className="fixed top-0 left-0 z-50 h-full w-64 flex flex-col shadow-2xl transition-transform duration-200"
-        style={{
-          background: "hsl(var(--card))",
-          borderRight: "1px solid hsl(var(--border))",
-          transform: menuOpen ? "translateX(0)" : "translateX(-100%)",
-        }}
-      >
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid hsl(var(--border))" }}>
-          <img src="/textlogo.png" alt="Rainbow Categories" style={{ maxHeight: "22px", width: "auto" }} />
-          <button
-            onClick={() => setMenuOpen(false)}
-            className="p-1.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
-            aria-label="Close menu"
-          >
-            <X className="w-4 h-4 text-muted-foreground" />
-          </button>
-        </div>
-
-        <nav className="flex flex-col py-2">
-          <Link to="/" onClick={() => setMenuOpen(false)} className={drawerItemClass}>
-            <Home className="w-4 h-4 text-muted-foreground" />
-            Today's Puzzle
-          </Link>
-          <Link to="/archive" onClick={() => setMenuOpen(false)} className={drawerItemClass}>
-            <Archive className="w-4 h-4 text-muted-foreground" />
-            Archive
-          </Link>
-        </nav>
-      </div>
+      <StatsModal open={activeModal === "stats"} onClose={closeModal} />
+      <SettingsModal
+        open={activeModal === "settings"}
+        onClose={closeModal}
+        settings={settings}
+        onSettingsChange={handleSettingsChange}
+        onOpenFeedback={() => setActiveModal("feedback")}
+      />
+      <FeedbackModal open={activeModal === "feedback"} onClose={closeModal} user={user} />
     </>
   );
 }
