@@ -295,6 +295,15 @@ export function useGame(
     setTileColors((prev) => ({ ...prev, [word]: color }));
   }, []);
 
+  // Marks the rainbow as found after the puzzle is already complete (the
+  // "Spot the Rainbow?" bonus prompt). Without this, gotRainbow never flips
+  // to true when the rainbow is the last thing found, so the reveal reverts
+  // to unsolved on reload even though the in-session share grid showed it.
+  const markRainbowFound = useCallback((words: string[]) => {
+    setRainbowWords(words);
+    setState((s) => (s.gotRainbow ? s : { ...s, gotRainbow: true }));
+  }, []);
+
   const clearAllColors = useCallback(() => {
     setTileColors({});
   }, []);
@@ -670,6 +679,7 @@ export function useGame(
     setTileColor,
     clearAllColors,
     hasAnyColor,
+    markRainbowFound,
     handleDragStart,
     handleDragOver,
     handleDrop,

@@ -34,6 +34,24 @@ interface SaveGameStatsParams {
   shareGrid?: string;
 }
 
+// Flips found_rainbow to true on an already-saved session — used when the
+// rainbow is spotted via the post-completion bonus prompt, after
+// saveGameStats already inserted the row with found_rainbow: false.
+export async function markRainbowFoundInSession(puzzleId: string): Promise<void> {
+  try {
+    const deviceId = getDeviceId();
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id ?? null;
+    const query = userId
+      ? supabase.from("game_sessions").update({ found_rainbow: true }).eq("puzzle_id", puzzleId).or(`user_id.eq.${userId},device_id.eq.${deviceId}`)
+      : supabase.from("game_sessions").update({ found_rainbow: true }).eq("puzzle_id", puzzleId).eq("device_id", deviceId);
+    const { error } = await query;
+    if (error) console.error("Failed to mark rainbow found:", error);
+  } catch (err) {
+    console.error("markRainbowFoundInSession error:", err);
+  }
+}
+
 export async function hasExistingSession(puzzleId: string): Promise<boolean> {
   try {
     const deviceId = getDeviceId();

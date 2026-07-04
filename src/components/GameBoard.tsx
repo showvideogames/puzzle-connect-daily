@@ -15,7 +15,7 @@ import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
 import { supabase } from "@/integrations/supabase/client";
-import { getDeviceId } from "@/lib/gameStats";
+import { getDeviceId, markRainbowFoundInSession } from "@/lib/gameStats";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { trackEvent } from "@/lib/analytics";
 
@@ -229,6 +229,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     setTileColor,
     clearAllColors,
     hasAnyColor,
+    markRainbowFound,
     handleDragStart,
     handleDragOver,
     handleDrop,
@@ -355,10 +356,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         setBonusRainbowWords([...puzzle.rainbowHerring]);
         confetti({ particleCount: 100, spread: 80, origin: { y: 0.55 } });
         playRainbowSound();
+        markRainbowFound(puzzle.rainbowHerring);
+        void markRainbowFoundInSession(puzzle.id);
       }
       setTimeout(() => setBonusRainbowCorrect(correct), correct ? 600 : 0);
     }, 400);
-  }, [puzzle.rainbowHerring]);
+  }, [puzzle.rainbowHerring, puzzle.id, markRainbowFound]);
 
   const hintItems = useCallback((): { color?: string; squareEmoji?: string; emoji: string }[] => {
     const sorted = [...puzzle.groups].sort((a, b) => a.difficulty - b.difficulty);
