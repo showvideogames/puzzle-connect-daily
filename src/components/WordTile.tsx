@@ -38,6 +38,24 @@ function getEmojiFontSize(charCount: number): string {
   return "0.9rem";
 }
 
+// Dynamic font size for regular text tiles — shrinks based on the longest
+// individual word (not the whole phrase). Mid-word breaking is disabled, so
+// without this a long word would either overflow the tile or force it wider;
+// shrinking lets it fit on its own line instead. Short words in a longer
+// phrase are unaffected and just wrap normally across as many lines as needed.
+function getWordFontSize(word: string): string | undefined {
+  const longest = Math.max(...word.split(" ").map(countVisibleChars));
+  if (longest <= 8) return undefined; // default text-xs/sm classes already fit these
+  if (longest === 9) return "0.7rem";
+  if (longest === 10) return "0.65rem";
+  if (longest === 11) return "0.6rem";
+  if (longest === 12) return "0.56rem";
+  if (longest === 13) return "0.52rem";
+  if (longest === 14) return "0.48rem";
+  if (longest <= 16) return "0.45rem";
+  return "0.42rem";
+}
+
 interface WordTileProps {
   word: string;
   isSelected: boolean;
@@ -94,6 +112,9 @@ export function WordTile({
   const isImage = isCustomEmoji(word);
   const emojiFontSize = isEmojiPuzzle && !isImage
     ? getEmojiFontSize(countVisibleChars(word))
+    : undefined;
+  const wordFontSize = !isEmojiPuzzle && !isImage
+    ? getWordFontSize(word)
     : undefined;
 
   useEffect(() => {
@@ -176,7 +197,7 @@ export function WordTile({
 
   const isRightEdge = column === 4;
 
-  const baseClasses = `tile-base h-16 font-semibold rounded-lg transition-all duration-150 ease-out relative
+  const baseClasses = `tile-base min-h-16 font-semibold rounded-lg transition-all duration-150 ease-out relative
     ${disabled ? "opacity-50 cursor-default" : ""}
   `;
 
@@ -211,7 +232,6 @@ export function WordTile({
         className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "" : "text-xs sm:text-sm"}`}
         style={{
           ...(emojiFontSize ? { fontSize: emojiFontSize } : {}),
-          ...(word.includes(" ") ? {} : { whiteSpace: "nowrap" }),
         }}
       >
         {isImage ? (
@@ -230,11 +250,22 @@ export function WordTile({
               pointerEvents: "none",
             }}
           />
-        ) : word.includes(" ") ? (
-          <span style={{ display: "block", maxWidth: "80px", wordBreak: "break-word", overflowWrap: "break-word", lineHeight: 1.2 }}>
+        ) : (
+          // Wraps only at word boundaries (no mid-word hyphenation) — a long
+          // single word shrinks via wordFontSize instead of splitting, and a
+          // long phrase is free to wrap to as many lines as it needs.
+          <span
+            className="w-full"
+            style={{
+              wordBreak: "normal",
+              overflowWrap: "normal",
+              lineHeight: 1.2,
+              ...(wordFontSize ? { fontSize: wordFontSize } : {}),
+            }}
+          >
             {word}
           </span>
-        ) : word}
+        )}
       </button>
 
       {showColorPicker && (
