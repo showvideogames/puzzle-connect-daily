@@ -52,4 +52,8 @@ export interface GameState {
   isWon: boolean;
   guessHistory: GuessAttempt[];
   gotRainbow: boolean;
+  // How many groups were already solved when the rainbow was found — lets
+  // the board and share grid place the rainbow at the right spot in the
+  // solve order instead of always pinning it to the top.
+  rainbowSolveIndex: number | null;
 }

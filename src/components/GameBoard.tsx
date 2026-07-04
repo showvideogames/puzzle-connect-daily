@@ -254,6 +254,18 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     [state.guessHistory],
   );
 
+  // Renders solved groups and the rainbow reveal in actual solve order,
+  // instead of always pinning the rainbow to the top of the list.
+  const boardSlots = useMemo(() => {
+    const slots: ({ kind: "group"; groupIdx: number } | { kind: "rainbow" })[] =
+      state.solvedGroups.map((groupIdx) => ({ kind: "group" as const, groupIdx }));
+    if (state.gotRainbow && puzzle.rainbowHerring) {
+      const insertAt = Math.min(state.rainbowSolveIndex ?? 0, slots.length);
+      slots.splice(insertAt, 0, { kind: "rainbow" as const });
+    }
+    return slots;
+  }, [state.solvedGroups, state.gotRainbow, state.rainbowSolveIndex, puzzle.rainbowHerring]);
+
   // Track if puzzle was already complete when component first mounted
   // Used to hide redundant UI (dots, headline) when viewing a completed puzzle
   const wasAlreadyComplete = useRef(state.isComplete);
@@ -336,8 +348,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   }, [state.gotRainbow]);
 
   useEffect(() => {
-    if (bonusRainbowCorrect !== null) {
-      if (bonusRainbowCorrect === true) trackEvent("rainbow_found", { source: "bonus_modal" });
+    if (bonusRainbowCorrect === true) {
+      // Reveal animation already ran off the state.gotRainbow flip above —
+      // markRainbowFound sets it synchronously, before this delayed flag.
+      trackEvent("rainbow_found", { source: "bonus_modal" });
+    } else if (bonusRainbowCorrect === false) {
       setRainbowVisible(false);
       requestAnimationFrame(() => requestAnimationFrame(() => setRainbowVisible(true)));
     }
@@ -401,9 +416,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         lines.push(row);
       }
     }
-    if (bonusRainbowCorrect === true) lines.push("🌈🌈🌈🌈");
     return lines;
-  }, [state.guessHistory, puzzle, bonusRainbowCorrect]);
+  }, [state.guessHistory, puzzle]);
 
   const generateShareText = useCallback(() => {
     const header = puzzle.title
@@ -464,30 +478,32 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         {!puzzle.rainbowHerring && <NoRainbowIndicator />}
       </div>
 
-      {/* Solved groups */}
+      {/* Solved groups — rainbow is interleaved at the position it was actually
+          found (boardSlots), not always pinned to the top */}
       <div className="space-y-2 mb-2">
-        {state.gotRainbow && puzzle.rainbowHerring && (
-          <div
-            className={`w-full rounded-lg py-3 px-4 text-center text-white ${rainbowVisible ? "animate-rainbow-curtain" : ""}`}
-            style={{
-              background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)",
-              clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
-            }}
-          >
-            <div className="font-bold text-sm uppercase tracking-wide">
-              {puzzle.rainbowCategoryName || "Rainbow 🌈"}
+        {boardSlots.map((slot) =>
+          slot.kind === "rainbow" ? (
+            <div
+              key="rainbow-reveal"
+              className={`w-full rounded-lg py-3 px-4 text-center text-white ${rainbowVisible ? "animate-rainbow-curtain" : ""}`}
+              style={{
+                background: "linear-gradient(to right, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)",
+                clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
+              }}
+            >
+              <div className="font-bold text-sm uppercase tracking-wide">
+                {puzzle.rainbowCategoryName || "Rainbow 🌈"}
+              </div>
+              <RainbowWordsRow words={puzzle.rainbowHerring!} />
             </div>
-            <RainbowWordsRow words={puzzle.rainbowHerring} />
-          </div>
+          ) : (
+            <SolvedGroup
+              key={slot.groupIdx}
+              group={puzzle.groups[slot.groupIdx]}
+              animate={slot.groupIdx === lastRevealedGroup}
+            />
+          )
         )}
-
-        {state.solvedGroups.map((groupIdx) => (
-          <SolvedGroup
-            key={groupIdx}
-            group={puzzle.groups[groupIdx]}
-            animate={groupIdx === lastRevealedGroup}
-          />
-        ))}
 
         {state.isComplete && !state.gotRainbow && puzzle.rainbowHerring && (
           bonusRainbowCorrect === null ? (

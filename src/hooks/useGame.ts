@@ -27,6 +27,7 @@ interface SavedProgress {
   isWon?: boolean;
   finalSolvedGroups?: number[];
   tileColors?: Record<string, string | null>;
+  rainbowSolveIndex?: number | null;
 }
 
 export function progressKey(puzzleId: string) {
@@ -142,6 +143,7 @@ export function useGame(
         isWon: saved.isWon ?? false,
         guessHistory: saved.guessHistory,
         gotRainbow: saved.gotRainbow,
+        rainbowSolveIndex: saved.rainbowSolveIndex ?? null,
       };
     }
 
@@ -155,6 +157,7 @@ export function useGame(
       isWon: false,
       guessHistory: [],
       gotRainbow: false,
+      rainbowSolveIndex: null,
     };
   });
 
@@ -248,6 +251,7 @@ export function useGame(
         mistakes: state.mistakes,
         guessHistory: state.guessHistory,
         gotRainbow: state.gotRainbow,
+        rainbowSolveIndex: state.rainbowSolveIndex,
         shuffledWords,
         rainbowWords,
         isComplete: state.isComplete,
@@ -264,6 +268,7 @@ export function useGame(
       mistakes: state.mistakes,
       guessHistory: state.guessHistory,
       gotRainbow: state.gotRainbow,
+      rainbowSolveIndex: state.rainbowSolveIndex,
       shuffledWords,
       rainbowWords,
       isComplete: state.isComplete,
@@ -296,12 +301,26 @@ export function useGame(
   }, []);
 
   // Marks the rainbow as found after the puzzle is already complete (the
-  // "Spot the Rainbow?" bonus prompt). Without this, gotRainbow never flips
-  // to true when the rainbow is the last thing found, so the reveal reverts
-  // to unsolved on reload even though the in-session share grid showed it.
+  // "Spot the Rainbow?" bonus prompt). Records a guessHistory entry and solve
+  // position just like the mid-game find does, so the board and share grid
+  // read from the same source of truth regardless of which path found it.
   const markRainbowFound = useCallback((words: string[]) => {
     setRainbowWords(words);
-    setState((s) => (s.gotRainbow ? s : { ...s, gotRainbow: true }));
+    setState((s) => {
+      if (s.gotRainbow) return s;
+      const attempt: GuessAttempt = {
+        words: [...words],
+        groupIndices: [],
+        isCorrect: false,
+        isRainbow: true,
+      };
+      return {
+        ...s,
+        gotRainbow: true,
+        rainbowSolveIndex: s.solvedGroups.length,
+        guessHistory: [...s.guessHistory, attempt],
+      };
+    });
   }, []);
 
   const clearAllColors = useCallback(() => {
@@ -459,7 +478,13 @@ export function useGame(
             isRainbow: true,
           };
           trackEvent("rainbow_found", { source: "in_game" });
-          setState((s) => ({ ...s, selectedWords: [], gotRainbow: true, guessHistory: [...s.guessHistory, attempt] }));
+          setState((s) => ({
+            ...s,
+            selectedWords: [],
+            gotRainbow: true,
+            rainbowSolveIndex: s.solvedGroups.length,
+            guessHistory: [...s.guessHistory, attempt],
+          }));
         }, 700);
         return;
       }
@@ -540,6 +565,7 @@ export function useGame(
             mistakes: state.mistakes,
             guessHistory: fullGuessHistory,
             gotRainbow: state.gotRainbow,
+            rainbowSolveIndex: state.rainbowSolveIndex,
             shuffledWords: [],
             rainbowWords,
             isComplete: true,
@@ -641,6 +667,7 @@ export function useGame(
                 mistakes: newMistakes,
                 guessHistory: fullGuessHistory,
                 gotRainbow: state.gotRainbow,
+                rainbowSolveIndex: state.rainbowSolveIndex,
                 shuffledWords: [],
                 rainbowWords,
                 isComplete: true,
