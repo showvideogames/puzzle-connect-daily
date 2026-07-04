@@ -493,6 +493,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               className={`w-full rounded-lg py-3 px-4 text-center text-white ${rainbowVisible ? "animate-rainbow-curtain" : ""}`}
               style={{
                 background: theme.gradient,
+                textShadow: theme.textShadow,
                 clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
               }}
             >
@@ -517,7 +518,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               className="w-full rounded-lg py-3 px-4 text-center text-white
                 hover:opacity-90 transition-opacity active:scale-[0.99]
                 animate-rainbow-breathe animate-rainbow-shimmer"
-              style={{ background: theme.gradient }}
+              style={{ background: theme.gradient, textShadow: theme.textShadow }}
             >
               <div className="font-bold text-sm uppercase tracking-wide">{theme.spotPrompt}</div>
               <div className="text-xs mt-0.5 opacity-80">Find one word from each group</div>
@@ -527,6 +528,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               className={`w-full rounded-lg py-3 px-4 text-center text-white ${rainbowVisible ? "animate-rainbow-curtain" : ""}`}
               style={{
                 background: theme.gradient,
+                textShadow: theme.textShadow,
                 clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
               }}
             >
@@ -603,6 +605,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 (showRainbow && rainbowWords.includes(word)) ||
                 bonusRainbowWords.includes(word)
               }
+              rainbowGradient={theme.isDefault ? undefined : theme.gradient}
+              rainbowTextShadow={theme.textShadow}
               isMatched={matchedWords.includes(word)}
               onClick={() => handleTileClick(word)}
               disabled={state.isComplete || matchedWords.length > 0}
@@ -632,7 +636,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         <div className="flex justify-center mt-3 animate-fade-up">
           <div
             className={`${showRainbow && theme.isDefault ? "rainbow-tile" : "bg-foreground"} px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg`}
-            style={showRainbow && !theme.isDefault ? { background: theme.gradient } : undefined}
+            style={showRainbow && !theme.isDefault ? { background: theme.gradient, textShadow: theme.textShadow } : undefined}
           >
             {theme.spottedMessage}
           </div>
@@ -787,7 +791,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           {puzzle.rainbowHintWord && puzzle.rainbowHintWord.trim() !== "" && (
             <div
               className="text-white text-sm font-semibold uppercase rounded-lg h-10 px-3 min-w-[60px] flex items-center justify-center"
-              style={{ background: theme.gradient }}
+              style={{ background: theme.gradient, textShadow: theme.textShadow }}
             >
               {isCustomEmoji(puzzle.rainbowHintWord) ? (
                 <img

@@ -13,6 +13,12 @@ export interface PuzzleTheme {
   emoji: string;
   /** Noun for the bonus category, used in copy ("Spot the {label}?"). */
   label: string;
+  /**
+   * Optional text-shadow applied over the gradient so the white bonus text stays
+   * legible against light bands (e.g. the flag's white stripe). Omit for gradients
+   * that are dark enough on their own (the default rainbow).
+   */
+  textShadow?: string;
 }
 
 /** A theme plus derived copy strings, so components stay declarative. */
@@ -41,9 +47,13 @@ export const DEFAULT_THEME: PuzzleTheme = {
 // in puzzles.theme. Nothing else needs to change.
 const THEMES: Record<string, PuzzleTheme> = {
   july4: {
-    gradient: "linear-gradient(to right, #b22234, #7a1f3d, #3c3b6e)",
+    // Three crisp bands — true red, white, true navy — so it reads as a flag at
+    // a glance instead of blending into a muddy middle tone.
+    gradient: "linear-gradient(90deg, #b22234 0%, #b22234 34%, #ffffff 34%, #ffffff 66%, #3c3b6e 66%, #3c3b6e 100%)",
     emoji: "🇺🇸",
     label: "Flag",
+    // Navy outline + soft drop so white text stays readable over the white band.
+    textShadow: "-1px 0 0 #16224a, 1px 0 0 #16224a, 0 -1px 0 #16224a, 0 1px 0 #16224a, 0 1px 3px rgba(0,0,0,0.35)",
   },
 };
 

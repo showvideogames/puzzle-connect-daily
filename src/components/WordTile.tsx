@@ -93,6 +93,10 @@ interface WordTileProps {
   onTouchDragEnd?: () => void;
   column?: number;
   isEmojiPuzzle?: boolean;
+  // When set, "rainbow" tiles use this themed gradient (e.g. flag colors) instead
+  // of the animated rainbow. rainbowTextShadow keeps the word legible over it.
+  rainbowGradient?: string;
+  rainbowTextShadow?: string;
 }
 
 export function WordTile({
@@ -116,6 +120,8 @@ export function WordTile({
   onTouchDragEnd,
   column = 1,
   isEmojiPuzzle = false,
+  rainbowGradient,
+  rainbowTextShadow,
 }: WordTileProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const lastTapRef = useRef<number>(0);
@@ -226,6 +232,9 @@ export function WordTile({
 
   const colorStyle = tileColor ? COLOR_STYLES[tileColor] : null;
 
+  // A themed bonus (e.g. flag) swaps the animated rainbow tile for a static gradient.
+  const themedRainbow = !!isRainbow && !!rainbowGradient;
+
   const isRightEdge = column === 4;
 
   const baseClasses = `tile-base min-h-16 font-semibold rounded-lg transition-all duration-150 ease-out relative
@@ -238,7 +247,7 @@ export function WordTile({
   const stateClasses = isMatched
     ? "bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
-      ? `rainbow-tile text-white shadow-md ${isSelected ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background scale-[0.97]" : ""}`
+      ? `${themedRainbow ? "" : "rainbow-tile"} text-white shadow-md ${isSelected ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background scale-[0.97]" : ""}`
       : colorStyle
         ? `${colorStyle.bg} hover:shadow-sm active:scale-95 ${isSelected ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background scale-[0.97]" : ""}`
         : isSelected
@@ -263,6 +272,7 @@ export function WordTile({
         className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "" : "text-xs sm:text-sm"}`}
         style={{
           ...(emojiFontSize ? { fontSize: emojiFontSize } : {}),
+          ...(themedRainbow ? { background: rainbowGradient, textShadow: rainbowTextShadow } : {}),
         }}
       >
         {isImage ? (
