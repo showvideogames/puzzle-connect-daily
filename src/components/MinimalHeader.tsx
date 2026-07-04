@@ -7,6 +7,7 @@ import { SettingsModal } from "./SettingsModal";
 import { FeedbackModal } from "./FeedbackModal";
 import { supabase } from "@/integrations/supabase/client";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
+import { todaysLogo } from "@/lib/themes";
 import type { User as AuthUser } from "@supabase/supabase-js";
 
 type ModalName = "stats" | "settings" | "feedback" | null;
@@ -39,7 +40,7 @@ export function MinimalHeader() {
       <header className="flex items-center w-full max-w-lg mx-auto py-3 px-2 gap-2">
         <Link to="/" className="active:scale-95 transition-transform shrink-0" aria-label="Home">
           <img
-            src="/textlogo.png"
+            src={todaysLogo()}
             alt="Rainbow Categories"
             style={{ maxHeight: "28px", width: "auto" }}
           />

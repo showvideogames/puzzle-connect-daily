@@ -1,6 +1,7 @@
 import { BarChart3, Lightbulb, BookOpen, Archive, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PlayerAuth } from "./PlayerAuth";
+import { todaysLogo } from "@/lib/themes";
 import type { User as AuthUser } from "@supabase/supabase-js";
 
 interface GameHeaderProps {
@@ -26,7 +27,7 @@ export function GameHeader({
     <header className="flex items-center w-full max-w-lg mx-auto py-3 px-2 gap-2">
       <Link to="/" className="active:scale-95 transition-transform shrink-0" aria-label="Home">
         <img
-          src="/textlogo.png"
+          src={todaysLogo()}
           alt="Rainbow Categories"
           style={{ maxHeight: "28px", width: "auto" }}
         />

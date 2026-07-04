@@ -47,9 +47,9 @@ export const DEFAULT_THEME: PuzzleTheme = {
 // in puzzles.theme. Nothing else needs to change.
 const THEMES: Record<string, PuzzleTheme> = {
   july4: {
-    // Three crisp bands — true red, white, true navy — so it reads as a flag at
-    // a glance instead of blending into a muddy middle tone.
-    gradient: "linear-gradient(90deg, #b22234 0%, #b22234 34%, #ffffff 34%, #ffffff 66%, #3c3b6e 66%, #3c3b6e 100%)",
+    // Three crisp horizontal stripes — true red, white, true navy — so it reads
+    // as a flag at a glance instead of blending into a muddy middle tone.
+    gradient: "linear-gradient(180deg, #b22234 0%, #b22234 34%, #ffffff 34%, #ffffff 66%, #3c3b6e 66%, #3c3b6e 100%)",
     emoji: "🇺🇸",
     label: "Flag",
     // Navy outline + soft drop so white text stays readable over the white band.
@@ -69,6 +69,24 @@ export function resolveTheme(theme: string | null | undefined): ResolvedTheme {
     almostMessage: `Almost ${base.emoji}`,
     shareRow: base.emoji.repeat(4),
   };
+}
+
+// ── Holiday header logo ──────────────────────────────────────────────────────
+// On its day, the header wordmark ("/textlogo.png") is swapped for a holiday
+// version site-wide. Date-based (local time) so it's independent of which puzzle
+// is loaded. Add more holidays by extending todaysLogo().
+
+const DEFAULT_LOGO = "/textlogo.png";
+const JULY4_LOGO = "/AmericanFlagLogo.png";
+
+/** True on July 4th in the viewer's local time. */
+export function isJuly4(d: Date = new Date()): boolean {
+  return d.getMonth() === 6 && d.getDate() === 4; // month is 0-indexed; 6 = July
+}
+
+/** The header wordmark logo to show today (holiday override, else the default). */
+export function todaysLogo(d: Date = new Date()): string {
+  return isJuly4(d) ? JULY4_LOGO : DEFAULT_LOGO;
 }
 
 /** Selectable theme options for the admin puzzle form. */
