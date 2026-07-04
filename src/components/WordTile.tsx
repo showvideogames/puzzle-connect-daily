@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 
 const DOUBLE_TAP_DELAY_MS = 250;
@@ -38,22 +38,38 @@ function getEmojiFontSize(charCount: number): string {
   return "0.9rem";
 }
 
-// Dynamic font size for regular text tiles — shrinks based on the longest
-// individual word (not the whole phrase). Mid-word breaking is disabled, so
-// without this a long word would either overflow the tile or force it wider;
-// shrinking lets it fit on its own line instead. Short words in a longer
-// phrase are unaffected and just wrap normally across as many lines as needed.
-function getWordFontSize(word: string): string | undefined {
-  const longest = Math.max(...word.split(" ").map(countVisibleChars));
-  if (longest <= 8) return undefined; // default text-xs/sm classes already fit these
-  if (longest === 9) return "0.7rem";
-  if (longest === 10) return "0.65rem";
-  if (longest === 11) return "0.6rem";
-  if (longest === 12) return "0.56rem";
-  if (longest === 13) return "0.52rem";
-  if (longest === 14) return "0.48rem";
-  if (longest <= 16) return "0.45rem";
-  return "0.42rem";
+// Shared offscreen canvas for text-width measurement — created lazily once.
+let measureCtx: CanvasRenderingContext2D | null = null;
+function getMeasureCtx(): CanvasRenderingContext2D {
+  if (!measureCtx) {
+    measureCtx = document.createElement("canvas").getContext("2d")!;
+  }
+  return measureCtx;
+}
+
+// Picks out the longest individual word in a phrase — the one that can't be
+// helped by wrapping, since wrapping only happens at word boundaries.
+function getLongestWord(word: string): string {
+  const parts = word.split(" ");
+  return parts.reduce((a, b) => (countVisibleChars(b) > countVisibleChars(a) ? b : a), parts[0] ?? "");
+}
+
+// Regular text tiles render at normal size and simply wrap to extra lines —
+// font-size only shrinks as a last resort, when the single longest word in
+// the phrase can't fit on its own line at normal size within the tile's
+// actual measured width. Words/phrases that already fit are left untouched.
+function computeShrunkFontSize(longestWord: string, availableWidthPx: number): string | undefined {
+  if (!longestWord || availableWidthPx <= 0) return undefined;
+  // Matches the text-xs / sm:text-sm classes applied by default.
+  const defaultPx = window.innerWidth >= 640 ? 14 : 12;
+  const ctx = getMeasureCtx();
+  ctx.font = `600 ${defaultPx}px "DM Sans", system-ui, sans-serif`;
+  const upper = longestWord.toUpperCase();
+  const letterSpacingPx = defaultPx * 0.025; // matches tracking-wide
+  const rawWidth = ctx.measureText(upper).width + letterSpacingPx * Math.max(countVisibleChars(upper) - 1, 0);
+  if (rawWidth <= availableWidthPx) return undefined;
+  const shrunkPx = Math.max((availableWidthPx / rawWidth) * defaultPx * 0.96, 8);
+  return `${shrunkPx}px`;
 }
 
 interface WordTileProps {
@@ -113,9 +129,24 @@ export function WordTile({
   const emojiFontSize = isEmojiPuzzle && !isImage
     ? getEmojiFontSize(countVisibleChars(word))
     : undefined;
-  const wordFontSize = !isEmojiPuzzle && !isImage
-    ? getWordFontSize(word)
-    : undefined;
+
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [autoFontSize, setAutoFontSize] = useState<string | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    if (isEmojiPuzzle || isImage) return;
+    const el = textRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      const longest = getLongestWord(word);
+      setAutoFontSize(computeShrunkFontSize(longest, el.clientWidth));
+    };
+
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [word, isEmojiPuzzle, isImage]);
 
   useEffect(() => {
     const el = buttonRef.current;
@@ -251,16 +282,18 @@ export function WordTile({
             }}
           />
         ) : (
-          // Wraps only at word boundaries (no mid-word hyphenation) — a long
-          // single word shrinks via wordFontSize instead of splitting, and a
-          // long phrase is free to wrap to as many lines as it needs.
+          // Wraps only at word boundaries (no mid-word hyphenation) — phrases
+          // are free to wrap to as many lines as they need at normal size.
+          // autoFontSize only kicks in when the longest word measures wider
+          // than the tile itself, as a last-resort shrink.
           <span
+            ref={textRef}
             className="w-full"
             style={{
               wordBreak: "normal",
               overflowWrap: "normal",
               lineHeight: 1.2,
-              ...(wordFontSize ? { fontSize: wordFontSize } : {}),
+              ...(autoFontSize ? { fontSize: autoFontSize } : {}),
             }}
           >
             {word}
