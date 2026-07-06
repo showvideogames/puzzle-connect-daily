@@ -289,7 +289,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     (word: string) => (el: HTMLElement, index: number, removeElement: () => void) => {
       const groupIdx = puzzle.groups.findIndex((g) => g.words.includes(word));
       const barEl = boardRef.current?.querySelector<HTMLElement>(`[data-flip-id="group-${groupIdx}"]`);
-      if (!barEl) {
+      // By the time onExit fires, flip-toolkit has already re-parented `el`
+      // back into its original parent and set it to position:absolute with
+      // top/left as an offset *relative to that parent* (it also makes the
+      // parent position:relative if it wasn't already) — not viewport
+      // coordinates. So the bar's getBoundingClientRect() has to be
+      // converted into that same parent-relative frame before assigning it.
+      const parentEl = el.parentElement;
+      if (!barEl || !parentEl) {
         // No bar to merge into (shouldn't normally happen for a real
         // correct-guess exit) — just let it disappear rather than get stuck.
         removeElement();
@@ -297,6 +304,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       }
 
       const barRect = barEl.getBoundingClientRect();
+      const parentRect = parentEl.getBoundingClientRect();
       const slotWidth = barRect.width / 4;
       const DURATION_MS = 380;
 
@@ -309,8 +317,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       ].join(", ");
 
       requestAnimationFrame(() => {
-        el.style.top = `${barRect.top}px`;
-        el.style.left = `${barRect.left + index * slotWidth}px`;
+        el.style.top = `${barRect.top - parentRect.top}px`;
+        el.style.left = `${barRect.left + index * slotWidth - parentRect.left}px`;
         el.style.width = `${slotWidth}px`;
         el.style.height = `${barRect.height}px`;
         el.style.opacity = "0";
