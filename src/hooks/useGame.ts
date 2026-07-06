@@ -106,9 +106,9 @@ export function useGame(
   }: { isArchive?: boolean; smallHintUsed?: boolean; fullHintUsed?: boolean } = {}
 ) {
   const MAX_MISTAKES = 4;
-  // Correct guess: how long the tile shake/wiggle plays before GameBoard's
-  // fly-up-and-merge overlay takes over (must match .animate-tile-matched's
-  // duration in index.css).
+  // Correct guess: how long the tile shake/wiggle plays (must match
+  // .animate-tile-matched's duration in index.css) before the tile is
+  // removed from the grid and the solved bar reveals in its place.
   const MATCH_SHAKE_MS = 350;
   // Incorrect guess: shake, then a brief suspense pause, before the mistake
   // count/tooltip/loss cascade actually reveal the result.

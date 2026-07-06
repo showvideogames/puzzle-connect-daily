@@ -1,4 +1,3 @@
-import { forwardRef } from "react";
 import { PuzzleGroup } from "@/lib/types";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 
@@ -12,23 +11,13 @@ const groupColors: Record<number, { bg: string; text: string }> = {
 interface SolvedGroupProps {
   group: PuzzleGroup;
   animate?: boolean;
-  // True while the flying-tile overlay is still converging on this bar's
-  // position — kept invisible-but-laid-out (rather than unrendered) so its
-  // real DOM rect can be measured as the animation's target.
-  pendingMerge?: boolean;
 }
 
-export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function SolvedGroup(
-  { group, animate, pendingMerge },
-  ref
-) {
+export function SolvedGroup({ group, animate }: SolvedGroupProps) {
   const colors = groupColors[group.difficulty] || groupColors[1];
   return (
     <div
-      ref={ref}
-      className={`${colors.bg} ${colors.text} rounded-lg py-3 px-4 text-center ${
-        pendingMerge ? "opacity-0" : animate ? "animate-group-appear" : ""
-      }`}
+      className={`${colors.bg} ${colors.text} rounded-lg py-3 px-4 text-center ${animate ? "animate-group-appear" : ""}`}
     >
       <div className="font-bold text-sm uppercase tracking-wide">{group.category}</div>
       <div className="text-xs mt-0.5 opacity-80 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
@@ -50,4 +39,4 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
       </div>
     </div>
   );
-});
+}
