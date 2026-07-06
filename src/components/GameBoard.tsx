@@ -301,12 +301,28 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // After the shake, the 4 matched tiles fly from their grid position into a
   // row aligned with the solved bar, then cross-fade into the solid bar —
   // instead of shrinking/fading away in place while the bar just pops in.
+  //
+  // flyingGroups is a queue (not a single slot): if a player is fast enough to
+  // land a second correct guess before the first group's overlay has finished
+  // (matchedWords only gates the ~350ms shake, not the ~600ms flight), a
+  // single shared slot would get overwritten mid-flight and its cleanup
+  // timers would silently no-op, orphaning fixed-position tiles on screen
+  // forever. Each group's lifecycle here is fully independent.
   const gridRef = useRef<HTMLDivElement>(null);
   const groupBarRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const matchedFromRectsRef = useRef<Record<string, DOMRect>>({});
   const prevRevealedGroupRef = useRef<number | null>(null);
-  const flyTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const [flyingGroup, setFlyingGroup] = useState<FlyingGroupState | null>(null);
+  const flyTimersRef = useRef<Record<number, ReturnType<typeof setTimeout>[]>>({});
+  const [flyingGroups, setFlyingGroups] = useState<FlyingGroupState[]>([]);
+
+  const findTileEl = useCallback((word: string): HTMLElement | null => {
+    const els = gridRef.current?.querySelectorAll<HTMLElement>("[data-word]");
+    if (!els) return null;
+    for (const el of els) {
+      if (el.dataset.word === word) return el;
+    }
+    return null;
+  }, []);
 
   // Capture each matched tile's current on-screen position while it's still
   // in the grid (mid-shake), before it gets removed once solvedGroups updates.
@@ -314,11 +330,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     if (matchedWords.length === 0) return;
     const rects: Record<string, DOMRect> = {};
     matchedWords.forEach((w) => {
-      const el = gridRef.current?.querySelector(`[data-word="${CSS.escape(w)}"]`);
+      const el = findTileEl(w);
       if (el) rects[w] = el.getBoundingClientRect();
     });
-    matchedFromRectsRef.current = rects;
-  }, [matchedWords]);
+    matchedFromRectsRef.current = { ...matchedFromRectsRef.current, ...rects };
+  }, [matchedWords, findTileEl]);
 
   // Kick off the fly-up once a new group actually lands in solvedGroups (the
   // grid tiles vanish and the solved bar appears in this same render — we
@@ -326,9 +342,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   useLayoutEffect(() => {
     if (lastRevealedGroup === null || lastRevealedGroup === prevRevealedGroupRef.current) return;
     prevRevealedGroupRef.current = lastRevealedGroup;
+    const thisGroup = lastRevealedGroup;
 
-    const words = puzzle.groups[lastRevealedGroup]?.words ?? [];
-    const barEl = groupBarRefs.current[lastRevealedGroup];
+    const words = puzzle.groups[thisGroup]?.words ?? [];
+    const barEl = groupBarRefs.current[thisGroup];
     const fromByWord = matchedFromRectsRef.current;
     const haveAllRects = barEl && words.length === 4 && words.every((w) => fromByWord[w]);
     if (!haveAllRects) return; // e.g. loss auto-reveal never populated matchedWords — just show it plainly
@@ -350,41 +367,54 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       height: barRect.height,
     }));
 
-    flyTimersRef.current.forEach(clearTimeout);
-    flyTimersRef.current = [];
+    setFlyingGroups((groups) => [
+      ...groups,
+      { groupIdx: thisGroup, words: ordered, from: ordered.map((w) => rectToFlyRect(fromByWord[w])), to, phase: "start" },
+    ]);
 
-    setFlyingGroup({
-      groupIdx: lastRevealedGroup,
-      words: ordered,
-      from: ordered.map((w) => rectToFlyRect(fromByWord[w])),
-      to,
-      phase: "start",
-    });
+    const setPhase = (phase: FlyingGroupState["phase"]) =>
+      setFlyingGroups((groups) => groups.map((g) => (g.groupIdx === thisGroup ? { ...g, phase } : g)));
+    const remove = () => setFlyingGroups((groups) => groups.filter((g) => g.groupIdx !== thisGroup));
 
-    const thisGroup = lastRevealedGroup;
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      setFlyingGroup((g) => (g && g.groupIdx === thisGroup ? { ...g, phase: "moving" } : g));
-    }));
-    flyTimersRef.current.push(
-      setTimeout(() => {
-        setFlyingGroup((g) => (g && g.groupIdx === thisGroup ? { ...g, phase: "merging" } : g));
-      }, FLY_MS),
-      setTimeout(() => {
-        setFlyingGroup((g) => (g && g.groupIdx === thisGroup ? null : g));
-      }, FLY_MS + MERGE_MS)
-    );
+    requestAnimationFrame(() => requestAnimationFrame(() => setPhase("moving")));
+    const timers = [
+      setTimeout(() => setPhase("merging"), FLY_MS),
+      setTimeout(remove, FLY_MS + MERGE_MS),
+      // A redundant hard safety-net: no matter what else happens (a missed
+      // frame, a measurement edge case), this group's overlay is guaranteed
+      // to be removed rather than lingering on screen indefinitely. Harmless
+      // no-op if the line above already removed it.
+      setTimeout(remove, FLY_MS + MERGE_MS + 500),
+    ];
+    flyTimersRef.current[thisGroup] = timers;
   }, [lastRevealedGroup, puzzle]);
 
   useEffect(() => {
-    return () => flyTimersRef.current.forEach(clearTimeout);
+    return () => {
+      Object.values(flyTimersRef.current).forEach((timers) => timers.forEach(clearTimeout));
+    };
   }, []);
 
-  // The solved bar for this group stays invisible-but-laid-out until the
-  // flying tiles arrive and start their merge, so the bar isn't visible for
-  // one frame before the overlay takes over (and isn't visible again once it
-  // starts crossfading in as the overlay fades out).
-  const pendingMergeGroupIdx =
-    flyingGroup && flyingGroup.phase !== "merging" ? flyingGroup.groupIdx : null;
+  // The solved bar for a group stays invisible-but-laid-out until its flying
+  // tiles arrive and start merging, so the bar isn't visible for one frame
+  // before the overlay takes over (and isn't shown again once it starts
+  // crossfading in as the overlay fades out).
+  const pendingMergeGroupIdxs = useMemo(
+    () => new Set(flyingGroups.filter((g) => g.phase !== "merging").map((g) => g.groupIdx)),
+    [flyingGroups]
+  );
+
+  // If this GameBoard instance is reused for a different puzzle (e.g. archive
+  // browsing without a remount), drop any in-flight animation state rather
+  // than risk it referencing stale words/groups from the previous puzzle.
+  useEffect(() => {
+    Object.values(flyTimersRef.current).forEach((timers) => timers.forEach(clearTimeout));
+    flyTimersRef.current = {};
+    matchedFromRectsRef.current = {};
+    groupBarRefs.current = {};
+    prevRevealedGroupRef.current = null;
+    setFlyingGroups([]);
+  }, [puzzle.id]);
 
   // Track if puzzle was already complete when component first mounted
   // Used to hide redundant UI (dots, headline) when viewing a completed puzzle
@@ -623,7 +653,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               ref={(el) => { groupBarRefs.current[slot.groupIdx] = el; }}
               group={puzzle.groups[slot.groupIdx]}
               animate={slot.groupIdx === lastRevealedGroup}
-              pendingMerge={slot.groupIdx === pendingMergeGroupIdx}
+              pendingMerge={pendingMergeGroupIdxs.has(slot.groupIdx)}
             />
           )
         )}
@@ -726,7 +756,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               rainbowTextShadow={theme.textShadow}
               isMatched={matchedWords.includes(word)}
               onClick={() => handleTileClick(word)}
-              disabled={state.isComplete || matchedWords.length > 0}
+              disabled={state.isComplete || matchedWords.length > 0 || flyingGroups.length > 0}
               arrangeTiles={arrangeTiles}
               colorCodeTiles={colorCodeTiles}
               tileColor={tileColors[word] ?? null}
@@ -749,35 +779,39 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
       {/* Flying tiles for the correct-guess fly-up + merge animation — slide
           from their grid spot into a row aligned with the solved bar, then
-          fade out as the real bar cross-fades in underneath. */}
-      {flyingGroup && flyingGroup.words.map((word, i) => {
-        const rect = flyingGroup.phase === "start" ? flyingGroup.from[i] : flyingGroup.to[i];
-        return (
-          <div
-            key={word}
-            className={`tile-flying flex items-center justify-center rounded-lg font-semibold text-xs sm:text-sm uppercase tracking-wide bg-tile-selected text-tile-selected-fg shadow-md ${
-              flyingGroup.phase === "merging" ? "opacity-0" : "opacity-100"
-            }`}
-            style={{
-              top: rect.top,
-              left: rect.left,
-              width: rect.width,
-              height: rect.height,
-            }}
-          >
-            {isCustomEmoji(word) ? (
-              <img
-                src={customEmojiUrl(word)}
-                alt={customEmojiName(word) ?? ""}
-                draggable={false}
-                style={{ height: "28px", width: "auto", objectFit: "contain" }}
-              />
-            ) : (
-              word
-            )}
-          </div>
-        );
-      })}
+          fade out as the real bar cross-fades in underneath. Rendered as a
+          queue so a fast second correct guess gets its own independent
+          overlay instead of clobbering one still in flight. */}
+      {flyingGroups.map((fg) =>
+        fg.words.map((word, i) => {
+          const rect = fg.phase === "start" ? fg.from[i] : fg.to[i];
+          return (
+            <div
+              key={`${fg.groupIdx}-${word}`}
+              className={`tile-flying flex items-center justify-center rounded-lg font-semibold text-xs sm:text-sm uppercase tracking-wide bg-tile-selected text-tile-selected-fg shadow-md ${
+                fg.phase === "merging" ? "opacity-0" : "opacity-100"
+              }`}
+              style={{
+                top: rect.top,
+                left: rect.left,
+                width: rect.width,
+                height: rect.height,
+              }}
+            >
+              {isCustomEmoji(word) ? (
+                <img
+                  src={customEmojiUrl(word)}
+                  alt={customEmojiName(word) ?? ""}
+                  draggable={false}
+                  style={{ height: "28px", width: "auto", objectFit: "contain" }}
+                />
+              ) : (
+                word
+              )}
+            </div>
+          );
+        })
+      )}
 
       {/* Rainbow Spotted popup — animated rainbow-tile for the default theme,
           static themed gradient otherwise */}
