@@ -9,7 +9,7 @@ import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
 import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2 } from "lucide-react";
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { useImagePreload } from "@/hooks/useImagePreload";
 import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
@@ -57,6 +57,32 @@ const DIFFICULTY_COLOR: Record<number, string> = {
   3: "bg-blue-500",
   4: "bg-red-500",
 };
+
+// ── Correct-guess fly-up + merge timing ──
+// Must match useGame's MATCH_SHAKE_MS (the shake plays first, then this
+// overlay takes over): tiles slide from their grid spot into a row aligned
+// with the solved bar (FLY_MS), then cross-fade into the solid bar (MERGE_MS).
+const FLY_MS = 380;
+const MERGE_MS = 220;
+
+interface FlyRect {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+function rectToFlyRect(r: DOMRect): FlyRect {
+  return { top: r.top, left: r.left, width: r.width, height: r.height };
+}
+
+interface FlyingGroupState {
+  groupIdx: number;
+  words: string[]; // left-to-right / reading order
+  from: FlyRect[]; // where each tile currently sits in the grid
+  to: FlyRect[]; // its slot within the solved bar's row
+  phase: "start" | "moving" | "merging";
+}
 
 function NoRainbowIndicator() {
   const [open, setOpen] = useState(false);
@@ -270,6 +296,95 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }
     return slots;
   }, [state.solvedGroups, state.gotRainbow, state.rainbowSolveIndex, puzzle.rainbowHerring]);
+
+  // ── Correct-guess fly-up + merge animation (FLIP-style) ──
+  // After the shake, the 4 matched tiles fly from their grid position into a
+  // row aligned with the solved bar, then cross-fade into the solid bar —
+  // instead of shrinking/fading away in place while the bar just pops in.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const groupBarRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const matchedFromRectsRef = useRef<Record<string, DOMRect>>({});
+  const prevRevealedGroupRef = useRef<number | null>(null);
+  const flyTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [flyingGroup, setFlyingGroup] = useState<FlyingGroupState | null>(null);
+
+  // Capture each matched tile's current on-screen position while it's still
+  // in the grid (mid-shake), before it gets removed once solvedGroups updates.
+  useLayoutEffect(() => {
+    if (matchedWords.length === 0) return;
+    const rects: Record<string, DOMRect> = {};
+    matchedWords.forEach((w) => {
+      const el = gridRef.current?.querySelector(`[data-word="${CSS.escape(w)}"]`);
+      if (el) rects[w] = el.getBoundingClientRect();
+    });
+    matchedFromRectsRef.current = rects;
+  }, [matchedWords]);
+
+  // Kick off the fly-up once a new group actually lands in solvedGroups (the
+  // grid tiles vanish and the solved bar appears in this same render — we
+  // measure its position and animate the captured "from" rects into it).
+  useLayoutEffect(() => {
+    if (lastRevealedGroup === null || lastRevealedGroup === prevRevealedGroupRef.current) return;
+    prevRevealedGroupRef.current = lastRevealedGroup;
+
+    const words = puzzle.groups[lastRevealedGroup]?.words ?? [];
+    const barEl = groupBarRefs.current[lastRevealedGroup];
+    const fromByWord = matchedFromRectsRef.current;
+    const haveAllRects = barEl && words.length === 4 && words.every((w) => fromByWord[w]);
+    if (!haveAllRects) return; // e.g. loss auto-reveal never populated matchedWords — just show it plainly
+
+    // Reading order (top-to-bottom, then left-to-right) so tiles slide into
+    // their row without crossing paths.
+    const ordered = [...words].sort((a, b) => {
+      const ra = fromByWord[a];
+      const rb = fromByWord[b];
+      return Math.abs(ra.top - rb.top) > 4 ? ra.top - rb.top : ra.left - rb.left;
+    });
+
+    const barRect = barEl!.getBoundingClientRect();
+    const slotWidth = barRect.width / 4;
+    const to = ordered.map((_, i) => ({
+      top: barRect.top,
+      left: barRect.left + i * slotWidth,
+      width: slotWidth,
+      height: barRect.height,
+    }));
+
+    flyTimersRef.current.forEach(clearTimeout);
+    flyTimersRef.current = [];
+
+    setFlyingGroup({
+      groupIdx: lastRevealedGroup,
+      words: ordered,
+      from: ordered.map((w) => rectToFlyRect(fromByWord[w])),
+      to,
+      phase: "start",
+    });
+
+    const thisGroup = lastRevealedGroup;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      setFlyingGroup((g) => (g && g.groupIdx === thisGroup ? { ...g, phase: "moving" } : g));
+    }));
+    flyTimersRef.current.push(
+      setTimeout(() => {
+        setFlyingGroup((g) => (g && g.groupIdx === thisGroup ? { ...g, phase: "merging" } : g));
+      }, FLY_MS),
+      setTimeout(() => {
+        setFlyingGroup((g) => (g && g.groupIdx === thisGroup ? null : g));
+      }, FLY_MS + MERGE_MS)
+    );
+  }, [lastRevealedGroup, puzzle]);
+
+  useEffect(() => {
+    return () => flyTimersRef.current.forEach(clearTimeout);
+  }, []);
+
+  // The solved bar for this group stays invisible-but-laid-out until the
+  // flying tiles arrive and start their merge, so the bar isn't visible for
+  // one frame before the overlay takes over (and isn't visible again once it
+  // starts crossfading in as the overlay fades out).
+  const pendingMergeGroupIdx =
+    flyingGroup && flyingGroup.phase !== "merging" ? flyingGroup.groupIdx : null;
 
   // Track if puzzle was already complete when component first mounted
   // Used to hide redundant UI (dots, headline) when viewing a completed puzzle
@@ -505,8 +620,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           ) : (
             <SolvedGroup
               key={slot.groupIdx}
+              ref={(el) => { groupBarRefs.current[slot.groupIdx] = el; }}
               group={puzzle.groups[slot.groupIdx]}
               animate={slot.groupIdx === lastRevealedGroup}
+              pendingMerge={slot.groupIdx === pendingMergeGroupIdx}
             />
           )
         )}
@@ -595,7 +712,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
       {/* Word grid */}
       {remainingWords.length > 0 && (
-        <div className={`grid grid-cols-4 gap-2 ${shaking || spotShaking ? "animate-shake" : ""}`}>
+        <div ref={gridRef} className={`grid grid-cols-4 gap-2 ${shaking || spotShaking ? "animate-shake" : ""}`}>
           {remainingWords.map((word, index) => (
             <WordTile
               key={word}
@@ -629,6 +746,38 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           ))}
         </div>
       )}
+
+      {/* Flying tiles for the correct-guess fly-up + merge animation — slide
+          from their grid spot into a row aligned with the solved bar, then
+          fade out as the real bar cross-fades in underneath. */}
+      {flyingGroup && flyingGroup.words.map((word, i) => {
+        const rect = flyingGroup.phase === "start" ? flyingGroup.from[i] : flyingGroup.to[i];
+        return (
+          <div
+            key={word}
+            className={`tile-flying flex items-center justify-center rounded-lg font-semibold text-xs sm:text-sm uppercase tracking-wide bg-tile-selected text-tile-selected-fg shadow-md ${
+              flyingGroup.phase === "merging" ? "opacity-0" : "opacity-100"
+            }`}
+            style={{
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              height: rect.height,
+            }}
+          >
+            {isCustomEmoji(word) ? (
+              <img
+                src={customEmojiUrl(word)}
+                alt={customEmojiName(word) ?? ""}
+                draggable={false}
+                style={{ height: "28px", width: "auto", objectFit: "contain" }}
+              />
+            ) : (
+              word
+            )}
+          </div>
+        );
+      })}
 
       {/* Rainbow Spotted popup — animated rainbow-tile for the default theme,
           static themed gradient otherwise */}

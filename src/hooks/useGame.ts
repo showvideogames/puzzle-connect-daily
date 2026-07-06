@@ -106,6 +106,14 @@ export function useGame(
   }: { isArchive?: boolean; smallHintUsed?: boolean; fullHintUsed?: boolean } = {}
 ) {
   const MAX_MISTAKES = 4;
+  // Correct guess: how long the tile shake/wiggle plays before GameBoard's
+  // fly-up-and-merge overlay takes over (must match .animate-tile-matched's
+  // duration in index.css).
+  const MATCH_SHAKE_MS = 350;
+  // Incorrect guess: shake, then a brief suspense pause, before the mistake
+  // count/tooltip/loss cascade actually reveal the result.
+  const WRONG_SHAKE_MS = 400;
+  const WRONG_REVEAL_PAUSE_MS = 300;
 
   const allWords = useMemo(
     () => puzzle.groups.flatMap((g) => g.words),
@@ -573,7 +581,7 @@ export function useGame(
             tileColors,
           });
         }
-      }, 700);
+      }, MATCH_SHAKE_MS);
 
       return;
     } else {
@@ -598,86 +606,94 @@ export function useGame(
 
       setShaking(true);
       vibrateError();
-      setTimeout(() => setShaking(false), 400);
 
-      if (isAlmostRainbow) setAlmostRainbow(true);
-      else if (isOneAway) setOneAway(true);
+      setTimeout(() => {
+        setShaking(false);
 
-      const newMistakes = state.mistakes + 1;
-      const isLost = newMistakes >= MAX_MISTAKES;
+        // Brief pause after the shake before revealing whether it was right
+        // or wrong — a suspense beat, instead of the mistake count/tooltip
+        // updating the instant the shake starts.
+        setTimeout(() => {
+          if (isAlmostRainbow) setAlmostRainbow(true);
+          else if (isOneAway) setOneAway(true);
 
-      setState((s) => ({
-        ...s,
-        mistakes: newMistakes,
-        isComplete: isLost,
-        isWon: false,
-        guessHistory: [...s.guessHistory, attempt],
-      }));
+          const newMistakes = state.mistakes + 1;
+          const isLost = newMistakes >= MAX_MISTAKES;
 
-      if (isLost) {
-        const fullGuessHistory = [...state.guessHistory, attempt];
-        const shareGrid = buildShareGrid(fullGuessHistory, puzzle);
+          setState((s) => ({
+            ...s,
+            mistakes: newMistakes,
+            isComplete: isLost,
+            isWon: false,
+            guessHistory: [...s.guessHistory, attempt],
+          }));
 
-        const lossStatsParams = {
-          puzzleId: puzzle.id,
-          won: false,
-          mistakes: newMistakes,
-          activeTimeSeconds: activeSecondsRef.current,
-          foundRainbow: state.gotRainbow,
-          solveOrder: getSolveOrder(state.solvedGroups),
-          hintsUsed: smallHintUsed || fullHintUsed,
-          shareGrid,
-          guessHistory: fullGuessHistory.filter((g) => !g.isHintMarker).map((g) => ({
-            words: g.words,
-            correct: g.isCorrect,
-            group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
-          })),
-        };
+          if (isLost) {
+            const fullGuessHistory = [...state.guessHistory, attempt];
+            const shareGrid = buildShareGrid(fullGuessHistory, puzzle);
 
-        if (isArchive) {
-          void (async () => {
-            if (await hasExistingSession(puzzle.id)) return;
-            saveResultToDb(false, newMistakes);
-            saveGameStats({ ...lossStatsParams, skipStreak: true });
-          })();
-        } else {
-          saveResultToDb(false, newMistakes);
-          saveGameStats(lossStatsParams);
-        }
+            const lossStatsParams = {
+              puzzleId: puzzle.id,
+              won: false,
+              mistakes: newMistakes,
+              activeTimeSeconds: activeSecondsRef.current,
+              foundRainbow: state.gotRainbow,
+              solveOrder: getSolveOrder(state.solvedGroups),
+              hintsUsed: smallHintUsed || fullHintUsed,
+              shareGrid,
+              guessHistory: fullGuessHistory.filter((g) => !g.isHintMarker).map((g) => ({
+                words: g.words,
+                correct: g.isCorrect,
+                group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
+              })),
+            };
 
-        const sortedIndices = puzzle.groups
-          .map((g, i) => ({ idx: i, diff: g.difficulty }))
-          .sort((a, b) => a.diff - b.diff)
-          .map((item) => item.idx);
-
-        const unsolvedIndices = sortedIndices.filter((idx) => !state.solvedGroups.includes(idx));
-        const finalSolvedGroups = [...state.solvedGroups, ...unsolvedIndices];
-
-        unsolvedIndices.forEach((groupIdx, i) => {
-          setTimeout(() => {
-            const solvedWords = puzzle.groups[groupIdx].words;
-            setLastRevealedGroup(groupIdx);
-            setShuffledWords((prev) => prev.filter((w) => !solvedWords.includes(w)));
-            setState((s) => ({ ...s, solvedGroups: [...s.solvedGroups, groupIdx] }));
-
-            if (i === unsolvedIndices.length - 1) {
-              saveProgress(puzzle.id, {
-                solvedGroups: finalSolvedGroups,
-                finalSolvedGroups,
-                mistakes: newMistakes,
-                guessHistory: fullGuessHistory,
-                gotRainbow: state.gotRainbow,
-                rainbowSolveIndex: state.rainbowSolveIndex,
-                shuffledWords: [],
-                rainbowWords,
-                isComplete: true,
-                isWon: false,
-                tileColors,
-              });
+            if (isArchive) {
+              void (async () => {
+                if (await hasExistingSession(puzzle.id)) return;
+                saveResultToDb(false, newMistakes);
+                saveGameStats({ ...lossStatsParams, skipStreak: true });
+              })();
+            } else {
+              saveResultToDb(false, newMistakes);
+              saveGameStats(lossStatsParams);
             }
-          }, 800 + i * 1500);
-        });
-      }
+
+            const sortedIndices = puzzle.groups
+              .map((g, i) => ({ idx: i, diff: g.difficulty }))
+              .sort((a, b) => a.diff - b.diff)
+              .map((item) => item.idx);
+
+            const unsolvedIndices = sortedIndices.filter((idx) => !state.solvedGroups.includes(idx));
+            const finalSolvedGroups = [...state.solvedGroups, ...unsolvedIndices];
+
+            unsolvedIndices.forEach((groupIdx, i) => {
+              setTimeout(() => {
+                const solvedWords = puzzle.groups[groupIdx].words;
+                setLastRevealedGroup(groupIdx);
+                setShuffledWords((prev) => prev.filter((w) => !solvedWords.includes(w)));
+                setState((s) => ({ ...s, solvedGroups: [...s.solvedGroups, groupIdx] }));
+
+                if (i === unsolvedIndices.length - 1) {
+                  saveProgress(puzzle.id, {
+                    solvedGroups: finalSolvedGroups,
+                    finalSolvedGroups,
+                    mistakes: newMistakes,
+                    guessHistory: fullGuessHistory,
+                    gotRainbow: state.gotRainbow,
+                    rainbowSolveIndex: state.rainbowSolveIndex,
+                    shuffledWords: [],
+                    rainbowWords,
+                    isComplete: true,
+                    isWon: false,
+                    tileColors,
+                  });
+                }
+              }, 800 + i * 1500);
+            });
+          }
+        }, WRONG_REVEAL_PAUSE_MS);
+      }, WRONG_SHAKE_MS);
     }
   }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, fireConfetti, tileColors, smallHintUsed, fullHintUsed]);
 
