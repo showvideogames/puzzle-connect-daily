@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { PuzzleGroup } from "@/lib/types";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 
@@ -13,10 +14,18 @@ interface SolvedGroupProps {
   animate?: boolean;
 }
 
-export function SolvedGroup({ group, animate }: SolvedGroupProps) {
+// forwardRef so react-flip-toolkit's <Flipped> can attach its own ref to the
+// real DOM node — it needs that to measure this bar's position/size, both for
+// its own FLIP tracking and as the merge target read in the exiting tiles'
+// onExit handler (see GameBoard.tsx).
+export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function SolvedGroup(
+  { group, animate },
+  ref
+) {
   const colors = groupColors[group.difficulty] || groupColors[1];
   return (
     <div
+      ref={ref}
       className={`${colors.bg} ${colors.text} rounded-lg py-3 px-4 text-center ${animate ? "animate-group-appear" : ""}`}
     >
       <div className="font-bold text-sm uppercase tracking-wide">{group.category}</div>
@@ -39,4 +48,4 @@ export function SolvedGroup({ group, animate }: SolvedGroupProps) {
       </div>
     </div>
   );
-}
+});

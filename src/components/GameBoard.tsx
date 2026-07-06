@@ -10,6 +10,7 @@ import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
 import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2 } from "lucide-react";
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { Flipper, Flipped } from "react-flip-toolkit";
 import { useImagePreload } from "@/hooks/useImagePreload";
 import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
@@ -271,6 +272,55 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     return slots;
   }, [state.solvedGroups, state.gotRainbow, state.rainbowSolveIndex, puzzle.rainbowHerring]);
 
+  // ── Correct-guess fly-into-bar animation, via react-flip-toolkit ──
+  // The Flipper below tracks every remaining tile (flipId=word) and every
+  // solved bar (flipId=`group-${groupIdx}`). Flipper's own FLIP mechanism
+  // handles all "before/after position" tracking automatically (including
+  // the remaining tiles smoothly reflowing into the gap) — we never call
+  // getBoundingClientRect ourselves for that part. The one thing the library
+  // has no built-in concept for is "4 exiting elements converge on a 5th,
+  // unrelated element" (it tracks 1:1 identities, not N:1 merges), so
+  // onExit below reads the target bar's rect once — inside a callback the
+  // library guarantees fires at the right time — rather than us guessing
+  // when it's safe to measure, which is what broke the last two attempts.
+  const boardRef = useRef<HTMLDivElement>(null);
+
+  const handleTileExit = useCallback(
+    (word: string) => (el: HTMLElement, index: number, removeElement: () => void) => {
+      const groupIdx = puzzle.groups.findIndex((g) => g.words.includes(word));
+      const barEl = boardRef.current?.querySelector<HTMLElement>(`[data-flip-id="group-${groupIdx}"]`);
+      if (!barEl) {
+        // No bar to merge into (shouldn't normally happen for a real
+        // correct-guess exit) — just let it disappear rather than get stuck.
+        removeElement();
+        return;
+      }
+
+      const barRect = barEl.getBoundingClientRect();
+      const slotWidth = barRect.width / 4;
+      const DURATION_MS = 380;
+
+      el.style.transition = [
+        `top ${DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
+        `left ${DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
+        `width ${DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
+        `height ${DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
+        `opacity ${DURATION_MS - 160}ms ease-in 160ms`,
+      ].join(", ");
+
+      requestAnimationFrame(() => {
+        el.style.top = `${barRect.top}px`;
+        el.style.left = `${barRect.left + index * slotWidth}px`;
+        el.style.width = `${slotWidth}px`;
+        el.style.height = `${barRect.height}px`;
+        el.style.opacity = "0";
+      });
+
+      setTimeout(removeElement, DURATION_MS);
+    },
+    [puzzle]
+  );
+
   // Track if puzzle was already complete when component first mounted
   // Used to hide redundant UI (dots, headline) when viewing a completed puzzle
   const wasAlreadyComplete = useRef(state.isComplete);
@@ -483,9 +533,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         {!puzzle.rainbowHerring && <NoRainbowIndicator />}
       </div>
 
+      <Flipper flipKey={state.solvedGroups.join(",")}>
+
       {/* Solved groups — rainbow is interleaved at the position it was actually
           found (boardSlots), not always pinned to the top */}
-      <div className="space-y-2 mb-2">
+      <div ref={boardRef} className="space-y-2 mb-2">
         {boardSlots.map((slot) =>
           slot.kind === "rainbow" ? (
             <div
@@ -503,11 +555,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               <RainbowWordsRow words={puzzle.rainbowHerring!} />
             </div>
           ) : (
-            <SolvedGroup
-              key={slot.groupIdx}
-              group={puzzle.groups[slot.groupIdx]}
-              animate={slot.groupIdx === lastRevealedGroup}
-            />
+            <Flipped key={slot.groupIdx} flipId={`group-${slot.groupIdx}`}>
+              <SolvedGroup
+                group={puzzle.groups[slot.groupIdx]}
+                animate={slot.groupIdx === lastRevealedGroup}
+              />
+            </Flipped>
           )
         )}
 
@@ -597,38 +650,41 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {remainingWords.length > 0 && (
         <div className={`grid grid-cols-4 gap-2 ${shaking || spotShaking ? "animate-shake" : ""}`}>
           {remainingWords.map((word, index) => (
-            <WordTile
-              key={word}
-              word={word}
-              isSelected={state.selectedWords.includes(word)}
-              isRainbow={
-                (showRainbow && rainbowWords.includes(word)) ||
-                bonusRainbowWords.includes(word)
-              }
-              rainbowGradient={theme.isDefault ? undefined : theme.gradient}
-              rainbowTextShadow={theme.textShadow}
-              isMatched={matchedWords.includes(word)}
-              onClick={() => handleTileClick(word)}
-              disabled={state.isComplete || matchedWords.length > 0}
-              arrangeTiles={arrangeTiles}
-              colorCodeTiles={colorCodeTiles}
-              tileColor={tileColors[word] ?? null}
-              onColorChange={setTileColor}
-              draggable={arrangeTiles}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              onTouchDragMove={handleTouchDragMove}
-              column={(index % 4) + 1}
-              onTouchDragEnd={handleTouchDragEnd}
-              isEmojiPuzzle={puzzle.isEmojiPuzzle ?? false}
-              colorPaletteMode={colorPaletteMode}
-              isPaintMode={colorPaletteMode && paletteMode !== "select"}
-              data-word={word}
-            />
+            <Flipped key={word} flipId={word} onExit={handleTileExit(word)}>
+              <WordTile
+                word={word}
+                isSelected={state.selectedWords.includes(word)}
+                isRainbow={
+                  (showRainbow && rainbowWords.includes(word)) ||
+                  bonusRainbowWords.includes(word)
+                }
+                rainbowGradient={theme.isDefault ? undefined : theme.gradient}
+                rainbowTextShadow={theme.textShadow}
+                isMatched={matchedWords.includes(word)}
+                onClick={() => handleTileClick(word)}
+                disabled={state.isComplete || matchedWords.length > 0}
+                arrangeTiles={arrangeTiles}
+                colorCodeTiles={colorCodeTiles}
+                tileColor={tileColors[word] ?? null}
+                onColorChange={setTileColor}
+                draggable={arrangeTiles}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                onTouchDragMove={handleTouchDragMove}
+                column={(index % 4) + 1}
+                onTouchDragEnd={handleTouchDragEnd}
+                isEmojiPuzzle={puzzle.isEmojiPuzzle ?? false}
+                colorPaletteMode={colorPaletteMode}
+                isPaintMode={colorPaletteMode && paletteMode !== "select"}
+                data-word={word}
+              />
+            </Flipped>
           ))}
         </div>
       )}
+
+      </Flipper>
 
       {/* Rainbow Spotted popup — animated rainbow-tile for the default theme,
           static themed gradient otherwise */}

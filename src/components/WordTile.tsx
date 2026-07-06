@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, forwardRef } from "react";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 
 const DOUBLE_TAP_DELAY_MS = 250;
@@ -99,7 +99,7 @@ interface WordTileProps {
   rainbowTextShadow?: string;
 }
 
-export function WordTile({
+export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordTile({
   word,
   isSelected,
   onClick,
@@ -122,12 +122,11 @@ export function WordTile({
   isEmojiPuzzle = false,
   rainbowGradient,
   rainbowTextShadow,
-}: WordTileProps) {
+}, forwardedRef) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const lastTapRef = useRef<number>(0);
   const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
   const isTouchDragging = useRef(false);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
 
@@ -256,7 +255,7 @@ export function WordTile({
 
   return (
     <div
-      ref={wrapperRef}
+      ref={forwardedRef}
       data-word={word}
       className="relative"
       style={{ touchAction: arrangeTiles ? "none" : "manipulation" }}
@@ -346,4 +345,4 @@ export function WordTile({
       )}
     </div>
   );
-}
+});
