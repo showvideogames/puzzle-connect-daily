@@ -97,6 +97,11 @@ interface WordTileProps {
   // of the animated rainbow. rainbowTextShadow keeps the word legible over it.
   rainbowGradient?: string;
   rainbowTextShadow?: string;
+  // True while this tile's group is mid-reveal-animation: a clone is standing
+  // in for it in a document.body overlay, so the real tile is hidden (but
+  // keeps its layout space — visibility, not display — so the grid doesn't
+  // reflow until the animation finishes and the word is actually removed).
+  hiddenForReveal?: boolean;
 }
 
 export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordTile({
@@ -122,6 +127,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   isEmojiPuzzle = false,
   rainbowGradient,
   rainbowTextShadow,
+  hiddenForReveal = false,
 }, forwardedRef) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const lastTapRef = useRef<number>(0);
@@ -258,7 +264,10 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       ref={forwardedRef}
       data-word={word}
       className="relative"
-      style={{ touchAction: arrangeTiles ? "none" : "manipulation" }}
+      style={{
+        touchAction: arrangeTiles ? "none" : "manipulation",
+        ...(hiddenForReveal ? { visibility: "hidden" as const } : {}),
+      }}
     >
       <button
         ref={buttonRef}

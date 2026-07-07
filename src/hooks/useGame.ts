@@ -182,6 +182,21 @@ export function useGame(
 
   const [shaking, setShaking] = useState(false);
   const [lastRevealedGroup, setLastRevealedGroup] = useState<number | null>(null);
+  // A group that's already in solvedGroups (for scoring/bar-rendering
+  // purposes) but whose tiles should still show in the interactive grid —
+  // GameBoard holds this while it runs its own clone-based reveal animation,
+  // then calls releaseRevealHold() once that finishes. Scoring/stats timing
+  // is unaffected: this only delays when the tiles visually leave the grid.
+  const [revealHoldGroupIdx, setRevealHoldGroupIdx] = useState<number | null>(null);
+  const releaseRevealHold = useCallback(() => {
+    setRevealHoldGroupIdx((heldIdx) => {
+      if (heldIdx !== null) {
+        const words = puzzle.groups[heldIdx]?.words ?? [];
+        setShuffledWords((prev) => prev.filter((w) => !words.includes(w)));
+      }
+      return null;
+    });
+  }, [puzzle]);
   const [oneAway, setOneAway] = useState(false);
   const [almostRainbow, setAlmostRainbow] = useState(false);
   const [alreadyGuessed, setAlreadyGuessed] = useState<"plain" | "oneaway" | null>(null);
@@ -518,8 +533,15 @@ export function useGame(
       setTimeout(() => {
         setMatchedWords([]);
         setLastRevealedGroup(groupIdx);
+        // Hold this group's tiles in the grid until GameBoard's clone-based
+        // reveal animation finishes and calls releaseRevealHold() — see
+        // remainingWords above. solvedGroups/isWon/stats below are otherwise
+        // completely unaffected by this hold.
+        setRevealHoldGroupIdx(groupIdx);
         trackEvent("category_solved", { difficulty: puzzle.groups[groupIdx].difficulty });
-        setShuffledWords((prev) => prev.filter((w) => !solvedWords.includes(w)));
+        // shuffledWords is trimmed later, in releaseRevealHold — not here —
+        // so the tiles stay in the grid (remainingWords derives from both
+        // shuffledWords and solvedGroups) until the reveal animation finishes.
 
         const newSolved = [...state.solvedGroups, groupIdx];
         const isWon = newSolved.length === 4;
@@ -698,9 +720,11 @@ export function useGame(
   }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, fireConfetti, tileColors, smallHintUsed, fullHintUsed]);
 
   const remainingWords = useMemo(() => {
-    const solvedWords = state.solvedGroups.flatMap((i) => puzzle.groups[i].words);
+    const solvedWords = state.solvedGroups
+      .filter((i) => i !== revealHoldGroupIdx)
+      .flatMap((i) => puzzle.groups[i].words);
     return shuffledWords.filter((w) => !solvedWords.includes(w));
-  }, [shuffledWords, state.solvedGroups, puzzle]);
+  }, [shuffledWords, state.solvedGroups, revealHoldGroupIdx, puzzle]);
 
   return {
     state,
@@ -711,6 +735,7 @@ export function useGame(
     submitGuess,
     shaking,
     lastRevealedGroup,
+    releaseRevealHold,
     oneAway,
     setOneAway,
     almostRainbow,

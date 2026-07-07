@@ -12,21 +12,25 @@ const groupColors: Record<number, { bg: string; text: string }> = {
 interface SolvedGroupProps {
   group: PuzzleGroup;
   animate?: boolean;
+  // True while GameBoard's clone-based reveal animation is still converging
+  // on this bar: kept invisible-but-laid-out (not unrendered) so its real DOM
+  // rect can be measured as the animation's target.
+  pendingMerge?: boolean;
 }
 
-// forwardRef so react-flip-toolkit's <Flipped> can attach its own ref to the
-// real DOM node — it needs that to measure this bar's position/size, both for
-// its own FLIP tracking and as the merge target read in the exiting tiles'
-// onExit handler (see GameBoard.tsx).
+// forwardRef so GameBoard can measure this bar's real DOM rect (the reveal
+// animation's target) via getBoundingClientRect.
 export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function SolvedGroup(
-  { group, animate },
+  { group, animate, pendingMerge },
   ref
 ) {
   const colors = groupColors[group.difficulty] || groupColors[1];
   return (
     <div
       ref={ref}
-      className={`${colors.bg} ${colors.text} rounded-lg py-3 px-4 text-center ${animate ? "animate-group-appear" : ""}`}
+      className={`${colors.bg} ${colors.text} rounded-lg py-3 px-4 text-center ${
+        pendingMerge ? "opacity-0" : animate ? "animate-group-appear" : ""
+      }`}
     >
       <div className="font-bold text-sm uppercase tracking-wide">{group.category}</div>
       <div className="text-xs mt-0.5 opacity-80 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">

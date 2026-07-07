@@ -9,8 +9,8 @@ import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
 import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2 } from "lucide-react";
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { Flipper, Flipped } from "react-flip-toolkit";
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useImagePreload } from "@/hooks/useImagePreload";
 import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
@@ -58,6 +58,40 @@ const DIFFICULTY_COLOR: Record<number, string> = {
   3: "bg-blue-500",
   4: "bg-red-500",
 };
+
+// ── Correct-guess reveal animation (deterministic, overlay-clone based) ──
+// Timings in ms. FLY covers the clones' movement from the grid into the
+// solved bar's row; MERGE covers the clones fading out while the real bar
+// fades in underneath.
+const REVEAL_FLY_MS = 380;
+const REVEAL_MERGE_MS = 220;
+
+interface RevealRect {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+function rectToRevealRect(r: DOMRect): RevealRect {
+  return { top: r.top, left: r.left, width: r.width, height: r.height };
+}
+
+interface RevealState {
+  groupIdx: number;
+  words: string[]; // reading order (top-to-bottom, then left-to-right)
+  from: RevealRect[]; // each clone's starting rect (viewport-relative)
+  to: RevealRect[] | null; // each clone's target slot within the bar (null until the bar is measured)
+  phase: "cloned" | "flying" | "merging";
+}
+
+function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
 
 function NoRainbowIndicator() {
   const [open, setOpen] = useState(false);
@@ -220,6 +254,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     submitGuess,
     shaking,
     lastRevealedGroup,
+    releaseRevealHold,
     oneAway,
     setOneAway,
     almostRainbow,
@@ -272,62 +307,132 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     return slots;
   }, [state.solvedGroups, state.gotRainbow, state.rainbowSolveIndex, puzzle.rainbowHerring]);
 
-  // ── Correct-guess fly-into-bar animation, via react-flip-toolkit ──
-  // The Flipper below tracks every remaining tile (flipId=word) and every
-  // solved bar (flipId=`group-${groupIdx}`). Flipper's own FLIP mechanism
-  // handles all "before/after position" tracking automatically (including
-  // the remaining tiles smoothly reflowing into the gap) — we never call
-  // getBoundingClientRect ourselves for that part. The one thing the library
-  // has no built-in concept for is "4 exiting elements converge on a 5th,
-  // unrelated element" (it tracks 1:1 identities, not N:1 merges), so
-  // onExit below reads the target bar's rect once — inside a callback the
-  // library guarantees fires at the right time — rather than us guessing
-  // when it's safe to measure, which is what broke the last two attempts.
-  const boardRef = useRef<HTMLDivElement>(null);
+  // ── Correct-guess reveal animation (deterministic, overlay-clone based) ──
+  // Sequence: shake (in useGame, unchanged) -> measure the 4 real tiles ->
+  // mount the solved bar hidden (still occupying its layout space, so it's
+  // measurable) -> spawn 4 clones in a document.body portal positioned at
+  // the tiles' exact viewport rects -> hide the real tiles (kept in the grid
+  // via useGame's revealHoldGroupIdx, not removed) -> fly clones into the
+  // bar's 4 slots -> cross-fade clones out / real bar in -> release the hold,
+  // which is what actually removes the words from the grid's data model.
+  //
+  // Every rect here comes from getBoundingClientRect() and is used only
+  // against position:fixed clones portaled to document.body, so it's always
+  // viewport-relative on both ends — no reparented/transformed-ancestor
+  // coordinate mismatch is possible.
+  const wordTileRefs = useRef<Record<string, HTMLElement | null>>({});
+  const revealBarRef = useRef<HTMLElement | null>(null);
+  const prevRevealedGroupRef = useRef<number | null>(null);
+  const revealTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [reveal, setReveal] = useState<RevealState | null>(null);
 
-  const handleTileExit = useCallback(
-    (word: string) => (el: HTMLElement, index: number, removeElement: () => void) => {
-      const groupIdx = puzzle.groups.findIndex((g) => g.words.includes(word));
-      const barEl = boardRef.current?.querySelector<HTMLElement>(`[data-flip-id="group-${groupIdx}"]`);
-      // By the time onExit fires, flip-toolkit has already re-parented `el`
-      // back into its original parent and set it to position:absolute with
-      // top/left as an offset *relative to that parent* (it also makes the
-      // parent position:relative if it wasn't already) — not viewport
-      // coordinates. So the bar's getBoundingClientRect() has to be
-      // converted into that same parent-relative frame before assigning it.
-      const parentEl = el.parentElement;
-      if (!barEl || !parentEl) {
-        // No bar to merge into (shouldn't normally happen for a real
-        // correct-guess exit) — just let it disappear rather than get stuck.
-        removeElement();
-        return;
-      }
+  const clearRevealTimers = useCallback(() => {
+    revealTimersRef.current.forEach(clearTimeout);
+    revealTimersRef.current = [];
+  }, []);
 
-      const barRect = barEl.getBoundingClientRect();
-      const parentRect = parentEl.getBoundingClientRect();
-      const slotWidth = barRect.width / 4;
-      const DURATION_MS = 380;
+  // Kick off the reveal once a group finishes shaking (lastRevealedGroup
+  // changes) and useGame is holding its tiles in the grid for us.
+  useLayoutEffect(() => {
+    if (lastRevealedGroup === null || lastRevealedGroup === prevRevealedGroupRef.current) return;
+    prevRevealedGroupRef.current = lastRevealedGroup;
+    const groupIdx = lastRevealedGroup;
 
-      el.style.transition = [
-        `top ${DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
-        `left ${DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
-        `width ${DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
-        `height ${DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
-        `opacity ${DURATION_MS - 160}ms ease-in 160ms`,
-      ].join(", ");
+    if (prefersReducedMotion()) {
+      releaseRevealHold();
+      return;
+    }
 
-      requestAnimationFrame(() => {
-        el.style.top = `${barRect.top - parentRect.top}px`;
-        el.style.left = `${barRect.left + index * slotWidth - parentRect.left}px`;
-        el.style.width = `${slotWidth}px`;
-        el.style.height = `${barRect.height}px`;
-        el.style.opacity = "0";
-      });
+    const words = puzzle.groups[groupIdx]?.words ?? [];
+    const fromByWord: Record<string, DOMRect> = {};
+    let haveAllRects = words.length === 4;
+    words.forEach((w) => {
+      const el = wordTileRefs.current[w];
+      if (el) fromByWord[w] = el.getBoundingClientRect();
+      else haveAllRects = false;
+    });
 
-      setTimeout(removeElement, DURATION_MS);
-    },
-    [puzzle]
-  );
+    if (!haveAllRects) {
+      // Couldn't measure the real tiles (shouldn't normally happen) — skip
+      // the clone animation rather than get stuck; just reveal plainly.
+      console.warn("[reveal] couldn't measure all 4 tiles for group", groupIdx, "— falling back to a plain reveal");
+      releaseRevealHold();
+      return;
+    }
+
+    // Reading order (top-to-bottom, then left-to-right) so clones don't cross
+    // paths on their way into the bar.
+    const ordered = [...words].sort((a, b) => {
+      const ra = fromByWord[a];
+      const rb = fromByWord[b];
+      return Math.abs(ra.top - rb.top) > 4 ? ra.top - rb.top : ra.left - rb.left;
+    });
+
+    clearRevealTimers();
+    setReveal({
+      groupIdx,
+      words: ordered,
+      from: ordered.map((w) => rectToRevealRect(fromByWord[w])),
+      to: null,
+      phase: "cloned",
+    });
+  }, [lastRevealedGroup, puzzle, releaseRevealHold, clearRevealTimers]);
+
+  // Once the bar has mounted (hidden) for this reveal, measure it and start
+  // the fly. Runs whenever `reveal` is freshly "cloned" — i.e. once per
+  // reveal, right after the bar's ref is guaranteed to be populated.
+  useLayoutEffect(() => {
+    if (!reveal || reveal.phase !== "cloned") return;
+    const barEl = revealBarRef.current;
+    if (!barEl) {
+      // Bar failed to mount/measure — bail out to a plain reveal rather than
+      // leaving clones stuck mid-air.
+      console.warn("[reveal] solved bar ref wasn't available for group", reveal.groupIdx, "— falling back to a plain reveal");
+      clearRevealTimers();
+      setReveal(null);
+      releaseRevealHold();
+      return;
+    }
+
+    const thisGroup = reveal.groupIdx;
+    const barRect = barEl.getBoundingClientRect();
+    const slotWidth = barRect.width / 4;
+    const to: RevealRect[] = reveal.words.map((_, i) => ({
+      top: barRect.top,
+      left: barRect.left + i * slotWidth,
+      width: slotWidth,
+      height: barRect.height,
+    }));
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      setReveal((r) => (r && r.groupIdx === thisGroup ? { ...r, to, phase: "flying" } : r));
+    }));
+
+    revealTimersRef.current = [
+      setTimeout(() => {
+        setReveal((r) => (r && r.groupIdx === thisGroup ? { ...r, phase: "merging" } : r));
+        // Reveal the real bar (fade in) at the same moment the clones start
+        // fading out, and only now actually remove the words from the grid.
+        releaseRevealHold();
+      }, REVEAL_FLY_MS),
+      setTimeout(() => {
+        setReveal((r) => (r && r.groupIdx === thisGroup ? null : r));
+      }, REVEAL_FLY_MS + REVEAL_MERGE_MS),
+    ];
+  }, [reveal, releaseRevealHold, clearRevealTimers]);
+
+  useEffect(() => clearRevealTimers, [clearRevealTimers]);
+
+  // If this GameBoard instance is reused for a different puzzle (e.g. archive
+  // browsing without a remount), drop any in-flight reveal rather than risk
+  // it referencing stale words/groups from the previous puzzle.
+  useEffect(() => {
+    clearRevealTimers();
+    setReveal(null);
+    wordTileRefs.current = {};
+    revealBarRef.current = null;
+    prevRevealedGroupRef.current = null;
+  }, [puzzle.id, clearRevealTimers]);
 
   // Track if puzzle was already complete when component first mounted
   // Used to hide redundant UI (dots, headline) when viewing a completed puzzle
@@ -541,11 +646,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         {!puzzle.rainbowHerring && <NoRainbowIndicator />}
       </div>
 
-      <Flipper flipKey={state.solvedGroups.join(",")}>
-
       {/* Solved groups — rainbow is interleaved at the position it was actually
           found (boardSlots), not always pinned to the top */}
-      <div ref={boardRef} className="space-y-2 mb-2">
+      <div className="space-y-2 mb-2">
         {boardSlots.map((slot) =>
           slot.kind === "rainbow" ? (
             <div
@@ -563,12 +666,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               <RainbowWordsRow words={puzzle.rainbowHerring!} />
             </div>
           ) : (
-            <Flipped key={slot.groupIdx} flipId={`group-${slot.groupIdx}`}>
-              <SolvedGroup
-                group={puzzle.groups[slot.groupIdx]}
-                animate={slot.groupIdx === lastRevealedGroup}
-              />
-            </Flipped>
+            <SolvedGroup
+              key={slot.groupIdx}
+              ref={reveal?.groupIdx === slot.groupIdx ? (el) => { revealBarRef.current = el; } : undefined}
+              group={puzzle.groups[slot.groupIdx]}
+              animate={slot.groupIdx === lastRevealedGroup}
+              pendingMerge={reveal?.groupIdx === slot.groupIdx && reveal.phase !== "merging"}
+            />
           )
         )}
 
@@ -657,9 +761,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* Word grid */}
       {remainingWords.length > 0 && (
         <div className={`grid grid-cols-4 gap-2 ${shaking || spotShaking ? "animate-shake" : ""}`}>
-          {remainingWords.map((word, index) => (
-            <Flipped key={word} flipId={word} onExit={handleTileExit(word)}>
+          {remainingWords.map((word, index) => {
+            const isRevealingWord = reveal?.words.includes(word) ?? false;
+            return (
               <WordTile
+                key={word}
+                ref={(el) => { wordTileRefs.current[word] = el; }}
                 word={word}
                 isSelected={state.selectedWords.includes(word)}
                 isRainbow={
@@ -669,8 +776,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 rainbowGradient={theme.isDefault ? undefined : theme.gradient}
                 rainbowTextShadow={theme.textShadow}
                 isMatched={matchedWords.includes(word)}
+                hiddenForReveal={isRevealingWord}
                 onClick={() => handleTileClick(word)}
-                disabled={state.isComplete || matchedWords.length > 0}
+                disabled={state.isComplete || matchedWords.length > 0 || reveal !== null}
                 arrangeTiles={arrangeTiles}
                 colorCodeTiles={colorCodeTiles}
                 tileColor={tileColors[word] ?? null}
@@ -687,12 +795,45 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 isPaintMode={colorPaletteMode && paletteMode !== "select"}
                 data-word={word}
               />
-            </Flipped>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      </Flipper>
+      {/* Correct-guess reveal overlay: clones portaled to document.body so
+          every measurement here is viewport-relative, with no risk of a
+          reparented/transformed-ancestor coordinate mismatch. */}
+      {reveal && typeof document !== "undefined" && createPortal(
+        reveal.words.map((word, i) => {
+          const rect = reveal.phase === "cloned" || !reveal.to ? reveal.from[i] : reveal.to[i];
+          return (
+            <div
+              key={word}
+              className={`tile-reveal-clone flex items-center justify-center rounded-lg font-semibold text-xs sm:text-sm uppercase tracking-wide bg-tile-selected text-tile-selected-fg shadow-md ${
+                reveal.phase === "merging" ? "opacity-0" : "opacity-100"
+              }`}
+              style={{
+                top: rect.top,
+                left: rect.left,
+                width: rect.width,
+                height: rect.height,
+              }}
+            >
+              {isCustomEmoji(word) ? (
+                <img
+                  src={customEmojiUrl(word)}
+                  alt={customEmojiName(word) ?? ""}
+                  draggable={false}
+                  style={{ height: "28px", width: "auto", objectFit: "contain" }}
+                />
+              ) : (
+                word
+              )}
+            </div>
+          );
+        }),
+        document.body
+      )}
 
       {/* Rainbow Spotted popup — animated rainbow-tile for the default theme,
           static themed gradient otherwise */}

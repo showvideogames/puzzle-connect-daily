@@ -168,8 +168,9 @@ html {
 .animate-reveal { animation: reveal-group 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .animate-pop { animation: pop-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .animate-fade-up { animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-/* Shake for a correct guess — suspense beat before the tile is removed from
-   the grid and the solved bar reveals in its place (see .animate-group-appear). */
+/* Shake for a correct guess — suspense beat. After it ends, GameBoard's
+   overlay-clone reveal animation takes over (see .tile-reveal-clone and
+   .animate-group-appear) before the tile is actually removed from the grid. */
 .animate-tile-matched { animation: tile-wiggle 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards; }
 
 @keyframes tile-wiggle {
@@ -179,6 +180,22 @@ html {
   60% { transform: scale(0.97) rotate(-2deg); }
   80% { transform: scale(0.97) rotate(2deg); }
   100% { transform: scale(1) rotate(0deg); }
+}
+
+/* ── Correct-guess reveal clones ──
+   Portaled to document.body (see GameBoard.tsx), positioned via inline
+   top/left/width/height computed from getBoundingClientRect() — always
+   viewport-relative since position:fixed here has no reparented/transformed
+   ancestor to be captured by. This class only supplies the transition. */
+.tile-reveal-clone {
+  position: fixed;
+  z-index: 60;
+  transition: top 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+              left 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+              height 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.22s ease-in;
+  pointer-events: none;
 }
 
 /* Rainbow Herring tile effect */
