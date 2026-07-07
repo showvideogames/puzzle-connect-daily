@@ -729,7 +729,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <div
               key="rainbow-reveal"
               className={`w-full rounded-lg py-3 px-4 text-center text-white ${
-                rainbowVisible ? "animate-rainbow-curtain animate-rainbow-pop" : ""
+                rainbowVisible ? "animate-rainbow-curtain" : ""
               }`}
               style={{
                 background: theme.gradient,
@@ -775,7 +775,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           ) : (
             <div
               className={`w-full rounded-lg py-3 px-4 text-center text-white ${
-                rainbowVisible ? "animate-rainbow-curtain animate-rainbow-pop" : ""
+                rainbowVisible ? "animate-rainbow-curtain" : ""
               }`}
               style={{
                 background: theme.gradient,

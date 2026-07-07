@@ -214,7 +214,6 @@ html {
   .animate-tile-checking { animation: none; }
   .animate-group-appear { animation: none; }
   .animate-solved-pop { animation: none; }
-  .animate-rainbow-pop { animation: none; }
 }
 
 /* Rainbow Herring tile effect */
@@ -277,18 +276,6 @@ html {
 }
 .animate-solved-pop {
   animation: solved-category-pop-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
-  transform-origin: center;
-}
-
-/* Same pop for the Rainbow/Flag bar, scale-only — its color reveal is the
-   curtain wipe, so we don't re-fade opacity here. */
-@keyframes solved-rainbow-pop-in {
-  0% { transform: scale(0.9); }
-  65% { transform: scale(1.04); }
-  100% { transform: scale(1); }
-}
-.animate-rainbow-pop {
-  animation: solved-rainbow-pop-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
   transform-origin: center;
 }
 
