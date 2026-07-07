@@ -61,10 +61,12 @@ const DIFFICULTY_COLOR: Record<number, string> = {
 
 // ── Correct-guess reveal animation (deterministic, overlay-clone based) ──
 // Timings in ms. FLY covers the clones' movement from the grid into the
-// solved bar's row; MERGE covers the clones fading out while the real bar
-// fades in underneath.
+// solved bar's row; then the bar "pops" in (index.css .animate-solved-pop)
+// while the clones fade/scale out. POP is kept longer than the ~0.22s clone
+// fade so the bar's overshoot lands AFTER the clones are gone — visible, not
+// hidden behind them — and matches the keyframe duration.
 const REVEAL_FLY_MS = 380;
-const REVEAL_MERGE_MS = 220;
+const REVEAL_POP_MS = 420;
 
 interface RevealRect {
   top: number;
@@ -344,9 +346,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // Their bar cross-fades in via the `reveal` prop, so it must NOT also get
   // the normal animate-group-appear entrance once the reveal state clears.
   const cloneRevealedGroupsRef = useRef<Set<number>>(new Set());
-  // Read once — enough for our animation gating; a mid-session preference
-  // change is an acceptable edge case not to react to live.
-  const reduceMotion = useMemo(() => prefersReducedMotion(), []);
   // Stores the remaining (non-solved) tiles' rects captured just before the
   // held words are released, so the grid can FLIP those tiles smoothly into
   // the gaps instead of snapping. Only set for a reveal-triggered release.
@@ -448,16 +447,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }));
 
     revealTimersRef.current = [
-      // Start the merge: real bar cross-fades in underneath the clones as they
-      // fade/scale out.
+      // Start the merge: the bar pops in (keyframe) while the clones fade/scale
+      // out on top of it.
       setTimeout(() => {
         setReveal((r) => (r && r.groupIdx === thisGroup ? { ...r, phase: "merging" } : r));
       }, REVEAL_FLY_MS),
-      // Tear down the clones once the crossfade is done. (The hold was already
-      // released at fly-start above, so the grid has long since closed.)
+      // Keep the reveal ("shown") alive for the full pop so its overshoot plays
+      // out after the clones have faded, then tear the clones down. (The hold
+      // was already released at fly-start, so the grid has long since closed.)
       setTimeout(() => {
         setReveal((r) => (r && r.groupIdx === thisGroup ? null : r));
-      }, REVEAL_FLY_MS + REVEAL_MERGE_MS),
+      }, REVEAL_FLY_MS + REVEAL_POP_MS),
     ];
   }, [reveal, releaseRevealHold, clearRevealTimers]);
 
@@ -728,18 +728,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           slot.kind === "rainbow" ? (
             <div
               key="rainbow-reveal"
-              className={`w-full rounded-lg py-3 px-4 text-center text-white ${rainbowVisible ? "animate-rainbow-curtain" : ""}`}
+              className={`w-full rounded-lg py-3 px-4 text-center text-white ${
+                rainbowVisible ? "animate-rainbow-curtain animate-rainbow-pop" : ""
+              }`}
               style={{
                 background: theme.gradient,
                 textShadow: theme.textShadow,
                 clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
-                // Same scale-grow polish as the category bars (skipped under
-                // reduced motion, which keeps just the curtain wipe).
-                transform: !reduceMotion && !rainbowVisible ? "scale(0.96)" : "scale(1)",
-                transformOrigin: "center",
-                transition: reduceMotion
-                  ? undefined
-                  : "transform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1)",
               }}
             >
               <div className="font-bold text-sm uppercase tracking-wide">
@@ -779,16 +774,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             </button>
           ) : (
             <div
-              className={`w-full rounded-lg py-3 px-4 text-center text-white ${rainbowVisible ? "animate-rainbow-curtain" : ""}`}
+              className={`w-full rounded-lg py-3 px-4 text-center text-white ${
+                rainbowVisible ? "animate-rainbow-curtain animate-rainbow-pop" : ""
+              }`}
               style={{
                 background: theme.gradient,
                 textShadow: theme.textShadow,
                 clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
-                transform: !reduceMotion && !rainbowVisible ? "scale(0.96)" : "scale(1)",
-                transformOrigin: "center",
-                transition: reduceMotion
-                  ? undefined
-                  : "transform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1)",
               }}
             >
               <div className="font-bold text-sm uppercase tracking-wide">

@@ -32,22 +32,13 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
   return (
     <div
       ref={ref}
+      // "shown" runs the pop keyframe (opacity + scale grow with overshoot);
+      // "hidden" is invisible-but-laid-out with NO transform, so the clones'
+      // fly target (getBoundingClientRect) is the bar's true final size.
       className={`${colors.bg} ${colors.text} rounded-lg py-3 px-4 text-center ${
         !revealing && animate ? "animate-group-appear" : ""
-      }`}
-      style={
-        revealing
-          ? {
-              opacity: reveal === "hidden" ? 0 : 1,
-              // Grow in from a slightly smaller size with a tiny overshoot
-              // (the back-out cubic) so the bar reveal feels bigger, not flat.
-              transform: reveal === "hidden" ? "scale(0.96)" : "scale(1)",
-              transformOrigin: "center",
-              transition:
-                "opacity 0.24s ease-out, transform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1)",
-            }
-          : undefined
-      }
+      } ${reveal === "shown" ? "animate-solved-pop" : ""}`}
+      style={reveal === "hidden" ? { opacity: 0 } : undefined}
     >
       <div className="font-bold text-sm uppercase tracking-wide">{group.category}</div>
       <div className="text-xs mt-0.5 opacity-80 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
