@@ -115,10 +115,14 @@ export function useGame(
 ) {
   const MAX_MISTAKES = 4;
   // Shared "checking guess" suspense: every submitted guess (correct OR
-  // incorrect) first plays a staggered per-tile bounce before the outcome is
-  // revealed — matching NYT Connections. Must cover the per-tile bounce +
-  // stagger in index.css (.animate-tile-checking).
+  // incorrect) first plays a staggered per-tile bounce, then holds a beat,
+  // before the outcome is revealed — matching NYT Connections.
+  //   CHECK_SUSPENSE_MS: covers the per-tile bounce + stagger (index.css
+  //     .animate-tile-checking).
+  //   CHECK_REVEAL_PAUSE_MS: a still hold AFTER the bounce so the result
+  //     doesn't land the instant the movement stops.
   const CHECK_SUSPENSE_MS = 550;
+  const CHECK_REVEAL_PAUSE_MS = 450;
   // Incorrect guess: how long the grid "reject" shake plays once the suspense
   // is over and the miss is revealed.
   const WRONG_SHAKE_MS = 400;
@@ -497,36 +501,17 @@ export function useGame(
 
     const guessGroupIndices = state.selectedWords.map((w) => getWordGroupIndex(w));
 
-    // Rainbow herring detection
-    if (puzzle.rainbowHerring && puzzle.rainbowHerring.length === 4 && rainbowWords.length === 0) {
-      const selected = [...state.selectedWords].sort();
-      const herring = [...puzzle.rainbowHerring].sort();
-      if (selected.every((w, i) => w === herring[i])) {
-        setMatchedWords([...state.selectedWords]);
-        setTimeout(() => {
-          setMatchedWords([]);
-          setRainbowWords(state.selectedWords);
-          setShowRainbowPopup(true);
-          playRainbowSound();
-          setTimeout(() => setShowRainbowPopup(false), 3000);
-          const attempt: GuessAttempt = {
-            words: [...state.selectedWords],
-            groupIndices: guessGroupIndices,
-            isCorrect: false,
-            isRainbow: true,
-          };
-          trackEvent("rainbow_found", { source: "in_game" });
-          setState((s) => ({
-            ...s,
-            selectedWords: [],
-            gotRainbow: true,
-            rainbowSolveIndex: s.solvedGroups.length,
-            guessHistory: [...s.guessHistory, attempt],
-          }));
-        }, 700);
-        return;
-      }
-    }
+    // Hidden rainbow/flag: the 4 selected words are exactly the herring set.
+    const herring = puzzle.rainbowHerring;
+    const isRainbowHerring =
+      !!herring &&
+      herring.length === 4 &&
+      rainbowWords.length === 0 &&
+      (() => {
+        const sel = [...state.selectedWords].sort();
+        const her = [...herring].sort();
+        return sel.every((w, i) => w === her[i]);
+      })();
 
     const matchedGroupIndex = puzzle.groups.findIndex(
       (g, idx) => !state.solvedGroups.includes(idx) && g.words.every((w) => state.selectedWords.includes(w))
@@ -534,17 +519,43 @@ export function useGame(
     const isCorrect = matchedGroupIndex !== -1;
 
     // ── Shared "checking guess" suspense ──
-    // Both outcomes first play the same staggered per-tile bounce; the result
-    // (category reveal vs. miss) is only applied once it finishes, so nothing
-    // gives the answer away early. Interaction is blocked meanwhile via
-    // checkingRef (see toggleWord/shuffle/deselectAll/submitGuess guards).
+    // Every outcome — category, hidden rainbow/flag, or miss — first plays the
+    // same staggered per-tile bounce, then holds a beat, before the result is
+    // applied, so nothing gives the answer away early. Interaction is blocked
+    // meanwhile via checkingRef (see the toggleWord/shuffle/deselectAll/submit
+    // guards).
     checkingRef.current = true;
     setCheckingWords([...state.selectedWords]);
-    const suspenseMs = prefersReducedMotion() ? 0 : CHECK_SUSPENSE_MS;
+    const totalDelay = prefersReducedMotion() ? 0 : CHECK_SUSPENSE_MS + CHECK_REVEAL_PAUSE_MS;
 
     setTimeout(() => {
       checkingRef.current = false;
       setCheckingWords([]);
+
+      // Hidden rainbow/flag reveal (no longer bypasses the suspense): the
+      // selected tiles turn rainbow and the reveal curtain wipes in. These
+      // tiles stay in the grid — they're still part of their own categories.
+      if (isRainbowHerring) {
+        const attempt: GuessAttempt = {
+          words: [...state.selectedWords],
+          groupIndices: guessGroupIndices,
+          isCorrect: false,
+          isRainbow: true,
+        };
+        setRainbowWords(state.selectedWords);
+        setShowRainbowPopup(true);
+        playRainbowSound();
+        setTimeout(() => setShowRainbowPopup(false), 3000);
+        trackEvent("rainbow_found", { source: "in_game" });
+        setState((s) => ({
+          ...s,
+          selectedWords: [],
+          gotRainbow: true,
+          rainbowSolveIndex: s.solvedGroups.length,
+          guessHistory: [...s.guessHistory, attempt],
+        }));
+        return;
+      }
 
       if (isCorrect) {
         const groupIdx = matchedGroupIndex;
@@ -729,7 +740,7 @@ export function useGame(
           });
         }
       }
-    }, suspenseMs);
+    }, totalDelay);
   }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, fireConfetti, tileColors, smallHintUsed, fullHintUsed]);
 
   const remainingWords = useMemo(() => {

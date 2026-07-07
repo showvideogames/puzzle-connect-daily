@@ -37,7 +37,15 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
       }`}
       style={
         revealing
-          ? { opacity: reveal === "hidden" ? 0 : 1, transition: "opacity 0.22s ease-out" }
+          ? {
+              opacity: reveal === "hidden" ? 0 : 1,
+              // Grow in from a slightly smaller size with a tiny overshoot
+              // (the back-out cubic) so the bar reveal feels bigger, not flat.
+              transform: reveal === "hidden" ? "scale(0.96)" : "scale(1)",
+              transformOrigin: "center",
+              transition:
+                "opacity 0.24s ease-out, transform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            }
           : undefined
       }
     >

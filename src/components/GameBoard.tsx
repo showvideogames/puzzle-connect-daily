@@ -344,6 +344,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // Their bar cross-fades in via the `reveal` prop, so it must NOT also get
   // the normal animate-group-appear entrance once the reveal state clears.
   const cloneRevealedGroupsRef = useRef<Set<number>>(new Set());
+  // Read once — enough for our animation gating; a mid-session preference
+  // change is an acceptable edge case not to react to live.
+  const reduceMotion = useMemo(() => prefersReducedMotion(), []);
+  // Stores the remaining (non-solved) tiles' rects captured just before the
+  // held words are released, so the grid can FLIP those tiles smoothly into
+  // the gaps instead of snapping. Only set for a reveal-triggered release.
+  const gridFlipBeforeRef = useRef<Record<string, DOMRect> | null>(null);
   const [reveal, setReveal] = useState<RevealState | null>(null);
 
   const clearRevealTimers = useCallback(() => {
@@ -423,25 +430,70 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       height: barRect.height,
     }));
 
+    const groupWords = new Set(reveal.words);
+
     requestAnimationFrame(() => requestAnimationFrame(() => {
+      // Capture the remaining tiles' current positions (holes still present,
+      // the selected tiles are hidden-but-laid-out), then release the hold so
+      // the selected words leave the grid and the gaps close. The grid FLIP
+      // effect below animates the remaining tiles old→new so they slide into
+      // the gaps while the clones fly upward, instead of snapping.
+      const before: Record<string, DOMRect> = {};
+      Object.entries(wordTileRefs.current).forEach(([w, el]) => {
+        if (el && !groupWords.has(w)) before[w] = el.getBoundingClientRect();
+      });
+      gridFlipBeforeRef.current = before;
+      releaseRevealHold();
       setReveal((r) => (r && r.groupIdx === thisGroup ? { ...r, to, phase: "flying" } : r));
     }));
 
     revealTimersRef.current = [
       // Start the merge: real bar cross-fades in underneath the clones as they
-      // fade/scale out. The grid still holds the (now-hidden) real tiles.
+      // fade/scale out.
       setTimeout(() => {
         setReveal((r) => (r && r.groupIdx === thisGroup ? { ...r, phase: "merging" } : r));
       }, REVEAL_FLY_MS),
-      // Only once the whole crossfade is done do we tear down the clones AND
-      // release the hold — so the grid doesn't reflow while clones are still
-      // visible at the top.
+      // Tear down the clones once the crossfade is done. (The hold was already
+      // released at fly-start above, so the grid has long since closed.)
       setTimeout(() => {
         setReveal((r) => (r && r.groupIdx === thisGroup ? null : r));
-        releaseRevealHold();
       }, REVEAL_FLY_MS + REVEAL_MERGE_MS),
     ];
   }, [reveal, releaseRevealHold, clearRevealTimers]);
+
+  // Grid FLIP: after a reveal releases its held words (gaps close), slide the
+  // remaining tiles from their old positions into their new ones with a
+  // transform, rather than letting them jump.
+  useLayoutEffect(() => {
+    const before = gridFlipBeforeRef.current;
+    if (!before) return;
+    gridFlipBeforeRef.current = null;
+
+    const FLIP_MS = 350;
+    Object.keys(before).forEach((w) => {
+      const el = wordTileRefs.current[w];
+      if (!el) return;
+      const after = el.getBoundingClientRect();
+      const dx = before[w].left - after.left;
+      const dy = before[w].top - after.top;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+
+      // Invert: start the tile visually at its OLD spot, then animate to none.
+      el.style.transition = "none";
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      requestAnimationFrame(() => {
+        el.style.transition = `transform ${FLIP_MS}ms cubic-bezier(0.2, 0, 0, 1)`;
+        el.style.transform = "";
+      });
+      window.setTimeout(() => {
+        // Clear inline styles so nothing lingers on the tile afterward.
+        if (el.style.transition.includes("transform")) {
+          el.style.transition = "";
+          el.style.transform = "";
+        }
+      }, FLIP_MS + 60);
+    });
+  }, [remainingWords]);
 
   useEffect(() => clearRevealTimers, [clearRevealTimers]);
 
@@ -681,6 +733,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 background: theme.gradient,
                 textShadow: theme.textShadow,
                 clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
+                // Same scale-grow polish as the category bars (skipped under
+                // reduced motion, which keeps just the curtain wipe).
+                transform: !reduceMotion && !rainbowVisible ? "scale(0.96)" : "scale(1)",
+                transformOrigin: "center",
+                transition: reduceMotion
+                  ? undefined
+                  : "transform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1)",
               }}
             >
               <div className="font-bold text-sm uppercase tracking-wide">
@@ -725,6 +784,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 background: theme.gradient,
                 textShadow: theme.textShadow,
                 clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
+                transform: !reduceMotion && !rainbowVisible ? "scale(0.96)" : "scale(1)",
+                transformOrigin: "center",
+                transition: reduceMotion
+                  ? undefined
+                  : "transform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1)",
               }}
             >
               <div className="font-bold text-sm uppercase tracking-wide">
