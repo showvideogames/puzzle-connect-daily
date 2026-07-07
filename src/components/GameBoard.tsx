@@ -60,13 +60,16 @@ const DIFFICULTY_COLOR: Record<number, string> = {
 };
 
 // ── Correct-guess reveal animation (deterministic, overlay-clone based) ──
-// Timings in ms. FLY covers the clones' movement from the grid into the
-// solved bar's row; then the bar "pops" in (index.css .animate-solved-pop)
-// while the clones fade/scale out. POP is kept longer than the ~0.22s clone
-// fade so the bar's overshoot lands AFTER the clones are gone — visible, not
-// hidden behind them — and matches the keyframe duration.
+// Timings in ms, and a deliberate TWO-BEAT sequence:
+//   beat 1: clones FLY from the grid into the bar's row, then fade/merge out
+//           (CLONE_FADE) while the real bar quietly fades in at ~scale 1.
+//   beat 2: once the clones are gone, a short PAUSE, then a distinct, bigger
+//           "arrival" pop on the bar (index.css .animate-solved-arrival) so it
+//           reads as a separate "category locked in" moment, not the fade.
 const REVEAL_FLY_MS = 380;
-const REVEAL_POP_MS = 420;
+const CLONE_FADE_MS = 220; // must match .tile-reveal-clone opacity transition
+const ARRIVAL_PAUSE_MS = 80;
+const ARRIVAL_POP_MS = 300; // must match .animate-solved-arrival duration
 
 interface RevealRect {
   top: number;
@@ -84,7 +87,7 @@ interface RevealState {
   words: string[]; // reading order (top-to-bottom, then left-to-right)
   from: RevealRect[]; // each clone's starting rect (viewport-relative)
   to: RevealRect[] | null; // each clone's target slot within the bar (null until the bar is measured)
-  phase: "cloned" | "flying" | "merging";
+  phase: "cloned" | "flying" | "merging" | "arrived";
 }
 
 function prefersReducedMotion(): boolean {
@@ -447,17 +450,21 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }));
 
     revealTimersRef.current = [
-      // Start the merge: the bar pops in (keyframe) while the clones fade/scale
-      // out on top of it.
+      // Beat 1: clones fade/merge out on top while the real bar quietly fades
+      // in behind them at ~scale 1 (no pop yet).
       setTimeout(() => {
         setReveal((r) => (r && r.groupIdx === thisGroup ? { ...r, phase: "merging" } : r));
       }, REVEAL_FLY_MS),
-      // Keep the reveal ("shown") alive for the full pop so its overshoot plays
-      // out after the clones have faded, then tear the clones down. (The hold
-      // was already released at fly-start, so the grid has long since closed.)
+      // Beat 2: clones are gone + a brief pause -> the bar does its distinct
+      // arrival pop, so it reads as a separate "locked in" moment.
+      setTimeout(() => {
+        setReveal((r) => (r && r.groupIdx === thisGroup ? { ...r, phase: "arrived" } : r));
+      }, REVEAL_FLY_MS + CLONE_FADE_MS + ARRIVAL_PAUSE_MS),
+      // Tear the clones down once the arrival pop has played out. (The hold was
+      // released at fly-start, so the grid closed long ago.)
       setTimeout(() => {
         setReveal((r) => (r && r.groupIdx === thisGroup ? null : r));
-      }, REVEAL_FLY_MS + REVEAL_POP_MS),
+      }, REVEAL_FLY_MS + CLONE_FADE_MS + ARRIVAL_PAUSE_MS + ARRIVAL_POP_MS),
     ];
   }, [reveal, releaseRevealHold, clearRevealTimers]);
 
@@ -753,7 +760,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               animate={slot.groupIdx === lastRevealedGroup && !cloneRevealedGroupsRef.current.has(slot.groupIdx)}
               reveal={
                 reveal?.groupIdx === slot.groupIdx
-                  ? (reveal.phase === "merging" ? "shown" : "hidden")
+                  ? (reveal.phase === "arrived"
+                      ? "arrived"
+                      : reveal.phase === "merging"
+                        ? "shown"
+                        : "hidden")
                   : undefined
               }
             />
@@ -894,7 +905,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {reveal && typeof document !== "undefined" && createPortal(
         reveal.words.map((word, i) => {
           const rect = reveal.phase === "cloned" || !reveal.to ? reveal.from[i] : reveal.to[i];
-          const merging = reveal.phase === "merging";
+          // Faded out from the merge beat onward (and stay gone through the
+          // arrival pop) so they never reappear over the popping bar.
+          const faded = reveal.phase === "merging" || reveal.phase === "arrived";
           return (
             <div
               key={word}
@@ -904,11 +917,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 left: rect.left,
                 width: rect.width,
                 height: rect.height,
-                // During merge the clones fade AND scale down while the real
-                // bar cross-fades in underneath them (z-index 60 keeps clones
-                // on top). transformOrigin center so they shrink in place.
-                opacity: merging ? 0 : 1,
-                transform: merging ? "scale(0.9)" : "scale(1)",
+                // Fade AND scale down while the real bar fades in underneath
+                // them (z-index 60 keeps clones on top). transformOrigin center
+                // so they shrink in place.
+                opacity: faded ? 0 : 1,
+                transform: faded ? "scale(0.9)" : "scale(1)",
                 transformOrigin: "center",
               }}
             >

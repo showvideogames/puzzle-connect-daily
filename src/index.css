@@ -213,7 +213,7 @@ html {
 @media (prefers-reduced-motion: reduce) {
   .animate-tile-checking { animation: none; }
   .animate-group-appear { animation: none; }
-  .animate-solved-pop { animation: none; }
+  .animate-solved-arrival { animation: none; }
 }
 
 /* Rainbow Herring tile effect */
@@ -263,19 +263,19 @@ html {
   transform-origin: center;
 }
 
-/* ── Solved category bar "pop" (clone-reveal path) ──
-   A clearly visible grow-in with overshoot. Applied when the bar goes
-   reveal hidden → shown; the reveal stays "shown" for the full duration
-   (see REVEAL_POP_MS in GameBoard) so the overshoot lands AFTER the clones
-   have faded, not hidden behind them. `both` fill so the 0% (opacity 0,
-   scaled down) applies immediately with no flash. */
-@keyframes solved-category-pop-in {
-  0% { opacity: 0; transform: scale(0.9); }
-  65% { opacity: 1; transform: scale(1.04); }
-  100% { opacity: 1; transform: scale(1); }
+/* ── Solved category bar "arrival" pop (clone-reveal path, beat 2) ──
+   The bar has already faded in at scale 1 during the clone merge (beat 1);
+   this is a separate, clearly-bigger pop played AFTER the clones are gone
+   (see the "arrived" phase timing in GameBoard) so it reads as a distinct
+   "category locked in" moment, not part of the fade. Scale-only — opacity is
+   already 1 by now. */
+@keyframes solved-category-arrival-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.07); }
+  100% { transform: scale(1); }
 }
-.animate-solved-pop {
-  animation: solved-category-pop-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+.animate-solved-arrival {
+  animation: solved-category-arrival-pop 0.3s cubic-bezier(0.2, 1.25, 0.35, 1) both;
   transform-origin: center;
 }
 

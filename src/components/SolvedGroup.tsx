@@ -12,13 +12,16 @@ const groupColors: Record<number, { bg: string; text: string }> = {
 interface SolvedGroupProps {
   group: PuzzleGroup;
   animate?: boolean;
-  // Reveal-phase override used by GameBoard's clone animation:
+  // Reveal-phase override used by GameBoard's clone animation (two beats):
   //  - "hidden": laid out but transparent, so its rect is measurable as the
-  //    clones' fly target while they're still flying.
-  //  - "shown": cross-fades in (opacity 0→1) underneath the clones as they
-  //    fade/scale out during the merge phase.
+  //    clones' fly target while they're still flying. No transform, so the
+  //    measured size is the bar's true final size.
+  //  - "shown": beat 1 — quietly fades in (opacity 0→1) at scale 1 behind the
+  //    clones as they fade/merge out. No pop yet.
+  //  - "arrived": beat 2 — once the clones are gone, a distinct scale pop
+  //    (.animate-solved-arrival) so the bar clearly "lands".
   // undefined = normal rendering (animate-group-appear entrance if `animate`).
-  reveal?: "hidden" | "shown";
+  reveal?: "hidden" | "shown" | "arrived";
 }
 
 // forwardRef so GameBoard can measure this bar's real DOM rect (the clones'
@@ -32,13 +35,16 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
   return (
     <div
       ref={ref}
-      // "shown" runs the pop keyframe (opacity + scale grow with overshoot);
-      // "hidden" is invisible-but-laid-out with NO transform, so the clones'
-      // fly target (getBoundingClientRect) is the bar's true final size.
       className={`${colors.bg} ${colors.text} rounded-lg py-3 px-4 text-center ${
         !revealing && animate ? "animate-group-appear" : ""
-      } ${reveal === "shown" ? "animate-solved-pop" : ""}`}
-      style={reveal === "hidden" ? { opacity: 0 } : undefined}
+      } ${reveal === "arrived" ? "animate-solved-arrival" : ""}`}
+      style={
+        reveal === "hidden"
+          ? { opacity: 0 }
+          : reveal === "shown"
+            ? { opacity: 1, transition: "opacity 0.2s ease-out" }
+            : undefined
+      }
     >
       <div className="font-bold text-sm uppercase tracking-wide">{group.category}</div>
       <div className="text-xs mt-0.5 opacity-80 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
