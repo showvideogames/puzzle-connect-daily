@@ -168,9 +168,7 @@ html {
 .animate-reveal { animation: reveal-group 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .animate-pop { animation: pop-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .animate-fade-up { animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-/* Shake for a correct guess — suspense beat. After it ends, GameBoard's
-   overlay-clone reveal animation takes over (see .tile-reveal-clone and
-   .animate-group-appear) before the tile is actually removed from the grid. */
+/* Rainbow-herring "matched" wiggle (still used by the rainbow bonus path). */
 .animate-tile-matched { animation: tile-wiggle 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards; }
 
 @keyframes tile-wiggle {
@@ -181,6 +179,15 @@ html {
   80% { transform: scale(0.97) rotate(2deg); }
   100% { transform: scale(1) rotate(0deg); }
 }
+
+/* ── Shared "checking guess" suspense bounce ──
+   Applied to each selected tile (staggered via inline animation-delay) after
+   submit, before the correct/incorrect outcome is revealed. */
+@keyframes tile-checking {
+  0%, 100% { transform: translateY(0); }
+  45% { transform: translateY(-13px); }
+}
+.animate-tile-checking { animation: tile-checking 0.4s ease-in-out both; }
 
 /* ── Correct-guess reveal clones ──
    Portaled to document.body (see GameBoard.tsx), positioned via inline
@@ -194,8 +201,16 @@ html {
               left 0.38s cubic-bezier(0.4, 0, 0.2, 1),
               width 0.38s cubic-bezier(0.4, 0, 0.2, 1),
               height 0.38s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.22s ease-in;
+              opacity 0.22s ease-in,
+              transform 0.22s ease-in;
   pointer-events: none;
+}
+
+/* Respect reduced-motion for the suspense bounce — useGame still runs the
+   state machine with a 0ms suspense, so logic is unaffected; this just kills
+   the movement for users who ask for it. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-tile-checking { animation: none; }
 }
 
 /* Rainbow Herring tile effect */

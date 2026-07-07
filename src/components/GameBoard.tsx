@@ -253,6 +253,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     shuffle,
     submitGuess,
     shaking,
+    checkingWords,
     lastRevealedGroup,
     releaseRevealHold,
     oneAway,
@@ -307,6 +308,21 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     return slots;
   }, [state.solvedGroups, state.gotRainbow, state.rainbowSolveIndex, puzzle.rainbowHerring]);
 
+  // Shared "checking guess" suspense: which tiles are animating, and their
+  // stagger order (by grid position, so the bounce reads as a left-to-right
+  // wave). Both correct and incorrect guesses use this before branching.
+  const isChecking = checkingWords.length > 0;
+  const checkingStagger = useMemo(() => {
+    const order: Record<string, number> = {};
+    if (checkingWords.length > 0) {
+      let n = 0;
+      remainingWords.forEach((w) => {
+        if (checkingWords.includes(w)) order[w] = n++;
+      });
+    }
+    return order;
+  }, [remainingWords, checkingWords]);
+
   // ── Correct-guess reveal animation (deterministic, overlay-clone based) ──
   // Sequence: shake (in useGame, unchanged) -> measure the 4 real tiles ->
   // mount the solved bar hidden (still occupying its layout space, so it's
@@ -324,6 +340,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const revealBarRef = useRef<HTMLElement | null>(null);
   const prevRevealedGroupRef = useRef<number | null>(null);
   const revealTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // Groups that have gone through (or are going through) the clone reveal.
+  // Their bar cross-fades in via the `reveal` prop, so it must NOT also get
+  // the normal animate-group-appear entrance once the reveal state clears.
+  const cloneRevealedGroupsRef = useRef<Set<number>>(new Set());
   const [reveal, setReveal] = useState<RevealState | null>(null);
 
   const clearRevealTimers = useCallback(() => {
@@ -360,14 +380,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       return;
     }
 
-    // Reading order (top-to-bottom, then left-to-right) so clones don't cross
-    // paths on their way into the bar.
-    const ordered = [...words].sort((a, b) => {
-      const ra = fromByWord[a];
-      const rb = fromByWord[b];
-      return Math.abs(ra.top - rb.top) > 4 ? ra.top - rb.top : ra.left - rb.left;
-    });
+    // Use the category's own word order (same order the solved bar's subtitle
+    // renders) so each clone lands in the slot matching its final subtitle
+    // position — the morph reads as continuous. Clone i starts at word i's
+    // measured grid rect and flies to slot i of the bar.
+    const ordered = [...words];
 
+    cloneRevealedGroupsRef.current.add(groupIdx);
     clearRevealTimers();
     setReveal({
       groupIdx,
@@ -409,14 +428,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }));
 
     revealTimersRef.current = [
+      // Start the merge: real bar cross-fades in underneath the clones as they
+      // fade/scale out. The grid still holds the (now-hidden) real tiles.
       setTimeout(() => {
         setReveal((r) => (r && r.groupIdx === thisGroup ? { ...r, phase: "merging" } : r));
-        // Reveal the real bar (fade in) at the same moment the clones start
-        // fading out, and only now actually remove the words from the grid.
-        releaseRevealHold();
       }, REVEAL_FLY_MS),
+      // Only once the whole crossfade is done do we tear down the clones AND
+      // release the hold — so the grid doesn't reflow while clones are still
+      // visible at the top.
       setTimeout(() => {
         setReveal((r) => (r && r.groupIdx === thisGroup ? null : r));
+        releaseRevealHold();
       }, REVEAL_FLY_MS + REVEAL_MERGE_MS),
     ];
   }, [reveal, releaseRevealHold, clearRevealTimers]);
@@ -432,6 +454,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     wordTileRefs.current = {};
     revealBarRef.current = null;
     prevRevealedGroupRef.current = null;
+    cloneRevealedGroupsRef.current = new Set();
   }, [puzzle.id, clearRevealTimers]);
 
   // Track if puzzle was already complete when component first mounted
@@ -670,8 +693,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               key={slot.groupIdx}
               ref={reveal?.groupIdx === slot.groupIdx ? (el) => { revealBarRef.current = el; } : undefined}
               group={puzzle.groups[slot.groupIdx]}
-              animate={slot.groupIdx === lastRevealedGroup}
-              pendingMerge={reveal?.groupIdx === slot.groupIdx && reveal.phase !== "merging"}
+              // animate-group-appear is only for bars that DIDN'T go through the
+              // clone reveal (reduced-motion path, loss cascade). Clone-revealed
+              // bars cross-fade in via the `reveal` prop instead.
+              animate={slot.groupIdx === lastRevealedGroup && !cloneRevealedGroupsRef.current.has(slot.groupIdx)}
+              reveal={
+                reveal?.groupIdx === slot.groupIdx
+                  ? (reveal.phase === "merging" ? "shown" : "hidden")
+                  : undefined
+              }
             />
           )
         )}
@@ -777,8 +807,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 rainbowTextShadow={theme.textShadow}
                 isMatched={matchedWords.includes(word)}
                 hiddenForReveal={isRevealingWord}
+                isChecking={checkingWords.includes(word)}
+                checkingIndex={checkingStagger[word] ?? 0}
                 onClick={() => handleTileClick(word)}
-                disabled={state.isComplete || matchedWords.length > 0 || reveal !== null}
+                disabled={state.isComplete || matchedWords.length > 0 || reveal !== null || isChecking}
                 arrangeTiles={arrangeTiles}
                 colorCodeTiles={colorCodeTiles}
                 tileColor={tileColors[word] ?? null}
@@ -806,17 +838,22 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {reveal && typeof document !== "undefined" && createPortal(
         reveal.words.map((word, i) => {
           const rect = reveal.phase === "cloned" || !reveal.to ? reveal.from[i] : reveal.to[i];
+          const merging = reveal.phase === "merging";
           return (
             <div
               key={word}
-              className={`tile-reveal-clone flex items-center justify-center rounded-lg font-semibold text-xs sm:text-sm uppercase tracking-wide bg-tile-selected text-tile-selected-fg shadow-md ${
-                reveal.phase === "merging" ? "opacity-0" : "opacity-100"
-              }`}
+              className="tile-reveal-clone flex items-center justify-center rounded-lg font-semibold text-xs sm:text-sm uppercase tracking-wide bg-tile-selected text-tile-selected-fg shadow-md"
               style={{
                 top: rect.top,
                 left: rect.left,
                 width: rect.width,
                 height: rect.height,
+                // During merge the clones fade AND scale down while the real
+                // bar cross-fades in underneath them (z-index 60 keeps clones
+                // on top). transformOrigin center so they shrink in place.
+                opacity: merging ? 0 : 1,
+                transform: merging ? "scale(0.9)" : "scale(1)",
+                transformOrigin: "center",
               }}
             >
               {isCustomEmoji(word) ? (
@@ -898,14 +935,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
           <button
             onClick={shuffle}
+            disabled={isChecking || reveal !== null}
             className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium
-              hover:bg-secondary transition-colors duration-150 active:scale-95"
+              hover:bg-secondary transition-colors duration-150 active:scale-95
+              disabled:opacity-40 disabled:cursor-default"
           >
             <Shuffle className="w-4 h-4" /> Shuffle
           </button>
           <button
             onClick={deselectAll}
-            disabled={state.selectedWords.length === 0}
+            disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
             className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium
               hover:bg-secondary transition-colors duration-150 active:scale-95
               disabled:opacity-40 disabled:cursor-default"
@@ -914,7 +953,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           </button>
           <button
             onClick={submitGuess}
-            disabled={state.selectedWords.length !== 4}
+            disabled={state.selectedWords.length !== 4 || isChecking || reveal !== null}
             className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-medium
               hover:opacity-90 transition-all duration-150 active:scale-95
               disabled:opacity-40 disabled:cursor-default"

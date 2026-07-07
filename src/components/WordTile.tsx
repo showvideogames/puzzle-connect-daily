@@ -102,6 +102,10 @@ interface WordTileProps {
   // keeps its layout space — visibility, not display — so the grid doesn't
   // reflow until the animation finishes and the word is actually removed).
   hiddenForReveal?: boolean;
+  // True while this tile is part of a guess in the shared "checking" suspense
+  // phase — plays a staggered bounce (checkingIndex sets the stagger order).
+  isChecking?: boolean;
+  checkingIndex?: number;
 }
 
 export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordTile({
@@ -128,6 +132,8 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   rainbowGradient,
   rainbowTextShadow,
   hiddenForReveal = false,
+  isChecking = false,
+  checkingIndex = 0,
 }, forwardedRef) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const lastTapRef = useRef<number>(0);
@@ -263,10 +269,13 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
     <div
       ref={forwardedRef}
       data-word={word}
-      className="relative"
+      // The checking bounce lives on this wrapper (not the button) so its
+      // transform doesn't fight the button's own scale/selection transforms.
+      className={`relative ${isChecking ? "animate-tile-checking" : ""}`}
       style={{
         touchAction: arrangeTiles ? "none" : "manipulation",
         ...(hiddenForReveal ? { visibility: "hidden" as const } : {}),
+        ...(isChecking ? { animationDelay: `${checkingIndex * 0.07}s` } : {}),
       }}
     >
       <button

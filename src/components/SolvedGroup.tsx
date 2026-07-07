@@ -12,25 +12,34 @@ const groupColors: Record<number, { bg: string; text: string }> = {
 interface SolvedGroupProps {
   group: PuzzleGroup;
   animate?: boolean;
-  // True while GameBoard's clone-based reveal animation is still converging
-  // on this bar: kept invisible-but-laid-out (not unrendered) so its real DOM
-  // rect can be measured as the animation's target.
-  pendingMerge?: boolean;
+  // Reveal-phase override used by GameBoard's clone animation:
+  //  - "hidden": laid out but transparent, so its rect is measurable as the
+  //    clones' fly target while they're still flying.
+  //  - "shown": cross-fades in (opacity 0→1) underneath the clones as they
+  //    fade/scale out during the merge phase.
+  // undefined = normal rendering (animate-group-appear entrance if `animate`).
+  reveal?: "hidden" | "shown";
 }
 
-// forwardRef so GameBoard can measure this bar's real DOM rect (the reveal
-// animation's target) via getBoundingClientRect.
+// forwardRef so GameBoard can measure this bar's real DOM rect (the clones'
+// fly target) via getBoundingClientRect.
 export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function SolvedGroup(
-  { group, animate, pendingMerge },
+  { group, animate, reveal },
   ref
 ) {
   const colors = groupColors[group.difficulty] || groupColors[1];
+  const revealing = reveal !== undefined;
   return (
     <div
       ref={ref}
       className={`${colors.bg} ${colors.text} rounded-lg py-3 px-4 text-center ${
-        pendingMerge ? "opacity-0" : animate ? "animate-group-appear" : ""
+        !revealing && animate ? "animate-group-appear" : ""
       }`}
+      style={
+        revealing
+          ? { opacity: reveal === "hidden" ? 0 : 1, transition: "opacity 0.22s ease-out" }
+          : undefined
+      }
     >
       <div className="font-bold text-sm uppercase tracking-wide">{group.category}</div>
       <div className="text-xs mt-0.5 opacity-80 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
