@@ -66,10 +66,10 @@ const DIFFICULTY_COLOR: Record<number, string> = {
 //   beat 2: once the clones are gone, a short PAUSE, then a distinct, bigger
 //           "arrival" pop on the bar (index.css .animate-solved-arrival) so it
 //           reads as a separate "category locked in" moment, not the fade.
-const REVEAL_FLY_MS = 380;
+const REVEAL_FLY_MS = 500; // must match .tile-reveal-clone position transition
 const CLONE_FADE_MS = 220; // must match .tile-reveal-clone opacity transition
 const ARRIVAL_PAUSE_MS = 80;
-const ARRIVAL_POP_MS = 360; // must match .animate-solved-arrival duration
+const ARRIVAL_POP_MS = 480; // must match .animate-solved-arrival duration
 
 interface RevealRect {
   top: number;
