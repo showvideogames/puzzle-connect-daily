@@ -270,12 +270,12 @@ html {
    "category locked in" moment, not part of the fade. Scale-only — opacity is
    already 1 by now. */
 @keyframes solved-category-arrival-pop {
-  0% { transform: scale(1); }
-  35% { transform: scale(1.07); }
+  0% { transform: scale(0.95); }
+  45% { transform: scale(1.08); }
   100% { transform: scale(1); }
 }
 .animate-solved-arrival {
-  animation: solved-category-arrival-pop 0.3s cubic-bezier(0.2, 1.25, 0.35, 1) both;
+  animation: solved-category-arrival-pop 0.36s ease-in-out both;
   transform-origin: center;
 }
 

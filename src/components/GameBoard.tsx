@@ -69,7 +69,7 @@ const DIFFICULTY_COLOR: Record<number, string> = {
 const REVEAL_FLY_MS = 380;
 const CLONE_FADE_MS = 220; // must match .tile-reveal-clone opacity transition
 const ARRIVAL_PAUSE_MS = 80;
-const ARRIVAL_POP_MS = 300; // must match .animate-solved-arrival duration
+const ARRIVAL_POP_MS = 360; // must match .animate-solved-arrival duration
 
 interface RevealRect {
   top: number;
