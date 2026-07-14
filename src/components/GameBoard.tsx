@@ -70,9 +70,10 @@ const REVEAL_FLY_MS = 500; // must match .tile-reveal-clone position transition
 const CLONE_FADE_MS = 220; // must match .tile-reveal-clone opacity transition
 const ARRIVAL_PAUSE_MS = 80;
 const ARRIVAL_POP_MS = 480; // must match .animate-solved-arrival duration
-// After the final category's arrival pop fully finishes, hold this brief beat
-// before revealing the victory celebration so the two moments read separately.
-const VICTORY_HOLD_AFTER_ARRIVAL_MS = 200;
+// The victory celebration triggers immediately when the final category's
+// arrival pop finishes — no extra hold, so the pop landing and the celebration
+// read as one continuous moment.
+const VICTORY_HOLD_AFTER_ARRIVAL_MS = 0;
 // Reduced-motion / fallback path: no clone animation plays, so reveal the
 // victory UI shortly after the final category bar has appeared.
 const VICTORY_REDUCED_MOTION_MS = 200;
@@ -514,10 +515,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       // Tear the clones down once the arrival pop has played out. (The hold was
       // released at fly-start, so the grid closed long ago.) This is also the
       // moment the FINAL category has fully "landed": if the game is won by now,
-      // hold a brief beat, then un-gate the victory celebration. isWonRef is
-      // read at fire time (not captured earlier), so it can't be stale — and
-      // input is locked during the reveal, so a non-final group's timer can
-      // never see a win that hadn't happened when its pop started.
+      // un-gate the victory celebration immediately (no extra hold) so confetti,
+      // sound, haptics, streak, and results all start together with the pop's
+      // finish. isWonRef is read at fire time (not captured earlier), so it
+      // can't be stale — and input is locked during the reveal, so a non-final
+      // group's timer can never see a win that hadn't happened when its pop
+      // started.
       setTimeout(() => {
         setReveal((r) => (r && r.groupIdx === thisGroup ? null : r));
         if (isWonRef.current) revealVictory(true, VICTORY_HOLD_AFTER_ARRIVAL_MS);
