@@ -475,6 +475,14 @@ export function useGame(
     playCelebrationSound();
   }, [playCelebrationSound]);
 
+  // The full win celebration (confetti + melody + celebratory haptic). Kept
+  // separate from the logical win so GameBoard can fire it only once the final
+  // category's arrival pop has finished, rather than the instant isWon flips.
+  const fireWinCelebration = useCallback(() => {
+    fireConfetti();
+    vibrateCelebration();
+  }, [fireConfetti]);
+
   const getSolveOrder = useCallback((solvedGroups: number[]): string[] => {
     const colorNames = ["orange", "green", "blue", "red"];
     return solvedGroups.map((groupIdx) => {
@@ -587,9 +595,11 @@ export function useGame(
         }));
 
         if (isWon) {
-          fireConfetti();
-          vibrateCelebration();
-
+          // NB: the win celebration (confetti/haptic) is intentionally NOT
+          // fired here. GameBoard triggers fireWinCelebration() only after the
+          // final category's arrival pop completes, so nothing celebratory
+          // appears while the last tiles are still flying. Scoring/stats/saving
+          // below stay on the immediate win, exactly as before.
           const fullGuessHistory = [...state.guessHistory, attempt];
           const shareGrid = buildShareGrid(fullGuessHistory, puzzle);
 
@@ -741,7 +751,7 @@ export function useGame(
         }
       }
     }, totalDelay);
-  }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, fireConfetti, tileColors, smallHintUsed, fullHintUsed]);
+  }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, tileColors, smallHintUsed, fullHintUsed]);
 
   const remainingWords = useMemo(() => {
     const solvedWords = state.solvedGroups
@@ -761,6 +771,7 @@ export function useGame(
     checkingWords,
     lastRevealedGroup,
     releaseRevealHold,
+    fireWinCelebration,
     oneAway,
     setOneAway,
     almostRainbow,

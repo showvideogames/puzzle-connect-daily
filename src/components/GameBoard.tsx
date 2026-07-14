@@ -70,6 +70,12 @@ const REVEAL_FLY_MS = 500; // must match .tile-reveal-clone position transition
 const CLONE_FADE_MS = 220; // must match .tile-reveal-clone opacity transition
 const ARRIVAL_PAUSE_MS = 80;
 const ARRIVAL_POP_MS = 480; // must match .animate-solved-arrival duration
+// After the final category's arrival pop fully finishes, hold this brief beat
+// before revealing the victory celebration so the two moments read separately.
+const VICTORY_HOLD_AFTER_ARRIVAL_MS = 200;
+// Reduced-motion / fallback path: no clone animation plays, so reveal the
+// victory UI shortly after the final category bar has appeared.
+const VICTORY_REDUCED_MOTION_MS = 200;
 
 interface RevealRect {
   top: number;
@@ -261,6 +267,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     checkingWords,
     lastRevealedGroup,
     releaseRevealHold,
+    fireWinCelebration,
     oneAway,
     setOneAway,
     almostRainbow,
@@ -355,6 +362,43 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const gridFlipBeforeRef = useRef<Record<string, DOMRect> | null>(null);
   const [reveal, setReveal] = useState<RevealState | null>(null);
 
+  // ── Victory celebration gating ──────────────────────────────────────────
+  // The results/share UI + confetti stay hidden until the FINAL category's
+  // arrival pop has completely finished. This is a distinct visual signal from
+  // the logical won state (state.isWon), which still flips the instant the 4th
+  // group is solved — scoring/stats/saving are unchanged. Initialized true only
+  // when the puzzle is ALREADY complete+won on mount, so a saved finished
+  // puzzle shows its results immediately without waiting on an animation that
+  // isn't playing.
+  const [victoryRevealReady, setVictoryRevealReady] = useState<boolean>(
+    () => state.isComplete && state.isWon,
+  );
+  // Latest-value mirror of state.isWon, updated during render so it's already
+  // current before any layout effect or timer runs in the same commit. Reading
+  // this at the moment a decision is made (e.g. when the arrival-pop timer
+  // fires) is guaranteed non-stale: isWon only ever goes false→true and never
+  // back, and the reveal machinery locks input so a later solve can't sneak in.
+  const isWonRef = useRef(state.isWon);
+  isWonRef.current = state.isWon;
+  const victoryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const clearVictoryTimers = useCallback(() => {
+    victoryTimersRef.current.forEach(clearTimeout);
+    victoryTimersRef.current = [];
+  }, []);
+  // Reveal the victory UI after `delayMs`. `withCelebration` fires the confetti
+  // + haptic — passed only for a live win, never for an already-completed load.
+  const revealVictory = useCallback(
+    (withCelebration: boolean, delayMs: number) => {
+      clearVictoryTimers();
+      const t = setTimeout(() => {
+        setVictoryRevealReady(true);
+        if (withCelebration) fireWinCelebration();
+      }, delayMs);
+      victoryTimersRef.current.push(t);
+    },
+    [clearVictoryTimers, fireWinCelebration],
+  );
+
   const clearRevealTimers = useCallback(() => {
     revealTimersRef.current.forEach(clearTimeout);
     revealTimersRef.current = [];
@@ -369,6 +413,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
     if (prefersReducedMotion()) {
       releaseRevealHold();
+      // No clone animation to wait on — if this solve won the game, reveal the
+      // victory UI right after the final bar appears (no full animation delay).
+      if (isWonRef.current) revealVictory(true, VICTORY_REDUCED_MOTION_MS);
       return;
     }
 
@@ -386,6 +433,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       // the clone animation rather than get stuck; just reveal plainly.
       console.warn("[reveal] couldn't measure all 4 tiles for group", groupIdx, "— falling back to a plain reveal");
       releaseRevealHold();
+      // Fallback still has to un-gate the victory UI on a winning solve, or the
+      // results would never appear.
+      if (isWonRef.current) revealVictory(true, VICTORY_REDUCED_MOTION_MS);
       return;
     }
 
@@ -404,7 +454,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       to: null,
       phase: "cloned",
     });
-  }, [lastRevealedGroup, puzzle, releaseRevealHold, clearRevealTimers]);
+  }, [lastRevealedGroup, puzzle, releaseRevealHold, clearRevealTimers, revealVictory]);
 
   // Once the bar has mounted (hidden) for this reveal, measure it and start
   // the fly. Runs whenever `reveal` is freshly "cloned" — i.e. once per
@@ -419,6 +469,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       clearRevealTimers();
       setReveal(null);
       releaseRevealHold();
+      if (isWonRef.current) revealVictory(true, VICTORY_REDUCED_MOTION_MS);
       return;
     }
 
@@ -461,12 +512,18 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         setReveal((r) => (r && r.groupIdx === thisGroup ? { ...r, phase: "arrived" } : r));
       }, REVEAL_FLY_MS + CLONE_FADE_MS + ARRIVAL_PAUSE_MS),
       // Tear the clones down once the arrival pop has played out. (The hold was
-      // released at fly-start, so the grid closed long ago.)
+      // released at fly-start, so the grid closed long ago.) This is also the
+      // moment the FINAL category has fully "landed": if the game is won by now,
+      // hold a brief beat, then un-gate the victory celebration. isWonRef is
+      // read at fire time (not captured earlier), so it can't be stale — and
+      // input is locked during the reveal, so a non-final group's timer can
+      // never see a win that hadn't happened when its pop started.
       setTimeout(() => {
         setReveal((r) => (r && r.groupIdx === thisGroup ? null : r));
+        if (isWonRef.current) revealVictory(true, VICTORY_HOLD_AFTER_ARRIVAL_MS);
       }, REVEAL_FLY_MS + CLONE_FADE_MS + ARRIVAL_PAUSE_MS + ARRIVAL_POP_MS),
     ];
-  }, [reveal, releaseRevealHold, clearRevealTimers]);
+  }, [reveal, releaseRevealHold, clearRevealTimers, revealVictory]);
 
   // Grid FLIP: after a reveal releases its held words (gaps close), slide the
   // remaining tiles from their old positions into their new ones with a
@@ -503,18 +560,42 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   }, [remainingWords]);
 
   useEffect(() => clearRevealTimers, [clearRevealTimers]);
+  useEffect(() => clearVictoryTimers, [clearVictoryTimers]);
 
   // If this GameBoard instance is reused for a different puzzle (e.g. archive
   // browsing without a remount), drop any in-flight reveal rather than risk
   // it referencing stale words/groups from the previous puzzle.
   useEffect(() => {
     clearRevealTimers();
+    clearVictoryTimers();
     setReveal(null);
+    setVictoryRevealReady(false);
     wordTileRefs.current = {};
     revealBarRef.current = null;
     prevRevealedGroupRef.current = null;
     cloneRevealedGroupsRef.current = new Set();
-  }, [puzzle.id, clearRevealTimers]);
+  }, [puzzle.id, clearRevealTimers, clearVictoryTimers]);
+
+  // Safety net for a RESTORED completed+won puzzle. victoryRevealReady's
+  // initializer runs only once at mount; if the saved state hydrates afterward
+  // (so it captured false) the results would otherwise stay gated forever. Once
+  // such a game is complete+won, reveal immediately — there's no animation to
+  // wait for. This is fenced off from a LIVE win: a live final solve always
+  // drives the reveal sequence, which sets lastRevealedGroup and mounts
+  // `reveal`; a pure restore does neither, so those two being null/absent is
+  // exactly what marks a restored game. No celebration fires here — the player
+  // already saw the confetti when they originally won.
+  useEffect(() => {
+    if (
+      state.isComplete &&
+      state.isWon &&
+      !victoryRevealReady &&
+      lastRevealedGroup === null &&
+      reveal === null
+    ) {
+      setVictoryRevealReady(true);
+    }
+  }, [state.isComplete, state.isWon, victoryRevealReady, lastRevealedGroup, reveal]);
 
   // Track if puzzle was already complete when component first mounted
   // Used to hide redundant UI (dots, headline) when viewing a completed puzzle
@@ -548,7 +629,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   const [streakBefore, setStreakBefore] = useState<number | null>(null);
   const [showStreak, setShowStreak] = useState(false);
-  const prevIsWon = useRef(state.isWon);
   const prevIsComplete = useRef(false);
   const prevGotRainbow = useRef(state.gotRainbow);
 
@@ -568,12 +648,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     void fetchStreakBefore();
   }, [isArchive]);
 
+  // Streak celebration is part of the victory moment, so it waits for the same
+  // reveal gate. Gating on `lastRevealedGroup !== null` keeps it to LIVE wins:
+  // a solve happened this session. A restored/hydrated completed game never set
+  // lastRevealedGroup, so it won't re-show the streak — and this stays correct
+  // even if the completed state hydrates asynchronously.
   useEffect(() => {
-    if (state.isWon && !prevIsWon.current && !isArchive) {
-      setTimeout(() => setShowStreak(true), 500);
+    if (victoryRevealReady && state.isWon && lastRevealedGroup !== null && !isArchive) {
+      setShowStreak(true);
     }
-    prevIsWon.current = state.isWon;
-  }, [state.isWon, isArchive]);
+  }, [victoryRevealReady, state.isWon, lastRevealedGroup, isArchive]);
 
   useEffect(() => {
     if (state.isComplete && !prevIsComplete.current) {
@@ -713,6 +797,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   const streakToShow = streakBefore != null ? streakBefore + 1 : 1;
 
+  // Gate for the end-of-game results/share section. A WON game waits for the
+  // victory reveal (final arrival pop finished); a LOST game shows immediately
+  // as before, since it has no victory animation to wait on.
+  const showEndState = state.isComplete && (!state.isWon || victoryRevealReady);
+
   return (
     <>
       {!imagesReady ? (
@@ -771,7 +860,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           )
         )}
 
-        {state.isComplete && !state.gotRainbow && puzzle.rainbowHerring && (
+        {showEndState && !state.gotRainbow && puzzle.rainbowHerring && (
           bonusRainbowCorrect === null ? (
             <button
               onClick={() => setShowSpotModal(true)}
@@ -1183,7 +1272,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {showStreak && <StreakCelebration streak={streakToShow} />}
 
       {/* End state — hide headline/subtitle when viewing already-completed puzzle */}
-      {state.isComplete && (
+      {showEndState && (
         <div className="text-center mt-6 animate-fade-up">
           {!wasAlreadyComplete.current && (
             <>
@@ -1228,7 +1317,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       )}
 
       {/* Rating */}
-      {state.isComplete && <PuzzleRating puzzleId={puzzle.id} user={user} />}
+      {showEndState && <PuzzleRating puzzleId={puzzle.id} user={user} />}
 
       <DailyStatsModal
         puzzleId={puzzle.id}
