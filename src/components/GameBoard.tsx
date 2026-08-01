@@ -643,8 +643,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         const { data: { user: authUser } } = await supabase.auth.getUser();
         const userId = authUser?.id ?? null;
         const { data } = userId
-          ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).single()
-          : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).single();
+          ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).maybeSingle()
+          : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).maybeSingle();
         if (data?.current_streak != null) setStreakBefore(data.current_streak);
       } catch {}
     };

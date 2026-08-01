@@ -51,7 +51,7 @@ export function PuzzleRating({ puzzleId, user }: PuzzleRatingProps) {
       .select("rating")
       .eq("puzzle_id", puzzleId)
       .eq("user_id", user.id)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         if (data) {
           setExisting(data.rating);

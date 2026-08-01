@@ -24,8 +24,8 @@ export function LandingScreen({ puzzle, user, onPlay, onSignInClick }: LandingSc
         const { data: { user: authUser } } = await supabase.auth.getUser();
         const userId = authUser?.id ?? null;
         const { data } = userId
-          ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).single()
-          : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).single();
+          ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).maybeSingle()
+          : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).maybeSingle();
         if (!cancelled && data?.current_streak != null) {
           setStreak(data.current_streak);
         }
