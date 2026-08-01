@@ -126,7 +126,7 @@ export function FeedbackModal({ open, onClose, user }: FeedbackModalProps) {
                   onSuccess={(token) => setTurnstileToken(token)}
                   onError={() => setTurnstileToken(null)}
                   onExpire={() => setTurnstileToken(null)}
-                  options={{ theme: "auto", size: "flexible" }}
+                  options={{ theme: "auto", size: "normal" }}
                 />
               </div>
             ) : (
