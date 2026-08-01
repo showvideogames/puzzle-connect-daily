@@ -162,7 +162,24 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
 
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+
+    // The canvas ruler in computeShrunkFontSize measures with "DM Sans", which
+    // is a web font that loads asynchronously. If the first measure() runs
+    // before it finishes downloading, the ruler falls back to a (usually
+    // narrower) system font, underestimates the real width, and the word can
+    // overflow once DM Sans swaps in. Re-measure once fonts are ready so the
+    // shrink is computed against the font that actually renders.
+    let cancelled = false;
+    if (typeof document !== "undefined" && document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        if (!cancelled) measure();
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("resize", measure);
+    };
   }, [word, isEmojiPuzzle, isImage]);
 
   useEffect(() => {
