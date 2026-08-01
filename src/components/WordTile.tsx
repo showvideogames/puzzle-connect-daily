@@ -156,12 +156,20 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
 
   useLayoutEffect(() => {
     if (isEmojiPuzzle || isImage) return;
-    const el = textRef.current;
-    if (!el) return;
+    const btn = buttonRef.current;
+    if (!btn) return;
 
     const measure = () => {
+      // Measure the tile's inner width from the BUTTON, not the text span. A
+      // long single word (e.g. "TELEVISION") can't wrap and stretches the
+      // w-full span to its own width; measuring the span would then hide the
+      // overflow, leave the word unshrunk, and let it render off-center. The
+      // button's content box is stable, so the overflow is detected reliably.
+      const cs = getComputedStyle(btn);
+      const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const available = btn.clientWidth - padX;
       const longest = getLongestWord(word);
-      setAutoFontSize(computeShrunkFontSize(longest, el.clientWidth));
+      setAutoFontSize(computeShrunkFontSize(longest, available));
     };
 
     measure();
