@@ -949,7 +949,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
       {/* Word grid */}
       {remainingWords.length > 0 && (
-        <div className={`grid grid-cols-4 gap-2 ${shaking || spotShaking ? "animate-shake" : ""}`}>
+        <div className="relative">
+          {/* Decorative sparkles around the board */}
+          <span aria-hidden="true" className="pointer-events-none select-none absolute -top-2 -left-1 text-lg" style={{ color: "#a855f7", opacity: 0.4 }}>✦</span>
+          <span aria-hidden="true" className="pointer-events-none select-none absolute -top-3 right-2 text-sm" style={{ color: "#ec4899", opacity: 0.4 }}>✦</span>
+          <span aria-hidden="true" className="pointer-events-none select-none absolute bottom-1 -left-1 text-sm" style={{ color: "#3b82f6", opacity: 0.35 }}>✦</span>
+          <span aria-hidden="true" className="pointer-events-none select-none absolute -bottom-2 right-1 text-base" style={{ color: "#a855f7", opacity: 0.4 }}>✦</span>
+          <div className={`grid grid-cols-4 gap-2 ${shaking || spotShaking ? "animate-shake" : ""}`}>
           {remainingWords.map((word, index) => {
             const isRevealingWord = reveal?.words.includes(word) ?? false;
             return (
@@ -988,6 +994,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               />
             );
           })}
+          </div>
         </div>
       )}
 
@@ -1115,9 +1122,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           <button
             onClick={submitGuess}
             disabled={state.selectedWords.length !== 4 || isChecking || reveal !== null}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-medium
-              hover:opacity-90 transition-all duration-150 active:scale-95
+            className="flex items-center gap-1.5 px-5 py-2 rounded-full text-white text-sm font-semibold
+              transition-all duration-150 hover:-translate-y-px active:scale-95
               disabled:opacity-40 disabled:cursor-default"
+            style={{
+              background: "linear-gradient(135deg, #a78bfa, #8b5cf6)",
+              boxShadow: "0 8px 20px -8px rgba(139,92,246,0.6)",
+            }}
           >
             <Send className="w-4 h-4" /> Submit
           </button>

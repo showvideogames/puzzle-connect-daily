@@ -277,7 +277,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
 
   const isRightEdge = column === 4;
 
-  const baseClasses = `tile-base min-h-16 font-semibold rounded-lg transition-all duration-150 ease-out relative
+  const baseClasses = `tile-base min-h-16 font-semibold rounded-[20px] transition-all duration-150 ease-out relative
     ${disabled ? "opacity-50 cursor-default" : ""}
   `;
 
@@ -292,7 +292,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         ? `${colorStyle.bg} hover:shadow-sm active:scale-95 ${isSelected ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background scale-[0.97]" : ""}`
         : isSelected
           ? "bg-tile-selected text-tile-selected-fg shadow-md scale-[0.97]"
-          : "bg-tile hover:shadow-sm active:scale-95";
+          : "cloud-tile";
 
   return (
     <div
