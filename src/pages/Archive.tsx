@@ -8,7 +8,7 @@ import { SettingsModal } from "@/components/SettingsModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SEO } from "@/components/SEO";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { playGiftOpenSound } from "@/lib/sounds";
 import confetti from "canvas-confetti";
@@ -69,6 +69,14 @@ function saveOpenedOrders(orders: number[]) {
   catch {}
 }
 
+// Per-weekday header colors (Sun→Sat), tracing the rainbow.
+const WEEKDAY_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#a855f7"];
+// Free-puzzle card colors, cycled by puzzle order.
+const FREE_COLORS = ["#f97316", "#22c55e", "#3b82f6", "#a855f7", "#ec4899"];
+const RAINBOW_BAR = "linear-gradient(90deg,#ef4444,#f97316,#eab308,#22c55e,#3b82f6,#a855f7)";
+// Subtle interlocking puzzle-piece texture overlaid on opened free-puzzle cards.
+const PUZZLE_TEXTURE = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'><g fill='none' stroke='white' stroke-opacity='0.28' stroke-width='1.4'><path d='M0 16 h8 a4 4 0 0 1 0 8 h-8'/><path d='M24 0 v8 a4 4 0 0 0 8 0 v-8'/><path d='M16 48 v-8 a4 4 0 0 1 8 0 v8'/><path d='M48 24 h-8 a4 4 0 0 0 0 8 h8'/></g></svg>")`;
+
 // ─── GiftBox ─────────────────────────────────────────────────────────────────
 
 function GiftBox({
@@ -82,6 +90,7 @@ function GiftBox({
 }) {
   const navigate = useNavigate();
   const [popping, setPopping] = useState(false);
+  const color = FREE_COLORS[(puzzle.free_puzzle_order - 1) % FREE_COLORS.length];
 
   function handleClick() {
     if (isOpened) {
@@ -120,22 +129,45 @@ function GiftBox({
       style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer" }}
     >
       {isOpened ? (
-        // Opened: rainbow numbered square, tappable
+        // Opened: colorful puzzle-piece card with number + Play now
         <div
-          className="w-full rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-sm animate-fade-up"
+          className="w-full flex flex-col items-center justify-center gap-2 text-white animate-fade-up"
           style={{
-            aspectRatio: "1",
-            background: "linear-gradient(135deg, #f97316, #eab308, #22c55e, #3b82f6, #a855f7)",
+            aspectRatio: "3 / 4",
+            borderRadius: "16px",
+            background: color,
+            backgroundImage: PUZZLE_TEXTURE,
+            backgroundSize: "38px 38px",
+            boxShadow: "0 8px 20px -10px rgba(60,40,110,0.5)",
           }}
         >
-          {puzzle.free_puzzle_order}
+          <div
+            className="flex items-center justify-center font-extrabold"
+            style={{
+              width: "38px",
+              height: "38px",
+              borderRadius: "999px",
+              background: "#fff",
+              color,
+              fontSize: "18px",
+              boxShadow: "0 3px 8px -3px rgba(0,0,0,0.35)",
+            }}
+          >
+            {puzzle.free_puzzle_order}
+          </div>
+          <span style={{ fontSize: "10px", fontWeight: 800, letterSpacing: "0.03em" }}>
+            PLAY NOW
+          </span>
         </div>
       ) : (
-        // Unopened: custom present icon, no border or background
+        // Unopened: gift box (tap to unwrap) — keeps the surprise
         <div
           className="w-full flex items-center justify-center"
           style={{
-            aspectRatio: "1",
+            aspectRatio: "3 / 4",
+            borderRadius: "16px",
+            background: "hsl(var(--secondary))",
+            border: "1.5px dashed hsl(var(--border))",
             transform: popping
               ? "scale(0) translateY(-18px) rotate(12deg)"
               : "scale(1) translateY(0) rotate(0deg)",
@@ -147,7 +179,7 @@ function GiftBox({
           <img
             src="/present-icon.png"
             alt="Gift box"
-            className="w-full h-full object-contain"
+            style={{ width: "56%", height: "56%", objectFit: "contain" }}
             draggable={false}
           />
         </div>
@@ -364,16 +396,36 @@ export default function Archive() {
   );
 
   const titleRow = (
-    <div className="flex items-center justify-between mb-2">
-      <h2 style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "-0.02em" }}>
-        Puzzle Archive
-      </h2>
+    <div className="flex items-start justify-between gap-3 mb-4">
+      <div>
+        <h2 style={{ fontSize: "22px", fontWeight: 800, letterSpacing: "-0.03em" }}>
+          Puzzle Archive
+        </h2>
+        <div
+          style={{
+            height: "4px",
+            width: "112px",
+            borderRadius: "999px",
+            marginTop: "6px",
+            background: RAINBOW_BAR,
+          }}
+        />
+      </div>
       <button
         onClick={() => navigate("/")}
-        className="text-xs hover:opacity-70 transition-opacity"
-        style={{ color: "hsl(var(--muted-foreground))" }}
+        className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-full transition-transform
+          hover:-translate-y-px active:scale-95"
+        style={{
+          padding: "9px 15px",
+          background: "hsl(var(--card))",
+          border: "1px solid hsl(var(--border))",
+          color: "#a855f7",
+          fontWeight: 700,
+          fontSize: "13px",
+          boxShadow: "0 2px 8px -3px rgba(60,40,110,0.18)",
+        }}
       >
-        ← Today's puzzle
+        <Calendar className="w-4 h-4" /> Today's puzzle
       </button>
     </div>
   );
@@ -398,54 +450,88 @@ export default function Archive() {
   );
 
   const calendarBlock = (
-    <div
-      className="px-6 py-5 sm:px-5"
-      style={{
-        position: "relative",
-        background: "hsl(var(--card))",
-        border: "1px solid hsl(var(--border))",
-        borderRadius: "16px",
-        width: "100%",
-        minHeight: "380px",
-      }}
-    >
-      {/* Calendar content — free for every signed-in player */}
-      <div>
+    <div style={{ position: "relative" }}>
+      {/* Soft rainbow glow behind the card */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: "-6px -2px",
+          zIndex: 0,
+          borderRadius: "34px",
+          filter: "blur(14px)",
+          background:
+            "radial-gradient(60% 55% at 50% 0%, rgba(168,85,247,0.16), transparent 70%)," +
+            "radial-gradient(70% 60% at 100% 60%, rgba(59,130,246,0.14), transparent 70%)," +
+            "radial-gradient(70% 60% at 0% 65%, rgba(239,68,68,0.10), transparent 70%)",
+        }}
+      />
+      <div
+        className="relative px-5 pt-5 pb-4"
+        style={{
+          zIndex: 1,
+          background: "hsl(var(--card))",
+          border: "1px solid hsl(var(--border))",
+          borderRadius: "24px",
+          width: "100%",
+          boxShadow: "0 18px 50px -20px rgba(60,40,110,0.28)",
+        }}
+      >
         {/* Month navigation */}
-        <div className="relative flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4">
           <button
             onClick={prevMonth}
             disabled={!canGoBack}
-            className="p-1.5 rounded-lg transition-colors hover:bg-secondary disabled:opacity-30"
+            className="grid place-items-center transition-transform hover:scale-105 disabled:opacity-30
+              disabled:hover:scale-100"
+            style={{
+              width: "42px",
+              height: "42px",
+              borderRadius: "14px",
+              background: "hsl(var(--card))",
+              border: "1px solid hsl(var(--border))",
+              color: "#a855f7",
+              boxShadow: "0 2px 6px -3px rgba(60,40,110,0.25)",
+            }}
             aria-label="Previous month"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-5 h-5" />
           </button>
-          <p style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", fontSize: "14px", fontWeight: 600, letterSpacing: "0.01em", whiteSpace: "nowrap" }}>
+          <p style={{ fontSize: "21px", fontWeight: 800, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
             {MONTHS[viewMonth]} {viewYear}
           </p>
           <button
             onClick={nextMonth}
             disabled={!canGoForward}
-            className="p-1.5 rounded-lg transition-colors hover:bg-secondary disabled:opacity-30"
+            className="grid place-items-center transition-transform hover:scale-105 disabled:opacity-30
+              disabled:hover:scale-100"
+            style={{
+              width: "42px",
+              height: "42px",
+              borderRadius: "14px",
+              background: "hsl(var(--card))",
+              border: "1px solid hsl(var(--border))",
+              color: "#a855f7",
+              boxShadow: "0 2px 6px -3px rgba(60,40,110,0.25)",
+            }}
             aria-label="Next month"
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Day headers */}
+        {/* Day headers — color-coded across the rainbow */}
         <div className="grid grid-cols-7 mb-1">
-          {DAYS.map((d) => (
+          {DAYS.map((d, idx) => (
             <div
               key={d}
               className="text-center py-1"
               style={{
                 fontSize: "11px",
-                fontWeight: 600,
-                letterSpacing: "0.06em",
+                fontWeight: 800,
+                letterSpacing: "0.07em",
                 textTransform: "uppercase",
-                color: "hsl(var(--muted-foreground))",
+                color: WEEKDAY_COLORS[idx],
               }}
             >
               {d}
@@ -472,68 +558,89 @@ export default function Archive() {
                 key={i}
                 onClick={() => handleDayClick(dateStr)}
                 disabled={!isClickable}
-                className="relative w-full flex flex-col items-center rounded-lg transition-all duration-150"
+                className={`relative w-full flex flex-col items-center justify-center transition-all duration-150
+                  ${isClickable ? "hover:-translate-y-px hover:shadow-md" : ""}`}
                 style={{
                   aspectRatio: "1",
-                  background:
-                    hasPuzzle && (isPast || isToday)
+                  borderRadius: "14px",
+                  gap: "4px",
+                  background: isToday
+                    ? "rgba(168,85,247,0.12)"
+                    : hasPuzzle && isPast
                       ? "hsl(var(--secondary))"
                       : "transparent",
-                  border:
-                    hasPuzzle && (isPast || isToday)
+                  border: isToday
+                    ? "1px solid rgba(168,85,247,0.5)"
+                    : hasPuzzle && isPast
                       ? "1px solid hsl(var(--border))"
                       : "1px solid transparent",
                   cursor: isClickable ? "pointer" : "default",
-                  opacity: !isPast && !isToday ? 0.3 : 1,
-                  paddingTop: "5px",
-                  paddingBottom: "4px",
-                  gap: "3px",
-                }}
-                onMouseEnter={(e) => {
-                  if (isClickable)
-                    (e.currentTarget as HTMLElement).style.background =
-                      "hsl(var(--secondary)/0.8)";
-                }}
-                onMouseLeave={(e) => {
-                  if (isClickable)
-                    (e.currentTarget as HTMLElement).style.background =
-                      "hsl(var(--secondary))";
+                  opacity: !isPast && !isToday ? 0.4 : 1,
                 }}
               >
                 <span
                   style={{
-                    fontSize: "14px",
-                    fontWeight: isToday ? 700 : 600,
+                    fontSize: "16px",
+                    fontWeight: isToday ? 800 : 600,
+                    fontVariantNumeric: "tabular-nums",
                     color: "hsl(var(--foreground))",
                     lineHeight: 1,
                   }}
                 >
                   {dayNum}
                 </span>
-                {result ? (
-                  <StarIcon
-                    size={22}
-                    fill={result.won ? "#f59e0b" : "none"}
-                    stroke={result.won ? "#f59e0b" : "hsl(var(--muted-foreground))"}
-                  />
-                ) : (
-                  <div />
-                )}
+                {/* Won = gold star · Played = purple dot · else keep the row height */}
+                <span style={{ height: "15px", display: "flex", alignItems: "center" }}>
+                  {result ? (
+                    result.won ? (
+                      <StarIcon size={15} fill="#eab308" stroke="#eab308" />
+                    ) : (
+                      <span
+                        style={{
+                          width: "7px",
+                          height: "7px",
+                          borderRadius: "999px",
+                          background: "#a855f7",
+                        }}
+                      />
+                    )
+                  ) : null}
+                </span>
               </button>
             );
           })}
         </div>
 
-        {/* Legend */}
-        <div className="flex items-center gap-4 mt-4 justify-center">
-          <div className="flex items-center gap-1.5">
-            <StarIcon size={13} fill="#f59e0b" stroke="#f59e0b" />
-            <span style={{ fontSize: "11px", color: "hsl(var(--muted-foreground))" }}>Won</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <StarIcon size={13} />
-            <span style={{ fontSize: "11px", color: "hsl(var(--muted-foreground))" }}>Played</span>
-          </div>
+        {/* Legend — pills */}
+        <div className="flex items-center gap-2.5 mt-4 justify-center">
+          <span
+            className="inline-flex items-center gap-1.5"
+            style={{
+              padding: "6px 13px",
+              borderRadius: "999px",
+              background: "hsl(var(--secondary))",
+              border: "1px solid hsl(var(--border))",
+              fontSize: "12.5px",
+              fontWeight: 600,
+              color: "hsl(var(--muted-foreground))",
+            }}
+          >
+            <StarIcon size={14} fill="#eab308" stroke="#eab308" /> Won
+          </span>
+          <span
+            className="inline-flex items-center gap-1.5"
+            style={{
+              padding: "6px 13px",
+              borderRadius: "999px",
+              background: "hsl(var(--secondary))",
+              border: "1px solid hsl(var(--border))",
+              fontSize: "12.5px",
+              fontWeight: 600,
+              color: "hsl(var(--muted-foreground))",
+            }}
+          >
+            <span style={{ width: "9px", height: "9px", borderRadius: "999px", background: "#a855f7" }} /> Played
+          </span>
         </div>
       </div>
     </div>
