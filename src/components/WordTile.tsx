@@ -67,8 +67,12 @@ function computeShrunkFontSize(longestWord: string, availableWidthPx: number): s
   const upper = longestWord.toUpperCase();
   const letterSpacingPx = defaultPx * 0.025; // matches tracking-wide
   const rawWidth = ctx.measureText(upper).width + letterSpacingPx * Math.max(countVisibleChars(upper) - 1, 0);
-  if (rawWidth <= availableWidthPx) return undefined;
-  const shrunkPx = Math.max((availableWidthPx / rawWidth) * defaultPx * 0.96, 8);
+  // Leave a comfort margin inside the tile so a borderline word (e.g.
+  // "CONDITIONING") shrinks slightly rather than rendering edge-to-edge
+  // against the border. Also absorbs sub-pixel canvas-vs-layout differences.
+  const target = availableWidthPx * 0.92;
+  if (rawWidth <= target) return undefined;
+  const shrunkPx = Math.max((target / rawWidth) * defaultPx, 8);
   return `${shrunkPx}px`;
 }
 
