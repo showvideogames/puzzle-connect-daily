@@ -8,8 +8,7 @@ import { SettingsModal } from "@/components/SettingsModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SEO } from "@/components/SEO";
-import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
-import { PlayerAuth } from "@/components/PlayerAuth";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { playGiftOpenSound } from "@/lib/sounds";
 import confetti from "canvas-confetti";
@@ -210,7 +209,6 @@ function FreePuzzlesSection({
 export default function Archive() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
-  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [puzzles, setPuzzles] = useState<ArchivePuzzle[]>([]);
   const [results, setResults] = useState<GameResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -248,30 +246,30 @@ export default function Archive() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Archive access + puzzles (requires login)
+  // Archive puzzles — free and open to everyone, no login required.
   useEffect(() => {
-    if (!user) {
-      setHasAccess(null);
-      setPuzzles([]);
-      setLoading(false);
-      return;
-    }
-
     async function load() {
       setLoading(true);
-      const { data: access } = await supabase.rpc("has_archive_access", { _user_id: user!.id });
-      setHasAccess(!!access);
 
-      if (access) {
-        const { data: archiveData } = await supabase.rpc("get_archive_puzzles");
-        setPuzzles((archiveData as ArchivePuzzle[]) || []);
+      // Published puzzles are publicly readable, so this works logged out too.
+      const { data: archiveData } = await supabase
+        .from("puzzles")
+        .select("id, date, title")
+        .eq("is_published", true)
+        .order("date", { ascending: false });
+      setPuzzles((archiveData as ArchivePuzzle[]) || []);
 
+      // Personal progress stars only exist for signed-in players.
+      if (user) {
         const { data: resultData } = await supabase
           .from("game_results")
           .select("puzzle_id, won, mistakes")
-          .eq("user_id", user!.id);
+          .eq("user_id", user.id);
         setResults((resultData as GameResult[]) || []);
+      } else {
+        setResults([]);
       }
+
       setLoading(false);
     }
     load();
@@ -337,7 +335,7 @@ export default function Archive() {
   function handleDayClick(dateStr: string) {
     if (dateStr >= todayStr) return;
     const puzzle = puzzleByDate[dateStr];
-    if (!puzzle || !hasAccess) return;
+    if (!puzzle) return;
     navigate(`/archive/${puzzle.id}`);
   }
 
@@ -411,14 +409,8 @@ export default function Archive() {
         minHeight: "380px",
       }}
     >
-      {/* Calendar content — blurred for non-subscribers */}
-      <div
-        style={{
-          filter: hasAccess ? "none" : "blur(4px)",
-          pointerEvents: hasAccess ? "auto" : "none",
-          userSelect: hasAccess ? "auto" : "none",
-        }}
-      >
+      {/* Calendar content — free for every signed-in player */}
+      <div>
         {/* Month navigation */}
         <div className="relative flex items-center justify-between mb-4">
           <button
@@ -473,7 +465,7 @@ export default function Archive() {
             const puzzle = puzzleByDate[dateStr];
             const result = puzzle ? resultByPuzzleId[puzzle.id] : null;
             const hasPuzzle = !!puzzle;
-            const isClickable = isPast && hasPuzzle && !!hasAccess;
+            const isClickable = isPast && hasPuzzle;
 
             return (
               <button
@@ -544,103 +536,8 @@ export default function Archive() {
           </div>
         </div>
       </div>
-
-      {/* Upgrade overlay — shown over blurred calendar for non-subscribers */}
-      {!hasAccess && (
-        <div
-          className="absolute inset-0 flex items-center justify-center rounded-2xl"
-          style={{ background: "rgba(0,0,0,0.04)" }}
-        >
-          <div
-            className="text-center rounded-2xl px-6 py-6 shadow-xl mx-4"
-            style={{
-              background: "hsl(var(--card))",
-              border: "1px solid hsl(var(--border))",
-              maxWidth: "280px",
-              width: "100%",
-            }}
-          >
-            <Lock className="w-6 h-6 mx-auto mb-3" style={{ color: "hsl(var(--foreground))" }} />
-            <p style={{ fontSize: "15px", fontWeight: 700, marginBottom: "6px" }}>
-              Archive Access
-            </p>
-            <p
-              style={{
-                fontSize: "13px",
-                color: "hsl(var(--muted-foreground))",
-                marginBottom: "16px",
-                lineHeight: 1.5,
-              }}
-            >
-              {displayCount > 0
-                ? `Subscribe for $2/month to get access to ${displayCount}+ puzzles`
-                : "Subscribe to unlock every past puzzle."}
-            </p>
-            <button
-              className="w-full py-2.5 rounded-full text-sm font-semibold transition-opacity hover:opacity-90 active:scale-95"
-              style={{
-                background: "hsl(var(--foreground))",
-                color: "hsl(var(--background))",
-              }}
-              onClick={() => {/* Stripe flow — coming soon */}}
-            >
-              Subscribe
-            </button>
-            <p
-              style={{
-                fontSize: "11px",
-                color: "hsl(var(--muted-foreground))",
-                marginTop: "10px",
-              }}
-            >
-              Already have access?{" "}
-              <button
-                style={{ textDecoration: "underline", textUnderlineOffset: "2px" }}
-                onClick={() =>
-                  supabase.auth.signOut().then(() => window.location.reload())
-                }
-              >
-                Sign out and back in
-              </button>
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
-
-  // ── Not logged in ─────────────────────────────────────────────────────────
-  if (!user) {
-    return (
-      <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
-        {pageHeader}
-        <div className="w-full max-w-lg px-4">
-          {titleRow}
-          {/* Free puzzles always visible, even when logged out */}
-          <FreePuzzlesSection
-            freePuzzles={freePuzzles}
-            openedOrders={openedOrders}
-            onOpen={handleBoxOpen}
-          />
-        </div>
-        {/* Auth prompt */}
-        <div className="flex-1 flex items-center justify-center px-4 w-full">
-          <div className="text-center space-y-4 max-w-sm">
-            <Lock
-              className="w-8 h-8 mx-auto"
-              style={{ color: "hsl(var(--muted-foreground))" }}
-            />
-            <h2 className="text-lg font-bold">Puzzle Archive</h2>
-            <p className="text-sm" style={{ color: "hsl(var(--muted-foreground))" }}>
-              Sign in to access the archive of past puzzles.
-            </p>
-            <PlayerAuth user={null} onSignOut={() => {}} />
-          </div>
-        </div>
-        {modals}
-      </div>
-    );
-  }
 
   if (loading) {
     return (
@@ -659,30 +556,16 @@ export default function Archive() {
       <div className="w-full max-w-lg px-4">
         {titleRow}
 
-        {hasAccess ? (
-          // Subscriber: calendar first, free puzzles below
-          <>
-            {calendarBlock}
-            {freePuzzles.length > 0 && (
-              <div className="mt-8">
-                <FreePuzzlesSection
-                  freePuzzles={freePuzzles}
-                  openedOrders={openedOrders}
-                  onOpen={handleBoxOpen}
-                />
-              </div>
-            )}
-          </>
-        ) : (
-          // Non-subscriber: free puzzles first, blurred calendar below
-          <>
+        {/* Calendar first, free puzzles below — full archive is free for all */}
+        {calendarBlock}
+        {freePuzzles.length > 0 && (
+          <div className="mt-8">
             <FreePuzzlesSection
               freePuzzles={freePuzzles}
               openedOrders={openedOrders}
               onOpen={handleBoxOpen}
             />
-            {calendarBlock}
-          </>
+          </div>
         )}
       </div>
       {modals}
