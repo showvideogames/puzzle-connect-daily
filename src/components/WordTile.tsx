@@ -277,7 +277,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
 
   const isRightEdge = column === 4;
 
-  const baseClasses = `tile-base min-h-16 font-semibold rounded-[20px] transition-all duration-150 ease-out relative
+  const baseClasses = `tile-base aspect-square font-semibold rounded-[20px] transition-all duration-150 ease-out relative
     ${disabled ? "opacity-50 cursor-default" : ""}
   `;
 
@@ -315,7 +315,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         onDragStart={() => onDragStart?.(word)}
         onDragOver={(e) => { e.preventDefault(); onDragOver?.(word); }}
         onDrop={onDrop}
-        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "" : "text-xs sm:text-sm"}`}
+        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "!p-2" : "text-xs sm:text-sm"}`}
         style={{
           ...(emojiFontSize ? { fontSize: emojiFontSize } : {}),
           ...(themedRainbow ? { background: rainbowGradient, textShadow: rainbowTextShadow } : {}),
@@ -327,10 +327,12 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
             alt={customEmojiName(word) ?? ""}
             draggable={false}
             style={{
-              maxHeight: "48px",
-              maxWidth: "100%",
-              width: "auto",
-              height: "auto",
+              // Fill the square tile uniformly: any image — large or small —
+              // is scaled to the same bounding box (contain preserves aspect
+              // ratio), so a tiny image scales UP to match the rest rather
+              // than rendering smaller than its neighbours.
+              width: "100%",
+              height: "100%",
               objectFit: "contain",
               display: "block",
               margin: "0 auto",
