@@ -330,11 +330,9 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
               // Fill the square tile uniformly: any image — large or small —
               // is scaled to the same bounding box (contain preserves aspect
               // ratio), so a tiny image scales UP to match the rest rather
-              // than rendering smaller than its neighbours. Sized to ~80% of
-              // the tile (not 100%) so custom-emoji images sit in line with
-              // the standard unicode emojis rather than dominating the tile.
-              width: "80%",
-              height: "80%",
+              // than rendering smaller than its neighbours.
+              width: "100%",
+              height: "100%",
               objectFit: "contain",
               display: "block",
               margin: "0 auto",
