@@ -21,17 +21,19 @@ export function MistakeDots({ mistakes, max }: MistakeDotsProps) {
       <span className="sr-only" role="status">
         {`${remaining} of ${max} mistakes remaining`}
       </span>
-      {Array.from({ length: max }).map((_, i) => (
-        <div
-          key={i}
-          aria-hidden="true"
-          className={`w-6 h-2.5 rounded-full transition-colors duration-300 ${
-            i < remaining
-              ? `bg-ink ${LEGACY_DARK_COLORS[i] ?? "dark:bg-foreground"}`
-              : "bg-tile-selected dark:bg-muted"
-          }`}
-        />
-      ))}
+      <div className="flex items-center gap-2">
+        {Array.from({ length: max }).map((_, i) => (
+          <div
+            key={i}
+            aria-hidden="true"
+            className={`w-[14px] h-[14px] shrink-0 aspect-square rounded-full transition-colors duration-300 ${
+              i < remaining
+                ? `bg-ink ${LEGACY_DARK_COLORS[i] ?? "dark:bg-foreground"}`
+                : "bg-tile-selected dark:bg-muted"
+            }`}
+          />
+        ))}
+      </div>
     </div>
   );
 }

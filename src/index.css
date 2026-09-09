@@ -166,7 +166,7 @@ html {
 
 @layer utilities {
   .tile-base {
-    @apply rounded-[clamp(11px,1.2vw,14px)] font-semibold text-sm uppercase tracking-wide
+    @apply rounded-[clamp(11px,1.2vw,14px)] font-bold text-sm uppercase tracking-wide
       cursor-pointer select-none transition-all duration-200 ease-out
       flex items-center justify-center text-center px-2 py-4;
   }
