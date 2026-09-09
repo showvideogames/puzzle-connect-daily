@@ -8,7 +8,7 @@ import { DailyStatsModal } from "./DailyStatsModal";
 import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
-import { Shuffle, Send, X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2 } from "lucide-react";
+import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2 } from "lucide-react";
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useImagePreload } from "@/hooks/useImagePreload";
@@ -245,13 +245,19 @@ interface GameBoardProps {
   user?: User | null;
   clearColorsTrigger?: number;
   isArchive?: boolean;
+  // "dailyHomepage" is an explicit, dedicated signal for the redesigned daily
+  // homepage layout (hides the intro subtitle/sparkles, widens the board) —
+  // deliberately separate from `isArchive` so it can never be conflated with
+  // "is this an archive page" for FreePuzzle or any future route.
+  variant?: "default" | "dailyHomepage";
   smallHintUsed?: boolean;
   fullHintUsed?: boolean;
   onHintClick?: () => void;
   onComplete?: () => void;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete }: GameBoardProps) {
+  const isDailyHomepage = variant === "dailyHomepage";
   const showRainbow = settings?.showRainbowColors ?? true;
   const arrangeTiles = settings?.arrangeTiles ?? false;
   const colorCodeTiles = settings?.colorCodeTiles ?? false;
@@ -808,17 +814,19 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   return (
     <>
       {!imagesReady ? (
-        <div className="w-full max-w-lg mx-auto px-2 flex flex-col items-center justify-center py-20">
+        <div className={`w-full mx-auto flex flex-col items-center justify-center py-20 ${isDailyHomepage ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-    <div className="w-full max-w-lg mx-auto px-2 animate-fade-up">
-      <div className="flex items-center justify-center gap-2 mb-4">
-        <p className="text-center text-sm text-muted-foreground">
-          Find four groups of four and the hidden {theme.label}!
-        </p>
-        {!puzzle.rainbowHerring && <NoRainbowIndicator />}
-      </div>
+    <div className={`w-full mx-auto animate-fade-up ${isDailyHomepage ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
+      {!isDailyHomepage && (
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <p className="text-center text-sm text-muted-foreground">
+            Find four groups of four and the hidden {theme.label}!
+          </p>
+          {!puzzle.rainbowHerring && <NoRainbowIndicator />}
+        </div>
+      )}
 
       {/* Solved groups — rainbow is interleaved at the position it was actually
           found (boardSlots), not always pinned to the top */}
@@ -950,12 +958,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* Word grid */}
       {remainingWords.length > 0 && (
         <div className="relative">
-          {/* Decorative sparkles around the board */}
-          <span aria-hidden="true" className="pointer-events-none select-none absolute -top-2 -left-1 text-lg" style={{ color: "#a855f7", opacity: 0.4 }}>✦</span>
-          <span aria-hidden="true" className="pointer-events-none select-none absolute -top-3 right-2 text-sm" style={{ color: "#ec4899", opacity: 0.4 }}>✦</span>
-          <span aria-hidden="true" className="pointer-events-none select-none absolute bottom-1 -left-1 text-sm" style={{ color: "#3b82f6", opacity: 0.35 }}>✦</span>
-          <span aria-hidden="true" className="pointer-events-none select-none absolute -bottom-2 right-1 text-base" style={{ color: "#a855f7", opacity: 0.4 }}>✦</span>
-          <div className={`grid grid-cols-4 gap-2 ${shaking || spotShaking ? "animate-shake" : ""}`}>
+          {/* Decorative sparkles around the board — homepage-only intro flourish */}
+          {!isDailyHomepage && (
+            <>
+              <span aria-hidden="true" className="pointer-events-none select-none absolute -top-2 -left-1 text-lg" style={{ color: "#a855f7", opacity: 0.4 }}>✦</span>
+              <span aria-hidden="true" className="pointer-events-none select-none absolute -top-3 right-2 text-sm" style={{ color: "#ec4899", opacity: 0.4 }}>✦</span>
+              <span aria-hidden="true" className="pointer-events-none select-none absolute bottom-1 -left-1 text-sm" style={{ color: "#3b82f6", opacity: 0.35 }}>✦</span>
+              <span aria-hidden="true" className="pointer-events-none select-none absolute -bottom-2 right-1 text-base" style={{ color: "#a855f7", opacity: 0.4 }}>✦</span>
+            </>
+          )}
+          <div className={`grid grid-cols-4 gap-2 ${isDailyHomepage ? "md:gap-3" : ""} ${shaking || spotShaking ? "animate-shake" : ""}`}>
           {remainingWords.map((word, index) => {
             const isRevealingWord = reveal?.words.includes(word) ?? false;
             return (
@@ -1104,38 +1116,55 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           <button
             onClick={shuffle}
             disabled={isChecking || reveal !== null}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium
-              hover:bg-secondary transition-colors duration-150 active:scale-95
-              disabled:opacity-40 disabled:cursor-default"
+            className="px-4 py-3 rounded-full text-sm font-bold transition-colors
+              bg-action-secondary-bg text-action-secondary-fg
+              dark:bg-transparent dark:border dark:border-border dark:text-foreground
+              dark:hover:bg-secondary dark:active:scale-95 dark:disabled:opacity-40
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+              focus-visible:ring-offset-2 focus-visible:ring-offset-background
+              disabled:cursor-default"
           >
-            <Shuffle className="w-4 h-4" /> Shuffle
+            Shuffle
           </button>
           <button
             onClick={deselectAll}
             disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium
-              hover:bg-secondary transition-colors duration-150 active:scale-95
-              disabled:opacity-40 disabled:cursor-default"
+            className={`px-4 py-3 rounded-full text-sm font-bold transition-colors
+              dark:bg-transparent dark:border dark:border-border dark:text-foreground
+              dark:hover:bg-secondary dark:active:scale-95 dark:disabled:opacity-40
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+              focus-visible:ring-offset-2 focus-visible:ring-offset-background
+              disabled:cursor-default ${
+                state.selectedWords.length === 0
+                  ? "bg-disabled-bg text-disabled-fg"
+                  : "bg-action-secondary-bg text-action-secondary-fg"
+              }`}
           >
-            <X className="w-4 h-4" /> Deselect
+            Clear
           </button>
           <button
             onClick={submitGuess}
             disabled={state.selectedWords.length !== 4 || isChecking || reveal !== null}
-            className="flex items-center gap-1.5 px-5 py-2 rounded-full text-white text-sm font-semibold
-              transition-all duration-150 hover:-translate-y-px active:scale-95
-              disabled:opacity-40 disabled:cursor-default"
-            style={{
-              background: "linear-gradient(135deg, #a78bfa, #8b5cf6)",
-              boxShadow: "0 8px 20px -8px rgba(139,92,246,0.6)",
-            }}
+            className={`px-5 py-3 rounded-full text-sm font-bold transition-all
+              dark:bg-[linear-gradient(135deg,_#a78bfa,_#8b5cf6)] dark:text-white
+              dark:shadow-[0_8px_20px_-8px_rgba(139,92,246,0.6)]
+              dark:hover:-translate-y-px dark:active:scale-95 dark:disabled:opacity-40
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+              focus-visible:ring-offset-2 focus-visible:ring-offset-background
+              disabled:cursor-default ${
+                state.selectedWords.length === 4
+                  ? "bg-action-primary-bg text-action-primary-fg"
+                  : "bg-disabled-bg text-disabled-fg"
+              }`}
           >
-            <Send className="w-4 h-4" /> Submit
+            Submit
           </button>
           {(colorCodeTiles || colorPaletteMode) && hasAnyColor && (
             <button
               onClick={clearAllColors}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border
+                bg-action-secondary-bg text-action-secondary-fg text-sm font-medium
+                dark:bg-transparent
                 hover:bg-secondary transition-colors duration-150 active:scale-95"
             >
               <Eraser className="w-4 h-4" /> Clear Colors

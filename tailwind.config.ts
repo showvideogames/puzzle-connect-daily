@@ -14,7 +14,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["DM Sans", "system-ui", "sans-serif"],
+        sans: ["Nunito Sans Variable", "Nunito Sans", "system-ui", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -54,6 +54,22 @@ export default {
           DEFAULT: "hsl(var(--tile))",
           selected: "hsl(var(--tile-selected))",
           "selected-fg": "hsl(var(--tile-selected-fg))",
+          bg: "hsl(var(--tile-bg))",
+          border: "hsl(var(--tile-border))",
+        },
+        ink: "hsl(var(--ink))",
+        slate: "hsl(var(--slate))",
+        pebble: "hsl(var(--pebble))",
+        divider: "hsl(var(--divider))",
+        action: {
+          "primary-bg": "hsl(var(--action-primary-bg))",
+          "primary-fg": "hsl(var(--action-primary-fg))",
+          "secondary-bg": "hsl(var(--action-secondary-bg))",
+          "secondary-fg": "hsl(var(--action-secondary-fg))",
+        },
+        disabled: {
+          bg: "hsl(var(--disabled-bg))",
+          fg: "hsl(var(--disabled-fg))",
         },
         group: {
           1: "hsl(var(--group-1))",

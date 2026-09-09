@@ -6,6 +6,10 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { GameSettings } from "@/lib/settings";
+import { Link } from "react-router-dom";
+import { BookOpen, Archive as ArchiveIcon } from "lucide-react";
+import { PlayerAuth } from "./PlayerAuth";
+import type { User as AuthUser } from "@supabase/supabase-js";
 
 interface SettingsModalProps {
   open: boolean;
@@ -13,9 +17,17 @@ interface SettingsModalProps {
   settings: GameSettings;
   onSettingsChange: (settings: GameSettings) => void;
   onOpenFeedback?: () => void;
+  // Daily-homepage-only: shows a "Menu" section (How to Play / Puzzle Archive
+  // / Account) since the homepage header drops those icons down to just 3.
+  // Left undefined/false everywhere else so archive's Settings modal is
+  // unchanged.
+  showMenuLinks?: boolean;
+  onHowToPlayClick?: () => void;
+  user?: AuthUser | null;
+  onSignOut?: () => void;
 }
 
-export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback }: SettingsModalProps) {
+export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback, showMenuLinks = false, onHowToPlayClick, user = null, onSignOut }: SettingsModalProps) {
   const items = [
     {
       label: "Dark Mode",
@@ -62,6 +74,34 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
           <DialogTitle className="text-lg font-bold">Settings</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-2">
+          {showMenuLinks && (
+            <div className="space-y-1 pb-4 border-b border-border">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate px-1 pb-1">Menu</p>
+              <button
+                onClick={() => { onClose(); onHowToPlayClick?.(); }}
+                className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
+                  hover:bg-secondary transition-colors active:scale-95"
+              >
+                <BookOpen className="w-4 h-4 text-slate" />
+                How to Play
+              </button>
+              <Link
+                to="/archive"
+                onClick={onClose}
+                className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
+                  hover:bg-secondary transition-colors active:scale-95"
+              >
+                <ArchiveIcon className="w-4 h-4 text-slate" />
+                Puzzle Archive
+              </Link>
+              <div className="flex items-center gap-3 px-2 py-1.5">
+                <PlayerAuth user={user} onSignOut={onSignOut ?? (() => {})} />
+                <span className="text-sm font-medium text-foreground">
+                  {user ? "Account" : "Sign In"}
+                </span>
+              </div>
+            </div>
+          )}
           {items.map((item) => (
             <label key={item.key} className="flex items-center justify-between gap-3 cursor-pointer">
               <div>

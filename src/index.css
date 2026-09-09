@@ -1,7 +1,4 @@
-@import url('@fontsource/dm-sans/400.css');
-@import url('@fontsource/dm-sans/500.css');
-@import url('@fontsource/dm-sans/600.css');
-@import url('@fontsource/dm-sans/700.css');
+@import url('@fontsource-variable/nunito-sans/standard.css');
 
 @tailwind base;
 @tailwind components;
@@ -13,7 +10,7 @@ html {
 
 @layer base {
   :root {
-    --background: 40 33% 96%;
+    --background: 43 41% 97%;
     --foreground: 30 10% 15%;
 
     --card: 40 30% 98%;
@@ -43,20 +40,35 @@ html {
 
     --radius: 0.75rem;
 
-    /* Puzzle group colors — easiest to hardest: yellow, green, light blue, pink */
-    --group-1: 50 90% 68%;
+    /* Puzzle group colors — official category colors (Yellow/Green/Blue/Red) */
+    --group-1: 48 89% 69%;
     --group-1-fg: 50 80% 18%;
-    --group-2: 130 45% 58%;
+    --group-2: 125 38% 67%;
     --group-2-fg: 130 50% 14%;
-    --group-3: 200 75% 68%;
+    --group-3: 203 59% 68%;
     --group-3-fg: 200 70% 18%;
-    --group-4: 0 75% 72%;
+    --group-4: 5 74% 67%;
     --group-4-fg: 0 70% 20%;
 
     /* Tile colors */
     --tile: 36 18% 88%;
-    --tile-selected: 30 10% 22%;
-    --tile-selected-fg: 40 33% 96%;
+    --tile-selected: 42 11% 83%;
+    --tile-selected-fg: 45 5% 15%;
+
+    /* Redesign: neutral palette (light mode only — dark mode gets defensive
+       aliases to existing dark tokens further below, not a new dark palette) */
+    --ink: 45 5% 15%;
+    --slate: 43 4% 38%;
+    --pebble: 42 4% 53%;
+    --tile-bg: 40 100% 99%;
+    --tile-border: 40 18% 87%;
+    --divider: 38 24% 91%;
+    --action-primary-bg: 45 5% 15%;
+    --action-primary-fg: 40 100% 99%;
+    --action-secondary-bg: 42 22% 91%;
+    --action-secondary-fg: 45 5% 15%;
+    --disabled-bg: 42 22% 91%;
+    --disabled-fg: 42 5% 58%;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -111,6 +123,25 @@ html {
     --tile-selected: 40 15% 85%;
     --tile-selected-fg: 220 15% 10%;
 
+    /* Redesign tokens: dark mode must render exactly as it did before this
+       redesign, so these are NOT a new dark palette — each one aliases an
+       existing, already-correct dark token as a defensive fallback. The
+       handful of components whose old dark look needs more precision than a
+       generic alias (mistake dots, Shuffle/Clear, Submit) get explicit
+       `dark:`-prefixed overrides at the component level instead. */
+    --ink: var(--foreground);
+    --slate: var(--muted-foreground);
+    --pebble: var(--muted-foreground);
+    --tile-bg: var(--tile);
+    --tile-border: var(--border);
+    --divider: var(--border);
+    --action-primary-bg: var(--primary);
+    --action-primary-fg: var(--primary-foreground);
+    --action-secondary-bg: var(--secondary);
+    --action-secondary-fg: var(--secondary-foreground);
+    --disabled-bg: var(--muted);
+    --disabled-fg: var(--muted-foreground);
+
     --sidebar-background: 220 15% 10%;
     --sidebar-foreground: 40 15% 90%;
     --sidebar-primary: 40 15% 90%;
@@ -128,34 +159,25 @@ html {
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'DM Sans', system-ui, sans-serif;
+    font-family: 'Nunito Sans Variable', 'Nunito Sans', system-ui, sans-serif;
     overflow-x: hidden;
   }
 }
 
 @layer utilities {
   .tile-base {
-    @apply rounded-[20px] font-semibold text-sm uppercase tracking-wide
+    @apply rounded-[clamp(11px,1.2vw,14px)] font-semibold text-sm uppercase tracking-wide
       cursor-pointer select-none transition-all duration-200 ease-out
       flex items-center justify-center text-center px-2 py-4;
   }
 
-  /* Soft "cloud-card" look for unselected word tiles — warm cream in light,
-     warm charcoal in dark. Layered low-opacity shadows + a top inset
-     highlight, restrained (not glossy/neumorphic). */
+  /* Flat "card" look for unselected word tiles (light mode only — dark mode
+     keeps its own separate rules below, untouched by this redesign). */
   .cloud-tile {
-    background: linear-gradient(145deg, rgba(255,255,255,0.96), rgba(250,247,240,0.92));
-    border: 1px solid rgba(225,215,200,0.65);
-    color: #171b50;
-    box-shadow: 0 10px 24px rgba(90,70,45,0.07), 0 3px 8px rgba(90,70,45,0.04), inset 0 1px 0 rgba(255,255,255,0.9);
-  }
-  .cloud-tile:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 14px 30px rgba(90,70,45,0.10), 0 5px 10px rgba(90,70,45,0.05), inset 0 1px 0 rgba(255,255,255,0.95);
-  }
-  .cloud-tile:active {
-    transform: translateY(1px) scale(0.99);
-    box-shadow: 0 5px 12px rgba(90,70,45,0.06), inset 0 2px 5px rgba(90,70,45,0.05);
+    background: hsl(var(--tile-bg));
+    border: 1px solid hsl(var(--tile-border));
+    color: hsl(var(--ink));
+    box-shadow: none;
   }
   .dark .cloud-tile {
     background: linear-gradient(145deg, #2c2933, #232029);

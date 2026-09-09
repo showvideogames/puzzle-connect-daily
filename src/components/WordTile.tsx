@@ -63,7 +63,7 @@ function computeShrunkFontSize(longestWord: string, availableWidthPx: number): s
   // Matches the text-xs / sm:text-sm classes applied by default.
   const defaultPx = window.innerWidth >= 640 ? 14 : 12;
   const ctx = getMeasureCtx();
-  ctx.font = `600 ${defaultPx}px "DM Sans", system-ui, sans-serif`;
+  ctx.font = `600 ${defaultPx}px "Nunito Sans Variable", "Nunito Sans", system-ui, sans-serif`;
   const upper = longestWord.toUpperCase();
   const letterSpacingPx = defaultPx * 0.025; // matches tracking-wide
   const rawWidth = ctx.measureText(upper).width + letterSpacingPx * Math.max(countVisibleChars(upper) - 1, 0);
@@ -175,12 +175,12 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
     measure();
     window.addEventListener("resize", measure);
 
-    // The canvas ruler in computeShrunkFontSize measures with "DM Sans", which
-    // is a web font that loads asynchronously. If the first measure() runs
-    // before it finishes downloading, the ruler falls back to a (usually
+    // The canvas ruler in computeShrunkFontSize measures with "Nunito Sans",
+    // which is a web font that loads asynchronously. If the first measure()
+    // runs before it finishes downloading, the ruler falls back to a (usually
     // narrower) system font, underestimates the real width, and the word can
-    // overflow once DM Sans swaps in. Re-measure once fonts are ready so the
-    // shrink is computed against the font that actually renders.
+    // overflow once Nunito Sans swaps in. Re-measure once fonts are ready so
+    // the shrink is computed against the font that actually renders.
     let cancelled = false;
     if (typeof document !== "undefined" && document.fonts?.ready) {
       document.fonts.ready.then(() => {
@@ -277,13 +277,15 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
 
   const isRightEdge = column === 4;
 
-  const baseClasses = `tile-base aspect-[5/4] font-semibold rounded-[20px] transition-all duration-150 ease-out relative
+  // Height is independent of width now (width comes purely from the grid
+  // column): tiles are wider than tall by design, not a fixed aspect ratio.
+  const baseClasses = `tile-base h-[clamp(68px,10vw,110px)] font-semibold transition-all duration-150 ease-out relative
     ${disabled ? "opacity-50 cursor-default" : ""}
   `;
 
   // Selection styling:
   // - Rainbow/colored tiles: black border when selected, keep their color
-  // - Normal tiles: gray background only when selected (no border)
+  // - Normal tiles: flat pale background only when selected (no shadow/scale)
   const stateClasses = isMatched
     ? "bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
@@ -291,7 +293,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       : colorStyle
         ? `${colorStyle.bg} hover:shadow-sm active:scale-95 ${isSelected ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background scale-[0.97]" : ""}`
         : isSelected
-          ? "bg-tile-selected text-tile-selected-fg shadow-md scale-[0.97]"
+          ? "bg-tile-selected text-tile-selected-fg"
           : "cloud-tile";
 
   return (
@@ -311,11 +313,14 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         ref={buttonRef}
         onClick={handleClick}
         disabled={disabled}
+        aria-pressed={isSelected}
         draggable={arrangeTiles && draggable}
         onDragStart={() => onDragStart?.(word)}
         onDragOver={(e) => { e.preventDefault(); onDragOver?.(word); }}
         onDrop={onDrop}
-        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "!p-2" : "text-xs sm:text-sm"}`}
+        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "!p-2" : "text-xs sm:text-sm"}
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+          focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
         style={{
           ...(emojiFontSize ? { fontSize: emojiFontSize } : {}),
           ...(themedRainbow ? { background: rainbowGradient, textShadow: rainbowTextShadow } : {}),

@@ -235,8 +235,9 @@ export default function Index() {
         showHint={true}
         user={user}
         onSignOut={handleSignOut}
+        variant="minimal"
       />
-      <div className="w-full max-w-lg border-b border-border mb-4" />
+      <div className="w-full max-w-[840px] border-b border-divider mb-6" />
 
       {/* Silly goose toast — shown when hint tapped after puzzle complete */}
       {showSillyGoose && (
@@ -271,6 +272,7 @@ export default function Index() {
           fullHintUsed={fullHintUsed}
           onHintClick={handleHeaderHintClick}
           onComplete={() => setIsPuzzleComplete(true)}
+          variant="dailyHomepage"
         />
       ) : (
         <div className="flex-1 flex items-center justify-center text-center px-4">
@@ -292,6 +294,10 @@ export default function Index() {
         settings={settings}
         onSettingsChange={handleSettingsChange}
         onOpenFeedback={() => setActiveModal("feedback")}
+        showMenuLinks
+        onHowToPlayClick={() => openModal("help")}
+        user={user}
+        onSignOut={handleSignOut}
       />
       <FeedbackModal
         open={activeModal === "feedback"}
