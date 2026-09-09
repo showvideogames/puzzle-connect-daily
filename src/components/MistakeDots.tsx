@@ -29,7 +29,7 @@ export function MistakeDots({ mistakes, max }: MistakeDotsProps) {
             className={`w-[14px] h-[14px] shrink-0 aspect-square rounded-full transition-colors duration-300 ${
               i < remaining
                 ? `bg-ink ${LEGACY_DARK_COLORS[i] ?? "dark:bg-foreground"}`
-                : "bg-tile-selected dark:bg-muted"
+                : "bg-disabled-bg dark:bg-muted"
             }`}
           />
         ))}

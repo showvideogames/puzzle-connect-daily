@@ -52,8 +52,11 @@ html {
 
     /* Tile colors */
     --tile: 36 18% 88%;
-    --tile-selected: 42 11% 83%;
-    --tile-selected-fg: 45 5% 15%;
+    /* Selected tile inverts to near-black/white (same near-black as primary
+       text) rather than the earlier pale gray — aliased to --ink/
+       --action-primary-fg below so it always tracks those exactly. */
+    --tile-selected: var(--ink);
+    --tile-selected-fg: var(--action-primary-fg);
 
     /* Redesign: neutral palette (light mode only — dark mode gets defensive
        aliases to existing dark tokens further below, not a new dark palette) */
@@ -166,7 +169,10 @@ html {
 
 @layer utilities {
   .tile-base {
-    @apply rounded-[clamp(11px,1.2vw,14px)] font-bold text-sm uppercase tracking-wide
+    /* Font weight is set once, on the button element itself in WordTile.tsx
+       (font-[730]) — not here — so there's a single source of truth and no
+       risk of one class silently overriding the other. */
+    @apply rounded-[clamp(11px,1.2vw,14px)] text-sm uppercase tracking-wide
       cursor-pointer select-none transition-all duration-200 ease-out
       flex items-center justify-center text-center px-2 py-4;
   }
