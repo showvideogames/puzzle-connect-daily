@@ -63,7 +63,7 @@ function computeShrunkFontSize(longestWord: string, availableWidthPx: number): s
   // Matches the text-xs / sm:text-sm classes applied by default.
   const defaultPx = window.innerWidth >= 640 ? 14 : 12;
   const ctx = getMeasureCtx();
-  ctx.font = `730 ${defaultPx}px "Nunito Sans Variable", "Nunito Sans", system-ui, sans-serif`;
+  ctx.font = `850 ${defaultPx}px "Nunito Sans Variable", "Nunito Sans", system-ui, sans-serif`;
   const upper = longestWord.toUpperCase();
   const letterSpacingPx = defaultPx * 0.025; // matches tracking-wide
   const rawWidth = ctx.measureText(upper).width + letterSpacingPx * Math.max(countVisibleChars(upper) - 1, 0);
@@ -281,7 +281,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // column). Tuned to land close to square on real phone widths — roughly
   // 90px at 390px+, 84-86px at 375px, 78-82px at 320px — while still
   // reaching the previously-approved ~110px on tablet/desktop.
-  const baseClasses = `tile-base h-[clamp(72px,calc(34px_+_14.3vw),110px)] font-[730] transition-all duration-150 ease-out relative
+  const baseClasses = `tile-base h-[clamp(72px,calc(34px_+_14.3vw),110px)] font-[850] transition-all duration-150 ease-out relative
     ${disabled ? "opacity-50 cursor-default" : ""}
   `;
 
