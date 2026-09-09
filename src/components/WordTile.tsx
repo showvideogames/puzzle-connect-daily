@@ -63,7 +63,7 @@ function computeShrunkFontSize(longestWord: string, availableWidthPx: number): s
   // Matches the text-xs / sm:text-sm classes applied by default.
   const defaultPx = window.innerWidth >= 640 ? 14 : 12;
   const ctx = getMeasureCtx();
-  ctx.font = `850 ${defaultPx}px "Nunito Sans Variable", "Nunito Sans", system-ui, sans-serif`;
+  ctx.font = `800 ${defaultPx}px "Roboto Condensed Variable", "Roboto Condensed", sans-serif`;
   const upper = longestWord.toUpperCase();
   const letterSpacingPx = defaultPx * 0.025; // matches tracking-wide
   const rawWidth = ctx.measureText(upper).width + letterSpacingPx * Math.max(countVisibleChars(upper) - 1, 0);
@@ -175,12 +175,13 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
     measure();
     window.addEventListener("resize", measure);
 
-    // The canvas ruler in computeShrunkFontSize measures with "Nunito Sans",
-    // which is a web font that loads asynchronously. If the first measure()
-    // runs before it finishes downloading, the ruler falls back to a (usually
-    // narrower) system font, underestimates the real width, and the word can
-    // overflow once Nunito Sans swaps in. Re-measure once fonts are ready so
-    // the shrink is computed against the font that actually renders.
+    // The canvas ruler in computeShrunkFontSize measures with "Roboto
+    // Condensed", which is a web font that loads asynchronously. If the
+    // first measure() runs before it finishes downloading, the ruler falls
+    // back to a (usually wider, uncondensed) system font, overestimates the
+    // real width, and the word can shrink more than necessary until Roboto
+    // Condensed swaps in. Re-measure once fonts are ready so the shrink is
+    // computed against the font that actually renders.
     let cancelled = false;
     if (typeof document !== "undefined" && document.fonts?.ready) {
       document.fonts.ready.then(() => {
@@ -278,10 +279,12 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   const isRightEdge = column === 4;
 
   // Height is independent of width (width comes purely from the grid
-  // column). Tuned to land close to square on real phone widths — roughly
-  // 90px at 390px+, 84-86px at 375px, 78-82px at 320px — while still
-  // reaching the previously-approved ~110px on tablet/desktop.
-  const baseClasses = `tile-base h-[clamp(72px,calc(34px_+_14.3vw),110px)] font-[850] transition-all duration-150 ease-out relative
+  // column, via the grid's own gap — see GameBoard.tsx). Mobile clamp is
+  // tuned to ~85px @320, ~94px @375, ~96px @390, plateauing at 97px from
+  // there through larger phones — matching the reference mockup's tile
+  // proportions (wider than tall). Tablet/desktop (md:768px+) keep the
+  // previously-approved flat 110px, unchanged from before this pass.
+  const baseClasses = `tile-base font-tile h-[clamp(80px,calc(35px_+_15.7vw),97px)] md:h-[110px] font-[800] transition-all duration-150 ease-out relative
     ${disabled ? "opacity-50 cursor-default" : ""}
   `;
 

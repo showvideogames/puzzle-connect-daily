@@ -1,4 +1,7 @@
 @import url('@fontsource-variable/nunito-sans/standard.css');
+/* Registers the @font-face only — applied narrowly to puzzle-tile words via
+   the `font-tile` Tailwind class (WordTile.tsx), not globally. */
+@import url('@fontsource-variable/roboto-condensed/wght.css');
 
 @tailwind base;
 @tailwind components;

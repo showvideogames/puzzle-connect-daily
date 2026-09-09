@@ -967,7 +967,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               <span aria-hidden="true" className="pointer-events-none select-none absolute -bottom-2 right-1 text-base" style={{ color: "#a855f7", opacity: 0.4 }}>✦</span>
             </>
           )}
-          <div className={`grid grid-cols-4 gap-2 ${isDailyHomepage ? "md:gap-3" : ""} ${shaking || spotShaking ? "animate-shake" : ""}`}>
+          <div className={`grid grid-cols-4 gap-1.5 ${isDailyHomepage ? "md:gap-3" : ""} ${shaking || spotShaking ? "animate-shake" : ""}`}>
           {remainingWords.map((word, index) => {
             const isRevealingWord = reveal?.words.includes(word) ?? false;
             return (
