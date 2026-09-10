@@ -63,7 +63,7 @@ function computeShrunkFontSize(longestWord: string, availableWidthPx: number): s
   // Matches the text-xs / sm:text-sm classes applied by default.
   const defaultPx = window.innerWidth >= 640 ? 14 : 12;
   const ctx = getMeasureCtx();
-  ctx.font = `800 ${defaultPx}px "Roboto Condensed Variable", "Roboto Condensed", sans-serif`;
+  ctx.font = `800 ${defaultPx}px "Inter Tight Variable", "Inter Tight", sans-serif`;
   const upper = longestWord.toUpperCase();
   const letterSpacingPx = defaultPx * 0.025; // matches tracking-wide
   const rawWidth = ctx.measureText(upper).width + letterSpacingPx * Math.max(countVisibleChars(upper) - 1, 0);
@@ -175,12 +175,11 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
     measure();
     window.addEventListener("resize", measure);
 
-    // The canvas ruler in computeShrunkFontSize measures with "Roboto
-    // Condensed", which is a web font that loads asynchronously. If the
-    // first measure() runs before it finishes downloading, the ruler falls
-    // back to a (usually wider, uncondensed) system font, overestimates the
-    // real width, and the word can shrink more than necessary until Roboto
-    // Condensed swaps in. Re-measure once fonts are ready so the shrink is
+    // The canvas ruler in computeShrunkFontSize measures with "Inter
+    // Tight", which is a web font that loads asynchronously. If the first
+    // measure() runs before it finishes downloading, the ruler falls back
+    // to a differently-proportioned system font and can mis-estimate the
+    // real width. Re-measure once fonts are ready so the shrink is
     // computed against the font that actually renders.
     let cancelled = false;
     if (typeof document !== "undefined" && document.fonts?.ready) {
