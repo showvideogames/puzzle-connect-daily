@@ -883,8 +883,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 animate-rainbow-breathe animate-rainbow-shimmer"
               style={{ background: theme.gradient, textShadow: theme.textShadow }}
             >
-              <div className="font-bold text-sm uppercase tracking-wide">{theme.spotPrompt}</div>
-              <div className="text-xs mt-0.5 opacity-80">Find one word from each group</div>
+              <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">{theme.spotPrompt}</div>
+              <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-0.5 opacity-80">Find one word from each group</div>
             </button>
           ) : (
             <div
@@ -1266,19 +1266,22 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           <button
             onClick={() => setHistoryExpanded((v) => !v)}
             aria-expanded={historyExpanded}
-            className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-secondary/40 transition-colors"
+            className="relative w-full px-4 py-3 text-center hover:bg-secondary/40 transition-colors"
           >
-            <History className="w-4 h-4 text-muted-foreground shrink-0" />
-            <span className="flex-1 min-w-0">
-              <span className="block text-sm font-bold text-foreground">Guess History</span>
-              {historyExpanded && (
-                <span className="block text-xs text-muted-foreground mt-0.5">
-                  Shows only incorrect guesses.
-                </span>
-              )}
+            {/* Centered relative to the full card width — the chevron below
+                is positioned absolutely so it doesn't shift this group off
+                center. */}
+            <span className="flex items-center justify-center gap-2">
+              <History className="w-4 h-4 text-muted-foreground shrink-0" />
+              <span className="text-sm font-bold text-foreground">Guess History</span>
             </span>
+            {historyExpanded && (
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                Shows only incorrect guesses.
+              </span>
+            )}
             <ChevronDown
-              className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
+              className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
                 historyExpanded ? "rotate-180" : ""
               }`}
             />
