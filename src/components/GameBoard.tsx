@@ -1266,7 +1266,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           <button
             onClick={() => setHistoryExpanded((v) => !v)}
             aria-expanded={historyExpanded}
-            className="relative w-full px-4 py-3 text-center hover:bg-secondary/40 transition-colors"
+            className={`relative w-full px-4 pt-3 text-center hover:bg-secondary/40 transition-colors ${
+              historyExpanded ? "pb-2" : "pb-3"
+            }`}
           >
             {/* Centered relative to the full card width — the chevron below
                 is positioned absolutely so it doesn't shift this group off
@@ -1300,13 +1302,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                     : "Incorrect";
 
                 return (
-                  <div key={i} className="py-2.5 text-center first:pt-1 last:pb-0">
-                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">{label}</p>
-                    <div className="flex items-center justify-center flex-wrap gap-1.5">
+                  <div key={i} className="py-2 text-center first:pt-0 last:pb-0">
+                    <p className="text-xs font-semibold text-muted-foreground mb-1">{label}</p>
+                    {/* Equal-width 4-column grid, matching the Spot the Rainbow
+                        selection rows — cell width never varies with word
+                        length, and grid rows keep all four cells the same
+                        height even when one wraps to two lines. */}
+                    <div className="grid grid-cols-4 gap-1">
                       {sorted.map((w, j) => (
                         <span
                           key={`${w}-${j}`}
-                          className="inline-flex items-center justify-center min-w-[3.25rem] bg-secondary text-foreground rounded-full px-3 py-1 text-sm font-medium"
+                          className="flex items-center justify-center min-w-0 bg-secondary text-foreground rounded-md px-0.5 py-1.5 text-[11px] sm:text-xs md:text-sm font-medium text-center leading-tight"
                         >
                           {isCustomEmoji(w) ? (
                             <img
@@ -1316,7 +1322,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                               style={{ height: "18px", width: "auto", objectFit: "contain" }}
                             />
                           ) : (
-                            w
+                            // A nested min-w-0 element is required: without it,
+                            // a long unbroken word (e.g. "STRAWBERRY") keeps its
+                            // full intrinsic width as this flex item and simply
+                            // overflows the cell into its neighbor instead of
+                            // wrapping, even though the cell itself is sized
+                            // correctly by the grid.
+                            <span className="min-w-0 break-words">{w}</span>
                           )}
                         </span>
                       ))}
