@@ -55,25 +55,24 @@ function getLongestWord(word: string): string {
 }
 
 // Fluid base font-size for normal (non-emoji) tile text — mirrors the CSS
-// clamp() applied in the button's className below
-// (text-[clamp(9px,calc(3.5vw_-_1.5px),14px)]) so this JS-side measurement
-// always starts from the same size that's actually rendered at the current
-// viewport width, rather than a stale/mismatched breakpoint assumption.
-// Scales continuously with viewport width (no device breakpoints) so text
-// stays proportionate to the tile as it shrinks; the ceiling (14px) matches
-// what tablet/desktop already showed before this change.
-function getBaseFontSizePx(): number {
-  const vw = window.innerWidth / 100;
-  return Math.min(14, Math.max(9, 3.5 * vw - 1.5));
+// container-query clamp() applied in the button's className below
+// (text-[clamp(9px,15cqw,32px)], with [container-type:inline-size] on the
+// tile's own wrapper) so this JS-side measurement always starts from the
+// same size that's actually rendered. Deriving it from the TILE'S OWN
+// rendered width (not the viewport) is what keeps text-to-tile proportion
+// constant everywhere, including desktop — where the board's width
+// plateaus at a max-width independent of the viewport, so a viewport-based
+// formula would have kept text capped far below where it should be.
+function getBaseFontSizePx(tileOuterWidthPx: number): number {
+  return Math.min(32, Math.max(9, 0.15 * tileOuterWidthPx));
 }
 
 // Regular text tiles render at normal size and simply wrap to extra lines —
 // font-size only shrinks as a last resort, when the single longest word in
 // the phrase can't fit on its own line at normal size within the tile's
 // actual measured width. Words/phrases that already fit are left untouched.
-function computeShrunkFontSize(longestWord: string, availableWidthPx: number): string | undefined {
+function computeShrunkFontSize(longestWord: string, availableWidthPx: number, defaultPx: number): string | undefined {
   if (!longestWord || availableWidthPx <= 0) return undefined;
-  const defaultPx = getBaseFontSizePx();
   const ctx = getMeasureCtx();
   ctx.font = `800 ${defaultPx}px "Inter Tight Variable", "Inter Tight", sans-serif`;
   const upper = longestWord.toUpperCase();
@@ -180,8 +179,12 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       const cs = getComputedStyle(btn);
       const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
       const available = btn.clientWidth - padX;
+      // Outer (border-box) width — matches what the CSS container query on
+      // the wrapper actually sizes against, since the wrapper has no
+      // padding/border of its own.
+      const outerWidth = btn.getBoundingClientRect().width;
       const longest = getLongestWord(word);
-      setAutoFontSize(computeShrunkFontSize(longest, available));
+      setAutoFontSize(computeShrunkFontSize(longest, available, getBaseFontSizePx(outerWidth)));
     };
 
     measure();
@@ -323,7 +326,11 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       data-word={word}
       // The checking bounce lives on this wrapper (not the button) so its
       // transform doesn't fight the button's own scale/selection transforms.
-      className={`relative ${isChecking ? "animate-tile-checking" : ""}`}
+      // [container-type:inline-size] makes this wrapper's own rendered
+      // width available to the button's cqw-based font-size below, so text
+      // scales directly off the tile's actual size (mobile through
+      // desktop) rather than the viewport.
+      className={`relative [container-type:inline-size] ${isChecking ? "animate-tile-checking" : ""}`}
       style={{
         touchAction: arrangeTiles ? "none" : "manipulation",
         ...(hiddenForReveal ? { visibility: "hidden" as const } : {}),
@@ -339,7 +346,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         onDragStart={() => onDragStart?.(word)}
         onDragOver={(e) => { e.preventDefault(); onDragOver?.(word); }}
         onDrop={onDrop}
-        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "!p-2" : "text-[clamp(9px,calc(3.5vw_-_1.5px),14px)]"}
+        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "!p-2" : "text-[clamp(9px,15cqw,32px)]"}
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
           focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
         style={{

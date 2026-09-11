@@ -1379,6 +1379,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           open={showSpotModal}
           puzzle={puzzle}
           onResult={handleSpotResult}
+          onClose={() => setShowSpotModal(false)}
         />
       )}
     </div>
