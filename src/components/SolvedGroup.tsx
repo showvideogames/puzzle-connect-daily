@@ -46,10 +46,21 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
             : undefined
       }
     >
-      <div className="font-bold text-sm uppercase tracking-wide">{group.category}</div>
-      <div className="text-xs mt-0.5 opacity-80 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
+      {/* Category title is the payoff/reveal on each card — noticeably
+          larger and heavier than the answer line, and shares the puzzle
+          tile's typeface (Inter Tight) to visually connect the two. */}
+      <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
+        {group.category}
+      </div>
+      {/* Answers stay clearly secondary: smaller, lighter weight, and a
+          touch more breathing room below the title (~4px via mt-1). */}
+      <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-1 opacity-80 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
         {group.words.map((w, i) => (
-          <span key={`${w}-${i}`} className="inline-flex items-center">
+          <span key={`${w}-${i}`} className="inline-flex items-center gap-x-1">
+            {/* Middot separator between answers (not before the first one) —
+                its own flex item so the surrounding gap gives it even
+                spacing on both sides, e.g. "MOLE · FRECKLES · PIMPLE". */}
+            {i > 0 && <span aria-hidden="true">·</span>}
             {isCustomEmoji(w) ? (
               <img
                 src={customEmojiUrl(w)}
@@ -58,9 +69,8 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
                 style={{ height: "28px", width: "auto", objectFit: "contain" }}
               />
             ) : (
-              w
+              <span>{w}</span>
             )}
-            {i < group.words.length - 1 && <span>,</span>}
           </span>
         ))}
       </div>
