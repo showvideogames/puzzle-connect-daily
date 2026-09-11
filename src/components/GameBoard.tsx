@@ -171,11 +171,15 @@ function getResultHeadline(isWon: boolean, mistakes: number): string {
   return "Valiant effort 💪";
 }
 
+// Same typography/spacing/separator treatment as SolvedGroup's answer line
+// — the completed Rainbow category should read as the same component
+// family as the four main categories, differing only in background.
 function RainbowWordsRow({ words }: { words: string[] }) {
   return (
-    <div className="text-xs mt-0.5 opacity-90 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
+    <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-1 opacity-80 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
       {words.map((w, i) => (
-        <span key={`${w}-${i}`} className="inline-flex items-center">
+        <span key={`${w}-${i}`} className="inline-flex items-center gap-x-1">
+          {i > 0 && <span aria-hidden="true">·</span>}
           {isCustomEmoji(w) ? (
             <img
               src={customEmojiUrl(w)}
@@ -184,9 +188,8 @@ function RainbowWordsRow({ words }: { words: string[] }) {
               style={{ height: "28px", width: "auto", objectFit: "contain" }}
             />
           ) : (
-            w
+            <span>{w}</span>
           )}
-          {i < words.length - 1 && <span>,</span>}
         </span>
       ))}
     </div>
@@ -844,7 +847,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
               }}
             >
-              <div className="font-bold text-sm uppercase tracking-wide">
+              <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
                 {puzzle.rainbowCategoryName || theme.defaultCategoryName}
               </div>
               <RainbowWordsRow words={puzzle.rainbowHerring!} />
@@ -894,7 +897,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
               }}
             >
-              <div className="font-bold text-sm uppercase tracking-wide">
+              <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
                 {puzzle.rainbowCategoryName || theme.defaultCategoryName}
               </div>
               <RainbowWordsRow words={puzzle.rainbowHerring} />
