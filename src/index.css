@@ -181,10 +181,11 @@ html {
 
 @layer utilities {
   .tile-base {
-    /* Font weight is set once, on the button element itself in WordTile.tsx
-       (font-[730]) — not here — so there's a single source of truth and no
-       risk of one class silently overriding the other. */
-    @apply rounded-[clamp(11px,1.2vw,14px)] text-sm uppercase tracking-wide
+    /* Font weight AND size are set once, on the button element itself in
+       WordTile.tsx (font-[800], text-[clamp(...)]) — not here — so there's
+       a single source of truth and no risk of one class silently
+       overriding the other. */
+    @apply rounded-[clamp(11px,1.2vw,14px)] uppercase tracking-wide
       cursor-pointer select-none transition-all duration-200 ease-out
       flex items-center justify-center text-center px-2 py-4;
   }

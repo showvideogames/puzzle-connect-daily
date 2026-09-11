@@ -54,14 +54,26 @@ function getLongestWord(word: string): string {
   return parts.reduce((a, b) => (countVisibleChars(b) > countVisibleChars(a) ? b : a), parts[0] ?? "");
 }
 
+// Fluid base font-size for normal (non-emoji) tile text — mirrors the CSS
+// clamp() applied in the button's className below
+// (text-[clamp(9px,calc(3.5vw_-_1.5px),14px)]) so this JS-side measurement
+// always starts from the same size that's actually rendered at the current
+// viewport width, rather than a stale/mismatched breakpoint assumption.
+// Scales continuously with viewport width (no device breakpoints) so text
+// stays proportionate to the tile as it shrinks; the ceiling (14px) matches
+// what tablet/desktop already showed before this change.
+function getBaseFontSizePx(): number {
+  const vw = window.innerWidth / 100;
+  return Math.min(14, Math.max(9, 3.5 * vw - 1.5));
+}
+
 // Regular text tiles render at normal size and simply wrap to extra lines —
 // font-size only shrinks as a last resort, when the single longest word in
 // the phrase can't fit on its own line at normal size within the tile's
 // actual measured width. Words/phrases that already fit are left untouched.
 function computeShrunkFontSize(longestWord: string, availableWidthPx: number): string | undefined {
   if (!longestWord || availableWidthPx <= 0) return undefined;
-  // Matches the text-xs / sm:text-sm classes applied by default.
-  const defaultPx = window.innerWidth >= 640 ? 14 : 12;
+  const defaultPx = getBaseFontSizePx();
   const ctx = getMeasureCtx();
   ctx.font = `800 ${defaultPx}px "Inter Tight Variable", "Inter Tight", sans-serif`;
   const upper = longestWord.toUpperCase();
@@ -277,13 +289,16 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
 
   const isRightEdge = column === 4;
 
-  // Height is independent of width (width comes purely from the grid
-  // column, via the grid's own gap — see GameBoard.tsx). Mobile clamp is
-  // tuned to ~85px @320, ~94px @375, ~96px @390, plateauing at 97px from
-  // there through larger phones — matching the reference mockup's tile
-  // proportions (wider than tall). Tablet/desktop (md:768px+) keep the
-  // previously-approved flat 110px, unchanged from before this pass.
-  const baseClasses = `tile-base font-tile h-[clamp(80px,calc(35px_+_15.7vw),97px)] md:h-[110px] font-[800] transition-all duration-150 ease-out relative
+  // Mobile height is DERIVED from width via aspect-ratio (11:10, i.e. tiles
+  // are ~10% wider than tall) rather than an independently-tuned vw clamp —
+  // width already comes from the 4-column grid dividing up the available
+  // board width, so deriving height from it guarantees the same tile
+  // proportions at every mobile screen width instead of tiles getting
+  // progressively taller/narrower-looking as the screen shrinks. Tablet/
+  // desktop (md:768px+) keep the previously-approved flat 110px height,
+  // unchanged from before this pass (md:aspect-auto hands sizing back to
+  // that explicit height there).
+  const baseClasses = `tile-base font-tile aspect-[11/10] md:aspect-auto md:h-[110px] font-[800] transition-all duration-150 ease-out relative
     ${disabled ? "opacity-50 cursor-default" : ""}
   `;
 
@@ -324,7 +339,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         onDragStart={() => onDragStart?.(word)}
         onDragOver={(e) => { e.preventDefault(); onDragOver?.(word); }}
         onDrop={onDrop}
-        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "!p-2" : "text-xs sm:text-sm"}
+        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "!p-2" : "text-[clamp(9px,calc(3.5vw_-_1.5px),14px)]"}
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
           focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
         style={{
