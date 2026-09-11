@@ -60,16 +60,23 @@ export function SpotTheRainbowModal({ open, puzzle, onResult, onClose }: SpotThe
             (.animate-pop, a scale keyframe with fill-mode:forwards) would
             otherwise permanently clobber any transform-based centering on
             that same element — CSS animations override transforms
-            regardless of specificity/order. items-start below the sm
-            breakpoint pins the modal near the top (with safe-area spacing)
-            instead of centering, since that's also where short phones
-            live and centering would push content below the fold there;
-            sm+ centers as before. pointer-events-none/auto split lets
-            clicks in the empty flex space still reach the backdrop. */}
+            regardless of specificity/order.
+
+            Always centers (items-center), on every screen — positioning is
+            driven by AVAILABLE HEIGHT, not width/device type. The ~12px
+            padding (plus safe-area insets) sets a floor of breathing room;
+            Content's max-height is derived from that same budget so that
+            when the modal's natural height fits within the visible
+            viewport it simply renders centered with room to spare, and
+            only when it genuinely doesn't fit does it get clamped to the
+            available height and scroll internally (still centered — a
+            height-clamped box centered in a flex container just ends up
+            filling most of the space, not pinned to an edge).
+            pointer-events-none/auto split lets clicks in the empty flex
+            space still reach the backdrop. */}
         <div
-          className="fixed inset-0 z-50 flex justify-center pointer-events-none
-            items-start sm:items-center
-            px-4 pt-[max(12px,env(safe-area-inset-top))] sm:pt-0"
+          className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none
+            px-4 pt-[max(12px,env(safe-area-inset-top))] pb-[max(12px,env(safe-area-inset-bottom))]"
         >
           {/* No onEscapeKeyDown here — Radix's default Escape behavior
               already calls the Root's onOpenChange(false) below, same path
@@ -77,7 +84,7 @@ export function SpotTheRainbowModal({ open, puzzle, onResult, onClose }: SpotThe
               twice per Escape press. */}
           <DialogPrimitive.Content
             className="pointer-events-auto w-full max-w-sm
-              max-h-[calc(100dvh-24px)] sm:max-h-[85dvh]
+              max-h-[calc(100dvh-24px)]
               overflow-y-auto
               bg-card rounded-xl shadow-2xl p-5 animate-pop
               focus:outline-none"
