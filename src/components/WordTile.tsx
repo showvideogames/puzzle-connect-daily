@@ -289,9 +289,9 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
 
   // Selection styling:
   // - Rainbow/colored tiles: black border when selected, keep their color
-  // - Normal tiles: inverted near-black/white when selected, with a
-  //   matching near-black border (dark mode keeps its own untouched look —
-  //   border is dropped there via dark:border-0).
+  // - Normal tiles: inverted charcoal/plum + white when selected, with a
+  //   border that matches the selected background exactly (dark mode keeps
+  //   its own untouched look — border is dropped there via dark:border-0).
   const stateClasses = isMatched
     ? "bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
@@ -299,7 +299,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       : colorStyle
         ? `${colorStyle.bg} hover:shadow-sm active:scale-95 ${isSelected ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background scale-[0.97]" : ""}`
         : isSelected
-          ? "bg-tile-selected text-tile-selected-fg border border-ink dark:border-0"
+          ? "bg-tile-selected text-tile-selected-fg border border-tile-selected dark:border-0"
           : "cloud-tile";
 
   return (

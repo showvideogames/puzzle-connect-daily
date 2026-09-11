@@ -75,6 +75,10 @@ export default {
           bg: "hsl(var(--disabled-bg))",
           fg: "hsl(var(--disabled-fg))",
         },
+        brand: {
+          "purple-from": "hsl(var(--brand-purple-from))",
+          "purple-to": "hsl(var(--brand-purple-to))",
+        },
         group: {
           1: "hsl(var(--group-1))",
           "1-fg": "hsl(var(--group-1-fg))",

@@ -17,7 +17,7 @@ export function MistakeDots({ mistakes, max }: MistakeDotsProps) {
   const remaining = max - mistakes;
   return (
     <div className="flex items-center gap-1.5 justify-center">
-      <span className="text-xs text-slate mr-1">Mistakes remaining:</span>
+      <span className="text-sm md:text-base text-slate mr-1">Mistakes remaining:</span>
       <span className="sr-only" role="status">
         {`${remaining} of ${max} mistakes remaining`}
       </span>
@@ -26,7 +26,7 @@ export function MistakeDots({ mistakes, max }: MistakeDotsProps) {
           <div
             key={i}
             aria-hidden="true"
-            className={`w-[14px] h-[14px] shrink-0 aspect-square rounded-full transition-colors duration-300 ${
+            className={`w-4 h-4 shrink-0 aspect-square rounded-full transition-colors duration-300 ${
               i < remaining
                 ? `bg-ink ${LEGACY_DARK_COLORS[i] ?? "dark:bg-foreground"}`
                 : "bg-disabled-bg dark:bg-muted"

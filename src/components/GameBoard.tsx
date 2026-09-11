@@ -8,7 +8,7 @@ import { DailyStatsModal } from "./DailyStatsModal";
 import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
-import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2 } from "lucide-react";
+import { Shuffle, X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2 } from "lucide-react";
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useImagePreload } from "@/hooks/useImagePreload";
@@ -1110,13 +1110,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* Controls */}
+      {/* Controls — all three share identical outer dimensions (84x48
+          mobile, 108x48 desktop) so they read as one uniform group. */}
       {!state.isComplete && (
         <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
           <button
             onClick={shuffle}
             disabled={isChecking || reveal !== null}
-            className="px-4 py-3 rounded-full text-sm font-bold transition-colors
+            className="inline-flex items-center justify-center gap-1.5
+              w-[84px] md:w-[108px] h-12 rounded-full text-sm md:text-base font-bold transition-colors
               bg-action-secondary-bg text-action-secondary-fg
               dark:bg-transparent dark:border dark:border-border dark:text-foreground
               dark:hover:bg-secondary dark:active:scale-95 dark:disabled:opacity-40
@@ -1124,12 +1126,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               focus-visible:ring-offset-2 focus-visible:ring-offset-background
               disabled:cursor-default"
           >
-            Shuffle
+            <Shuffle className="w-4 h-4 shrink-0" /> Shuffle
           </button>
           <button
             onClick={deselectAll}
             disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
-            className={`px-4 py-3 rounded-full text-sm font-bold transition-colors
+            className={`inline-flex items-center justify-center
+              w-[84px] md:w-[108px] h-12 rounded-full text-sm md:text-base font-bold transition-colors
               dark:bg-transparent dark:border dark:border-border dark:text-foreground
               dark:hover:bg-secondary dark:active:scale-95 dark:disabled:opacity-40
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
@@ -1145,17 +1148,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           <button
             onClick={submitGuess}
             disabled={state.selectedWords.length !== 4 || isChecking || reveal !== null}
-            className={`px-5 py-3 rounded-full text-sm font-bold transition-all
-              dark:bg-[linear-gradient(135deg,_#a78bfa,_#8b5cf6)] dark:text-white
-              dark:shadow-[0_8px_20px_-8px_rgba(139,92,246,0.6)]
-              dark:hover:-translate-y-px dark:active:scale-95 dark:disabled:opacity-40
+            className="inline-flex items-center justify-center
+              w-[84px] md:w-[108px] h-12 rounded-full text-sm md:text-base font-bold text-white transition-all
+              bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
+              shadow-[0_8px_20px_-8px_rgba(139,92,246,0.6)]
+              dark:hover:-translate-y-px dark:active:scale-95
+              disabled:opacity-40
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
               focus-visible:ring-offset-2 focus-visible:ring-offset-background
-              disabled:cursor-default ${
-                state.selectedWords.length === 4
-                  ? "bg-action-primary-bg text-action-primary-fg"
-                  : "bg-disabled-bg text-disabled-fg"
-              }`}
+              disabled:cursor-default"
           >
             Submit
           </button>

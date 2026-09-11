@@ -55,11 +55,17 @@ html {
 
     /* Tile colors */
     --tile: 36 18% 88%;
-    /* Selected tile inverts to near-black/white (same near-black as primary
-       text) rather than the earlier pale gray — aliased to --ink/
-       --action-primary-fg below so it always tracks those exactly. */
-    --tile-selected: var(--ink);
+    /* Selected tile: a deep muted charcoal/plum (matching the dark-mode
+       tile family's tone) rather than near-black or the earlier pale gray.
+       A literal value, not an --ink alias, since it's deliberately a
+       different (softer) shade than primary text. */
+    --tile-selected: 267 9% 19%;
     --tile-selected-fg: var(--action-primary-fg);
+
+    /* Brand purple used by the Submit button when enabled — same values in
+       light and dark (a fixed brand color, not a theme-adaptive token). */
+    --brand-purple-from: 255 92% 76%;
+    --brand-purple-to: 258 90% 66%;
 
     /* Redesign: neutral palette (light mode only — dark mode gets defensive
        aliases to existing dark tokens further below, not a new dark palette) */
@@ -128,6 +134,10 @@ html {
     --tile: 220 12% 18%;
     --tile-selected: 40 15% 85%;
     --tile-selected-fg: 220 15% 10%;
+
+    /* Same fixed brand purple as light mode — not theme-adaptive. */
+    --brand-purple-from: 255 92% 76%;
+    --brand-purple-to: 258 90% 66%;
 
     /* Redesign tokens: dark mode must render exactly as it did before this
        redesign, so these are NOT a new dark palette — each one aliases an
