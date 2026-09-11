@@ -8,7 +8,7 @@ import { DailyStatsModal } from "./DailyStatsModal";
 import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
-import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2 } from "lucide-react";
+import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown } from "lucide-react";
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useImagePreload } from "@/hooks/useImagePreload";
@@ -1260,57 +1260,65 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* Guess History (Beta) */}
+      {/* Guess History */}
       {settings?.guessHistory && incorrectGuesses.length > 0 && (
-        <div className="mt-3">
+        <div className="mt-3 rounded-2xl bg-card border border-border overflow-hidden">
           <button
             onClick={() => setHistoryExpanded((v) => !v)}
-            className="w-full text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors py-1"
+            aria-expanded={historyExpanded}
+            className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-secondary/40 transition-colors"
           >
-            Guess History {historyExpanded ? "▴" : "▾"}
+            <History className="w-4 h-4 text-muted-foreground shrink-0" />
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-bold text-foreground">Guess History</span>
+              {historyExpanded && (
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  Shows only incorrect guesses.
+                </span>
+              )}
+            </span>
+            <ChevronDown
+              className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
+                historyExpanded ? "rotate-180" : ""
+              }`}
+            />
           </button>
           {historyExpanded && (
-            <div className="mt-2 space-y-1">
+            <div className="px-4 pb-3 divide-y divide-border">
               {incorrectGuesses.map((g, i) => {
                 const sorted = [...g.words].sort((a, b) => a.localeCompare(b));
+                // Reuse the guess's own stored feedback (set at guess-time in
+                // useGame.ts) rather than re-deriving one-away/rainbow status
+                // from the final solved categories.
                 const label = g.isAlmostRainbow
-                  ? theme.almostMessage
+                  ? "One Away 🌈"
                   : g.isOneAway
                     ? "One Away"
-                    : null;
-                const chips = (
-                  <div className="flex items-center justify-center flex-wrap gap-1.5">
-                    {sorted.map((w, j) => (
-                      <span
-                        key={`${w}-${j}`}
-                        className="inline-flex items-center bg-secondary text-foreground rounded-full px-3 py-1 text-sm font-medium"
-                      >
-                        {isCustomEmoji(w) ? (
-                          <img
-                            src={customEmojiUrl(w)}
-                            alt={customEmojiName(w) ?? ""}
-                            draggable={false}
-                            style={{ height: "18px", width: "auto", objectFit: "contain" }}
-                          />
-                        ) : (
-                          w
-                        )}
-                      </span>
-                    ))}
-                  </div>
-                );
+                    : "Incorrect";
 
-                return label ? (
-                  <div
-                    key={i}
-                    className="rounded-xl px-3 py-2 text-center"
-                    style={{ border: "1.5px dashed hsl(var(--border))" }}
-                  >
-                    <p className="text-xs text-muted-foreground mb-1.5">{label}</p>
-                    {chips}
+                return (
+                  <div key={i} className="py-2.5 text-center first:pt-1 last:pb-0">
+                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">{label}</p>
+                    <div className="flex items-center justify-center flex-wrap gap-1.5">
+                      {sorted.map((w, j) => (
+                        <span
+                          key={`${w}-${j}`}
+                          className="inline-flex items-center justify-center min-w-[3.25rem] bg-secondary text-foreground rounded-full px-3 py-1 text-sm font-medium"
+                        >
+                          {isCustomEmoji(w) ? (
+                            <img
+                              src={customEmojiUrl(w)}
+                              alt={customEmojiName(w) ?? ""}
+                              draggable={false}
+                              style={{ height: "18px", width: "auto", objectFit: "contain" }}
+                            />
+                          ) : (
+                            w
+                          )}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                ) : (
-                  <div key={i}>{chips}</div>
                 );
               })}
             </div>
