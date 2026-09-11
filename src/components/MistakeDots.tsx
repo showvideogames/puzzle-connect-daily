@@ -3,16 +3,6 @@ interface MistakeDotsProps {
   max: number;
 }
 
-// Legacy per-category colors — kept ONLY as dark-mode overrides so dark mode
-// keeps rendering exactly as it did before the redesign. Light mode uses a
-// single neutral Ink color instead (no per-category mapping).
-const LEGACY_DARK_COLORS = [
-  "dark:bg-yellow-400",
-  "dark:bg-green-500",
-  "dark:bg-blue-500",
-  "dark:bg-red-500",
-];
-
 export function MistakeDots({ mistakes, max }: MistakeDotsProps) {
   const remaining = max - mistakes;
   return (
@@ -27,8 +17,10 @@ export function MistakeDots({ mistakes, max }: MistakeDotsProps) {
             key={i}
             aria-hidden="true"
             className={`w-4 h-4 shrink-0 aspect-square rounded-full transition-colors duration-300 ${
+              // These communicate lives/mistakes remaining, not the puzzle
+              // categories — neutral in both themes, never category colors.
               i < remaining
-                ? `bg-ink ${LEGACY_DARK_COLORS[i] ?? "dark:bg-foreground"}`
+                ? "bg-ink dark:bg-foreground"
                 : "bg-disabled-bg dark:bg-muted"
             }`}
           />

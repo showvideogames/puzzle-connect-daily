@@ -8,7 +8,7 @@ import { DailyStatsModal } from "./DailyStatsModal";
 import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
-import { Shuffle, X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2 } from "lucide-react";
+import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2 } from "lucide-react";
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useImagePreload } from "@/hooks/useImagePreload";
@@ -1110,68 +1110,71 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* Controls — all three share identical outer dimensions (84x48
-          mobile, 108x48 desktop) so they read as one uniform group. */}
+      {/* Controls — a 3-column grid so Shuffle/Clear/Submit are always
+          exactly equal width and the row spans close to the board's own
+          width (100% on mobile, 80% on desktop), rather than three
+          fixed-width buttons floating narrower than the grid above them. */}
       {!state.isComplete && (
-        <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
-          <button
-            onClick={shuffle}
-            disabled={isChecking || reveal !== null}
-            className="inline-flex items-center justify-center gap-1.5
-              w-[84px] md:w-[108px] h-12 rounded-full text-sm md:text-base font-bold transition-colors
-              bg-action-secondary-bg text-action-secondary-fg
-              dark:bg-transparent dark:border dark:border-border dark:text-foreground
-              dark:hover:bg-secondary dark:active:scale-95 dark:disabled:opacity-40
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-              focus-visible:ring-offset-2 focus-visible:ring-offset-background
-              disabled:cursor-default"
-          >
-            <Shuffle className="w-4 h-4 shrink-0" /> Shuffle
-          </button>
-          <button
-            onClick={deselectAll}
-            disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
-            className={`inline-flex items-center justify-center
-              w-[84px] md:w-[108px] h-12 rounded-full text-sm md:text-base font-bold transition-colors
-              dark:bg-transparent dark:border dark:border-border dark:text-foreground
-              dark:hover:bg-secondary dark:active:scale-95 dark:disabled:opacity-40
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-              focus-visible:ring-offset-2 focus-visible:ring-offset-background
-              disabled:cursor-default ${
-                state.selectedWords.length === 0
-                  ? "bg-disabled-bg text-disabled-fg"
-                  : "bg-action-secondary-bg text-action-secondary-fg"
-              }`}
-          >
-            Clear
-          </button>
-          <button
-            onClick={submitGuess}
-            disabled={state.selectedWords.length !== 4 || isChecking || reveal !== null}
-            className="inline-flex items-center justify-center
-              w-[84px] md:w-[108px] h-12 rounded-full text-sm md:text-base font-bold text-white transition-all
-              bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
-              shadow-[0_8px_20px_-8px_rgba(139,92,246,0.6)]
-              dark:hover:-translate-y-px dark:active:scale-95
-              disabled:opacity-40
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-              focus-visible:ring-offset-2 focus-visible:ring-offset-background
-              disabled:cursor-default"
-          >
-            Submit
-          </button>
-          {(colorCodeTiles || colorPaletteMode) && hasAnyColor && (
+        <>
+          <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-4">
             <button
-              onClick={clearAllColors}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border
-                bg-action-secondary-bg text-action-secondary-fg text-sm font-medium
-                dark:bg-transparent
-                hover:bg-secondary transition-colors duration-150 active:scale-95"
+              onClick={shuffle}
+              disabled={isChecking || reveal !== null}
+              className="w-full h-12 rounded-full text-sm md:text-base font-bold transition-colors
+                bg-action-secondary-bg text-action-secondary-fg
+                dark:bg-transparent dark:border dark:border-border dark:text-foreground
+                dark:hover:bg-secondary dark:active:scale-95 dark:disabled:opacity-40
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                focus-visible:ring-offset-2 focus-visible:ring-offset-background
+                disabled:cursor-default"
             >
-              <Eraser className="w-4 h-4" /> Clear Colors
+              Shuffle
             </button>
+            <button
+              onClick={deselectAll}
+              disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
+              className={`w-full h-12 rounded-full text-sm md:text-base font-bold transition-colors
+                dark:bg-transparent dark:border dark:border-border dark:text-foreground
+                dark:hover:bg-secondary dark:active:scale-95 dark:disabled:opacity-40
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                focus-visible:ring-offset-2 focus-visible:ring-offset-background
+                disabled:cursor-default ${
+                  state.selectedWords.length === 0
+                    ? "bg-disabled-bg text-disabled-fg"
+                    : "bg-action-secondary-bg text-action-secondary-fg"
+                }`}
+            >
+              Clear
+            </button>
+            <button
+              onClick={submitGuess}
+              disabled={state.selectedWords.length !== 4 || isChecking || reveal !== null}
+              className="w-full h-12 rounded-full text-sm md:text-base font-bold text-white transition-all
+                bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
+                shadow-[0_8px_20px_-8px_rgba(139,92,246,0.6)]
+                dark:hover:-translate-y-px dark:active:scale-95
+                disabled:opacity-40
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                focus-visible:ring-offset-2 focus-visible:ring-offset-background
+                disabled:cursor-default"
+            >
+              Submit
+            </button>
+          </div>
+          {(colorCodeTiles || colorPaletteMode) && hasAnyColor && (
+            <div className="flex justify-center mt-3">
+              <button
+                onClick={clearAllColors}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border
+                  bg-action-secondary-bg text-action-secondary-fg text-sm font-medium
+                  dark:bg-transparent
+                  hover:bg-secondary transition-colors duration-150 active:scale-95"
+              >
+                <Eraser className="w-4 h-4" /> Clear Colors
+              </button>
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {/* Hint pill */}
