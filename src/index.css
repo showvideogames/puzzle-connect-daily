@@ -55,11 +55,10 @@ html {
 
     /* Tile colors */
     --tile: 36 18% 88%;
-    /* Selected tile: a deep muted charcoal/plum (matching the dark-mode
-       tile family's tone) rather than near-black or the earlier pale gray.
-       A literal value, not an --ink alias, since it's deliberately a
-       different (softer) shade than primary text. */
-    --tile-selected: 267 9% 19%;
+    /* Selected tile: matches the reference mockup's selected-tile color
+       exactly (#3E3832). Light mode only — dark mode's own value below is
+       untouched. */
+    --tile-selected: 30 11% 22%;
     --tile-selected-fg: var(--action-primary-fg);
 
     /* Brand purple used by the Submit button when enabled — same values in
