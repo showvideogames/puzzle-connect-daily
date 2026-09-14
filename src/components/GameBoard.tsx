@@ -994,15 +994,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* Word grid */}
       {remainingWords.length > 0 && (
         <div className="relative">
-          {/* Decorative sparkles around the board — homepage-only intro flourish */}
-          {!isDailyHomepage && (
-            <>
-              <span aria-hidden="true" className="pointer-events-none select-none absolute -top-2 -left-1 text-lg" style={{ color: "#a855f7", opacity: 0.4 }}>✦</span>
-              <span aria-hidden="true" className="pointer-events-none select-none absolute -top-3 right-2 text-sm" style={{ color: "#ec4899", opacity: 0.4 }}>✦</span>
-              <span aria-hidden="true" className="pointer-events-none select-none absolute bottom-1 -left-1 text-sm" style={{ color: "#3b82f6", opacity: 0.35 }}>✦</span>
-              <span aria-hidden="true" className="pointer-events-none select-none absolute -bottom-2 right-1 text-base" style={{ color: "#a855f7", opacity: 0.4 }}>✦</span>
-            </>
-          )}
           <div className={`grid grid-cols-4 gap-1.5 ${isDailyHomepage ? "md:gap-3" : ""} ${shaking || spotShaking ? "animate-shake" : ""}`}>
           {remainingWords.map((word, index) => {
             const isRevealingWord = reveal?.words.includes(word) ?? false;
