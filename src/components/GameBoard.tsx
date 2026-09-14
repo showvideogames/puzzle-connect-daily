@@ -8,6 +8,7 @@ import { DailyStatsModal } from "./DailyStatsModal";
 import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
+import { ResultGrid } from "./ResultGrid";
 import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown } from "lucide-react";
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -1360,13 +1361,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
           {state.guessHistory.length > 0 && (
             <div className="mt-4 space-y-3">
-              <div className="flex flex-col items-center gap-0.5">
-                {generateShareLines().map((line, i) => (
-                  <span key={i} className="text-2xl leading-tight tracking-wider">
-                    {line}
-                  </span>
-                ))}
-              </div>
+              {/* Custom brand-color visual grid — decorative only. The
+                  copied Share Score text below is built from
+                  generateShareLines()/generateShareText() exactly as
+                  before and is unaffected by this. */}
+              <ResultGrid />
               <div className="flex items-center justify-center gap-3">
                 <button
                   onClick={handleShare}
