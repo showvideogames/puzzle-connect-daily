@@ -151,8 +151,10 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   checkingIndex = 0,
 }, forwardedRef) {
   const [showColorPicker, setShowColorPicker] = useState(false);
+  // Timestamp of this tile's own last tap — each WordTile instance gets its
+  // own ref, so "was the previous tap on this same tile" falls out for free
+  // without tracking a target separately.
   const lastTapRef = useRef<number>(0);
-  const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const isTouchDragging = useRef(false);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
@@ -255,28 +257,30 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   const handleClick = useCallback(() => {
     if (isTouchDragging.current) return;
 
-    // Color Palette Mode or not using color features at all
+    // Color Palette Mode or not using color features at all — plain
+    // selection, no double-tap tracking needed.
     if (!colorCodeTiles || colorPaletteMode) {
       onClick();
       return;
     }
 
-    // Color-Code Tiles mode: double-tap logic
+    // Color-Code Tiles mode: the first tap selects INSTANTLY (no waiting to
+    // see if a second tap follows — that's what made ordinary selection feel
+    // delayed). Only when a second tap lands on this same tile within the
+    // double-tap window do we treat it as the color action instead of a
+    // second select/deselect toggle; selection is left exactly as the first
+    // tap set it.
     const now = Date.now();
     const timeSinceLastTap = now - lastTapRef.current;
-    lastTapRef.current = now;
 
     if (timeSinceLastTap < DOUBLE_TAP_DELAY_MS) {
-      if (singleTapTimer.current) {
-        clearTimeout(singleTapTimer.current);
-        singleTapTimer.current = null;
-      }
+      // Reset rather than stamping `now`, so a third rapid tap is treated as
+      // a fresh first tap instead of chaining into another double-tap.
+      lastTapRef.current = 0;
       setShowColorPicker(true);
     } else {
-      singleTapTimer.current = setTimeout(() => {
-        singleTapTimer.current = null;
-        onClick();
-      }, DOUBLE_TAP_DELAY_MS);
+      lastTapRef.current = now;
+      onClick();
     }
   }, [colorCodeTiles, colorPaletteMode, onClick]);
 
