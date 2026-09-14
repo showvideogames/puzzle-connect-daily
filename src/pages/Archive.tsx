@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { GameHeader } from "@/components/GameHeader";
 import { TutorialModal } from "@/components/TutorialModal";
@@ -8,28 +8,43 @@ import { SettingsModal } from "@/components/SettingsModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SEO } from "@/components/SEO";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { playGiftOpenSound } from "@/lib/sounds";
+import { getDeviceId } from "@/lib/gameStats";
+import { hasInProgressGame } from "@/hooks/useGame";
 import confetti from "canvas-confetti";
 import type { User } from "@supabase/supabase-js";
 
-function StarIcon({
-  size = 22,
-  fill = "none",
-  stroke = "hsl(var(--muted-foreground))",
-}: {
-  size?: number;
-  fill?: string;
-  stroke?: string;
-}) {
+// Standalone rainbow-gradient checkmark for "Completed" — the gradient
+// itself is the checkmark's stroke (not a rainbow ring around a plain
+// check), using the same brand stops as the custom result grid
+// (ResultGrid.tsx), with a thin fixed Ink outline layered behind it so it
+// stays legible at the ~16-20px the calendar renders it at.
+function RainbowCheckIcon({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <polygon
-        points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
-        fill={fill}
-        stroke={stroke}
-        strokeWidth="1.5"
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="archive-rainbow-check" x1="3" y1="18" x2="21" y2="5" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#F6D968" />
+          <stop offset="18%" stopColor="#F6D968" />
+          <stop offset="34%" stopColor="#8CCB91" />
+          <stop offset="54%" stopColor="#7DB9DD" />
+          <stop offset="74%" stopColor="#9B7BE5" />
+          <stop offset="100%" stopColor="#E9786D" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M4.5 12.5L9.5 17.5L19.5 6.5"
+        stroke="#292825"
+        strokeWidth="5.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4.5 12.5L9.5 17.5L19.5 6.5"
+        stroke="url(#archive-rainbow-check)"
+        strokeWidth="4"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -43,18 +58,13 @@ interface ArchivePuzzle {
   title: string | null;
 }
 
-interface GameResult {
-  puzzle_id: string;
-  won: boolean;
-  mistakes: number;
-}
-
 interface FreePuzzleItem {
   id: string;
   free_puzzle_order: number;
 }
 
 type ModalName = "stats" | "help" | "settings" | "feedback" | null;
+type DayStatus = "completed" | "in-progress" | "unplayed" | "none";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -69,13 +79,14 @@ function saveOpenedOrders(orders: number[]) {
   catch {}
 }
 
-// Per-weekday header colors (Sun→Sat), tracing the rainbow.
-const WEEKDAY_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#a855f7"];
-// Free-puzzle card colors, cycled by puzzle order.
-const FREE_COLORS = ["#f97316", "#22c55e", "#3b82f6", "#a855f7", "#ec4899"];
-const RAINBOW_BAR = "linear-gradient(90deg,#ef4444,#f97316,#eab308,#22c55e,#3b82f6,#a855f7)";
-// Subtle interlocking puzzle-piece texture overlaid on opened free-puzzle cards.
-const PUZZLE_TEXTURE = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'><g fill='none' stroke='white' stroke-opacity='0.28' stroke-width='1.4'><path d='M0 16 h8 a4 4 0 0 1 0 8 h-8'/><path d='M24 0 v8 a4 4 0 0 0 8 0 v-8'/><path d='M16 48 v-8 a4 4 0 0 1 8 0 v8'/><path d='M48 24 h-8 a4 4 0 0 0 0 8 h8'/></g></svg>")`;
+function monthParam(year: number, month: number) {
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+// A small, fixed set of accent colors for the free-puzzle number badge only
+// — the card itself stays neutral (current borders/tokens), so this reads
+// as a subtle personality touch rather than a saturated decorative card.
+const FREE_ACCENTS = ["#f97316", "#22c55e", "#3b82f6", "#a855f7", "#ec4899"];
 
 // ─── GiftBox ─────────────────────────────────────────────────────────────────
 
@@ -90,7 +101,7 @@ function GiftBox({
 }) {
   const navigate = useNavigate();
   const [popping, setPopping] = useState(false);
-  const color = FREE_COLORS[(puzzle.free_puzzle_order - 1) % FREE_COLORS.length];
+  const accent = FREE_ACCENTS[(puzzle.free_puzzle_order - 1) % FREE_ACCENTS.length];
 
   function handleClick() {
     if (isOpened) {
@@ -129,44 +140,28 @@ function GiftBox({
       style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer" }}
     >
       {isOpened ? (
-        // Opened: colorful puzzle-piece card with number + Play now
+        // Opened: restrained card — neutral background, accent color kept
+        // only on the small number badge.
         <div
-          className="w-full flex flex-col items-center justify-center gap-2 text-white animate-fade-up"
-          style={{
-            aspectRatio: "3 / 4",
-            borderRadius: "16px",
-            background: color,
-            backgroundImage: PUZZLE_TEXTURE,
-            backgroundSize: "38px 38px",
-            boxShadow: "0 8px 20px -10px rgba(60,40,110,0.5)",
-          }}
+          className="w-full flex flex-col items-center justify-center gap-2 bg-card border border-border rounded-xl animate-fade-up"
+          style={{ aspectRatio: "3 / 4" }}
         >
           <div
-            className="flex items-center justify-center font-extrabold"
-            style={{
-              width: "38px",
-              height: "38px",
-              borderRadius: "999px",
-              background: "#fff",
-              color,
-              fontSize: "18px",
-              boxShadow: "0 3px 8px -3px rgba(0,0,0,0.35)",
-            }}
+            className="flex items-center justify-center font-extrabold text-white"
+            style={{ width: "34px", height: "34px", borderRadius: "999px", background: accent, fontSize: "15px" }}
           >
             {puzzle.free_puzzle_order}
           </div>
-          <span style={{ fontSize: "10px", fontWeight: 800, letterSpacing: "0.03em" }}>
+          <span className="text-[10px] font-bold tracking-wide text-muted-foreground">
             PLAY NOW
           </span>
         </div>
       ) : (
         // Unopened: gift box (tap to unwrap) — keeps the surprise
         <div
-          className="w-full flex items-center justify-center"
+          className="w-full flex items-center justify-center rounded-xl bg-secondary"
           style={{
             aspectRatio: "3 / 4",
-            borderRadius: "16px",
-            background: "hsl(var(--secondary))",
             border: "1.5px dashed hsl(var(--border))",
             transform: popping
               ? "scale(0) translateY(-18px) rotate(12deg)"
@@ -186,10 +181,7 @@ function GiftBox({
       )}
       {/* Order number label — only on unopened boxes */}
       {!isOpened && (
-        <span
-          className="text-xs font-semibold leading-none"
-          style={{ color: "hsl(var(--muted-foreground))" }}
-        >
+        <span className="text-xs font-semibold leading-none text-muted-foreground">
           {puzzle.free_puzzle_order}
         </span>
       )}
@@ -212,16 +204,7 @@ function FreePuzzlesSection({
 
   return (
     <div className="mb-8">
-      <h3
-        style={{
-          fontSize: "15px",
-          fontWeight: 700,
-          letterSpacing: "-0.01em",
-          marginBottom: "12px",
-        }}
-      >
-        Free Puzzles 🎁
-      </h3>
+      <h3 className="text-sm font-bold tracking-tight mb-3">Free Puzzles 🎁</h3>
       <div className="grid grid-cols-5 gap-3">
         {freePuzzles.map((puzzle) => (
           <GiftBox
@@ -240,9 +223,14 @@ function FreePuzzlesSection({
 
 export default function Archive() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
   const [puzzles, setPuzzles] = useState<ArchivePuzzle[]>([]);
-  const [results, setResults] = useState<GameResult[]>([]);
+  // Completed status works for signed-in AND anonymous players — reuses the
+  // same game_sessions table + device-id fallback already established in
+  // gameStats.ts (hasExistingSession/loadStatsFromSupabase), rather than
+  // the old game_results table, which only ever worked when logged in.
+  const [completedPuzzleIds, setCompletedPuzzleIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [activeModal, setActiveModal] = useState<ModalName>(null);
   const [settings, setSettings] = useState<GameSettings>(loadSettings);
@@ -252,10 +240,16 @@ export default function Archive() {
   const [openedOrders, setOpenedOrders] = useState<number[]>(() => loadOpenedOrders());
   const [totalPuzzleCount, setTotalPuzzleCount] = useState(0);
 
-  // Calendar navigation
+  // Calendar navigation — the viewed month lives in the URL (?month=YYYY-MM)
+  // rather than local state, so it's naturally part of browser history: a
+  // "Back to Archive" link can point straight at it, and browser Back just
+  // works without any special-casing. Falls back to the current month when
+  // the param is absent/invalid.
   const today = new Date();
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const rawMonth = searchParams.get("month");
+  const validMonth = rawMonth && /^\d{4}-\d{2}$/.test(rawMonth) ? rawMonth : null;
+  const viewYear = validMonth ? parseInt(validMonth.slice(0, 4), 10) : today.getFullYear();
+  const viewMonth = validMonth ? parseInt(validMonth.slice(5, 7), 10) - 1 : today.getMonth();
 
   const handleSettingsChange = (s: GameSettings) => {
     setSettings(s);
@@ -291,16 +285,12 @@ export default function Archive() {
         .order("date", { ascending: false });
       setPuzzles((archiveData as ArchivePuzzle[]) || []);
 
-      // Personal progress stars only exist for signed-in players.
-      if (user) {
-        const { data: resultData } = await supabase
-          .from("game_results")
-          .select("puzzle_id, won, mistakes")
-          .eq("user_id", user.id);
-        setResults((resultData as GameResult[]) || []);
-      } else {
-        setResults([]);
-      }
+      const deviceId = getDeviceId();
+      const sessionsQuery = user
+        ? supabase.from("game_sessions").select("puzzle_id").or(`user_id.eq.${user.id},device_id.eq.${deviceId}`)
+        : supabase.from("game_sessions").select("puzzle_id").eq("device_id", deviceId);
+      const { data: sessionRows } = await sessionsQuery;
+      setCompletedPuzzleIds(new Set((sessionRows ?? []).map((r: { puzzle_id: string }) => r.puzzle_id)));
 
       setLoading(false);
     }
@@ -337,7 +327,6 @@ export default function Archive() {
 
   // Calendar helpers
   const puzzleByDate = Object.fromEntries(puzzles.map((p) => [p.date, p]));
-  const resultByPuzzleId = Object.fromEntries(results.map((r) => [r.puzzle_id, r]));
   const todayStr = today.toLocaleDateString("en-CA");
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
@@ -356,19 +345,50 @@ export default function Archive() {
     (viewYear === today.getFullYear() && viewMonth < today.getMonth());
 
   function prevMonth() {
-    if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11); }
-    else setViewMonth((m) => m - 1);
+    const newMonth = viewMonth === 0 ? 11 : viewMonth - 1;
+    const newYear = viewMonth === 0 ? viewYear - 1 : viewYear;
+    setSearchParams({ month: monthParam(newYear, newMonth) }, { replace: true });
   }
   function nextMonth() {
-    if (viewMonth === 11) { setViewYear((y) => y + 1); setViewMonth(0); }
-    else setViewMonth((m) => m + 1);
+    const newMonth = viewMonth === 11 ? 0 : viewMonth + 1;
+    const newYear = viewMonth === 11 ? viewYear + 1 : viewYear;
+    setSearchParams({ month: monthParam(newYear, newMonth) }, { replace: true });
   }
+
+  // "In progress" is local, device-persisted gameplay state (the same
+  // hasInProgressGame/progressKey source useGame.ts already writes to only
+  // after a real guess/hint — see the mount-guard fix in useGame.ts).
+  // Opening a puzzle and closing it again without playing never sets this.
+  function getDayStatus(dateStr: string, isPast: boolean): DayStatus {
+    if (!isPast) return "none";
+    const puzzle = puzzleByDate[dateStr];
+    if (!puzzle) return "none";
+    if (completedPuzzleIds.has(puzzle.id)) return "completed";
+    if (hasInProgressGame(puzzle.id)) return "in-progress";
+    return "unplayed";
+  }
+
+  const monthSummary = useMemo(() => {
+    let played = 0;
+    let completed = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      if (dateStr >= todayStr) continue;
+      const status = getDayStatus(dateStr, true);
+      if (status === "completed") { completed++; played++; }
+      else if (status === "in-progress") played++;
+    }
+    return { played, completed };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewYear, viewMonth, daysInMonth, todayStr, puzzleByDate, completedPuzzleIds]);
 
   function handleDayClick(dateStr: string) {
     if (dateStr >= todayStr) return;
     const puzzle = puzzleByDate[dateStr];
     if (!puzzle) return;
-    navigate(`/archive/${puzzle.id}`);
+    navigate(`/archive/${puzzle.id}`, {
+      state: { archiveReturnPath: `/archive?month=${monthParam(viewYear, viewMonth)}` },
+    });
   }
 
   // Round total count down to nearest 50 for subscribe CTA
@@ -398,34 +418,15 @@ export default function Archive() {
   const titleRow = (
     <div className="flex items-start justify-between gap-3 mb-4">
       <div>
-        <h2 style={{ fontSize: "22px", fontWeight: 800, letterSpacing: "-0.03em" }}>
-          Puzzle Archive
-        </h2>
-        <div
-          style={{
-            height: "4px",
-            width: "112px",
-            borderRadius: "999px",
-            marginTop: "6px",
-            background: RAINBOW_BAR,
-          }}
-        />
+        <h2 className="text-2xl font-bold tracking-tight">Puzzle Archive</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">Browse and play past puzzles.</p>
       </div>
       <button
         onClick={() => navigate("/")}
-        className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-full transition-transform
-          hover:-translate-y-px active:scale-95"
-        style={{
-          padding: "9px 15px",
-          background: "hsl(var(--card))",
-          border: "1px solid hsl(var(--border))",
-          color: "#a855f7",
-          fontWeight: 700,
-          fontSize: "13px",
-          boxShadow: "0 2px 8px -3px rgba(60,40,110,0.18)",
-        }}
+        className="flex-shrink-0 bg-foreground text-background text-xs font-semibold rounded-full px-3 py-1.5
+          hover:opacity-90 transition-opacity active:scale-95"
       >
-        <Calendar className="w-4 h-4" /> Today's puzzle
+        Today's Puzzle →
       </button>
     </div>
   );
@@ -450,198 +451,96 @@ export default function Archive() {
   );
 
   const calendarBlock = (
-    <div style={{ position: "relative" }}>
-      {/* Soft rainbow glow behind the card */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          inset: "-6px -2px",
-          zIndex: 0,
-          borderRadius: "34px",
-          filter: "blur(14px)",
-          background:
-            "radial-gradient(60% 55% at 50% 0%, rgba(168,85,247,0.16), transparent 70%)," +
-            "radial-gradient(70% 60% at 100% 60%, rgba(59,130,246,0.14), transparent 70%)," +
-            "radial-gradient(70% 60% at 0% 65%, rgba(239,68,68,0.10), transparent 70%)",
-        }}
-      />
-      <div
-        className="relative px-5 pt-5 pb-4"
-        style={{
-          zIndex: 1,
-          background: "hsl(var(--card))",
-          border: "1px solid hsl(var(--border))",
-          borderRadius: "24px",
-          width: "100%",
-          boxShadow: "0 18px 50px -20px rgba(60,40,110,0.28)",
-        }}
-      >
-        {/* Month navigation */}
-        <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={prevMonth}
-            disabled={!canGoBack}
-            className="grid place-items-center transition-transform hover:scale-105 disabled:opacity-30
-              disabled:hover:scale-100"
-            style={{
-              width: "42px",
-              height: "42px",
-              borderRadius: "14px",
-              background: "hsl(var(--card))",
-              border: "1px solid hsl(var(--border))",
-              color: "#a855f7",
-              boxShadow: "0 2px 6px -3px rgba(60,40,110,0.25)",
-            }}
-            aria-label="Previous month"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <p style={{ fontSize: "21px", fontWeight: 800, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
-            {MONTHS[viewMonth]} {viewYear}
-          </p>
-          <button
-            onClick={nextMonth}
-            disabled={!canGoForward}
-            className="grid place-items-center transition-transform hover:scale-105 disabled:opacity-30
-              disabled:hover:scale-100"
-            style={{
-              width: "42px",
-              height: "42px",
-              borderRadius: "14px",
-              background: "hsl(var(--card))",
-              border: "1px solid hsl(var(--border))",
-              color: "#a855f7",
-              boxShadow: "0 2px 6px -3px rgba(60,40,110,0.25)",
-            }}
-            aria-label="Next month"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
+    <div className="w-full bg-card border border-border rounded-2xl px-4 pt-4 pb-4">
+      {/* Month navigation */}
+      <div className="flex items-center justify-between mb-1">
+        <button
+          onClick={prevMonth}
+          disabled={!canGoBack}
+          className="w-9 h-9 grid place-items-center rounded-full border border-border text-foreground
+            hover:bg-secondary transition-colors active:scale-95 disabled:opacity-30 disabled:hover:bg-transparent"
+          aria-label="Previous month"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <p className="text-lg font-bold tracking-tight whitespace-nowrap">
+          {MONTHS[viewMonth]} {viewYear}
+        </p>
+        <button
+          onClick={nextMonth}
+          disabled={!canGoForward}
+          className="w-9 h-9 grid place-items-center rounded-full border border-border text-foreground
+            hover:bg-secondary transition-colors active:scale-95 disabled:opacity-30 disabled:hover:bg-transparent"
+          aria-label="Next month"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+      <p className="text-center text-xs text-muted-foreground mb-4">
+        {monthSummary.played} played · {monthSummary.completed} completed
+      </p>
 
-        {/* Day headers — color-coded across the rainbow */}
-        <div className="grid grid-cols-7 mb-1">
-          {DAYS.map((d, idx) => (
-            <div
-              key={d}
-              className="text-center py-1"
-              style={{
-                fontSize: "11px",
-                fontWeight: 800,
-                letterSpacing: "0.07em",
-                textTransform: "uppercase",
-                color: WEEKDAY_COLORS[idx],
-              }}
+      {/* Weekday headers */}
+      <div className="grid grid-cols-7 mb-1">
+        {DAYS.map((d) => (
+          <div key={d} className="text-center py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      <div className="grid grid-cols-7 gap-1">
+        {Array.from({ length: totalCells }).map((_, i) => {
+          const dayNum = i - firstDay + 1;
+          if (dayNum < 1 || dayNum > daysInMonth) return <div key={i} style={{ aspectRatio: "1" }} />;
+
+          const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+          const isPast = dateStr < todayStr;
+          const isToday = dateStr === todayStr;
+          const hasPuzzle = !!puzzleByDate[dateStr];
+          const isClickable = isPast && hasPuzzle;
+          const status = getDayStatus(dateStr, isPast);
+
+          return (
+            <button
+              key={i}
+              onClick={() => handleDayClick(dateStr)}
+              disabled={!isClickable}
+              className={`relative aspect-square w-full flex flex-col items-center justify-center gap-1 rounded-lg border transition-colors duration-150
+                ${hasPuzzle && isPast ? "bg-secondary border-border" : "bg-transparent border-transparent"}
+                ${isToday ? "ring-2 ring-foreground/60" : ""}
+                ${isClickable ? "hover:bg-muted cursor-pointer" : "cursor-default"}
+                ${!isPast && !isToday ? "opacity-40" : ""}`}
             >
-              {d}
-            </div>
-          ))}
-        </div>
+              <span className={`text-sm tabular-nums leading-none text-foreground ${isToday ? "font-bold" : "font-medium"}`}>
+                {dayNum}
+              </span>
+              <span className="h-4 flex items-center justify-center">
+                {status === "completed" && <RainbowCheckIcon size={16} />}
+                {status === "in-progress" && (
+                  <span
+                    className="w-[7px] h-[7px] rounded-full"
+                    style={{ background: "hsl(var(--brand-purple-to))" }}
+                  />
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
-        {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: totalCells }).map((_, i) => {
-            const dayNum = i - firstDay + 1;
-            if (dayNum < 1 || dayNum > daysInMonth) return <div key={i} style={{ aspectRatio: "1" }} />;
-
-            const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-            const isPast = dateStr < todayStr;
-            const isToday = dateStr === todayStr;
-            const puzzle = puzzleByDate[dateStr];
-            const result = puzzle ? resultByPuzzleId[puzzle.id] : null;
-            const hasPuzzle = !!puzzle;
-            const isClickable = isPast && hasPuzzle;
-
-            return (
-              <button
-                key={i}
-                onClick={() => handleDayClick(dateStr)}
-                disabled={!isClickable}
-                className={`relative w-full flex flex-col items-center justify-center transition-all duration-150
-                  ${isClickable ? "hover:-translate-y-px hover:shadow-md" : ""}`}
-                style={{
-                  aspectRatio: "1",
-                  borderRadius: "14px",
-                  gap: "4px",
-                  background: isToday
-                    ? "rgba(168,85,247,0.12)"
-                    : hasPuzzle && isPast
-                      ? "hsl(var(--secondary))"
-                      : "transparent",
-                  border: isToday
-                    ? "1px solid rgba(168,85,247,0.5)"
-                    : hasPuzzle && isPast
-                      ? "1px solid hsl(var(--border))"
-                      : "1px solid transparent",
-                  cursor: isClickable ? "pointer" : "default",
-                  opacity: !isPast && !isToday ? 0.4 : 1,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "16px",
-                    fontWeight: isToday ? 800 : 600,
-                    fontVariantNumeric: "tabular-nums",
-                    color: "hsl(var(--foreground))",
-                    lineHeight: 1,
-                  }}
-                >
-                  {dayNum}
-                </span>
-                {/* Won = gold star · Played = purple dot · else keep the row height */}
-                <span style={{ height: "15px", display: "flex", alignItems: "center" }}>
-                  {result ? (
-                    result.won ? (
-                      <StarIcon size={15} fill="#eab308" stroke="#eab308" />
-                    ) : (
-                      <span
-                        style={{
-                          width: "7px",
-                          height: "7px",
-                          borderRadius: "999px",
-                          background: "#a855f7",
-                        }}
-                      />
-                    )
-                  ) : null}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Legend — pills */}
-        <div className="flex items-center gap-2.5 mt-4 justify-center">
-          <span
-            className="inline-flex items-center gap-1.5"
-            style={{
-              padding: "6px 13px",
-              borderRadius: "999px",
-              background: "hsl(var(--secondary))",
-              border: "1px solid hsl(var(--border))",
-              fontSize: "12.5px",
-              fontWeight: 600,
-              color: "hsl(var(--muted-foreground))",
-            }}
-          >
-            <StarIcon size={14} fill="#eab308" stroke="#eab308" /> Won
-          </span>
-          <span
-            className="inline-flex items-center gap-1.5"
-            style={{
-              padding: "6px 13px",
-              borderRadius: "999px",
-              background: "hsl(var(--secondary))",
-              border: "1px solid hsl(var(--border))",
-              fontSize: "12.5px",
-              fontWeight: 600,
-              color: "hsl(var(--muted-foreground))",
-            }}
-          >
-            <span style={{ width: "9px", height: "9px", borderRadius: "999px", background: "#a855f7" }} /> Played
-          </span>
-        </div>
+      {/* Legend */}
+      <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1.5 mt-4 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <RainbowCheckIcon size={14} /> Completed
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-[7px] h-[7px] rounded-full" style={{ background: "hsl(var(--brand-purple-to))" }} /> In progress
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="font-medium text-foreground">12</span> Unplayed
+        </span>
       </div>
     </div>
   );
@@ -649,9 +548,7 @@ export default function Archive() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="animate-pulse" style={{ color: "hsl(var(--muted-foreground))" }}>
-          Loading…
-        </p>
+        <p className="animate-pulse text-muted-foreground">Loading…</p>
       </div>
     );
   }

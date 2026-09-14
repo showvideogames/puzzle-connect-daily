@@ -301,7 +301,19 @@ export function useGame(
     }
   }, [state, shuffledWords, rainbowWords, tileColors, puzzle.id]);
 
+  // Skip the very first run (mount) — otherwise merely opening a puzzle
+  // would immediately persist a progress row (tileColors' own useState
+  // initializer always "changes" on mount, which fires this effect once
+  // regardless of the dependency array), making an untouched archived
+  // puzzle indistinguishable from one the player actually started. Archive's
+  // "in progress" calendar status relies on hasInProgressGame/progressKey
+  // below only appearing after real interaction.
+  const tileColorsMountedRef = useRef(false);
   useEffect(() => {
+    if (!tileColorsMountedRef.current) {
+      tileColorsMountedRef.current = true;
+      return;
+    }
     const existing = loadProgress(puzzle.id);
     saveProgress(puzzle.id, {
       solvedGroups: state.solvedGroups,

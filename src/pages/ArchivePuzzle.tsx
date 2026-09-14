@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { X } from "lucide-react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { GameBoard } from "@/components/GameBoard";
 import { GameHeader } from "@/components/GameHeader";
@@ -22,6 +22,7 @@ type ModalName = "stats" | "help" | "settings" | "feedback" | null;
 export default function ArchivePuzzle() {
   const { puzzleId } = useParams<{ puzzleId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,17 +98,17 @@ export default function ArchivePuzzle() {
 
   const puzzleLabel = puzzle?.title?.trim() || puzzleId || "";
 
+  // Archive.tsx passes the exact archive URL (including its ?month=YYYY-MM)
+  // it was on when the player opened this puzzle, as router state — so
+  // "Back to Archive" restores the same month rather than resetting to
+  // today's. document.referrer doesn't work for this: it reflects the
+  // browser's original page-load referrer, not in-app client-side route
+  // changes, so it never actually pointed at the live Archive view here.
+  // Falls back to a plain /archive (today's month) when there's no state —
+  // e.g. the puzzle was opened directly via a shared link.
+  const archiveReturnPath = (location.state as { archiveReturnPath?: string } | null)?.archiveReturnPath;
   const handleBackToArchive = () => {
-    try {
-      const ref = new URL(document.referrer);
-      if (ref.origin === window.location.origin && ref.pathname === "/archive") {
-        navigate(-1);
-        return;
-      }
-    } catch {
-      // fall through to fallback
-    }
-    navigate("/archive");
+    navigate(archiveReturnPath ?? "/archive");
   };
 
   return (
@@ -171,15 +172,30 @@ export default function ArchivePuzzle() {
         {puzzle && (() => {
           const d = new Date(puzzle.date + "T12:00:00");
           const formattedDate = d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-          const titleText = puzzle.title?.trim()
-            ? `Puzzle ${puzzle.title.trim()}`
-            : formattedDate;
-          const showDateSubtitle = !!puzzle.title?.trim();
+          const trimmedTitle = puzzle.title?.trim();
+          // Puzzle-number-first hierarchy (approved design direction): when
+          // a puzzle has a purely numeric title (e.g. "482"), that's a real
+          // puzzle number and becomes the big "#482" hero, with the date
+          // subordinate beneath it. The actual data model also allows a
+          // free-text title (e.g. "Monday Mashup" — see Admin.tsx), which
+          // isn't a number, so it keeps the existing "Puzzle {title}"
+          // phrasing rather than an incorrect "#" prefix. With no title at
+          // all, the date remains the hero — there's no other identifier.
+          const isNumericTitle = !!trimmedTitle && /^\d+$/.test(trimmedTitle);
           return (
             <div className="mt-4 text-center">
-              <h1 className="text-2xl font-bold tracking-tight">{titleText}</h1>
-              {showDateSubtitle && (
-                <p className="text-sm text-muted-foreground mt-0.5">{formattedDate}</p>
+              {isNumericTitle ? (
+                <>
+                  <h1 className="text-3xl font-extrabold tracking-tight">#{trimmedTitle}</h1>
+                  <p className="text-sm text-muted-foreground mt-0.5">{formattedDate}</p>
+                </>
+              ) : trimmedTitle ? (
+                <>
+                  <h1 className="text-2xl font-bold tracking-tight">Puzzle {trimmedTitle}</h1>
+                  <p className="text-sm text-muted-foreground mt-0.5">{formattedDate}</p>
+                </>
+              ) : (
+                <h1 className="text-2xl font-bold tracking-tight">{formattedDate}</h1>
               )}
             </div>
           );

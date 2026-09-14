@@ -26,9 +26,9 @@ function GoogleIcon() {
   );
 }
 
-function PersonIcon({ filled }: { filled: boolean }) {
+function PersonIcon({ filled, className }: { filled: boolean; className?: string }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
       <circle
         cx="12" cy="8" r="4"
         fill={filled ? "hsl(var(--foreground))" : "none"}
@@ -119,10 +119,10 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
       <div className="relative shrink-0" ref={dropdownRef}>
         <button
           onClick={() => { setShowDropdown((v) => !v); setShowChangePassword(false); }}
-          className="p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95"
+          className="p-1 sm:p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95"
           aria-label="Account"
         >
-          <PersonIcon filled />
+          <PersonIcon filled className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
 
         {showDropdown && (
@@ -217,10 +217,10 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
       {!hideTrigger && (
         <button
           onClick={() => setShowAuth(true)}
-          className="p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95 shrink-0"
+          className="p-1 sm:p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95 shrink-0"
           aria-label="Sign in"
         >
-          <PersonIcon filled={false} />
+          <PersonIcon filled={false} className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
       )}
 

@@ -30,63 +30,62 @@ export function GameHeader({
 }: GameHeaderProps) {
   const isMinimal = variant === "minimal";
   return (
-    <header className={`flex items-center w-full mx-auto py-3 gap-2 ${isMinimal ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
+    <header className={`flex items-center w-full mx-auto py-3 gap-1 sm:gap-2 ${isMinimal ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-1.5 sm:px-2"}`}>
       <Link to="/" className="active:scale-95 transition-transform shrink-0" aria-label="Home">
         <img
           src={todaysLogo()}
           alt="Rainbow Categories"
-          // The minimal (homepage) header only has 3 icons, so the logo has
-          // room to stay full-size past ~480px; below that it scales down
-          // (aspect ratio preserved via width:auto) so the header never
-          // horizontally overflows even at a 320px viewport. The default
-          // (archive) header keeps its original fixed size unchanged.
-          className={isMinimal ? "h-[clamp(14px,5.8vw,28px)] w-auto" : undefined}
-          style={isMinimal ? undefined : { maxHeight: "28px", width: "auto" }}
+          // Scales down at narrow viewports (aspect ratio preserved via
+          // width:auto), capping at 28px tall once there's room — applies to
+          // both variants so the header never horizontally overflows at a
+          // 320px viewport, whether it's the homepage's 3 icons or the
+          // default variant's larger icon set (archive/free-puzzle pages).
+          className="h-[clamp(14px,5.8vw,28px)] w-auto"
         />
       </Link>
 
-      <div className="ml-auto flex items-center gap-1 shrink-0">
+      <div className="ml-auto flex items-center gap-0 sm:gap-1 shrink-0">
         {showHint && (
           <button
             onClick={onHintClick}
-            className="p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+            className="p-1 sm:p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
             aria-label="Get a hint"
           >
-            <Lightbulb className="w-5 h-5 text-slate" />
+            <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
           </button>
         )}
         <button
           onClick={onStatsClick}
-          className="p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+          className="p-1 sm:p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
           aria-label="My stats"
         >
-          <BarChart3 className="w-5 h-5 text-slate" />
+          <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
         </button>
         {!isMinimal && (
           <button
             onClick={onHowToPlayClick}
-            className="p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+            className="p-1 sm:p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
             aria-label="How to play"
           >
-            <BookOpen className="w-5 h-5 text-slate" />
+            <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
           </button>
         )}
         {!isMinimal && (
           <Link
             to="/archive"
-            className="p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+            className="p-1 sm:p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
             aria-label="Puzzle archive"
           >
-            <Archive className="w-5 h-5 text-slate" />
+            <Archive className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
           </Link>
         )}
         {onSettingsClick && (
           <button
             onClick={onSettingsClick}
-            className="p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+            className="p-1 sm:p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
             aria-label={isMinimal ? "Settings and menu" : "Settings"}
           >
-            <Settings className="w-5 h-5 text-slate" />
+            <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
           </button>
         )}
         {!isMinimal && <PlayerAuth user={user} onSignOut={onSignOut} />}
