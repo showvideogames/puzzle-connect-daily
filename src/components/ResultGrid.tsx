@@ -6,11 +6,14 @@
 // a consistent near-black outline in both light and dark mode, matching
 // the fixed, non-theme-adaptive brand fill colors below.
 //
-// Row DATA is not decided here — GameBoard.tsx derives `rows` from the same
-// state.guessHistory used to build the Share Score text (generateShareLines/
-// generateShareText), so the two always describe the same real solve order.
-// This component only knows how to paint each row kind.
-export type ResultRowKind = "rainbow" | "yellow" | "green" | "blue" | "red" | "wrong";
+// Row DATA is not decided here — GameBoard.tsx derives `rows` per-cell from
+// the same state.guessHistory used to build the Share Score text
+// (generateShareLines/generateShareText), including each submitted word's
+// own true category membership for incorrect/one-away guesses, so the two
+// always describe the same real solve path. This component only knows how
+// to paint each cell kind.
+export type ResultCellKind = "yellow" | "green" | "blue" | "red" | "rainbow";
+export type ResultRow = ResultCellKind[];
 
 const INK = "#292825";
 
@@ -32,7 +35,7 @@ const RAINBOW_GRADIENT = `linear-gradient(
   #E9786D 100%
 )`;
 
-const SOLID_FILLS: Partial<Record<ResultRowKind, string>> = {
+const SOLID_FILLS: Record<Exclude<ResultCellKind, "rainbow">, string> = {
   yellow: "#F6D968",
   green: "#8CCB91",
   blue: "#7DB9DD",
@@ -40,43 +43,26 @@ const SOLID_FILLS: Partial<Record<ResultRowKind, string>> = {
 };
 
 interface ResultGridProps {
-  rows: ResultRowKind[];
+  rows: ResultRow[];
 }
 
 export function ResultGrid({ rows }: ResultGridProps) {
   return (
     <div className="flex flex-col items-center gap-[3px]">
-      {rows.map((kind, rowIndex) => (
+      {rows.map((row, rowIndex) => (
         <div key={rowIndex} className="flex gap-[3px]">
-          {Array.from({ length: 4 }).map((_, i) =>
-            kind === "wrong" ? (
-              // Wrong guesses get a neutral, theme-adaptive fill (reusing the
-              // existing --muted token: warm gray/cream in light mode, muted
-              // charcoal in dark mode) rather than red, which already means
-              // the Red category. A faint "x" marks it as a miss without
-              // competing with the solid category-color rows.
-              <div
-                key={i}
-                className={`${CELL_SIZE} rounded-[4px] border-2 bg-muted flex items-center justify-center`}
-                style={{ borderColor: INK }}
-              >
-                <span className="text-[10px] leading-none select-none text-black/25 dark:text-white/25">
-                  ✕
-                </span>
-              </div>
-            ) : (
-              <div
-                key={i}
-                className={`${CELL_SIZE} rounded-[4px] border-2`}
-                style={{
-                  borderColor: INK,
-                  ...(kind === "rainbow"
-                    ? { backgroundImage: RAINBOW_GRADIENT }
-                    : { backgroundColor: SOLID_FILLS[kind] }),
-                }}
-              />
-            )
-          )}
+          {row.map((kind, i) => (
+            <div
+              key={i}
+              className={`${CELL_SIZE} rounded-[4px] border-2`}
+              style={{
+                borderColor: INK,
+                ...(kind === "rainbow"
+                  ? { backgroundImage: RAINBOW_GRADIENT }
+                  : { backgroundColor: SOLID_FILLS[kind] }),
+              }}
+            />
+          ))}
         </div>
       ))}
     </div>

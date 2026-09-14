@@ -8,7 +8,7 @@ import { DailyStatsModal } from "./DailyStatsModal";
 import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
-import { ResultGrid, ResultRowKind } from "./ResultGrid";
+import { ResultGrid, ResultCellKind, ResultRow } from "./ResultGrid";
 import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown } from "lucide-react";
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -60,10 +60,11 @@ const DIFFICULTY_COLOR: Record<number, string> = {
   4: "bg-red-500",
 };
 
-// Maps a solved group's difficulty to the ResultGrid row it should render —
-// same yellow/green/blue/red assignment as DIFFICULTY_SQUARE/DIFFICULTY_COLOR
-// above, just as ResultRowKind values instead of emoji/Tailwind classes.
-const DIFFICULTY_RESULT_KIND: Record<number, ResultRowKind> = {
+// Maps a word's group difficulty to the ResultGrid cell color it should
+// render — same yellow/green/blue/red assignment as DIFFICULTY_SQUARE/
+// DIFFICULTY_COLOR above, just as ResultCellKind values instead of
+// emoji/Tailwind classes.
+const DIFFICULTY_RESULT_KIND: Record<number, ResultCellKind> = {
   1: "yellow",
   2: "green",
   3: "blue",
@@ -776,22 +777,24 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     return lines;
   }, [state.guessHistory, puzzle, theme]);
 
-  // Same source of truth as generateShareLines above (state.guessHistory) —
-  // the on-page ResultGrid and the copied Share Score text must always
-  // describe the identical real solve order, just rendered two different
-  // ways. Hint markers have no square/color representation in the grid, so
-  // (like Guess History's own incorrectGuesses filter elsewhere in this
-  // file) they're skipped rather than guessed at.
-  const resultRows = useMemo((): ResultRowKind[] => {
+  // Same source of truth as generateShareLines above (state.guessHistory),
+  // and the same per-word logic that block already uses for its non-rainbow
+  // lines (attempt.groupIndices, in submitted order) — so an incorrect or
+  // one-away guess renders each of its 4 cells in that WORD's own true
+  // category color, exactly matching the mixed-color rows Share Score's
+  // emoji text already produces, rather than collapsing the guess into a
+  // single flat status. Hint markers have no square/color representation in
+  // the grid, so (like Guess History's own incorrectGuesses filter
+  // elsewhere in this file) they're skipped rather than guessed at.
+  const resultRows = useMemo((): ResultRow[] => {
     return state.guessHistory
       .filter((attempt) => !attempt.isHintMarker)
-      .map((attempt): ResultRowKind => {
-        if (attempt.isRainbow) return "rainbow";
-        if (attempt.isCorrect) {
-          const diff = puzzle.groups[attempt.groupIndices[0]]?.difficulty;
-          return DIFFICULTY_RESULT_KIND[diff] ?? "wrong";
-        }
-        return "wrong";
+      .map((attempt): ResultRow => {
+        if (attempt.isRainbow) return ["rainbow", "rainbow", "rainbow", "rainbow"];
+        return attempt.groupIndices.map((gi): ResultCellKind => {
+          const diff = puzzle.groups[gi]?.difficulty;
+          return DIFFICULTY_RESULT_KIND[diff] ?? "yellow";
+        });
       });
   }, [state.guessHistory, puzzle]);
 
