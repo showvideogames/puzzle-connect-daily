@@ -8,7 +8,7 @@ import { DailyStatsModal } from "./DailyStatsModal";
 import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
-import { ResultGrid } from "./ResultGrid";
+import { ResultGrid, ResultRowKind } from "./ResultGrid";
 import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown } from "lucide-react";
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -58,6 +58,16 @@ const DIFFICULTY_COLOR: Record<number, string> = {
   2: "bg-green-500",
   3: "bg-blue-500",
   4: "bg-red-500",
+};
+
+// Maps a solved group's difficulty to the ResultGrid row it should render —
+// same yellow/green/blue/red assignment as DIFFICULTY_SQUARE/DIFFICULTY_COLOR
+// above, just as ResultRowKind values instead of emoji/Tailwind classes.
+const DIFFICULTY_RESULT_KIND: Record<number, ResultRowKind> = {
+  1: "yellow",
+  2: "green",
+  3: "blue",
+  4: "red",
 };
 
 // ── Correct-guess reveal animation (deterministic, overlay-clone based) ──
@@ -766,6 +776,25 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     return lines;
   }, [state.guessHistory, puzzle, theme]);
 
+  // Same source of truth as generateShareLines above (state.guessHistory) —
+  // the on-page ResultGrid and the copied Share Score text must always
+  // describe the identical real solve order, just rendered two different
+  // ways. Hint markers have no square/color representation in the grid, so
+  // (like Guess History's own incorrectGuesses filter elsewhere in this
+  // file) they're skipped rather than guessed at.
+  const resultRows = useMemo((): ResultRowKind[] => {
+    return state.guessHistory
+      .filter((attempt) => !attempt.isHintMarker)
+      .map((attempt): ResultRowKind => {
+        if (attempt.isRainbow) return "rainbow";
+        if (attempt.isCorrect) {
+          const diff = puzzle.groups[attempt.groupIndices[0]]?.difficulty;
+          return DIFFICULTY_RESULT_KIND[diff] ?? "wrong";
+        }
+        return "wrong";
+      });
+  }, [state.guessHistory, puzzle]);
+
   const generateShareText = useCallback(() => {
     const header = puzzle.title
       ? `Puzzle ${puzzle.title}`
@@ -1365,7 +1394,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   copied Share Score text below is built from
                   generateShareLines()/generateShareText() exactly as
                   before and is unaffected by this. */}
-              <ResultGrid />
+              <ResultGrid rows={resultRows} />
               <div className="flex items-center justify-center gap-3">
                 <button
                   onClick={handleShare}
