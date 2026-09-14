@@ -37,6 +37,19 @@ export function GameHeader({
 }: GameHeaderProps) {
   const isMinimal = variant === "minimal";
   const hideExtraIcons = isMinimal || simplifiedIcons;
+  // The 3-icon case (Daily's "minimal" header and ArchivePuzzle's
+  // simplifiedIcons) has plenty of room even at 320px, so those icons get a
+  // bigger, constant (non-responsive) touch target — a real 34-38px circular
+  // tap area with an 18-20px glyph, per the polish request. The default
+  // variant's larger icon set (Archive calendar, FreePuzzle: up to 5-6
+  // icons) keeps the tighter, breakpoint-scaled sizing that was specifically
+  // tuned to avoid header overflow at narrow widths with that many icons.
+  const iconButtonClass = hideExtraIcons
+    ? "p-2 rounded-full hover:bg-secondary transition-colors active:scale-95"
+    : "p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95";
+  const iconGlyphClass = hideExtraIcons
+    ? "w-5 h-5 text-slate"
+    : "w-4 h-4 sm:w-5 sm:h-5 text-slate";
   return (
     <header className={`flex items-center w-full mx-auto py-3 gap-1 sm:gap-2 ${isMinimal ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-1.5 sm:px-2"}`}>
       <Link to="/" className="active:scale-95 transition-transform shrink-0" aria-label="Home">
@@ -52,22 +65,22 @@ export function GameHeader({
         />
       </Link>
 
-      <div className="ml-auto flex items-center gap-0 sm:gap-1 shrink-0">
+      <div className={`ml-auto flex items-center shrink-0 ${hideExtraIcons ? "gap-1.5 sm:gap-2" : "gap-0 sm:gap-1"}`}>
         {showHint && (
           <button
             onClick={onHintClick}
-            className="p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95"
+            className={iconButtonClass}
             aria-label="Get a hint"
           >
-            <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
+            <Lightbulb className={iconGlyphClass} />
           </button>
         )}
         <button
           onClick={onStatsClick}
-          className="p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95"
+          className={iconButtonClass}
           aria-label="My stats"
         >
-          <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
+          <BarChart3 className={iconGlyphClass} />
         </button>
         {!hideExtraIcons && (
           <button
@@ -90,10 +103,10 @@ export function GameHeader({
         {onSettingsClick && (
           <button
             onClick={onSettingsClick}
-            className="p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95"
+            className={iconButtonClass}
             aria-label={hideExtraIcons ? "Settings and menu" : "Settings"}
           >
-            <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
+            <Settings className={iconGlyphClass} />
           </button>
         )}
         {!hideExtraIcons && <PlayerAuth user={user} onSignOut={onSignOut} />}
