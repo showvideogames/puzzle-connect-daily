@@ -317,8 +317,16 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // Selection styling:
   // - Rainbow/colored tiles: black border when selected, keep their color
   // - Normal tiles: inverted charcoal/plum + white when selected, with a
-  //   border that matches the selected background exactly (dark mode keeps
-  //   its own untouched look — border is dropped there via dark:border-0).
+  //   border that matches the selected background exactly — border-tile-
+  //   selected resolves against the same --tile-selected variable as the
+  //   fill in both themes, so it's always seamless/invisible without a
+  //   dark:-specific override. This used to be dark:border-0 in dark mode
+  //   (a real 0px border), while the unselected .cloud-tile class carries
+  //   its own 1px border in both themes — so selecting a tile switched its
+  //   border-box from 1px to 0px, visibly shifting it out of alignment with
+  //   its grid neighbours for the duration of the transition. Keeping
+  //   border-width constant at 1px in every state and only ever changing
+  //   color removes that geometry change entirely.
   const stateClasses = isMatched
     ? "bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
@@ -326,7 +334,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       : colorStyle
         ? `${colorStyle.bg} hover:shadow-sm active:scale-95 ${isSelected ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background scale-[0.97]" : ""}`
         : isSelected
-          ? "bg-tile-selected text-tile-selected-fg border border-tile-selected dark:border-0"
+          ? "bg-tile-selected text-tile-selected-fg border border-tile-selected"
           : "cloud-tile";
 
   return (
