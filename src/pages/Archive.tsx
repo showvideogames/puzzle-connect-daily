@@ -410,6 +410,7 @@ export default function Archive() {
         onSettingsClick={() => setActiveModal("settings")}
         user={user}
         onSignOut={() => supabase.auth.signOut()}
+        simplifiedIcons
       />
       <div className="w-full max-w-lg border-b border-border mb-4" />
     </>
@@ -441,6 +442,10 @@ export default function Archive() {
         settings={settings}
         onSettingsChange={handleSettingsChange}
         onOpenFeedback={() => setActiveModal("feedback")}
+        showMenuLinks
+        onHowToPlayClick={() => setActiveModal("help")}
+        user={user}
+        onSignOut={() => supabase.auth.signOut()}
       />
       <FeedbackModal
         open={activeModal === "feedback"}
