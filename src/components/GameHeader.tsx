@@ -56,7 +56,7 @@ export function GameHeader({
         {showHint && (
           <button
             onClick={onHintClick}
-            className="p-1 sm:p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+            className="p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95"
             aria-label="Get a hint"
           >
             <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
@@ -64,7 +64,7 @@ export function GameHeader({
         )}
         <button
           onClick={onStatsClick}
-          className="p-1 sm:p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+          className="p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95"
           aria-label="My stats"
         >
           <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
@@ -72,7 +72,7 @@ export function GameHeader({
         {!hideExtraIcons && (
           <button
             onClick={onHowToPlayClick}
-            className="p-1 sm:p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+            className="p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95"
             aria-label="How to play"
           >
             <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
@@ -81,7 +81,7 @@ export function GameHeader({
         {!hideExtraIcons && (
           <Link
             to="/archive"
-            className="p-1 sm:p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+            className="p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95"
             aria-label="Puzzle archive"
           >
             <Archive className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
@@ -90,7 +90,7 @@ export function GameHeader({
         {onSettingsClick && (
           <button
             onClick={onSettingsClick}
-            className="p-1 sm:p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+            className="p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95"
             aria-label={hideExtraIcons ? "Settings and menu" : "Settings"}
           >
             <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />

@@ -147,19 +147,28 @@ export default function ArchivePuzzle() {
         </div>
       )}
 
-      <div className="w-full max-w-lg px-4 mb-3">
+      <div className="w-full max-w-lg px-4 mb-4">
         <div className="flex items-center justify-between gap-3">
+          {/* Secondary/outlined "soft surface" pill — quiet but polished,
+              paired against Today's Puzzle's accent treatment below. */}
           <button
             onClick={handleBackToArchive}
-            className="border border-border text-foreground text-xs font-semibold rounded-full px-3 py-1.5
+            className="inline-flex items-center whitespace-nowrap h-8 sm:h-9 px-2.5 sm:px-4 rounded-full border border-border bg-card
+              text-foreground text-xs sm:text-sm font-semibold
               hover:bg-secondary transition-colors active:scale-95"
           >
             ← Back to Archive
           </button>
+          {/* Same brand-purple gradient token pair as Submit — a compact
+              "destination" pill, not a full-width CTA, so the two accent
+              actions on the page read as one family without introducing a
+              new color. */}
           <button
             onClick={() => navigate("/")}
-            className="bg-foreground text-background text-xs font-semibold rounded-full px-3 py-1.5
-              hover:opacity-90 transition-opacity active:scale-95"
+            className="inline-flex items-center whitespace-nowrap h-8 sm:h-9 px-2.5 sm:px-4 rounded-full text-xs sm:text-sm font-semibold text-white
+              bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
+              shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45)]
+              hover:-translate-y-px active:scale-95 transition-all"
           >
             Today's Puzzle →
           </button>
@@ -178,20 +187,25 @@ export default function ArchivePuzzle() {
           // phrasing rather than an incorrect "#" prefix. With no title at
           // all, the date remains the hero — there's no other identifier.
           const isNumericTitle = !!trimmedTitle && /^\d+$/.test(trimmedTitle);
+          // font-tile (Inter Tight) ties the title to the same brand display
+          // face already used for tile words, solved-category titles, and
+          // Guess History — confident/bold rather than the page's default
+          // body font, without introducing a new typeface.
+          const titleClass = "font-tile font-extrabold tracking-tight text-foreground";
           return (
-            <div className="mt-4 text-center">
+            <div className="mt-5 text-center">
               {isNumericTitle ? (
                 <>
-                  <h1 className="text-3xl font-extrabold tracking-tight">#{trimmedTitle}</h1>
-                  <p className="text-sm text-muted-foreground mt-0.5">{formattedDate}</p>
+                  <h1 className={`${titleClass} text-[28px] md:text-[32px]`}>#{trimmedTitle}</h1>
+                  <p className="text-[13px] md:text-sm font-medium text-slate mt-1">{formattedDate}</p>
                 </>
               ) : trimmedTitle ? (
                 <>
-                  <h1 className="text-2xl font-bold tracking-tight">Puzzle {trimmedTitle}</h1>
-                  <p className="text-sm text-muted-foreground mt-0.5">{formattedDate}</p>
+                  <h1 className={`${titleClass} text-[26px] md:text-[30px]`}>Puzzle {trimmedTitle}</h1>
+                  <p className="text-[13px] md:text-sm font-medium text-slate mt-1">{formattedDate}</p>
                 </>
               ) : (
-                <h1 className="text-2xl font-bold tracking-tight">{formattedDate}</h1>
+                <h1 className={`${titleClass} text-[26px] md:text-[30px]`}>{formattedDate}</h1>
               )}
             </div>
           );

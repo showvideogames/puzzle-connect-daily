@@ -857,7 +857,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     <div className={`w-full mx-auto animate-fade-up ${isDailyHomepage ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
       {!isDailyHomepage && (
         <div className="flex items-center justify-center gap-2 mb-4">
-          <p className="text-center text-sm text-muted-foreground">
+          <p className="text-center text-[13px] font-medium tracking-wide text-muted-foreground">
             Select four words that share a connection!
           </p>
           {!puzzle.rainbowHerring && <NoRainbowIndicator />}
@@ -1148,9 +1148,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               onClick={shuffle}
               disabled={isChecking || reveal !== null}
               className="w-full h-12 rounded-full text-sm md:text-base font-bold transition-colors
-                bg-action-secondary-bg text-action-secondary-fg
-                dark:bg-transparent dark:border dark:border-border dark:text-foreground
-                dark:hover:bg-secondary dark:active:scale-95 dark:disabled:opacity-40
+                bg-action-secondary-bg text-action-secondary-fg border border-transparent
+                dark:bg-secondary dark:text-foreground dark:border-border
+                dark:hover:bg-muted dark:active:scale-95 dark:disabled:opacity-40
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
                 focus-visible:ring-offset-2 focus-visible:ring-offset-background
                 disabled:cursor-default"
@@ -1161,8 +1161,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               onClick={deselectAll}
               disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
               className={`w-full h-12 rounded-full text-sm md:text-base font-bold transition-colors
-                dark:bg-transparent dark:border dark:border-border dark:text-foreground
-                dark:hover:bg-secondary dark:active:scale-95 dark:disabled:opacity-40
+                border border-transparent
+                dark:bg-secondary dark:text-foreground dark:border-border
+                dark:hover:bg-muted dark:active:scale-95 dark:disabled:opacity-40
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
                 focus-visible:ring-offset-2 focus-visible:ring-offset-background
                 disabled:cursor-default ${
@@ -1178,9 +1179,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               disabled={state.selectedWords.length !== 4 || isChecking || reveal !== null}
               className="w-full h-12 rounded-full text-sm md:text-base font-bold text-white transition-all
                 bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
-                shadow-[0_8px_20px_-8px_rgba(139,92,246,0.6)]
-                dark:hover:-translate-y-px dark:active:scale-95
-                disabled:opacity-40
+                shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45)]
+                hover:-translate-y-px active:scale-95
+                disabled:opacity-40 disabled:hover:translate-y-0
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
                 focus-visible:ring-offset-2 focus-visible:ring-offset-background
                 disabled:cursor-default"
