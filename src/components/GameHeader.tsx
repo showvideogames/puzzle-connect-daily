@@ -16,6 +16,12 @@ interface GameHeaderProps {
   // stats, gear) at the wider board-matching width. How to Play, Archive, and
   // Account move into the Settings modal's new Menu section on that variant.
   variant?: "default" | "minimal";
+  // Hides the same How to Play / Archive / Account icons as "minimal" (down
+  // to hint/stats/settings), but keeps the "default" variant's width —
+  // for pages like ArchivePuzzle that want Daily's simplified icon set
+  // without the wider homepage board layout. Pair with SettingsModal's
+  // showMenuLinks so those items are still reachable from Settings.
+  simplifiedIcons?: boolean;
 }
 
 export function GameHeader({
@@ -27,8 +33,10 @@ export function GameHeader({
   user,
   onSignOut,
   variant = "default",
+  simplifiedIcons = false,
 }: GameHeaderProps) {
   const isMinimal = variant === "minimal";
+  const hideExtraIcons = isMinimal || simplifiedIcons;
   return (
     <header className={`flex items-center w-full mx-auto py-3 gap-1 sm:gap-2 ${isMinimal ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-1.5 sm:px-2"}`}>
       <Link to="/" className="active:scale-95 transition-transform shrink-0" aria-label="Home">
@@ -61,7 +69,7 @@ export function GameHeader({
         >
           <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
         </button>
-        {!isMinimal && (
+        {!hideExtraIcons && (
           <button
             onClick={onHowToPlayClick}
             className="p-1 sm:p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
@@ -70,7 +78,7 @@ export function GameHeader({
             <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
           </button>
         )}
-        {!isMinimal && (
+        {!hideExtraIcons && (
           <Link
             to="/archive"
             className="p-1 sm:p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
@@ -83,12 +91,12 @@ export function GameHeader({
           <button
             onClick={onSettingsClick}
             className="p-1 sm:p-2.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
-            aria-label={isMinimal ? "Settings and menu" : "Settings"}
+            aria-label={hideExtraIcons ? "Settings and menu" : "Settings"}
           >
             <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
           </button>
         )}
-        {!isMinimal && <PlayerAuth user={user} onSignOut={onSignOut} />}
+        {!hideExtraIcons && <PlayerAuth user={user} onSignOut={onSignOut} />}
       </div>
     </header>
   );

@@ -128,6 +128,7 @@ export default function ArchivePuzzle() {
         showHint={true}
         user={user ?? null}
         onSignOut={() => supabase.auth.signOut()}
+        simplifiedIcons
       />
       <div className="w-full max-w-lg border-b border-border mb-4" />
 
@@ -147,26 +148,21 @@ export default function ArchivePuzzle() {
       )}
 
       <div className="w-full max-w-lg px-4 mb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleBackToArchive}
-              className="border border-border text-foreground text-xs font-semibold rounded-full px-3 py-1.5
-                hover:bg-secondary transition-colors active:scale-95"
-            >
-              ← Back to Archive
-            </button>
-            <button
-              onClick={() => navigate("/")}
-              className="bg-foreground text-background text-xs font-semibold rounded-full px-3 py-1.5
-                hover:opacity-90 transition-opacity active:scale-95"
-            >
-              Today's Puzzle →
-            </button>
-          </div>
-          <span className="text-xs text-muted-foreground inline-flex items-center gap-1 pt-1.5">
-            <span>🗄️</span> Archive
-          </span>
+        <div className="flex items-center justify-between gap-3">
+          <button
+            onClick={handleBackToArchive}
+            className="border border-border text-foreground text-xs font-semibold rounded-full px-3 py-1.5
+              hover:bg-secondary transition-colors active:scale-95"
+          >
+            ← Back to Archive
+          </button>
+          <button
+            onClick={() => navigate("/")}
+            className="bg-foreground text-background text-xs font-semibold rounded-full px-3 py-1.5
+              hover:opacity-90 transition-opacity active:scale-95"
+          >
+            Today's Puzzle →
+          </button>
         </div>
 
         {puzzle && (() => {
@@ -236,6 +232,10 @@ export default function ArchivePuzzle() {
         settings={settings}
         onSettingsChange={handleSettingsChange}
         onOpenFeedback={() => setActiveModal("feedback")}
+        showMenuLinks
+        onHowToPlayClick={() => setActiveModal("help")}
+        user={user ?? null}
+        onSignOut={() => supabase.auth.signOut()}
       />
       <FeedbackModal
         open={activeModal === "feedback"}

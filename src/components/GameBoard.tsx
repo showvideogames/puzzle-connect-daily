@@ -858,7 +858,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {!isDailyHomepage && (
         <div className="flex items-center justify-center gap-2 mb-4">
           <p className="text-center text-sm text-muted-foreground">
-            Find four groups of four and the hidden {theme.label}!
+            Select four words that share a connection!
           </p>
           {!puzzle.rainbowHerring && <NoRainbowIndicator />}
         </div>
@@ -1171,7 +1171,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                     : "bg-action-secondary-bg text-action-secondary-fg"
                 }`}
             >
-              Clear
+              Deselect All
             </button>
             <button
               onClick={submitGuess}
