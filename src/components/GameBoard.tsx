@@ -777,25 +777,35 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     return lines;
   }, [state.guessHistory, puzzle, theme]);
 
-  // Same source of truth as generateShareLines above (state.guessHistory),
-  // and the same per-word logic that block already uses for its non-rainbow
-  // lines (attempt.groupIndices, in submitted order) — so an incorrect or
-  // one-away guess renders each of its 4 cells in that WORD's own true
-  // category color, exactly matching the mixed-color rows Share Score's
-  // emoji text already produces, rather than collapsing the guess into a
-  // single flat status. Hint markers have no square/color representation in
-  // the grid, so (like Guess History's own incorrectGuesses filter
-  // elsewhere in this file) they're skipped rather than guessed at.
+  // Same source of truth as generateShareLines above (state.guessHistory) —
+  // guessHistory is already the real chronological event log (guesses AND
+  // hint markers get pushed onto it at the moment each happens, see
+  // addHintMarker in useGame.ts), so no separate history model or
+  // persistence change is needed; this just maps that existing log to
+  // ResultGrid's row shape instead of filtering hints out of it. Guess rows
+  // reuse the same per-word logic generateShareLines uses for its
+  // non-rainbow lines (attempt.groupIndices, in submitted order), so an
+  // incorrect or one-away guess renders each of its 4 cells in that WORD's
+  // own true category color, exactly matching the mixed-color rows Share
+  // Score's emoji text already produces. Old saved games from before this
+  // feature existed simply have no isHintMarker entries in their history,
+  // so they render exactly as before — nothing to migrate.
   const resultRows = useMemo((): ResultRow[] => {
-    return state.guessHistory
-      .filter((attempt) => !attempt.isHintMarker)
-      .map((attempt): ResultRow => {
-        if (attempt.isRainbow) return ["rainbow", "rainbow", "rainbow", "rainbow"];
-        return attempt.groupIndices.map((gi): ResultCellKind => {
+    return state.guessHistory.map((attempt): ResultRow => {
+      if (attempt.isHintMarker) {
+        return { type: "hint", hint: attempt.hintType === "small" ? "bulb" : "flashlight" };
+      }
+      if (attempt.isRainbow) {
+        return { type: "guess", cells: ["rainbow", "rainbow", "rainbow", "rainbow"] };
+      }
+      return {
+        type: "guess",
+        cells: attempt.groupIndices.map((gi): ResultCellKind => {
           const diff = puzzle.groups[gi]?.difficulty;
           return DIFFICULTY_RESULT_KIND[diff] ?? "yellow";
-        });
-      });
+        }),
+      };
+    });
   }, [state.guessHistory, puzzle]);
 
   const generateShareText = useCallback(() => {
