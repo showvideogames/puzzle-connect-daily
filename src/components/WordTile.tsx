@@ -268,8 +268,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
     // see if a second tap follows — that's what made ordinary selection feel
     // delayed). Only when a second tap lands on this same tile within the
     // double-tap window do we treat it as the color action instead of a
-    // second select/deselect toggle; selection is left exactly as the first
-    // tap set it.
+    // second select/deselect toggle.
     const now = Date.now();
     const timeSinceLastTap = now - lastTapRef.current;
 
@@ -277,6 +276,12 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       // Reset rather than stamping `now`, so a third rapid tap is treated as
       // a fresh first tap instead of chaining into another double-tap.
       lastTapRef.current = 0;
+      // Double-tap coloring is selection-neutral: the first tap already
+      // toggled selection, so undo that toggle here (onClick is a pure
+      // select/deselect toggle — see toggleWord in useGame.ts) to restore
+      // whatever selection state the tile had before this gesture started,
+      // then open the picker.
+      onClick();
       setShowColorPicker(true);
     } else {
       lastTapRef.current = now;
