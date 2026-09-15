@@ -1211,7 +1211,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 onClick={clearAllColors}
                 className="w-full h-12 rounded-full text-sm md:text-base font-bold transition-colors
                   bg-action-secondary-bg text-action-secondary-fg border border-transparent
-                  dark:bg-secondary dark:text-foreground dark:border-border
+                  dark:bg-transparent dark:border-border
                   dark:hover:bg-muted dark:active:scale-95 dark:disabled:opacity-40
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
                   focus-visible:ring-offset-2 focus-visible:ring-offset-background
