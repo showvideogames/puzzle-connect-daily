@@ -965,25 +965,25 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           </button>
           <button
             onClick={() => setPaletteMode("yellow")}
-            className={`w-10 h-10 rounded-lg bg-yellow-400 dark:bg-[#E0B64A] hover:scale-110 transition-all
+            className={`w-10 h-10 rounded-lg bg-yellow-400 dark:bg-[#D4A62A] hover:scale-110 transition-all
               ${paletteMode === "yellow" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
             aria-label="Yellow paint"
           />
           <button
             onClick={() => setPaletteMode("green")}
-            className={`w-10 h-10 rounded-lg bg-green-500 dark:bg-[#52C58E] hover:scale-110 transition-all
+            className={`w-10 h-10 rounded-lg bg-green-500 dark:bg-[#3FBF7F] hover:scale-110 transition-all
               ${paletteMode === "green" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
             aria-label="Green paint"
           />
           <button
             onClick={() => setPaletteMode("blue")}
-            className={`w-10 h-10 rounded-lg bg-blue-500 dark:bg-[#6CB7EA] hover:scale-110 transition-all
+            className={`w-10 h-10 rounded-lg bg-blue-500 dark:bg-[#5AA7E0] hover:scale-110 transition-all
               ${paletteMode === "blue" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
             aria-label="Blue paint"
           />
           <button
             onClick={() => setPaletteMode("red")}
-            className={`w-10 h-10 rounded-lg bg-red-500 dark:bg-[#E08188] hover:scale-110 transition-all
+            className={`w-10 h-10 rounded-lg bg-red-500 dark:bg-[#E56D6D] hover:scale-110 transition-all
               ${paletteMode === "red" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
             aria-label="Red paint"
           />

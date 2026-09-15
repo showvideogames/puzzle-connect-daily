@@ -9,17 +9,17 @@ const DOUBLE_TAP_DELAY_MS = 250;
 // palette — the two no longer share one hex per color the way earlier
 // revisions did, so each needs its own light/dark class pair.
 const COLOR_STYLES: Record<string, { bg: string; ring: string }> = {
-  yellow: { bg: "bg-yellow-400/35 dark:bg-[#E0B64A]/35", ring: "ring-yellow-400 dark:ring-[#E0B64A]" },
-  green:  { bg: "bg-green-500/35 dark:bg-[#52C58E]/35",  ring: "ring-green-400 dark:ring-[#52C58E]"  },
-  blue:   { bg: "bg-blue-500/35 dark:bg-[#6CB7EA]/35",   ring: "ring-blue-400 dark:ring-[#6CB7EA]"   },
-  red:    { bg: "bg-red-500/35 dark:bg-[#E08188]/35",    ring: "ring-red-400 dark:ring-[#E08188]"    },
+  yellow: { bg: "bg-yellow-400/35 dark:bg-[#D4A62A]/35", ring: "ring-yellow-400 dark:ring-[#D4A62A]" },
+  green:  { bg: "bg-green-500/35 dark:bg-[#3FBF7F]/35",  ring: "ring-green-400 dark:ring-[#3FBF7F]"  },
+  blue:   { bg: "bg-blue-500/35 dark:bg-[#5AA7E0]/35",   ring: "ring-blue-400 dark:ring-[#5AA7E0]"   },
+  red:    { bg: "bg-red-500/35 dark:bg-[#E56D6D]/35",    ring: "ring-red-400 dark:ring-[#E56D6D]"    },
 };
 
 const COLOR_CIRCLES: { key: string; circle: string }[] = [
-  { key: "yellow", circle: "bg-yellow-400 dark:bg-[#E0B64A]" },
-  { key: "green",  circle: "bg-green-500 dark:bg-[#52C58E]"  },
-  { key: "blue",   circle: "bg-blue-500 dark:bg-[#6CB7EA]"   },
-  { key: "red",    circle: "bg-red-500 dark:bg-[#E08188]"    },
+  { key: "yellow", circle: "bg-yellow-400 dark:bg-[#D4A62A]" },
+  { key: "green",  circle: "bg-green-500 dark:bg-[#3FBF7F]"  },
+  { key: "blue",   circle: "bg-blue-500 dark:bg-[#5AA7E0]"   },
+  { key: "red",    circle: "bg-red-500 dark:bg-[#E56D6D]"    },
 ];
 
 // Count visible characters/emojis using Intl.Segmenter
