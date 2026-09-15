@@ -123,16 +123,15 @@ const STATUS_CELL_CLASSES: Record<Exclude<DayStatus, "none" | "won-rainbow" | "n
   failed: "bg-[hsl(5_74%_58%/0.28)] dark:bg-[hsl(5_74%_58%/0.32)] border-border",
 };
 
-// "No puzzle" cells deliberately invert the page theme (black fill/white
-// number in light mode, white fill/black number in dark mode) instead of
-// following the light/dark tint pattern every other status uses above —
-// the goal is a date that reads as visually opposite the page, not just a
-// different tint of it. bg-foreground/text-background already resolve to
-// exactly that in both themes (foreground is near-black in light mode and
-// near-white in dark mode, background is the inverse of each), so no new
-// color tokens are needed.
-const NO_PUZZLE_CELL_CLASS = "bg-foreground border-border";
-const NO_PUZZLE_NUMBER_CLASS = "text-background";
+// "No puzzle" cells read as greyed-out/disabled — dimmer than an available
+// "unplayed" date, never a highlighted or achievement-like state. Reuses
+// the same disabled-bg/disabled-fg tokens the Shuffle/Clear/Submit controls
+// already use for their own disabled look (light: soft warm gray fill,
+// medium muted gray number; dark: charcoal fill, muted gray number), so
+// this stays visually consistent with "disabled" everywhere else in the
+// app instead of introducing a new one-off treatment.
+const NO_PUZZLE_CELL_CLASS = "bg-disabled-bg border-border";
+const NO_PUZZLE_NUMBER_CLASS = "text-disabled-fg";
 
 const RAINBOW_CELL_GRADIENT =
   "linear-gradient(135deg, hsl(48 89% 60% / 0.40), hsl(125 45% 50% / 0.38), hsl(203 65% 55% / 0.38), hsl(258 90% 62% / 0.40), hsl(5 74% 58% / 0.38))";
@@ -722,7 +721,7 @@ export default function Archive() {
           <span className="w-2.5 h-2.5 rounded-full shrink-0 border border-border bg-card" /> Unplayed
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full shrink-0 border border-border bg-foreground" /> No puzzle
+          <span className="w-2.5 h-2.5 rounded-full shrink-0 border border-border bg-disabled-bg" /> No puzzle
         </span>
       </div>
     </div>
