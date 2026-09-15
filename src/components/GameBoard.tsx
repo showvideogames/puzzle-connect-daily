@@ -1219,10 +1219,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               >
                 <span className="flex items-center justify-center gap-1.5">
                   <img
-                    src="/broom-icon.png"
+                    src="/new-broom-icon.png"
                     alt=""
                     aria-hidden="true"
-                    className="w-8 h-8 shrink-0 dark:invert"
+                    className="w-6 h-6 shrink-0 dark:invert"
                   />
                   Clear Colors
                 </span>
