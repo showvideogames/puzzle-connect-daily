@@ -1222,7 +1222,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                     src="/broom-icon.png"
                     alt=""
                     aria-hidden="true"
-                    className="w-4 h-4 shrink-0 dark:invert"
+                    className="w-8 h-8 shrink-0 dark:invert"
                   />
                   Clear Colors
                 </span>
