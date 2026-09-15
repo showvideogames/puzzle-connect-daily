@@ -197,7 +197,7 @@ export default function ArchivePuzzle() {
             onClick={() => navigate("/")}
             className="justify-self-end inline-flex items-center whitespace-nowrap h-8 sm:h-9 px-2 sm:px-4 rounded-full text-xs sm:text-sm font-semibold text-white
               bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
-              shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45)]
+              shadow-[0_6px_16px_-8px_rgba(165,138,196,0.45)]
               hover:-translate-y-px active:scale-95 transition-all"
           >
             Today's Puzzle →

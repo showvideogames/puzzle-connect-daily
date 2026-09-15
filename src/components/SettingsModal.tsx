@@ -86,7 +86,7 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
             className="pointer-events-auto w-full max-w-sm
               max-h-[calc(100vh-24px)] max-h-[calc(100dvh-24px)]
               flex flex-col
-              bg-background border shadow-lg rounded-none sm:rounded-lg
+              bg-card border shadow-lg rounded-none sm:rounded-lg
               data-[state=open]:animate-in data-[state=closed]:animate-out
               data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0
               data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95

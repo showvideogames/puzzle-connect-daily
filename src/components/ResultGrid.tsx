@@ -2,9 +2,13 @@
 // completed-puzzle page. Styled to read as a miniature version of the
 // puzzle tiles (mini-tile corner radius, a fixed near-black "Ink" border)
 // rather than soft pill/dot chips — the Ink hex is the same fixed value as
-// --ink in index.css, used literally (not the CSS var) so the border stays
-// a consistent near-black outline in both light and dark mode, matching
-// the fixed, non-theme-adaptive brand fill colors below.
+// --ink resolves to in *light* mode, used literally (not the CSS var, which
+// is theme-adaptive) so the border stays a consistent near-black outline in
+// both light and dark mode. The cell fills below (SOLID_FILLS, and the
+// yellow/green/blue/red bands of RAINBOW_GRADIENT) resolve through the
+// shared --group-N tokens instead, so they DO pick up the approved dark
+// variants; only the gradient's purple mid-blend (a decorative rainbow
+// band, not a semantic category color) stays fixed like the border/icons.
 //
 // Row DATA is not decided here — GameBoard.tsx derives `rows` from the same
 // state.guessHistory used to build the Share Score text
@@ -29,25 +33,29 @@ const HINT_ICON_SIZE = "w-[clamp(22px,6vw,30px)] h-[clamp(22px,6vw,30px)]";
 
 // Five roughly-equal color bands with short blend zones at each boundary —
 // reads clearly as distinct colors rather than one continuous, muddy smear.
+// The four real category bands resolve through the shared --group-N tokens
+// (so dark mode picks up the approved dark variants); the purple band is a
+// decorative mid-blend specific to this rainbow illustration, not tied to
+// any semantic category token, so it stays fixed in both themes.
 const RAINBOW_GRADIENT = `linear-gradient(
   115deg,
-  #F6D968 0%,
-  #F6D968 16%,
-  #8CCB91 24%,
-  #8CCB91 36%,
-  #7DB9DD 44%,
-  #7DB9DD 56%,
+  hsl(var(--group-1)) 0%,
+  hsl(var(--group-1)) 16%,
+  hsl(var(--group-2)) 24%,
+  hsl(var(--group-2)) 36%,
+  hsl(var(--group-3)) 44%,
+  hsl(var(--group-3)) 56%,
   #9B7BE5 64%,
   #9B7BE5 76%,
-  #E9786D 84%,
-  #E9786D 100%
+  hsl(var(--group-4)) 84%,
+  hsl(var(--group-4)) 100%
 )`;
 
 const SOLID_FILLS: Record<Exclude<ResultCellKind, "rainbow">, string> = {
-  yellow: "#F6D968",
-  green: "#8CCB91",
-  blue: "#7DB9DD",
-  red: "#E9786D",
+  yellow: "hsl(var(--group-1))",
+  green: "hsl(var(--group-2))",
+  blue: "hsl(var(--group-3))",
+  red: "hsl(var(--group-4))",
 };
 
 // Simple flat bulb silhouette: warm-yellow glass, three short Slate rays, a

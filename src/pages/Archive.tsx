@@ -20,18 +20,21 @@ import type { User } from "@supabase/supabase-js";
 // itself is the checkmark's stroke (not a rainbow ring around a plain
 // check), using the same brand stops as the custom result grid
 // (ResultGrid.tsx), with a thin fixed Ink outline layered behind it so it
-// stays legible at the ~16-20px the calendar renders it at.
+// stays legible at the ~16-20px the calendar renders it at. The four real
+// category stops resolve through the shared --group-N tokens (dark-mode
+// aware); the purple mid-blend is a decorative rainbow band, not a
+// semantic category color, so it stays fixed like the Ink outline.
 function RainbowCheckIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <defs>
         <linearGradient id="archive-rainbow-check" x1="3" y1="18" x2="21" y2="5" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#F6D968" />
-          <stop offset="18%" stopColor="#F6D968" />
-          <stop offset="34%" stopColor="#8CCB91" />
-          <stop offset="54%" stopColor="#7DB9DD" />
+          <stop offset="0%" style={{ stopColor: "hsl(var(--group-1))" }} />
+          <stop offset="18%" style={{ stopColor: "hsl(var(--group-1))" }} />
+          <stop offset="34%" style={{ stopColor: "hsl(var(--group-2))" }} />
+          <stop offset="54%" style={{ stopColor: "hsl(var(--group-3))" }} />
           <stop offset="74%" stopColor="#9B7BE5" />
-          <stop offset="100%" stopColor="#E9786D" />
+          <stop offset="100%" style={{ stopColor: "hsl(var(--group-4))" }} />
         </linearGradient>
       </defs>
       <path
