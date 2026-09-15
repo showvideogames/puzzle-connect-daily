@@ -72,11 +72,11 @@ export function resolveTheme(theme: string | null | undefined): ResolvedTheme {
 }
 
 // ── Holiday header logo ──────────────────────────────────────────────────────
-// On its day, the header wordmark ("/textlogo.png") is swapped for a holiday
-// version site-wide. Date-based (local time) so it's independent of which puzzle
-// is loaded. Add more holidays by extending todaysLogo().
+// On its day, the header wordmark ("/rainbow-connect-logo.png") is swapped for
+// a holiday version site-wide. Date-based (local time) so it's independent of
+// which puzzle is loaded. Add more holidays by extending todaysLogo().
 
-const DEFAULT_LOGO = "/textlogo.png";
+const DEFAULT_LOGO = "/rainbow-connect-logo.png";
 const JULY4_LOGO = "/AmericanFlagLogo.png";
 
 /** True on July 4th in the viewer's local time. */

@@ -55,13 +55,17 @@ export function GameHeader({
       <Link to="/" className="active:scale-95 transition-transform shrink-0" aria-label="Home">
         <img
           src={todaysLogo()}
-          alt="Rainbow Categories"
+          alt="Rainbow Connect"
           // Scales down at narrow viewports (aspect ratio preserved via
-          // width:auto), capping at 28px tall once there's room — applies to
-          // both variants so the header never horizontally overflows at a
-          // 320px viewport, whether it's the homepage's 3 icons or the
-          // default variant's larger icon set (archive/free-puzzle pages).
-          className="h-[clamp(14px,5.8vw,28px)] w-auto"
+          // width:auto) — the floor/vw-coefficient are tuned against the
+          // tightest case (FreePuzzle's full 6-icon header at 320px) so the
+          // header never horizontally overflows there. The 28px→40px ceiling
+          // bump only matters well past mobile: every variant's header hits
+          // its own max-width (840px minimal / 512px default) long before
+          // 40px-tall renders, so this just stops the logo from staying
+          // capped at a comparatively tiny 28px on desktop, where there was
+          // hundreds of pixels of unused gap before the icons.
+          className="h-[clamp(14px,5.8vw,40px)] w-auto"
         />
       </Link>
 
