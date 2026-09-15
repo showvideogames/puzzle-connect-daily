@@ -117,6 +117,29 @@ function prefersReducedMotion(): boolean {
   }
 }
 
+// Lucide has no broom icon, so this is a small hand-drawn one matching
+// its conventions (24x24, currentColor stroke, round caps/joins) for the
+// Clear Colors button.
+function BroomIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <circle cx="3" cy="10" r="0.8" fill="currentColor" stroke="none" />
+      <circle cx="6" cy="6" r="0.8" fill="currentColor" stroke="none" />
+      <path d="M20 4 11 13" />
+      <path d="M11 13 4 19 9 22 15 15 Z" />
+    </svg>
+  );
+}
+
 function NoRainbowIndicator() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -1217,7 +1240,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   focus-visible:ring-offset-2 focus-visible:ring-offset-background
                   disabled:cursor-default"
               >
-                Clear Colors
+                <span className="flex items-center justify-center gap-1.5">
+                  <BroomIcon className="w-4 h-4 shrink-0" />
+                  Clear Colors
+                </span>
               </button>
               <div aria-hidden="true" />
             </div>
