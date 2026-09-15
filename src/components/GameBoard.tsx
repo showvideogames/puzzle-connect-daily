@@ -965,7 +965,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           </button>
           <button
             onClick={() => setPaletteMode("yellow")}
-            className={`w-10 h-10 rounded-lg bg-yellow-400 hover:scale-110 transition-all
+            className={`w-10 h-10 rounded-lg bg-[#8A6A24] hover:scale-110 transition-all
               ${paletteMode === "yellow" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
             aria-label="Yellow paint"
           />
@@ -983,7 +983,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           />
           <button
             onClick={() => setPaletteMode("red")}
-            className={`w-10 h-10 rounded-lg bg-red-500 hover:scale-110 transition-all
+            className={`w-10 h-10 rounded-lg bg-[#8F3F43] hover:scale-110 transition-all
               ${paletteMode === "red" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
             aria-label="Red paint"
           />
