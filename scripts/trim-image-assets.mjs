@@ -12,7 +12,13 @@
 // hint-image bucket is ever added, list it in BUCKETS below.
 //
 // Usage:
-//   npm run trim:assets
+//   npm run trim:assets                            process every PNG, upload changes
+//   npm run trim:assets -- --dry-run               process + report dimensions, upload nothing
+//   npm run trim:assets -- --file NAME             process a single asset only (e.g.
+//                                                   "smile" or "smile.png"); useful for
+//                                                   validating the workflow before a full run
+//   npm run trim:assets -- --dry-run --file NAME   combine both
+// (npm needs the extra "--" to forward flags to the script instead of eating them itself.)
 //
 // Requires two environment variables (never commit these, never prefix with
 // VITE_ — that would ship the service-role key to the browser bundle):
@@ -72,6 +78,25 @@ if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+// ── CLI args ────────────────────────────────────────────────────────────────
+
+function parseArgs(argv) {
+  const args = { dryRun: false, file: null };
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--dry-run") {
+      args.dryRun = true;
+    } else if (arg === "--file") {
+      args.file = argv[++i];
+    } else if (arg.startsWith("--file=")) {
+      args.file = arg.slice("--file=".length);
+    }
+  }
+  return args;
+}
+
+const { dryRun, file: fileArg } = parseArgs(process.argv.slice(2));
+
 // ── Storage helpers ─────────────────────────────────────────────────────────
 
 // Supabase Storage's list() returns folders as entries with id === null;
@@ -93,7 +118,7 @@ async function listPngPaths(bucket, prefix = "") {
   return paths;
 }
 
-async function processAsset(bucket, filePath) {
+async function processAsset(bucket, filePath, { dryRun = false } = {}) {
   const { data: blob, error: downloadError } = await supabase.storage.from(bucket).download(filePath);
   if (downloadError) {
     console.error(`  [FAILED download] ${bucket}/${filePath}: ${downloadError.message}`);
@@ -123,6 +148,11 @@ async function processAsset(bucket, filePath) {
     return;
   }
 
+  if (dryRun) {
+    console.log(`  [DRY RUN] ${bucket}/${filePath}: ${originalW}x${originalH} -> ${newW}x${newH} (would update, not uploaded)`);
+    return;
+  }
+
   // Write the processed image to a temp file and re-decode it as a
   // correctness check BEFORE touching the remote asset — the upload below
   // only runs once this has succeeded, and upload() is a single atomic PUT,
@@ -149,7 +179,31 @@ async function processAsset(bucket, filePath) {
 }
 
 async function main() {
-  console.log(`Trimming transparent padding from custom PNG assets (padding: ${PADDING_PX}px)\n`);
+  console.log(
+    `Trimming transparent padding from custom PNG assets (padding: ${PADDING_PX}px)` +
+    (dryRun ? " [DRY RUN — nothing will be uploaded]" : "") + "\n"
+  );
+
+  if (fileArg) {
+    // Single-file mode: accept "name", "name.png", or "bucket/name.png".
+    let bucket = BUCKETS[0];
+    let filePath = fileArg;
+    const slash = fileArg.indexOf("/");
+    if (slash !== -1 && BUCKETS.includes(fileArg.slice(0, slash))) {
+      bucket = fileArg.slice(0, slash);
+      filePath = fileArg.slice(slash + 1);
+    }
+    if (!filePath.toLowerCase().endsWith(".png")) filePath += ".png";
+
+    console.log(`Bucket: ${bucket} (single file: ${filePath})`);
+    try {
+      await processAsset(bucket, filePath, { dryRun });
+    } catch (err) {
+      console.error(`  [FAILED] ${bucket}/${filePath}:`, err.message ?? err);
+    }
+    console.log("\nDone.");
+    return;
+  }
 
   for (const bucket of BUCKETS) {
     console.log(`Bucket: ${bucket}`);
@@ -160,7 +214,7 @@ async function main() {
     }
     for (const filePath of files) {
       try {
-        await processAsset(bucket, filePath);
+        await processAsset(bucket, filePath, { dryRun });
       } catch (err) {
         // Isolate failures per-file (corrupt PNG, transient network error,
         // etc.) so one bad asset doesn't abort the rest of the batch.
