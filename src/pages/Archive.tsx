@@ -105,21 +105,23 @@ const EMOJI_TINTS = [
 
 // ── Calendar status tints ────────────────────────────────────────────────────
 // Whole-cell tints, not badges/dots — literal hue constants (matching the
-// site's real category colors) at a deliberately low, "5-15% strength"
-// alpha so they read as restrained pastels rather than saturated category
-// cards. Dark-mode alphas are bumped slightly since the same tint over a
-// darker neutral reads fainter than it does over the light cream page.
+// site's real category colors). Alpha is tuned to read as a clearly
+// noticeable colored tile at a glance (roughly 28-35% light / 30-40% dark
+// per status — dark mode runs a bit stronger since the same tint reads
+// fainter over a dark neutral than over the light cream page), while
+// staying well short of the fully-saturated category-card colors used
+// elsewhere in the app.
 const STATUS_CELL_CLASSES: Record<Exclude<DayStatus, "none" | "won-rainbow">, string> = {
   unplayed: "bg-card border-border",
-  "in-progress": "bg-[hsl(48_89%_69%/0.20)] dark:bg-[hsl(48_89%_69%/0.20)] border-border",
-  won: "bg-[hsl(125_38%_67%/0.18)] dark:bg-[hsl(125_38%_67%/0.20)] border-border",
-  failed: "bg-[hsl(5_74%_67%/0.16)] dark:bg-[hsl(5_74%_67%/0.18)] border-border",
+  "in-progress": "bg-[hsl(48_89%_60%/0.32)] dark:bg-[hsl(48_89%_60%/0.35)] border-border",
+  won: "bg-[hsl(125_45%_50%/0.32)] dark:bg-[hsl(125_45%_50%/0.36)] border-border",
+  failed: "bg-[hsl(5_74%_58%/0.28)] dark:bg-[hsl(5_74%_58%/0.32)] border-border",
 };
 
 const RAINBOW_CELL_GRADIENT =
-  "linear-gradient(135deg, hsl(48 89% 69% / 0.22), hsl(125 38% 67% / 0.20), hsl(203 59% 68% / 0.20), hsl(258 90% 66% / 0.20), hsl(5 74% 67% / 0.20))";
+  "linear-gradient(135deg, hsl(48 89% 60% / 0.40), hsl(125 45% 50% / 0.38), hsl(203 65% 55% / 0.38), hsl(258 90% 62% / 0.40), hsl(5 74% 58% / 0.38))";
 const RAINBOW_CELL_GRADIENT_DARK =
-  "linear-gradient(135deg, hsl(48 89% 69% / 0.26), hsl(125 38% 67% / 0.24), hsl(203 59% 68% / 0.24), hsl(258 90% 66% / 0.26), hsl(5 74% 67% / 0.24))";
+  "linear-gradient(135deg, hsl(48 89% 60% / 0.46), hsl(125 45% 50% / 0.44), hsl(203 65% 55% / 0.44), hsl(258 90% 62% / 0.46), hsl(5 74% 58% / 0.44))";
 
 // Solid (non-pale) version for the compact legend dots, where a diluted
 // tint would be too faint to read as a 8px swatch.
@@ -541,9 +543,8 @@ export default function Archive() {
   );
 
   const titleBlock = (
-    <div className="text-center mb-6 sm:mb-8 mt-2">
+    <div className="text-center mb-3 sm:mb-4 mt-1">
       <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">Archive</h2>
-      <p className="text-sm sm:text-base text-muted-foreground mt-1">Browse and play past puzzles.</p>
     </div>
   );
 
@@ -573,7 +574,7 @@ export default function Archive() {
   // Floating pill month selector — visually separate from (and elevated
   // above) the calendar card below it.
   const monthSelector = (
-    <div className="flex justify-center mb-4 sm:mb-5">
+    <div className="flex justify-center mb-3 sm:mb-4">
       <div
         className="inline-flex items-center gap-3 sm:gap-4 bg-card border border-border rounded-full pl-2 pr-2 py-2
           shadow-[0_1px_2px_rgba(30,25,20,0.04),0_4px_14px_rgba(30,25,20,0.07)]
