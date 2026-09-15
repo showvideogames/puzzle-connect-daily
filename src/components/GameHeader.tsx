@@ -1,4 +1,4 @@
-import { BarChart3, Lightbulb, BookOpen, Archive, Settings } from "lucide-react";
+import { BarChart3, Lightbulb, BookOpen, Archive, Calendar, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PlayerAuth } from "./PlayerAuth";
 import { todaysLogo } from "@/lib/themes";
@@ -88,6 +88,21 @@ export function GameHeader({
         >
           <BarChart3 className={iconGlyphClass} />
         </button>
+        {/* Daily-homepage-only: the "minimal" variant's own dedicated
+            Archive icon (a calendar, not the box-shaped Archive icon used
+            below on the default variant) — Archive/ArchivePuzzle already
+            have their own in-page Archive navigation, so this is scoped to
+            isMinimal specifically rather than the shared hideExtraIcons
+            flag, to avoid a redundant/self-linking icon on those pages. */}
+        {isMinimal && (
+          <Link
+            to="/archive"
+            className={iconButtonClass}
+            aria-label="Puzzle archive"
+          >
+            <Calendar className={iconGlyphClass} />
+          </Link>
+        )}
         {!hideExtraIcons && (
           <button
             onClick={onHowToPlayClick}

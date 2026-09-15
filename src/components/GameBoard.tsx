@@ -1200,16 +1200,23 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             </button>
           </div>
           {(colorCodeTiles || colorPaletteMode) && hasAnyColor && (
-            <div className="flex justify-center mt-3">
+            // Same w-full md:w-[80%] mx-auto grid-cols-3 gap-2 math as the
+            // Shuffle/Deselect All/Submit row above, with the button in the
+            // center column only — guarantees this matches one of those
+            // buttons' width exactly (not an eyeballed value) while staying
+            // centered, rather than sizing its own single-button container.
+            <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-3">
+              <div aria-hidden="true" />
               <button
                 onClick={clearAllColors}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border
-                  bg-action-secondary-bg text-action-secondary-fg text-sm font-medium
+                className="w-full h-12 rounded-full text-sm md:text-base font-medium border border-border
+                  bg-action-secondary-bg text-action-secondary-fg
                   dark:bg-transparent
                   hover:bg-secondary transition-colors duration-150 active:scale-95"
               >
-                <Eraser className="w-4 h-4" /> Clear Colors
+                Clear Colors
               </button>
+              <div aria-hidden="true" />
             </div>
           )}
         </>
