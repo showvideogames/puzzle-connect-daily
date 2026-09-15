@@ -1209,10 +1209,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               <div aria-hidden="true" />
               <button
                 onClick={clearAllColors}
-                className="w-full h-12 rounded-full text-sm md:text-base font-medium border border-border
-                  bg-action-secondary-bg text-action-secondary-fg
-                  dark:bg-transparent
-                  hover:bg-secondary transition-colors duration-150 active:scale-95"
+                className="w-full h-12 rounded-full text-sm md:text-base font-bold transition-colors
+                  bg-action-secondary-bg text-action-secondary-fg border border-transparent
+                  dark:bg-secondary dark:text-foreground dark:border-border
+                  dark:hover:bg-muted dark:active:scale-95 dark:disabled:opacity-40
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                  focus-visible:ring-offset-2 focus-visible:ring-offset-background
+                  disabled:cursor-default"
               >
                 Clear Colors
               </button>
@@ -1308,9 +1311,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           <button
             onClick={() => setHistoryExpanded((v) => !v)}
             aria-expanded={historyExpanded}
-            className={`relative w-full px-4 pt-3 text-center hover:bg-secondary/40 transition-colors ${
-              historyExpanded ? "pb-2" : "pb-3"
-            }`}
+            className="relative w-full px-4 py-3 text-center hover:bg-secondary/40 transition-colors"
           >
             {/* Centered relative to the full card width — the chevron below
                 is positioned absolutely so it doesn't shift this group off
@@ -1319,11 +1320,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               <History className="w-4 h-4 text-muted-foreground shrink-0" />
               <span className="text-sm font-bold text-foreground">Guess History</span>
             </span>
-            {historyExpanded && (
-              <span className="block text-xs text-muted-foreground mt-0.5">
-                Shows only incorrect guesses.
-              </span>
-            )}
             <ChevronDown
               className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
                 historyExpanded ? "rotate-180" : ""
