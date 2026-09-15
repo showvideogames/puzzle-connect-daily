@@ -9,7 +9,7 @@ import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
 import { ResultGrid, ResultCellKind, ResultRow } from "./ResultGrid";
-import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown } from "lucide-react";
+import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown, Rainbow, Grid2x2 } from "lucide-react";
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useImagePreload } from "@/hooks/useImagePreload";
@@ -22,7 +22,10 @@ import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoj
 import { trackEvent } from "@/lib/analytics";
 import { resolveTheme } from "@/lib/themes";
 
-const TOOLTIP_MSG = "This puzzle has no Rainbow category.";
+const RAINBOW_MODE_TITLE = "Hidden Rainbow";
+const RAINBOW_MODE_BODY = "This puzzle contains a fifth connection made from one word in each group.";
+const NO_RAINBOW_MODE_TITLE = "Four Groups Only";
+const NO_RAINBOW_MODE_BODY = "This puzzle does not contain a hidden Rainbow.";
 
 function extractTrailingEmojis(str: string): string {
   try {
@@ -117,7 +120,14 @@ function prefersReducedMotion(): boolean {
   }
 }
 
-function NoRainbowIndicator() {
+// Compact puzzle-mode badge shown above the board — RAINBOW when the puzzle
+// has hidden-Rainbow data, 4 GROUPS otherwise. Both variants share the exact
+// same geometry (height/radius/padding/font/icon size/border width); only
+// the fill color, icon, and label differ, so neither reads as more "correct"
+// than the other. Rainbow's fill reuses the existing .rainbow-tile gradient
+// (the same one real in-game rainbow tiles use) rather than introducing a
+// new brand color, per "use the current Rainbow Connect visual language."
+function PuzzleModeBadge({ isRainbow }: { isRainbow: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -136,39 +146,35 @@ function NoRainbowIndicator() {
     };
   }, [open]);
 
+  const Icon = isRainbow ? Rainbow : Grid2x2;
+  const title = isRainbow ? RAINBOW_MODE_TITLE : NO_RAINBOW_MODE_TITLE;
+  const body = isRainbow ? RAINBOW_MODE_BODY : NO_RAINBOW_MODE_BODY;
+
   return (
-    <div ref={ref} className="relative flex-shrink-0" style={{ lineHeight: 0 }}>
+    <div ref={ref} className="relative shrink-0">
       <button
         type="button"
-        aria-label={TOOLTIP_MSG}
         onClick={() => setOpen((v) => !v)}
-        className="group focus:outline-none"
-        style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+        aria-expanded={open}
+        aria-label={`${isRainbow ? "Rainbow" : "4 Groups"} puzzle mode — tap for details`}
+        className={`inline-flex items-center gap-1 sm:gap-1.5 h-6 sm:h-7 pl-1.5 pr-2 sm:pl-2 sm:pr-2.5
+          rounded-full border text-[10px] sm:text-[11px] font-bold uppercase tracking-wide
+          transition-transform active:scale-95
+          ${isRainbow
+            ? "rainbow-tile text-white border-transparent"
+            : "bg-secondary text-muted-foreground border-border"}`}
       >
-        <img
-          src="/no-rainbow.png"
-          alt="No rainbow"
-          style={{ height: "48px", width: "auto", display: "block" }}
-        />
-        <span
-          className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2
-            whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium shadow-md
-            bg-foreground text-background
-            opacity-0 group-hover:opacity-100 transition-opacity duration-150
-            hidden sm:block"
-        >
-          {TOOLTIP_MSG}
-        </span>
+        <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+        {isRainbow ? "Rainbow" : "4 Groups"}
       </button>
 
       {open && (
         <div
-          className="absolute bottom-full right-0 mb-2 z-50
-            rounded-xl px-3 py-2 text-xs font-medium shadow-lg text-center
-            bg-foreground text-background sm:hidden"
-          style={{ width: "max-content", maxWidth: "220px" }}
+          className="absolute right-0 top-full mt-2 z-50 w-max max-w-[220px]
+            rounded-xl px-3 py-2.5 shadow-lg text-left bg-foreground text-background"
         >
-          {TOOLTIP_MSG}
+          <p className="text-[10px] font-bold uppercase tracking-wide mb-0.5">{title}</p>
+          <p className="text-xs leading-snug opacity-90">{body}</p>
         </div>
       )}
     </div>
@@ -865,14 +871,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       ) : (
     <div className={`w-full mx-auto animate-fade-up ${isDailyHomepage ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
-      {!isDailyHomepage && (
-        <div className="flex items-center justify-center gap-2 mb-4">
-          <p className="text-center text-[13px] font-medium tracking-wide text-muted-foreground">
-            Select four words that share a connection!
-          </p>
-          {!puzzle.rainbowHerring && <NoRainbowIndicator />}
-        </div>
-      )}
+      {/* Instruction + puzzle-mode badge share one row: instruction on the
+          left (shrinks/truncates first — min-w-0 is required for that on a
+          flex item), badge fixed-size on the right (shrink-0), so on tight
+          widths the badge always stays fully readable and only the
+          instruction ever gives up space. */}
+      <div className="flex items-center justify-between gap-2 sm:gap-3 mb-4">
+        <p className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] sm:text-[13px] font-medium tracking-wide text-muted-foreground">
+          Select four words that share a connection!
+        </p>
+        <PuzzleModeBadge isRainbow={!!puzzle.rainbowHerring} />
+      </div>
 
       {/* Solved groups — rainbow is interleaved at the position it was actually
           found (boardSlots), not always pinned to the top */}
