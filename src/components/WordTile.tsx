@@ -320,7 +320,19 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   `;
 
   // Selection styling:
-  // - Rainbow/colored tiles: black border when selected, keep their color
+  // - Rainbow/colored tiles: solid foreground-color border when selected,
+  //   keep their own background/gradient. This used to be a ring-[3px]
+  //   ring-offset-2 (a box-shadow "halo" painted ~5px *outside* the tile's
+  //   own box) with no equivalent reserved on the unselected tile — visually
+  //   harmless to this element's own layout box, but the halo sits well
+  //   outside the tile's border-box, inside the grid's own 6px gap, and can
+  //   visually bleed onto/over a neighbouring tile (most often the one
+  //   above) the moment it appears. Reserving the same border-[3px] on the
+  //   unselected tile (transparent, so the paint color still shows straight
+  //   through to the edge under border-box's default background-clip) and
+  //   only ever changing its color removes that outside-the-box halo
+  //   entirely — the border paints inside the box, so it can never overlap
+  //   a neighbour regardless of gap size.
   // - Normal tiles: inverted charcoal/plum + white when selected, with a
   //   border that matches the selected background exactly — border-tile-
   //   selected resolves against the same --tile-selected variable as the
@@ -335,9 +347,9 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   const stateClasses = isMatched
     ? "bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
-      ? `${themedRainbow ? "" : "rainbow-tile"} text-white shadow-md ${isSelected ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background scale-[0.97]" : ""}`
+      ? `${themedRainbow ? "" : "rainbow-tile"} text-white shadow-md border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
       : colorStyle
-        ? `${colorStyle.bg} hover:shadow-sm active:scale-95 ${isSelected ? "ring-[3px] ring-foreground ring-offset-2 ring-offset-background scale-[0.97]" : ""}`
+        ? `${colorStyle.bg} hover:shadow-sm active:scale-95 border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
         : isSelected
           ? "bg-tile-selected text-tile-selected-fg border border-tile-selected"
           : "cloud-tile";
