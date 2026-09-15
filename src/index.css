@@ -61,13 +61,10 @@ html {
     --tile-selected: 30 11% 22%;
     --tile-selected-fg: var(--action-primary-fg);
 
-    /* Brand purple used by Submit, "Today's Puzzle", and the archive
-       in-progress accent — approved brand palette (Purple: #A58AC4 light /
-       #A68DC0 dark). from/to are equal (the CSS still renders as a
-       "gradient" for structural reasons, but a single approved color per
-       theme reads correctly as a flat fill rather than an invented blend). */
-    --brand-purple-from: 268 33% 65%;
-    --brand-purple-to: 268 33% 65%;
+    /* Brand purple used by the Submit button when enabled — same values in
+       light and dark (a fixed brand color, not a theme-adaptive token). */
+    --brand-purple-from: 255 92% 76%;
+    --brand-purple-to: 258 90% 66%;
 
     /* Redesign: neutral palette (light mode only — dark mode gets defensive
        aliases to existing dark tokens further below, not a new dark palette) */
@@ -95,62 +92,51 @@ html {
   }
 
   .dark {
-    /* Approved dark-mode neutrals (page #1D1D1B / elevated #272724 / tile
-       #30302C / border #41413C / primary text #F5F2EA / secondary text
-       #B9B5AC). secondary/muted/accent aren't in the approved list, so
-       they're only retinted to the same warm-neutral hue family (kept at
-       their existing lightness steps) rather than left as an off-hue
-       blue-gray that would clash with the new palette. */
-    --background: 60 4% 11%;
-    --foreground: 44 35% 94%;
+    --background: 220 15% 10%;
+    --foreground: 40 15% 90%;
 
-    --card: 60 4% 15%;
-    --card-foreground: 44 35% 94%;
+    --card: 220 15% 13%;
+    --card-foreground: 40 15% 90%;
 
-    --popover: 60 4% 15%;
-    --popover-foreground: 44 35% 94%;
+    --popover: 220 15% 13%;
+    --popover-foreground: 40 15% 90%;
 
-    --primary: 44 35% 94%;
-    --primary-foreground: 60 4% 11%;
+    --primary: 40 15% 90%;
+    --primary-foreground: 220 15% 10%;
 
-    --secondary: 60 4% 18%;
-    --secondary-foreground: 44 35% 94%;
+    --secondary: 220 12% 18%;
+    --secondary-foreground: 40 15% 90%;
 
-    --muted: 60 4% 20%;
-    --muted-foreground: 42 8% 70%;
+    --muted: 220 10% 20%;
+    --muted-foreground: 40 5% 55%;
 
-    --accent: 60 4% 18%;
-    --accent-foreground: 44 35% 94%;
+    --accent: 220 12% 18%;
+    --accent-foreground: 40 15% 90%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 60 4% 25%;
-    --input: 60 4% 25%;
-    --ring: 44 35% 94%;
+    --border: 220 10% 22%;
+    --input: 220 10% 22%;
+    --ring: 40 15% 90%;
 
-    /* Dark mode group colors — approved dark variants (Yellow #E9CE69,
-       Green #82BF88, Blue #78AFD0, Red #DE756C). These sit at nearly the
-       same lightness as their light-mode counterparts (pastels, not
-       darkened/muted tones), so the foreground (text) pairing reuses the
-       light-mode -fg values (dark ink) rather than the old light-on-dark
-       text, which would no longer contrast against these lighter fills. */
-    --group-1: 47 74% 66%;
-    --group-1-fg: 50 80% 18%;
-    --group-2: 126 32% 63%;
-    --group-2-fg: 130 50% 14%;
-    --group-3: 203 48% 64%;
-    --group-3-fg: 200 70% 18%;
-    --group-4: 5 63% 65%;
-    --group-4-fg: 0 70% 20%;
+    /* Dark mode group colors — same hues, darker/muted */
+    --group-1: 25 75% 35%;
+    --group-1-fg: 25 80% 90%;
+    --group-2: 130 40% 30%;
+    --group-2-fg: 130 45% 88%;
+    --group-3: 200 60% 35%;
+    --group-3-fg: 200 65% 90%;
+    --group-4: 0 55% 35%;
+    --group-4-fg: 0 60% 90%;
 
-    --tile: 60 4% 18%;
+    --tile: 220 12% 18%;
     --tile-selected: 40 15% 85%;
     --tile-selected-fg: 220 15% 10%;
 
-    /* Approved brand purple, dark variant (#A68DC0). */
-    --brand-purple-from: 269 29% 65%;
-    --brand-purple-to: 269 29% 65%;
+    /* Same fixed brand purple as light mode — not theme-adaptive. */
+    --brand-purple-from: 255 92% 76%;
+    --brand-purple-to: 258 90% 66%;
 
     /* Redesign tokens: dark mode must render exactly as it did before this
        redesign, so these are NOT a new dark palette — each one aliases an
@@ -213,12 +199,9 @@ html {
     box-shadow: none;
   }
   .dark .cloud-tile {
-    /* Approved flat word-tile surface (#30302C) instead of the old
-       hardcoded gradient — wired to the shared --tile-bg/--tile-border/
-       --ink tokens so it tracks the palette instead of bypassing it. */
-    background: hsl(var(--tile-bg));
-    border: 1px solid hsl(var(--tile-border));
-    color: hsl(var(--ink));
+    background: linear-gradient(145deg, #2c2933, #232029);
+    border: 1px solid rgba(255,255,255,0.07);
+    color: #e6e7fb;
     box-shadow: 0 10px 24px rgba(0,0,0,0.42), 0 3px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
   }
   .dark .cloud-tile:hover {

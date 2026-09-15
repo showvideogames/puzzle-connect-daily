@@ -1189,7 +1189,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               disabled={state.selectedWords.length !== 4 || isChecking || reveal !== null}
               className="w-full h-12 rounded-full text-sm md:text-base font-bold text-white transition-all
                 bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
-                shadow-[0_6px_16px_-8px_rgba(165,138,196,0.45)]
+                shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45)]
                 hover:-translate-y-px active:scale-95
                 disabled:opacity-40 disabled:hover:translate-y-0
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
@@ -1251,19 +1251,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             .sort((a, b) => a.difficulty - b.difficulty)
             .filter((g) => (g.hintWord ?? "").trim() !== "")
             .map((g) => {
-              // Real category colors (not the opt-in paint feature's plain
-              // Tailwind palette above) — wired to the shared --group-N
-              // tokens so this resolves the approved dark variants too.
-              const colorClasses =
-                g.difficulty === 1 ? "bg-group-1 text-group-1-fg"
-                : g.difficulty === 2 ? "bg-group-2 text-group-2-fg"
-                : g.difficulty === 3 ? "bg-group-3 text-group-3-fg"
-                : "bg-group-4 text-group-4-fg";
+              const colorClass =
+                g.difficulty === 1 ? "bg-yellow-500"
+                : g.difficulty === 2 ? "bg-green-600"
+                : g.difficulty === 3 ? "bg-blue-500"
+                : "bg-red-500";
               const word = (g.hintWord ?? "").trim();
               return (
                 <div
                   key={g.difficulty}
-                  className={`${colorClasses} text-sm font-semibold uppercase rounded-lg h-10 px-3 min-w-[60px] flex items-center justify-center`}
+                  className={`${colorClass} text-white text-sm font-semibold uppercase rounded-lg h-10 px-3 min-w-[60px] flex items-center justify-center`}
                 >
                   {isCustomEmoji(word) ? (
                     <img
