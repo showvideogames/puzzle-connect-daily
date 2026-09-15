@@ -3,18 +3,23 @@ import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoj
 
 const DOUBLE_TAP_DELAY_MS = 250;
 
+// Light-mode values restored verbatim from git history (commit 29ca29a,
+// the last-known-good state before an intervening recolor pass mistakenly
+// changed light mode too). Dark mode uses the separately-approved "Option A"
+// palette — the two no longer share one hex per color the way earlier
+// revisions did, so each needs its own light/dark class pair.
 const COLOR_STYLES: Record<string, { bg: string; ring: string }> = {
-  yellow: { bg: "bg-[#8A6A24]/35", ring: "ring-[#8A6A24]" },
-  green:  { bg: "bg-green-500/35 dark:bg-green-600/35",  ring: "ring-green-400"  },
-  blue:   { bg: "bg-blue-500/35 dark:bg-blue-600/35",   ring: "ring-blue-400"   },
-  red:    { bg: "bg-[#8F3F43]/35", ring: "ring-[#8F3F43]" },
+  yellow: { bg: "bg-yellow-400/35 dark:bg-[#D4A62A]/35", ring: "ring-yellow-400 dark:ring-[#D4A62A]" },
+  green:  { bg: "bg-green-500/35 dark:bg-[#3FBF7F]/35",  ring: "ring-green-400 dark:ring-[#3FBF7F]"  },
+  blue:   { bg: "bg-blue-500/35 dark:bg-[#5AA7E0]/35",   ring: "ring-blue-400 dark:ring-[#5AA7E0]"   },
+  red:    { bg: "bg-red-500/35 dark:bg-[#E56D6D]/35",    ring: "ring-red-400 dark:ring-[#E56D6D]"    },
 };
 
 const COLOR_CIRCLES: { key: string; circle: string }[] = [
-  { key: "yellow", circle: "bg-[#8A6A24]" },
-  { key: "green",  circle: "bg-green-500"  },
-  { key: "blue",   circle: "bg-blue-500"   },
-  { key: "red",    circle: "bg-[#8F3F43]"  },
+  { key: "yellow", circle: "bg-yellow-400 dark:bg-[#D4A62A]" },
+  { key: "green",  circle: "bg-green-500 dark:bg-[#3FBF7F]"  },
+  { key: "blue",   circle: "bg-blue-500 dark:bg-[#5AA7E0]"   },
+  { key: "red",    circle: "bg-red-500 dark:bg-[#E56D6D]"    },
 ];
 
 // Count visible characters/emojis using Intl.Segmenter
