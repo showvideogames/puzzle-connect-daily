@@ -41,9 +41,14 @@ interface SessionSummary {
 }
 
 type ModalName = "stats" | "help" | "settings" | "feedback" | null;
-// "none" = not a real calendar day yet (future, or no puzzle published) —
-// rendered with the same neutral look as "unplayed" but never clickable.
-type DayStatus = "unplayed" | "in-progress" | "won" | "won-rainbow" | "failed" | "none";
+// "none" = a future day that hasn't happened yet but already has a
+// published puzzle waiting — rendered with the same neutral look as
+// "unplayed" but never clickable.
+// "no-puzzle" = there is no puzzle for this date at all (a gap in the
+// archive, or a future day nothing has been published for yet) — visually
+// distinct from "unplayed" (a puzzle exists, just hasn't been played) via
+// its own inverted-theme fill (see STATUS_CELL_CLASSES below).
+type DayStatus = "unplayed" | "in-progress" | "won" | "won-rainbow" | "failed" | "none" | "no-puzzle";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -111,12 +116,23 @@ const EMOJI_TINTS = [
 // fainter over a dark neutral than over the light cream page), while
 // staying well short of the fully-saturated category-card colors used
 // elsewhere in the app.
-const STATUS_CELL_CLASSES: Record<Exclude<DayStatus, "none" | "won-rainbow">, string> = {
+const STATUS_CELL_CLASSES: Record<Exclude<DayStatus, "none" | "won-rainbow" | "no-puzzle">, string> = {
   unplayed: "bg-card border-border",
   "in-progress": "bg-[hsl(48_89%_60%/0.32)] dark:bg-[hsl(48_89%_60%/0.35)] border-border",
   won: "bg-[hsl(125_45%_50%/0.32)] dark:bg-[hsl(125_45%_50%/0.36)] border-border",
   failed: "bg-[hsl(5_74%_58%/0.28)] dark:bg-[hsl(5_74%_58%/0.32)] border-border",
 };
+
+// "No puzzle" cells deliberately invert the page theme (black fill/white
+// number in light mode, white fill/black number in dark mode) instead of
+// following the light/dark tint pattern every other status uses above —
+// the goal is a date that reads as visually opposite the page, not just a
+// different tint of it. bg-foreground/text-background already resolve to
+// exactly that in both themes (foreground is near-black in light mode and
+// near-white in dark mode, background is the inverse of each), so no new
+// color tokens are needed.
+const NO_PUZZLE_CELL_CLASS = "bg-foreground border-border";
+const NO_PUZZLE_NUMBER_CLASS = "text-background";
 
 const RAINBOW_CELL_GRADIENT =
   "linear-gradient(135deg, hsl(48 89% 60% / 0.40), hsl(125 45% 50% / 0.38), hsl(203 65% 55% / 0.38), hsl(258 90% 62% / 0.40), hsl(5 74% 58% / 0.38))";
@@ -512,9 +528,9 @@ export default function Archive() {
   // A recorded session (won or lost) always takes priority over that local
   // in-progress flag, since a finished game session naturally leaves it be.
   function getDayStatus(dateStr: string, isPast: boolean): DayStatus {
-    if (!isPast) return "none";
     const puzzle = puzzleByDate[dateStr];
-    if (!puzzle) return "none";
+    if (!puzzle) return "no-puzzle";
+    if (!isPast) return "none";
     const session = sessionsByPuzzleId.get(puzzle.id);
     if (session) return session.won ? (session.foundRainbow ? "won-rainbow" : "won") : "failed";
     if (hasInProgressGame(puzzle.id)) return "in-progress";
@@ -650,7 +666,12 @@ export default function Archive() {
           const isClickable = isPast && hasPuzzle;
           const status = getDayStatus(dateStr, isPast);
           const isRainbow = status === "won-rainbow";
-          const cellClass = isRainbow ? "border-border" : STATUS_CELL_CLASSES[status === "none" ? "unplayed" : status];
+          const isNoPuzzle = status === "no-puzzle";
+          const cellClass = isRainbow
+            ? "border-border"
+            : isNoPuzzle
+              ? NO_PUZZLE_CELL_CLASS
+              : STATUS_CELL_CLASSES[status === "none" ? "unplayed" : status];
 
           return (
             <button
@@ -674,7 +695,7 @@ export default function Archive() {
                   aria-hidden="true"
                 />
               )}
-              <span className="relative text-sm sm:text-base font-semibold tabular-nums leading-none text-foreground">
+              <span className={`relative text-sm sm:text-base font-semibold tabular-nums leading-none ${isNoPuzzle ? NO_PUZZLE_NUMBER_CLASS : "text-foreground"}`}>
                 {dayNum}
               </span>
             </button>
@@ -699,6 +720,9 @@ export default function Archive() {
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full shrink-0 border border-border bg-card" /> Unplayed
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full shrink-0 border border-border bg-foreground" /> No puzzle
         </span>
       </div>
     </div>
