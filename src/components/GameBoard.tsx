@@ -117,25 +117,28 @@ function prefersReducedMotion(): boolean {
   }
 }
 
-// Lucide has no broom icon, so this is a small hand-drawn one matching
-// its conventions (24x24, currentColor stroke, round caps/joins) for the
-// Clear Colors button.
+// Lucide has no broom icon, so this is a hand-drawn one matching the
+// user-provided reference (hooked handle, flared bristle head with two
+// notches, two dust flecks) for the Clear Colors button. The viewBox is
+// cropped tight to the artwork's own bounds, not a generic 24x24 square,
+// so there's no dead space around it at small sizes.
 function BroomIcon({ className }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 24 24"
+      viewBox="0 0 22 23"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
       aria-hidden="true"
     >
-      <circle cx="3" cy="10" r="0.8" fill="currentColor" stroke="none" />
-      <circle cx="6" cy="6" r="0.8" fill="currentColor" stroke="none" />
-      <path d="M20 4 11 13" />
-      <path d="M11 13 4 19 9 22 15 15 Z" />
+      <circle cx="1.5" cy="8.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="4" cy="5" r="1" fill="currentColor" stroke="none" />
+      <path d="M19 1.5c1.8 0.6 1.8 2.6 0 3.8L11 13.5" />
+      <path d="M11 13.5 L3 19.5 L2 20.5 L5.5 17.5 L8 21.5 L10.5 18 L13 21 L16 15 L11 13.5 Z" />
+      <path d="M5.5 15.5 L15 12" />
     </svg>
   );
 }
