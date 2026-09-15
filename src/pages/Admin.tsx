@@ -215,6 +215,7 @@ export default function Admin() {
   const [rainbowHintWord, setRainbowHintWord] = useState("");
   const [theme, setTheme] = useState("");
   const [isEmojiPuzzle, setIsEmojiPuzzle] = useState(false);
+  const [emojiPuzzleIcon, setEmojiPuzzleIcon] = useState("");
   const [isFreePuzzle, setIsFreePuzzle] = useState(false);
   const [freePuzzleOrder, setFreePuzzleOrder] = useState<number | null>(null);
   const [groups, setGroups] = useState<GroupForm[]>([
@@ -289,6 +290,7 @@ export default function Admin() {
     rainbowWordOrder,
     theme,
     isEmojiPuzzle,
+    emojiPuzzleIcon,
     isFreePuzzle,
     freePuzzleOrder,
     editingId,
@@ -310,6 +312,7 @@ export default function Admin() {
       setRainbowWordOrder(draft.rainbowWordOrder ?? []);
       setTheme(draft.theme ?? "");
       setIsEmojiPuzzle(draft.isEmojiPuzzle ?? false);
+      setEmojiPuzzleIcon(draft.emojiPuzzleIcon ?? "");
       setIsFreePuzzle(draft.isFreePuzzle ?? false);
       setFreePuzzleOrder(draft.freePuzzleOrder ?? null);
     },
@@ -508,6 +511,7 @@ export default function Admin() {
             rainbow_hint_word: rainbowHintWord.trim() || null,
             theme: theme || null,
             is_emoji_puzzle: isEmojiPuzzle,
+            emoji_puzzle_icon: isEmojiPuzzle ? (emojiPuzzleIcon.trim() || null) : null,
             is_free_puzzle: isFreePuzzle,
             free_puzzle_order: isFreePuzzle ? freePuzzleOrder : null,
           })
@@ -530,6 +534,7 @@ export default function Admin() {
             rainbow_hint_word: rainbowHintWord.trim() || null,
             theme: theme || null,
             is_emoji_puzzle: isEmojiPuzzle,
+            emoji_puzzle_icon: isEmojiPuzzle ? (emojiPuzzleIcon.trim() || null) : null,
             is_free_puzzle: isFreePuzzle,
             free_puzzle_order: isFreePuzzle ? freePuzzleOrder : null,
           })
@@ -586,6 +591,7 @@ export default function Admin() {
     setRainbowWordOrder([]);
     setTheme("");
     setIsEmojiPuzzle(false);
+    setEmojiPuzzleIcon("");
     setIsFreePuzzle(false);
     setFreePuzzleOrder(null);
   }
@@ -623,6 +629,7 @@ export default function Admin() {
     setRainbowHintWord(p.rainbow_hint_word || "");
     setTheme(p.theme || "");
     setIsEmojiPuzzle(p.is_emoji_puzzle ?? false);
+    setEmojiPuzzleIcon(p.emoji_puzzle_icon ?? "");
     setIsFreePuzzle(p.is_free_puzzle ?? false);
     setFreePuzzleOrder(p.free_puzzle_order ?? null);
     setDraftRestored(false);
@@ -1010,6 +1017,23 @@ export default function Admin() {
               />
               <span className="text-sm font-medium">Emoji Puzzle 🎨</span>
             </label>
+            {isEmojiPuzzle && (
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium whitespace-nowrap">Emoji Puzzle Icon</label>
+                <input
+                  type="text"
+                  value={emojiPuzzleIcon}
+                  onChange={(e) => {
+                    setEmojiPuzzleIcon(e.target.value);
+                    if (!editingId) {
+                      saveDraft({ ...getCurrentDraft(), emojiPuzzleIcon: e.target.value });
+                    }
+                  }}
+                  placeholder="🐶"
+                  className="w-20 rounded border-border px-2 py-1 text-sm"
+                />
+              </div>
+            )}
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"

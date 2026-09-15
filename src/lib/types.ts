@@ -15,6 +15,9 @@ export interface Puzzle {
   rainbowCategoryName?: string | null;
   rainbowHintWord?: string | null;
   isEmojiPuzzle?: boolean | null;
+  // Manually-entered emoji shown on this puzzle's card in the Emoji Puzzles
+  // section (admin-editable, only meaningful when isEmojiPuzzle is true).
+  emojiPuzzleIcon?: string | null;
   isFreePuzzle?: boolean | null;
   freePuzzleOrder?: number | null;
   // Optional visual theme key for the bonus category (null = default rainbow).

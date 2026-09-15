@@ -64,6 +64,7 @@ function mapPuzzle(data: any): Puzzle {
     rainbowCategoryName: data.rainbow_category_name || null,
     rainbowHintWord: data.rainbow_hint_word ?? null,
     isEmojiPuzzle: data.is_emoji_puzzle ?? false,
+    emojiPuzzleIcon: data.emoji_puzzle_icon ?? null,
     isFreePuzzle: data.is_free_puzzle ?? false,
     freePuzzleOrder: data.free_puzzle_order ?? null,
     theme: data.theme ?? null,

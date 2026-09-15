@@ -30,6 +30,7 @@ interface FreePuzzleItem {
 interface EmojiPuzzleItem {
   id: string;
   rainbow_category_name: string | null;
+  emoji_puzzle_icon: string | null;
 }
 
 // A puzzle's game_sessions rows (there may be several across retries) are
@@ -259,7 +260,10 @@ function GiftBox({
 function EmojiPuzzleCard({ puzzle, index }: { puzzle: EmojiPuzzleItem; index: number }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const emoji = extractTrailingEmoji(puzzle.rainbow_category_name ?? "") || "🧩";
+  // The admin-entered icon is authoritative when present; the trailing-emoji
+  // extraction below only exists as a fallback for older Emoji Puzzles saved
+  // before this field existed.
+  const emoji = puzzle.emoji_puzzle_icon || extractTrailingEmoji(puzzle.rainbow_category_name ?? "") || "🧩";
   const tint = EMOJI_TINTS[index % EMOJI_TINTS.length];
 
   return (
@@ -474,7 +478,7 @@ export default function Archive() {
     async function loadEmoji() {
       const { data } = await supabase
         .from("puzzles")
-        .select("id, rainbow_category_name")
+        .select("id, rainbow_category_name, emoji_puzzle_icon")
         .eq("is_emoji_puzzle", true)
         .eq("is_published", true)
         .order("date", { ascending: false })

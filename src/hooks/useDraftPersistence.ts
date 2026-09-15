@@ -21,6 +21,7 @@ export interface DraftData {
   rainbowWordOrder: string[];
   theme: string;
   isEmojiPuzzle: boolean;
+  emojiPuzzleIcon: string;
   isFreePuzzle: boolean;
   freePuzzleOrder: number | null;
   editingId: string | null;
