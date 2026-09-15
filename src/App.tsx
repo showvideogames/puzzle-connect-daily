@@ -7,7 +7,6 @@ import Index from "./pages/Index.tsx";
 import Admin from "./pages/Admin.tsx";
 import Archive from "./pages/Archive.tsx";
 import ArchivePuzzle from "./pages/ArchivePuzzle.tsx";
-import FreePuzzle from "./pages/FreePuzzle.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import Privacy from "./pages/Privacy.tsx";
 import Terms from "./pages/Terms.tsx";
@@ -27,7 +26,11 @@ const App = () => (
           <Route path="/admin" element={<Admin />} />
           <Route path="/archive" element={<Archive />} />
           <Route path="/archive/:puzzleId" element={<ArchivePuzzle />} />
-          <Route path="/free/:puzzleId" element={<FreePuzzle />} />
+          {/* Legacy free-puzzle URLs (old shared/bookmarked links) now render
+              the exact same shared archived-puzzle page — there is no
+              separate FreePuzzle component anymore. New navigation (Archive's
+              Free Puzzles cards) links straight to /archive/:puzzleId. */}
+          <Route path="/free/:puzzleId" element={<ArchivePuzzle />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />

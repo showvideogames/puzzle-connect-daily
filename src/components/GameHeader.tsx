@@ -37,13 +37,14 @@ export function GameHeader({
 }: GameHeaderProps) {
   const isMinimal = variant === "minimal";
   const hideExtraIcons = isMinimal || simplifiedIcons;
-  // The 3-icon case (Daily's "minimal" header and ArchivePuzzle's
+  // The 3-icon case (Daily's "minimal" header and ArchivePuzzle's/Archive's
   // simplifiedIcons) has plenty of room even at 320px, so those icons get a
   // bigger, constant (non-responsive) touch target — a real 34-38px circular
   // tap area with an 18-20px glyph, per the polish request. The default
-  // variant's larger icon set (Archive calendar, FreePuzzle: up to 5-6
-  // icons) keeps the tighter, breakpoint-scaled sizing that was specifically
-  // tuned to avoid header overflow at narrow widths with that many icons.
+  // (full, up to 5-6 icon) variant isn't used by any page right now — the
+  // former last consumer (a standalone FreePuzzle page) was consolidated
+  // into ArchivePuzzle/simplifiedIcons — but the tighter, breakpoint-scaled
+  // sizing stays as-is in case a future page needs the full icon set.
   const iconButtonClass = hideExtraIcons
     ? "p-2 rounded-full hover:bg-secondary transition-colors active:scale-95"
     : "p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95";
@@ -58,8 +59,9 @@ export function GameHeader({
           alt="Rainbow Connect"
           // Scales down at narrow viewports (aspect ratio preserved via
           // width:auto) — the floor/vw-coefficient are tuned against the
-          // tightest case (FreePuzzle's full 6-icon header at 320px) so the
-          // header never horizontally overflows there. The 28px→40px ceiling
+          // tightest case (the default variant's full 6-icon header at
+          // 320px, see hideExtraIcons above) so the header never
+          // horizontally overflows there. The 28px→40px ceiling
           // bump only matters well past mobile: every variant's header hits
           // its own max-width (840px minimal / 512px default) long before
           // 40px-tall renders, so this just stops the logo from staying

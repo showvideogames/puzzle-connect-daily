@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment, type ReactNode } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { GameHeader } from "@/components/GameHeader";
 import { TutorialModal } from "@/components/TutorialModal";
@@ -140,12 +140,19 @@ function GiftBox({
   onOpen: (order: number) => void;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [popping, setPopping] = useState(false);
   const accent = FREE_ACCENTS[(puzzle.free_puzzle_order - 1) % FREE_ACCENTS.length];
 
   function handleClick() {
     if (isOpened) {
-      navigate(`/free/${puzzle.id}`);
+      // Same shared archived-puzzle page as the calendar and Emoji Puzzles —
+      // there is no separate "free puzzle" page anymore. Passing the current
+      // Archive URL (including ?month=, if any) lets that page's "Archive"
+      // button return here instead of always resetting to today's month.
+      navigate(`/archive/${puzzle.id}`, {
+        state: { archiveReturnPath: `${location.pathname}${location.search}` },
+      });
       return;
     }
     if (popping) return;
@@ -236,12 +243,17 @@ function GiftBox({
 
 function EmojiPuzzleCard({ puzzle, index }: { puzzle: EmojiPuzzleItem; index: number }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const emoji = extractTrailingEmoji(puzzle.rainbow_category_name ?? "") || "🧩";
   const tint = EMOJI_TINTS[index % EMOJI_TINTS.length];
 
   return (
     <button
-      onClick={() => navigate(`/archive/${puzzle.id}`)}
+      onClick={() =>
+        navigate(`/archive/${puzzle.id}`, {
+          state: { archiveReturnPath: `${location.pathname}${location.search}` },
+        })
+      }
       aria-label="Play emoji puzzle"
       className={`w-full flex flex-col items-center justify-center gap-2 rounded-2xl border border-border ${tint}
         shadow-[0_2px_8px_rgba(30,25,20,0.05)] dark:shadow-[0_2px_10px_rgba(0,0,0,0.3)]
