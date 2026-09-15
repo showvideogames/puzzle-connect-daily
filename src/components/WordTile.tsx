@@ -380,11 +380,14 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
               // Fill the square tile uniformly: any image — large or small —
               // is scaled to the same bounding box (contain preserves aspect
               // ratio), so a tiny image scales UP to match the rest rather
-              // than rendering smaller than its neighbours. Sized to 85% (not
-              // a full 100%) so custom emoji/icon tiles read a bit less
-              // toy-like/oversized next to the word tiles.
-              width: "85%",
-              height: "85%",
+              // than rendering smaller than its neighbours. Sized below 100%
+              // so custom emoji/icon tiles read a bit less toy-like/oversized
+              // next to the word tiles. Assets are now trimmed tight to their
+              // visible content (scripts/trim-image-assets.mjs), so this
+              // percentage needs to be smaller than it was when assets still
+              // carried their own transparent padding.
+              width: "73%",
+              height: "73%",
               objectFit: "contain",
               display: "block",
               margin: "0 auto",
