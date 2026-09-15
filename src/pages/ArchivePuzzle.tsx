@@ -148,71 +148,61 @@ export default function ArchivePuzzle() {
       )}
 
       <div className="w-full max-w-lg px-4 mb-2">
-        {/* Left/center/right grid (not flex+justify-between) so the puzzle
-            title is truly centered on the row's midpoint regardless of the
-            two buttons' differing widths — "Archive" and "Today's Puzzle"
-            are rarely the same width. */}
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-          {/* Secondary/outlined "soft surface" pill — quiet but polished,
-              paired against Today's Puzzle's accent treatment. */}
+        {/* Top nav row — just the matched pair of pills now that the title
+            has its own dedicated hero row below, so neither button has to
+            fight the title for space. Same height/padding/radius on both;
+            only the fill color differs (neutral vs. brand accent). */}
+        <div className="flex items-center justify-between gap-2">
           <button
             onClick={handleBackToArchive}
-            className="justify-self-start inline-flex items-center whitespace-nowrap h-8 sm:h-9 px-2 sm:px-4 rounded-full border border-border bg-card
+            className="inline-flex items-center whitespace-nowrap h-8 sm:h-9 px-3 sm:px-4 rounded-full border border-border bg-card
               text-foreground text-xs sm:text-sm font-semibold
               hover:bg-secondary transition-colors active:scale-95"
           >
             ← Archive
           </button>
 
-          {puzzle && (() => {
-            const trimmedTitle = puzzle.title?.trim();
-            const isNumericTitle = !!trimmedTitle && /^\d+$/.test(trimmedTitle);
-            // Puzzle-number-first hierarchy (approved design direction):
-            // the puzzle's identifier is the strongest text in this row.
-            // The actual data model allows a free-text title too (e.g.
-            // "Monday Mashup" — see Admin.tsx), which keeps its existing
-            // "Puzzle {title}" phrasing; a purely numeric title (e.g. "101")
-            // gets a "#" so it reads as a number. With no title at all, the
-            // date is the only identifier available, so it takes this slot
-            // instead (and isn't repeated again below).
-            const centerLabel = trimmedTitle
-              ? isNumericTitle ? `Puzzle #${trimmedTitle}` : `Puzzle ${trimmedTitle}`
-              : new Date(puzzle.date + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-            return (
-              <h1
-                className="justify-self-center text-center whitespace-nowrap overflow-hidden text-ellipsis
-                  font-tile font-extrabold tracking-tight text-foreground
-                  text-[15px] sm:text-lg md:text-2xl"
-              >
-                {centerLabel}
-              </h1>
-            );
-          })()}
-
-          {/* Same brand-purple gradient token pair as Submit — a compact
-              "destination" pill, not a full-width CTA, so the two accent
-              actions on the page read as one family without introducing a
-              new color. */}
+          {/* Same brand-purple gradient token pair as Submit, so the two
+              accent actions on the page read as one family. */}
           <button
             onClick={() => navigate("/")}
-            className="justify-self-end inline-flex items-center whitespace-nowrap h-8 sm:h-9 px-2 sm:px-4 rounded-full text-xs sm:text-sm font-semibold text-white
+            className="inline-flex items-center whitespace-nowrap h-8 sm:h-9 px-3 sm:px-4 rounded-full text-xs sm:text-sm font-semibold text-white
               bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
               shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45)]
               hover:-translate-y-px active:scale-95 transition-all"
           >
-            Today's Puzzle →
+            Today
           </button>
         </div>
 
-        {/* Date sits on its own line beneath the row — only shown here when
-            the row above already shows an actual title, not the date itself
-            (the no-title fallback puts the date in the center slot instead,
-            so it's never rendered twice). */}
-        {puzzle && puzzle.title?.trim() && (
-          <p className="text-center text-[13px] md:text-sm font-medium text-slate mt-1">
-            {new Date(puzzle.date + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
-          </p>
-        )}
+        {/* Hero title — the puzzle's identifier is the strongest text on the
+            page, not a small label squeezed between two buttons. A
+            free-text title (e.g. "Monday Mashup" — see Admin.tsx) keeps its
+            existing "Puzzle {title}" phrasing; a purely numeric title (e.g.
+            "101") gets a "#" so it reads as a number. With no title at all,
+            the date is the only identifier available, so it takes the hero
+            slot instead (and isn't repeated again below it). Wraps rather
+            than truncating — a hero title cut off with an ellipsis would
+            undercut the "important and intentional" point of enlarging it. */}
+        {puzzle && (() => {
+          const trimmedTitle = puzzle.title?.trim();
+          const isNumericTitle = !!trimmedTitle && /^\d+$/.test(trimmedTitle);
+          const heroLabel = trimmedTitle
+            ? isNumericTitle ? `Puzzle #${trimmedTitle}` : `Puzzle ${trimmedTitle}`
+            : new Date(puzzle.date + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+          return (
+            <div className="text-center mt-4 sm:mt-5">
+              <h1 className="font-tile font-extrabold tracking-tight text-foreground text-[40px] leading-[1.05] sm:text-5xl md:text-6xl break-words">
+                {heroLabel}
+              </h1>
+              {trimmedTitle && (
+                <p className="text-sm sm:text-base font-medium text-slate mt-1.5 sm:mt-2">
+                  {new Date(puzzle.date + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                </p>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {loading ? (

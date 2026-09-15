@@ -176,13 +176,13 @@ function GiftBox({
           ? `Play free puzzle ${puzzle.free_puzzle_order}`
           : `Open gift box ${puzzle.free_puzzle_order}`
       }
-      className="flex flex-col items-center gap-1.5 focus:outline-none active:scale-95"
-      style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+      className="w-full flex flex-col items-center focus:outline-none active:scale-95"
     >
       {isOpened ? (
         // Opened: restrained card — neutral background, accent color kept
         // only on the small number badge. Soft floating-card elevation
-        // (not just a border) so it reads as a tile sitting above the page.
+        // (not just a border) so it reads as a tile sitting above the page —
+        // same card family as the Emoji Puzzle / View All cards.
         <div
           className="w-full flex flex-col items-center justify-center gap-2 bg-card border border-border rounded-2xl animate-fade-up
             shadow-[0_2px_8px_rgba(30,25,20,0.05)] dark:shadow-[0_2px_10px_rgba(0,0,0,0.3)]"
@@ -199,13 +199,16 @@ function GiftBox({
           </span>
         </div>
       ) : (
-        // Unopened: gift box (tap to unwrap) — keeps the surprise
+        // Unopened: gift box (tap to unwrap) — same solid border/shadow/
+        // radius as every other card in the row (the old dashed-border,
+        // bg-secondary treatment was the one visual holdout from an earlier
+        // pass), so it only reads as "different" via its content, not a
+        // different card language.
         <div
-          className="w-full flex items-center justify-center rounded-2xl bg-secondary
+          className="w-full flex flex-col items-center justify-center gap-1.5 bg-card border border-border rounded-2xl
             shadow-[0_2px_8px_rgba(30,25,20,0.05)] dark:shadow-[0_2px_10px_rgba(0,0,0,0.3)]"
           style={{
             aspectRatio: "3 / 4",
-            border: "1.5px dashed hsl(var(--border))",
             transform: popping
               ? "scale(0) translateY(-18px) rotate(12deg)"
               : "scale(1) translateY(0) rotate(0deg)",
@@ -217,16 +220,13 @@ function GiftBox({
           <img
             src="/present-icon.png"
             alt="Gift box"
-            style={{ width: "56%", height: "56%", objectFit: "contain" }}
+            style={{ width: "44%", height: "44%", objectFit: "contain" }}
             draggable={false}
           />
+          <span className="text-[10px] font-bold tracking-wide text-muted-foreground">
+            TAP TO OPEN
+          </span>
         </div>
-      )}
-      {/* Order number label — only on unopened boxes */}
-      {!isOpened && (
-        <span className="text-xs font-semibold leading-none text-muted-foreground">
-          {puzzle.free_puzzle_order}
-        </span>
       )}
     </button>
   );
