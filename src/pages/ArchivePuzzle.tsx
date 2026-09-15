@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { X } from "lucide-react";
+import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { GameBoard } from "@/components/GameBoard";
@@ -111,6 +111,21 @@ export default function ArchivePuzzle() {
     navigate(archiveReturnPath ?? "/archive");
   };
 
+  // Puzzle identifier for the center of the top row — a free-text title
+  // (e.g. "Monday Mashup" — see Admin.tsx) keeps its existing
+  // "Puzzle {title}" phrasing; a purely numeric title (e.g. "101") gets a
+  // "#" so it reads as a number. With no title at all, the date is the only
+  // identifier available, so it takes this slot instead (and isn't
+  // repeated again below it).
+  const trimmedTitle = puzzle?.title?.trim();
+  const isNumericTitle = !!trimmedTitle && /^\d+$/.test(trimmedTitle);
+  const puzzleDateStr = puzzle
+    ? new Date(puzzle.date + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    : "";
+  const heroLabel = trimmedTitle
+    ? isNumericTitle ? `Puzzle #${trimmedTitle}` : `Puzzle ${trimmedTitle}`
+    : puzzleDateStr;
+
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       {puzzleLabel && (
@@ -148,61 +163,55 @@ export default function ArchivePuzzle() {
       )}
 
       <div className="w-full max-w-lg px-4 mb-2">
-        {/* Top nav row — just the matched pair of pills now that the title
-            has its own dedicated hero row below, so neither button has to
-            fight the title for space. Same height/padding/radius on both;
-            only the fill color differs (neutral vs. brand accent). */}
-        <div className="flex items-center justify-between gap-2">
+        {/* Top row: nav buttons + puzzle title share one row, using a
+            fixed-width | flexible-center | fixed-width grid so the two
+            buttons are pixel-identical regardless of label length and the
+            title gets whatever horizontal space is left between them —
+            never the other way around. Both buttons keep the exact same
+            height/padding/radius/font-size; only the fill color differs. */}
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 sm:gap-2 mt-2">
           <button
             onClick={handleBackToArchive}
-            className="inline-flex items-center whitespace-nowrap h-8 sm:h-9 px-3 sm:px-4 rounded-full border border-border bg-card
-              text-foreground text-xs sm:text-sm font-semibold
+            className="w-[68px] sm:w-[88px] shrink-0 inline-flex items-center justify-center gap-0.5 whitespace-nowrap h-8 sm:h-9 rounded-full border border-border bg-card
+              text-foreground text-[11px] sm:text-sm font-semibold
               hover:bg-secondary transition-colors active:scale-95"
           >
-            ← Archive
+            <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
+            Archive
           </button>
+
+          {/* min-w-0 is required for a grid item to actually shrink below
+              its content's intrinsic width — without it, overflow-hidden/
+              text-ellipsis below would never kick in and this column would
+              just push the row (and the right-hand button) wider instead. */}
+          <h1 className="min-w-0 text-center overflow-hidden whitespace-nowrap text-ellipsis
+            font-tile font-extrabold tracking-tight text-foreground text-xl sm:text-4xl md:text-5xl">
+            {heroLabel}
+          </h1>
 
           {/* Same brand-purple gradient token pair as Submit, so the two
               accent actions on the page read as one family. */}
           <button
             onClick={() => navigate("/")}
-            className="inline-flex items-center whitespace-nowrap h-8 sm:h-9 px-3 sm:px-4 rounded-full text-xs sm:text-sm font-semibold text-white
+            className="w-[68px] sm:w-[88px] shrink-0 inline-flex items-center justify-center gap-0.5 whitespace-nowrap h-8 sm:h-9 rounded-full text-[11px] sm:text-sm font-semibold text-white
               bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
               shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45)]
               hover:-translate-y-px active:scale-95 transition-all"
           >
             Today
+            <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
           </button>
         </div>
 
-        {/* Hero title — the puzzle's identifier is the strongest text on the
-            page, not a small label squeezed between two buttons. A
-            free-text title (e.g. "Monday Mashup" — see Admin.tsx) keeps its
-            existing "Puzzle {title}" phrasing; a purely numeric title (e.g.
-            "101") gets a "#" so it reads as a number. With no title at all,
-            the date is the only identifier available, so it takes the hero
-            slot instead (and isn't repeated again below it). Wraps rather
-            than truncating — a hero title cut off with an ellipsis would
-            undercut the "important and intentional" point of enlarging it. */}
-        {puzzle && (() => {
-          const trimmedTitle = puzzle.title?.trim();
-          const isNumericTitle = !!trimmedTitle && /^\d+$/.test(trimmedTitle);
-          const heroLabel = trimmedTitle
-            ? isNumericTitle ? `Puzzle #${trimmedTitle}` : `Puzzle ${trimmedTitle}`
-            : new Date(puzzle.date + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-          return (
-            <div className="text-center mt-4 sm:mt-5">
-              <h1 className="font-tile font-extrabold tracking-tight text-foreground text-[40px] leading-[1.05] sm:text-5xl md:text-6xl break-words">
-                {heroLabel}
-              </h1>
-              {trimmedTitle && (
-                <p className="text-sm sm:text-base font-medium text-slate mt-1.5 sm:mt-2">
-                  {new Date(puzzle.date + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
-                </p>
-              )}
-            </div>
-          );
-        })()}
+        {/* Date sits on its own line beneath the row — only shown when the
+            row above already shows an actual title, not the date itself
+            (the no-title fallback puts the date in the hero slot instead,
+            so it's never rendered twice). */}
+        {trimmedTitle && (
+          <p className="text-center text-sm sm:text-base font-medium text-slate mt-1.5 sm:mt-2">
+            {puzzleDateStr}
+          </p>
+        )}
       </div>
 
       {loading ? (
