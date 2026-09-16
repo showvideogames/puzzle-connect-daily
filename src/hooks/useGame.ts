@@ -397,7 +397,11 @@ export function useGame(
   // "Spot the Rainbow?" bonus prompt). Records a guessHistory entry and solve
   // position just like the mid-game find does, so the board and share grid
   // read from the same source of truth regardless of which path found it.
-  const markRainbowFound = useCallback((words: string[]) => {
+  // guessedAt is required rather than defaulted here: it must be captured by
+  // the caller (GameBoard's handleSpotResult) at the moment the player
+  // actually submitted the bonus modal, not whenever this callback happens
+  // to run after that flow's own reveal delay.
+  const markRainbowFound = useCallback((words: string[], guessedAt: string) => {
     setRainbowWords(words);
     setState((s) => {
       if (s.gotRainbow) return s;
@@ -407,6 +411,7 @@ export function useGame(
         isCorrect: false,
         isRainbow: true,
         isRainbowAttempt: true,
+        guessedAt,
       };
       return {
         ...s,
@@ -548,6 +553,12 @@ export function useGame(
   const submitGuess = useCallback(() => {
     if (state.selectedWords.length !== 4 || state.isComplete || checkingRef.current) return;
 
+    // Captured HERE — the moment the player actually submits — not inside
+    // the setTimeout below, which only fires after the ~1s "checking guess"
+    // suspense animation. That delay is presentation only; the guess itself
+    // happened now.
+    const guessedAt = new Date().toISOString();
+
     const sortedSelected = [...state.selectedWords].sort();
     const isDuplicate = state.guessHistory.some(
       (g) => !g.isRainbow && g.words.length === 4 && [...g.words].sort().every((w, i) => w === sortedSelected[i])
@@ -604,6 +615,7 @@ export function useGame(
           isCorrect: false,
           isRainbow: true,
           isRainbowAttempt: true,
+          guessedAt,
         };
         setRainbowWords(state.selectedWords);
         setShowRainbowPopup(true);
@@ -627,6 +639,7 @@ export function useGame(
           groupIndices: guessGroupIndices,
           isCorrect: true,
           isRainbowAttempt: new Set(guessGroupIndices).size === 4,
+          guessedAt,
         };
 
         vibrateSuccess();
@@ -674,6 +687,7 @@ export function useGame(
               correct: g.isCorrect,
               group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
               is_rainbow_attempt: g.isRainbowAttempt ?? false,
+              guessed_at: g.guessedAt ?? null,
             })),
           };
 
@@ -724,6 +738,7 @@ export function useGame(
           isOneAway: isOneAway && !isAlmostRainbow,
           isAlmostRainbow,
           isRainbowAttempt: new Set(guessGroupIndices).size === 4,
+          guessedAt,
         };
 
         // Miss: now that the suspense is over, the grid "reject" shake and the
@@ -765,6 +780,7 @@ export function useGame(
               correct: g.isCorrect,
               group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
               is_rainbow_attempt: g.isRainbowAttempt ?? false,
+              guessed_at: g.guessedAt ?? null,
             })),
           };
 

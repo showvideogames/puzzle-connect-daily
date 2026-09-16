@@ -667,6 +667,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   }, [fullHintUsed]);
 
   const handleSpotResult = useCallback((correct: boolean, words: string[]) => {
+    // Captured HERE — the moment SpotTheRainbowModal's Submit actually fired
+    // — not inside the setTimeout below, which only runs after this
+    // component's own 400ms shake/reveal delay. That delay is presentation
+    // only; the bonus attempt itself happened now.
+    const guessedAt = new Date().toISOString();
     setShowSpotModal(false);
     setSpotShaking(true);
     setTimeout(() => {
@@ -675,13 +680,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         setBonusRainbowWords([...puzzle.rainbowHerring]);
         confetti({ particleCount: 100, spread: 80, origin: { y: 0.55 } });
         playRainbowSound();
-        markRainbowFound(puzzle.rainbowHerring);
+        markRainbowFound(puzzle.rainbowHerring, guessedAt);
         void markRainbowFoundInSession(puzzle.id);
-        void recordRainbowAttempt(puzzle.id, words, true);
+        void recordRainbowAttempt(puzzle.id, words, true, guessedAt);
       } else {
         // Failed bonus attempts previously vanished entirely — this is the
         // only durable record of them (see recordRainbowAttempt).
-        void recordRainbowAttempt(puzzle.id, words, false);
+        void recordRainbowAttempt(puzzle.id, words, false, guessedAt);
       }
       setTimeout(() => setBonusRainbowCorrect(correct), correct ? 600 : 0);
     }, 400);

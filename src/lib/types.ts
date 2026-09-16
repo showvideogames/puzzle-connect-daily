@@ -67,6 +67,13 @@ export interface GuessAttempt {
   isAlmostRainbow?: boolean;
   isHintMarker?: boolean;
   hintType?: "small" | "full";
+  // Real wall-clock time this guess was submitted (ISO 8601, captured via
+  // new Date().toISOString() at the moment submitGuess/handleSpotResult
+  // runs — NOT when it's later bulk-inserted into guess_events). Absent on
+  // guessHistory entries saved before this field existed (see
+  // gameStats.ts's saveGameStats for the legacy DB-insert fallback) and on
+  // hint markers, which are never persisted to guess_events.
+  guessedAt?: string;
 }
 
 export interface GameState {
