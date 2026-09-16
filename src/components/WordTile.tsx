@@ -61,7 +61,7 @@ function getLongestWord(word: string): string {
 
 // Fluid base font-size for normal (non-emoji) tile text — mirrors the CSS
 // container-query clamp() applied in the button's className below
-// (text-[clamp(9px,15cqw,32px)], with [container-type:inline-size] on the
+// (text-[clamp(9px,15.5cqw,33px)], with [container-type:inline-size] on the
 // tile's own wrapper) so this JS-side measurement always starts from the
 // same size that's actually rendered. Deriving it from the TILE'S OWN
 // rendered width (not the viewport) is what keeps text-to-tile proportion
@@ -69,7 +69,7 @@ function getLongestWord(word: string): string {
 // plateaus at a max-width independent of the viewport, so a viewport-based
 // formula would have kept text capped far below where it should be.
 function getBaseFontSizePx(tileOuterWidthPx: number): number {
-  return Math.min(32, Math.max(9, 0.15 * tileOuterWidthPx));
+  return Math.min(33, Math.max(9, 0.155 * tileOuterWidthPx));
 }
 
 // Regular text tiles render at normal size and simply wrap to extra lines —
@@ -380,7 +380,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         onDragStart={() => onDragStart?.(word)}
         onDragOver={(e) => { e.preventDefault(); onDragOver?.(word); }}
         onDrop={onDrop}
-        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "!p-2" : "text-[clamp(9px,15cqw,32px)]"}
+        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "!p-2" : "text-[clamp(9px,15.5cqw,33px)]"}
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
           focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
         style={{

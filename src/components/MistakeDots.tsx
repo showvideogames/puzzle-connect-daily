@@ -6,7 +6,16 @@ interface MistakeDotsProps {
 export function MistakeDots({ mistakes, max }: MistakeDotsProps) {
   const remaining = max - mistakes;
   return (
-    <div className="flex items-center gap-1.5 justify-center">
+    // A quiet metadata pill rather than text/dots floating directly on the
+    // page — bg-card/border-border are the same theme-aware tokens the
+    // Guess History panel already uses, so this reads correctly in both
+    // themes without a dark-specific override. The shadow is light-mode
+    // only (dark already gets its separation from the border/bg contrast
+    // against the page, and doesn't need an added shadow layer).
+    <div
+      className="mx-auto w-fit flex items-center gap-1.5 justify-center rounded-full border border-border bg-card
+        px-4 py-2 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none"
+    >
       <span className="text-sm md:text-base text-slate mr-1">Mistakes remaining:</span>
       <span className="sr-only" role="status">
         {`${remaining} of ${max} mistakes remaining`}

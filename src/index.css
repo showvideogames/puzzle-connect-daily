@@ -71,8 +71,8 @@ html {
     --ink: 45 5% 15%;
     --slate: 43 4% 38%;
     --pebble: 42 4% 53%;
-    --tile-bg: 40 100% 99%;
-    --tile-border: 40 18% 87%;
+    --tile-bg: 40 45% 99.3%;
+    --tile-border: 40 22% 91%;
     --divider: 38 24% 91%;
     --action-primary-bg: 45 5% 15%;
     --action-primary-fg: 40 100% 99%;
@@ -191,12 +191,15 @@ html {
   }
 
   /* Flat "card" look for unselected word tiles (light mode only — dark mode
-     keeps its own separate rules below, untouched by this redesign). */
+     keeps its own separate rules below, untouched by this redesign). A
+     refined, low-key shadow plus a lighter border give the tile soft card
+     separation from the page without reading as floating/glassy — the
+     border alone previously did all the work of defining the tile's edge. */
   .cloud-tile {
     background: hsl(var(--tile-bg));
     border: 1px solid hsl(var(--tile-border));
     color: hsl(var(--ink));
-    box-shadow: none;
+    box-shadow: 0 1px 2px rgba(30, 25, 20, 0.04), 0 2px 6px rgba(30, 25, 20, 0.05);
   }
   .dark .cloud-tile {
     background: linear-gradient(145deg, #2c2933, #232029);

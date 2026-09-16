@@ -1162,12 +1162,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           fixed-width buttons floating narrower than the grid above them. */}
       {!state.isComplete && (
         <>
-          <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-4">
+          <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-3">
             <button
               onClick={shuffle}
               disabled={isChecking || reveal !== null}
-              className="w-full h-12 rounded-full text-sm md:text-base font-bold transition-colors
+              className="w-full h-14 rounded-full text-sm md:text-base font-bold transition-colors
                 bg-action-secondary-bg text-action-secondary-fg border border-transparent
+                shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
                 dark:bg-secondary dark:text-foreground dark:border-border
                 dark:hover:bg-muted dark:active:scale-95 dark:disabled:opacity-40
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
@@ -1179,8 +1180,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <button
               onClick={deselectAll}
               disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
-              className={`w-full h-12 rounded-full text-sm md:text-base font-bold transition-colors
+              className={`w-full h-14 rounded-full text-sm md:text-base font-bold transition-colors
                 border border-transparent
+                shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
                 dark:bg-secondary dark:text-foreground dark:border-border
                 dark:hover:bg-muted dark:active:scale-95 dark:disabled:opacity-40
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
@@ -1196,9 +1198,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <button
               onClick={submitGuess}
               disabled={state.selectedWords.length !== 4 || isChecking || reveal !== null}
-              className="w-full h-12 rounded-full text-sm md:text-base font-bold text-white transition-all
+              className="w-full h-14 rounded-full text-sm md:text-base font-bold text-white transition-all
                 bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
-                shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45)]
+                shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]
                 hover:-translate-y-px active:scale-95
                 disabled:opacity-40 disabled:hover:translate-y-0
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
