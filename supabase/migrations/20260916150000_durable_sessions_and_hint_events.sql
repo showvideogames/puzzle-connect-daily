@@ -104,7 +104,40 @@ alter table public.game_sessions
   check ((status = 'in_progress') = (completed_at is null));
 
 comment on column public.game_sessions.status is
-  'Lifecycle: in_progress | won | lost. in_progress <=> completed_at IS NULL (enforced). Player-facing Stats MUST filter to (won, lost) -- a row existing no longer implies a played game.';
+  'Lifecycle: in_progress | won | lost. in_progress <=> completed_at IS NULL and won IS NULL (both enforced). Player-facing Stats MUST filter to (won, lost) -- a row existing no longer implies a played game.';
+
+
+-- ---------------------------------------------------------------------------
+-- `won` becomes truthfully three-state.
+--
+--   status = in_progress -> won IS NULL   (not yet knowable)
+--   status = won         -> won IS TRUE
+--   status = lost        -> won IS FALSE
+--
+-- Previously `won` was NOT NULL, so a just-created session had to carry a
+-- placeholder `false` — a row that read as "this player lost" to anything
+-- that failed to check `status` first. NULL is the honest value for a game
+-- that has not finished: not a loss, not a win, simply not yet determined.
+--
+-- Dropping NOT NULL cannot affect any existing row (all 256 have a real
+-- boolean), and the CHECK below makes the three-state mapping an enforced
+-- invariant rather than a convention, so `won` and `status` can never drift
+-- apart in either direction.
+alter table public.game_sessions
+  alter column won drop not null;
+
+alter table public.game_sessions
+  drop constraint if exists game_sessions_status_won_check;
+alter table public.game_sessions
+  add constraint game_sessions_status_won_check
+  check (
+    (status = 'in_progress' and won is null)
+    or (status = 'won' and won is true)
+    or (status = 'lost' and won is false)
+  );
+
+comment on column public.game_sessions.won is
+  'Three-state: NULL while in_progress (not yet knowable), TRUE when status=won, FALSE when status=lost. Enforced by game_sessions_status_won_check. Never read without filtering on status first.';
 
 
 -- Does this session own the permanent official result for its
@@ -214,6 +247,61 @@ alter table public.game_sessions
 
 comment on column public.game_sessions.started_at is
   'When meaningful play began (first guess or first revealed hint) -- NOT page load. NULL for historical rows, which are never backfilled with a guessed value.';
+
+-- ---------------------------------------------------------------------------
+-- Rainbow outcome, resolvable at the session level.
+--
+-- For every COMPLETED normal puzzle (win or loss alike) analytics must be
+-- able to separate three mutually exclusive outcomes:
+--
+--   A. NOT ATTEMPTED     found_rainbow = false AND bonus_rainbow_attempted = false
+--   B. ATTEMPTED, FAILED found_rainbow = false AND bonus_rainbow_attempted = true
+--   C. FOUND             found_rainbow = true
+--
+-- Two independent boolean facts, not a status enum: "did they find it" and
+-- "did they explicitly try the post-game flow" are genuinely separate
+-- questions, and encoding them separately keeps the three outcomes derivable
+-- without a third field that could disagree with the other two.
+--
+-- PRODUCT RULE (firm): a Rainbow found through the post-game "Spot the
+-- Rainbow" flow AFTER A FORMAL LOSS counts as found, and counts toward the
+-- player's Rainbows Spotted. That post-loss opportunity is intentional --
+-- failing the main puzzle does not forfeit the Rainbow. Nothing in this
+-- schema or in the Stats queries requires a win.
+--   "Found after a formal loss" is therefore simply:
+--     found_rainbow = true AND status = 'lost'
+alter table public.game_sessions
+  add column if not exists bonus_rainbow_attempted boolean not null default false;
+
+comment on column public.game_sessions.bonus_rainbow_attempted is
+  'True when the player EXPLICITLY submitted the post-completion "Spot the Rainbow" modal at least once, correct or not. Session-level summary of guess_events.attempt_type = ''bonus_rainbow'' (same relationship hints_used has to hint_events). Never inferred from the Rainbow-SHAPE heuristic is_rainbow_attempt.';
+
+-- How the Rainbow was found. NULL when it was not found at all, so this is
+-- only ever read alongside found_rainbow = true.
+--
+--   'in_game'   -- found during normal play, by submitting the herring set as
+--                  an ordinary guess
+--   'post_game' -- found through the post-completion "Spot the Rainbow" flow
+--                  (after a win OR after a formal loss)
+--
+-- A session summary rather than something derived per-query from the event
+-- stream, deliberately. The alternative -- inferring it from
+-- rainbow_solve_index = 4 -- happens to be correct today but is fragile
+-- reasoning about an unrelated column, and it would silently break the moment
+-- a Rainbow could be found in-game at position 4. This column states the fact
+-- directly. It is set exactly once, by whichever path actually found the
+-- Rainbow, so there is no second writer to disagree with.
+alter table public.game_sessions
+  add column if not exists rainbow_source text;
+
+alter table public.game_sessions
+  drop constraint if exists game_sessions_rainbow_source_check;
+alter table public.game_sessions
+  add constraint game_sessions_rainbow_source_check
+  check (rainbow_source is null or rainbow_source in ('in_game', 'post_game'));
+
+comment on column public.game_sessions.rainbow_source is
+  'How the Rainbow was found: in_game | post_game. NULL when not found, and NULL for historical rows (never backfilled with a guess). Read only alongside found_rainbow = true.';
 comment on column public.game_sessions.last_activity_at is
   'Time of the last meaningful action (creation, guess, hint, completion). Basis for classifying stale in_progress sessions as abandoned in later analysis. Never written from timer ticks or UI-only events. NULL for historical rows.';
 
@@ -244,7 +332,13 @@ language plpgsql
 set search_path = public
 as $$
 begin
-  if new.status = 'in_progress' and new.completed_at is not null then
+  -- `won is not null` matters now that won is three-state: an old client
+  -- always sends a real boolean alongside its completed_at, so requiring one
+  -- here keeps the repair to the case it was written for. A row with a
+  -- completion timestamp but no outcome is not something this can honestly
+  -- resolve, so it is left for the CHECK constraints to reject rather than
+  -- being guessed into 'lost'.
+  if new.status = 'in_progress' and new.completed_at is not null and new.won is not null then
     new.status := case when new.won then 'won' else 'lost' end;
   end if;
   return new;
@@ -290,6 +384,42 @@ comment on column public.guess_events.active_time_seconds is
   'Cumulative ACTIVE play seconds at the moment of this guess (background-tab time already excluded). NULL = not recorded (historical rows).';
 comment on column public.guess_events.groups_solved is
   'Normal categories already solved when this guess was submitted (0-4). NULL = not recorded (historical rows).';
+
+
+-- What KIND of submission this event was. This is the field that carries
+-- explicit player intent, and it exists because is_rainbow_attempt cannot.
+--
+--   'normal'        -- an ordinary in-game guess. Includes a guess that
+--                      happens to be Rainbow-SHAPED, and includes the in-game
+--                      find where the player submits the herring set as a
+--                      normal guess. In every one of those cases the player
+--                      was playing the board, not invoking a Rainbow flow.
+--   'bonus_rainbow' -- an EXPLICIT submission of the post-completion "Spot
+--                      the Rainbow" modal, correct or not. The player opened
+--                      that flow and pressed Submit; there is no inference.
+--
+-- Do NOT use is_rainbow_attempt to answer "did the player try Spot the
+-- Rainbow?". That column is a SHAPE heuristic -- one selected word from each
+-- of the 4 categories -- and a player idly picking four unrelated words
+-- satisfies it by accident. It stays as-is for compatibility and remains
+-- useful as a shape signal, but it is not evidence of intent. attempt_type
+-- is.
+--
+-- NULL for historical rows, which are never backfilled: the old data cannot
+-- distinguish a bonus submission from a Rainbow-shaped normal guess, and
+-- guessing would manufacture exactly the false intent signal this column
+-- exists to prevent.
+alter table public.guess_events
+  add column if not exists attempt_type text;
+
+alter table public.guess_events
+  drop constraint if exists guess_events_attempt_type_check;
+alter table public.guess_events
+  add constraint guess_events_attempt_type_check
+  check (attempt_type is null or attempt_type in ('normal', 'bonus_rainbow'));
+
+comment on column public.guess_events.attempt_type is
+  'normal | bonus_rainbow. The authoritative record of an EXPLICIT post-completion "Spot the Rainbow" submission. NULL = historical row (never backfilled). Use this, NOT the is_rainbow_attempt shape heuristic, to determine player intent.';
 
 
 -- ===========================================================================
@@ -426,6 +556,13 @@ create index if not exists game_sessions_in_progress_activity_idx
 
 create index if not exists hint_events_session_idx
   on public.hint_events (game_session_id);
+
+-- Explicit bonus submissions are a small fraction of guess_events, so a
+-- partial index keeps "which sessions actually tried Spot the Rainbow?" cheap
+-- without carrying every ordinary guess.
+create index if not exists guess_events_bonus_rainbow_idx
+  on public.guess_events (game_session_id)
+  where attempt_type = 'bonus_rainbow';
 
 
 -- ===========================================================================

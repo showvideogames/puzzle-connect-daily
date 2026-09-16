@@ -179,7 +179,7 @@ describe("B. first guess", () => {
     const s = sessions()[0];
     expect(s.status).toBe("in_progress");
     expect(s.completed_at).toBeNull();
-    expect(s.is_official).toBeUndefined(); // left to the DB default (false)
+    expect(s.is_official).toBe(false); // DB default: only set at completion
     expect(s.entry_context).toBe("daily_home");
     expect(s.started_at).toEqual(expect.any(String));
     expect(s.last_activity_at).toEqual(expect.any(String));
@@ -619,9 +619,8 @@ describe("M. post-completion Rainbow bonus", () => {
     const guessesAtCompletion = guesses().length;
 
     // The bonus write path, as GameBoard drives it after completion.
-    const { markRainbowFoundInSession, recordRainbowAttempt } = await import("@/lib/gameStats");
-    await markRainbowFoundInSession(s.id as string);
-    await recordRainbowAttempt({
+    const { recordBonusRainbowAttempt } = await import("@/lib/gameStats");
+    await recordBonusRainbowAttempt({
       sessionId: s.id as string,
       guessNumber: view.result.current.nextGuessNumber(0),
       words: ["y1", "g1", "b1", "r1"],
@@ -749,6 +748,308 @@ describe("O. stats with an in-progress session alongside completed ones", () => 
     expect(after.rainbowSpotRate).toBe(before.rainbowSpotRate);
     // Exactly the one completed row participates.
     expect(after.gamesPlayed).toBe(1);
+  });
+});
+
+
+// ── RAINBOW OUTCOME MODEL ──────────────────────────────────────────────────
+// The three outcomes must be mutually exclusive and reliably resolvable at
+// the session level, for a WIN or a formal LOSS alike:
+//
+//   A. NOT ATTEMPTED     found_rainbow = false AND bonus_rainbow_attempted = false
+//   B. ATTEMPTED, FAILED found_rainbow = false AND bonus_rainbow_attempted = true
+//   C. FOUND             found_rainbow = true   (+ rainbow_source)
+describe("Rainbow outcome model", () => {
+  type Outcome = "NOT_ATTEMPTED" | "ATTEMPTED_FAILED" | "FOUND";
+
+  /** Exactly how analytics is expected to classify a completed session. */
+  function classify(s: Record<string, unknown>): Outcome {
+    if (s.found_rainbow === true) return "FOUND";
+    return s.bonus_rainbow_attempted === true ? "ATTEMPTED_FAILED" : "NOT_ATTEMPTED";
+  }
+
+  /** Drives the bonus modal exactly as GameBoard's handleSpotResult does. */
+  async function submitBonus(
+    view: ReturnType<typeof mount>,
+    correct: boolean,
+    words: string[],
+    failedSoFar = 0
+  ) {
+    const { recordBonusRainbowAttempt } = await import("@/lib/gameStats");
+    const s = sessions()[0];
+    await recordBonusRainbowAttempt({
+      sessionId: s.id as string,
+      guessNumber: view.result.current.nextGuessNumber(failedSoFar),
+      words,
+      correct,
+      guessedAt: new Date().toISOString(),
+      activeTimeSeconds: view.result.current.activeSecondsRef.current,
+      groupsSolved: 4,
+    });
+  }
+
+  async function playToWin(view: ReturnType<typeof mount>) {
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+  }
+
+  async function playToLoss(view: ReturnType<typeof mount>) {
+    await guess(view, ["y1", "y2", "y3", "g1"]);
+    await guess(view, ["y1", "y2", "y3", "b1"]);
+    await guess(view, ["y1", "y2", "y3", "r1"]);
+    await guess(view, ["y1", "y2", "g2", "r1"]);
+  }
+
+  const bonusEvents = () => guesses().filter((g) => g.attempt_type === "bonus_rainbow");
+
+  // 1. Win, Rainbow found during gameplay -> FOUND, source = in_game
+  it("1. win with an in-game Rainbow find: FOUND, source in_game", async () => {
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    // The herring set, submitted as an ordinary board guess.
+    await guess(view, ["y1", "g1", "b1", "r1"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    const s = sessions()[0];
+    expect(s.status).toBe("won");
+    expect(classify(s)).toBe("FOUND");
+    expect(s.found_rainbow).toBe(true);
+    expect(s.rainbow_source).toBe("in_game");
+    // The player never opened the post-game flow.
+    expect(s.bonus_rainbow_attempted).toBe(false);
+    expect(bonusEvents()).toHaveLength(0);
+
+    const stats = await loadStatsFromSupabase();
+    expect(stats.rainbowSpottedCount).toBe(1);
+  });
+
+  // 2. Win, never finds it, never opens the prompt -> NOT ATTEMPTED
+  it("2. win with no Rainbow and no bonus attempt: NOT_ATTEMPTED", async () => {
+    const view = mount();
+    await playToWin(view);
+
+    const s = sessions()[0];
+    expect(classify(s)).toBe("NOT_ATTEMPTED");
+    expect(s.found_rainbow).toBe(false);
+    expect(s.bonus_rainbow_attempted).toBe(false);
+    expect(s.rainbow_source).toBeNull();
+
+    const stats = await loadStatsFromSupabase();
+    expect(stats.rainbowSpottedCount).toBe(0);
+  });
+
+  // 3. Win, bonus attempted and wrong -> ATTEMPTED_FAILED
+  it("3. win with a failed bonus attempt: ATTEMPTED_FAILED", async () => {
+    const view = mount();
+    await playToWin(view);
+    await submitBonus(view, false, ["y1", "g2", "b3", "r4"]);
+
+    const s = sessions()[0];
+    expect(classify(s)).toBe("ATTEMPTED_FAILED");
+    expect(s.found_rainbow).toBe(false);
+    expect(s.bonus_rainbow_attempted).toBe(true);
+    expect(s.rainbow_source).toBeNull();
+
+    // The failed attempt is durable rather than vanishing.
+    expect(bonusEvents()).toHaveLength(1);
+    expect(bonusEvents()[0].correct).toBe(false);
+
+    const stats = await loadStatsFromSupabase();
+    expect(stats.rainbowSpottedCount).toBe(0);
+  });
+
+  // 4. Win, bonus attempted and correct -> FOUND, source = post_game
+  it("4. win with a correct bonus attempt: FOUND, source post_game", async () => {
+    const view = mount();
+    await playToWin(view);
+    await submitBonus(view, true, ["y1", "g1", "b1", "r1"]);
+
+    const s = sessions()[0];
+    expect(classify(s)).toBe("FOUND");
+    expect(s.found_rainbow).toBe(true);
+    expect(s.rainbow_source).toBe("post_game");
+    expect(s.bonus_rainbow_attempted).toBe(true);
+    expect(s.rainbow_solve_index).toBe(4);
+
+    const stats = await loadStatsFromSupabase();
+    expect(stats.rainbowSpottedCount).toBe(1);
+  });
+
+  // 5. Loss, never opens the prompt -> NOT ATTEMPTED
+  it("5. loss with no bonus attempt: NOT_ATTEMPTED", async () => {
+    const view = mount();
+    await playToLoss(view);
+
+    const s = sessions()[0];
+    expect(s.status).toBe("lost");
+    expect(classify(s)).toBe("NOT_ATTEMPTED");
+    expect(s.bonus_rainbow_attempted).toBe(false);
+    expect(s.rainbow_source).toBeNull();
+  });
+
+  // 6. Loss, bonus attempted and wrong -> ATTEMPTED_FAILED
+  it("6. loss with a failed bonus attempt: ATTEMPTED_FAILED", async () => {
+    const view = mount();
+    await playToLoss(view);
+    await submitBonus(view, false, ["y1", "g2", "b3", "r4"]);
+
+    const s = sessions()[0];
+    expect(s.status).toBe("lost");
+    expect(classify(s)).toBe("ATTEMPTED_FAILED");
+    expect(s.found_rainbow).toBe(false);
+    expect(s.bonus_rainbow_attempted).toBe(true);
+    expect(bonusEvents()).toHaveLength(1);
+
+    const stats = await loadStatsFromSupabase();
+    expect(stats.rainbowSpottedCount).toBe(0);
+  });
+
+  // 7. Loss, bonus attempted and correct -> FOUND, and it COUNTS.
+  it("7. loss with a correct bonus attempt: FOUND, post_game, and it counts", async () => {
+    const view = mount();
+    await playToLoss(view);
+    const finalTime = sessions()[0].active_time_seconds as number;
+    await submitBonus(view, true, ["y1", "g1", "b1", "r1"]);
+
+    const s = sessions()[0];
+    // The firm product rule: failing the main puzzle does not forfeit the
+    // Rainbow.
+    expect(s.status).toBe("lost");
+    expect(s.won).toBe(false);
+    expect(classify(s)).toBe("FOUND");
+    expect(s.found_rainbow).toBe(true);
+    expect(s.rainbow_source).toBe("post_game");
+    expect(s.bonus_rainbow_attempted).toBe(true);
+    // "Found after a formal loss" is answerable directly.
+    expect(s.found_rainbow === true && s.status === "lost").toBe(true);
+    // The loss itself is untouched — no accidental promotion to a win.
+    expect(s.mistakes).toBe(4);
+    expect(s.active_time_seconds).toBe(finalTime);
+
+    const stats = await loadStatsFromSupabase();
+    expect(stats.rainbowSpottedCount).toBe(1);
+    expect(stats.gamesWon).toBe(0);
+    expect(stats.gamesPlayed).toBe(1);
+  });
+
+  // 8. A Rainbow-SHAPED normal guess must never read as a bonus attempt.
+  it("8. a Rainbow-shaped in-game guess is not a Spot the Rainbow attempt", async () => {
+    const view = mount();
+    // One word from each category, but NOT the herring set — so it is
+    // Rainbow-SHAPED and incorrect, exactly the heuristic's false positive.
+    await guess(view, ["y2", "g2", "b2", "r2"]);
+
+    const g = guesses()[0];
+    // The shape heuristic fires...
+    expect(g.is_rainbow_attempt).toBe(true);
+    // ...but intent does not.
+    expect(g.attempt_type).toBe("normal");
+    expect(bonusEvents()).toHaveLength(0);
+    expect(sessions()[0].bonus_rainbow_attempted).toBe(false);
+
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    const s = sessions()[0];
+    expect(s.status).toBe("won");
+    // Classified as never having tried the bonus flow, which is the truth.
+    expect(classify(s)).toBe("NOT_ATTEMPTED");
+    expect(s.bonus_rainbow_attempted).toBe(false);
+  });
+
+  // The in-game FIND is likewise a normal guess, not a bonus attempt.
+  it("classifies the in-game herring find as a normal guess", async () => {
+    const view = mount();
+    await guess(view, ["y1", "g1", "b1", "r1"]);
+
+    const g = guesses()[0];
+    expect(g.attempt_type).toBe("normal");
+    expect(bonusEvents()).toHaveLength(0);
+  });
+
+  // Every completed session lands in exactly one bucket. Asserted over the
+  // full grid of (outcome x bonus attempt) directly against the column
+  // combinations the writers above produce, so the classification rule is
+  // checked exhaustively rather than one scenario at a time.
+  it("the three outcomes are mutually exclusive and total", () => {
+    const grid = [
+      { found_rainbow: false, bonus_rainbow_attempted: false, expected: "NOT_ATTEMPTED" },
+      { found_rainbow: false, bonus_rainbow_attempted: true, expected: "ATTEMPTED_FAILED" },
+      { found_rainbow: true, bonus_rainbow_attempted: false, expected: "FOUND" },
+      { found_rainbow: true, bonus_rainbow_attempted: true, expected: "FOUND" },
+    ] as const;
+
+    for (const row of grid) {
+      const outcome = classify({
+        found_rainbow: row.found_rainbow,
+        bonus_rainbow_attempted: row.bonus_rainbow_attempted,
+      });
+      expect(outcome).toBe(row.expected);
+      // Exactly one bucket, never zero and never two.
+      const buckets = [
+        outcome === "NOT_ATTEMPTED",
+        outcome === "ATTEMPTED_FAILED",
+        outcome === "FOUND",
+      ].filter(Boolean);
+      expect(buckets).toHaveLength(1);
+    }
+  });
+});
+
+// ── THREE-STATE `won` ──────────────────────────────────────────────────────
+describe("three-state won", () => {
+  it("is NULL while in progress and TRUE on a win", async () => {
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "g1"]);
+
+    // in_progress -> won IS NULL. Not false: a placeholder false would read as
+    // "this player lost" to anything that skipped the status check.
+    expect(sessions()[0].status).toBe("in_progress");
+    expect(sessions()[0].won).toBeNull();
+
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+    expect(sessions()[0].status).toBe("won");
+    expect(sessions()[0].won).toBe(true);
+  });
+
+  it("is FALSE on a formal loss", async () => {
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "g1"]);
+    await guess(view, ["y1", "y2", "y3", "b1"]);
+    await guess(view, ["y1", "y2", "y3", "r1"]);
+    await guess(view, ["y1", "y2", "g2", "r1"]);
+    expect(sessions()[0].status).toBe("lost");
+    expect(sessions()[0].won).toBe(false);
+  });
+
+  it("never lets a won = NULL row read as a win or a loss in Stats or Archive", async () => {
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "g1"]);
+    view.unmount();
+
+    expect(sessions()[0].won).toBeNull();
+
+    // Player-facing Stats: neither played, nor won, nor a loss bucket.
+    const stats = await loadStatsFromSupabase();
+    expect(stats.gamesPlayed).toBe(0);
+    expect(stats.gamesWon).toBe(0);
+    expect(stats.guessDistribution).toEqual([0, 0, 0, 0, 0]);
+
+    // Archive calendar: the same completed-only filter the page applies.
+    const { data: calendarRows } = await db
+      .from("game_sessions")
+      .select("puzzle_id, won, found_rainbow")
+      .in("status", ["won", "lost"]);
+    expect(calendarRows).toHaveLength(0);
   });
 });
 

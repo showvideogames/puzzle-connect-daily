@@ -375,6 +375,10 @@ export function useGame(
             : null,
           guessedAt: g.guessedAt ?? null,
           isRainbowAttempt: g.isRainbowAttempt ?? false,
+          // Everything in the local guess history is an in-game board guess:
+          // the post-completion bonus writes straight to the server through
+          // its own path and is never replayed through this backfill.
+          attemptType: "normal" as const,
           isOneAway: g.isOneAway ?? null,
           isAlmostRainbow: g.isAlmostRainbow ?? null,
           snapshot,
@@ -820,6 +824,14 @@ export function useGame(
       // Does not prove the player intended a Rainbow guess. Preserved exactly
       // as previously defined; see GuessEventInput.isRainbowAttempt.
       isRainbowAttempt: isRainbowHerring || new Set(guessGroupIndices).size === 4,
+      // Always "normal" here — this is the in-game board, whatever shape the
+      // guess happened to take. Even the in-game Rainbow FIND is a normal
+      // guess: the player submitted the herring set from the board, they did
+      // not invoke the post-completion "Spot the Rainbow" flow. Only that
+      // flow writes "bonus_rainbow" (see recordBonusRainbowAttempt), which is
+      // what stops a Rainbow-shaped ordinary guess from ever being counted as
+      // "the player tried Spot the Rainbow".
+      attemptType: "normal" as const,
       isOneAway: isOneAway && !isAlmostRainbow,
       isAlmostRainbow,
       snapshot: eventSnapshot(),

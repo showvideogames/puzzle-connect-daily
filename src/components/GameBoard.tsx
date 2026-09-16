@@ -18,7 +18,7 @@ import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
 import { supabase } from "@/integrations/supabase/client";
-import { getDeviceId, markRainbowFoundInSession, recordRainbowAttempt } from "@/lib/gameStats";
+import { getDeviceId, recordBonusRainbowAttempt } from "@/lib/gameStats";
 import type { EntryContext } from "@/lib/entryContext";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { trackEvent } from "@/lib/analytics";
@@ -706,18 +706,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       setSpotShaking(false);
       // Local UI/share state always reflects what actually happened THIS
       // playthrough — that part is unconditional (see markRainbowFound
-      // below). But the two network calls that mutate the official
-      // game_sessions row (found_rainbow/rainbow_solve_index, plus its own
-      // guess_events row) are skipped when this playthrough is a confirmed
-      // replay/duplicate (isOfficialAttemptRef.current === false — see
-      // commitOfficialResult in useGame.ts) — otherwise a replay's bonus
-      // Rainbow find could silently rewrite the real official result's
-      // Rainbows Spotted outcome. Defaults to proceeding (undetermined or
-      // confirmed official both pass) since the check resolves well before
-      // a human could reach this bonus prompt in the normal, non-replay case.
+      // below). The durable write is skipped when this playthrough is a
+      // confirmed replay/duplicate (isOfficialAttemptRef.current === false —
+      // see commitOfficialResult in useGame.ts), so a replay's bonus find can
+      // never rewrite the real official result's Rainbows Spotted outcome.
+      // Defaults to proceeding (undetermined or confirmed official both pass)
+      // since the check resolves well before a human could reach this prompt
+      // in the normal, non-replay case.
       const isDuplicateAttempt = isOfficialAttemptRef.current === false;
 
-      // Both writes now target the session BY ID — the very session this
+      // The write targets the session BY ID — the very session this
       // playthrough has been appending events to all along. The previous
       // implementation re-derived a session from puzzle_id + identity, a
       // lookup that can now return the wrong row, since one puzzle+identity
@@ -733,44 +731,44 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       // the final solve time — the bonus round cannot inflate it.
       const activeTimeSeconds = activeSecondsRef.current;
 
+      // A failed bonus attempt is never appended to guessHistory (it has no
+      // share-grid row), so the guess numbering has to advance here instead —
+      // otherwise a player who failed, refreshed and failed again would have
+      // the second attempt silently discarded as a duplicate. A CORRECT one
+      // does get appended by markRainbowFound, so the count advances on its
+      // own and this offset must not also move.
+      const attemptOffset = failedBonusAttemptsRef.current;
+      if (!correct) failedBonusAttemptsRef.current = attemptOffset + 1;
+
       if (correct && puzzle.rainbowHerring) {
         setBonusRainbowWords([...puzzle.rainbowHerring]);
         confetti({ particleCount: 100, spread: 80, origin: { y: 0.55 } });
         playRainbowSound();
         markRainbowFound(puzzle.rainbowHerring, guessedAt);
-        if (canPersist) {
-          void markRainbowFoundInSession(sessionId);
-          void recordRainbowAttempt({
-            sessionId,
-            guessNumber: nextGuessNumber(failedBonusAttemptsRef.current),
-            words,
-            correct: true,
-            guessedAt,
-            activeTimeSeconds,
-            groupsSolved: state.solvedGroups.length,
-          });
-        }
-      } else {
-        // A failed bonus attempt is never appended to guessHistory (it has no
-        // share-grid row), so the guess numbering has to advance here instead
-        // — otherwise a player who failed, refreshed, and failed again would
-        // have the second attempt silently discarded as a duplicate.
-        const attemptOffset = failedBonusAttemptsRef.current;
-        failedBonusAttemptsRef.current = attemptOffset + 1;
-        if (canPersist) {
-          // Failed bonus attempts previously vanished entirely — this is the
-          // only durable record of them.
-          void recordRainbowAttempt({
-            sessionId,
-            guessNumber: nextGuessNumber(attemptOffset),
-            words,
-            correct: false,
-            guessedAt,
-            activeTimeSeconds,
-            groupsSolved: state.solvedGroups.length,
-          });
-        }
       }
+
+      // ONE write path for both outcomes. This is the only call site in the
+      // app that produces attempt_type = 'bonus_rainbow', which is what makes
+      // "did the player explicitly try Spot the Rainbow?" answerable from
+      // intent rather than from the Rainbow-shape heuristic.
+      //
+      // Runs on success AND failure, and after a WIN or a formal LOSS alike —
+      // the post-loss prompt exists on purpose (showEndState is true for a
+      // loss), and a Rainbow found there counts. A failed attempt would
+      // otherwise vanish entirely, leaving it indistinguishable from never
+      // having tried.
+      if (canPersist) {
+        void recordBonusRainbowAttempt({
+          sessionId,
+          guessNumber: nextGuessNumber(attemptOffset),
+          words,
+          correct,
+          guessedAt,
+          activeTimeSeconds,
+          groupsSolved: state.solvedGroups.length,
+        });
+      }
+
       setTimeout(() => setBonusRainbowCorrect(correct), correct ? 600 : 0);
     }, 400);
   }, [puzzle.rainbowHerring, markRainbowFound, isOfficialAttemptRef, sessionIdRef, activeSecondsRef, nextGuessNumber, state.solvedGroups.length]);

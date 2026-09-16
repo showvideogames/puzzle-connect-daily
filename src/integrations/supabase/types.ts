@@ -73,6 +73,7 @@ export type Database = {
       game_sessions: {
         Row: {
           active_time_seconds: number | null
+          bonus_rainbow_attempted: boolean
           completed_at: string | null
           device_id: string | null
           entry_context: string | null
@@ -84,15 +85,17 @@ export type Database = {
           mistakes: number
           puzzle_id: string
           rainbow_solve_index: number | null
+          rainbow_source: string | null
           share_grid: string | null
           solve_order: Json | null
           started_at: string | null
           status: string
           user_id: string | null
-          won: boolean
+          won: boolean | null
         }
         Insert: {
           active_time_seconds?: number | null
+          bonus_rainbow_attempted?: boolean
           completed_at?: string | null
           device_id?: string | null
           entry_context?: string | null
@@ -104,15 +107,17 @@ export type Database = {
           mistakes: number
           puzzle_id: string
           rainbow_solve_index?: number | null
+          rainbow_source?: string | null
           share_grid?: string | null
           solve_order?: Json | null
           started_at?: string | null
           status?: string
           user_id?: string | null
-          won: boolean
+          won?: boolean | null
         }
         Update: {
           active_time_seconds?: number | null
+          bonus_rainbow_attempted?: boolean
           completed_at?: string | null
           device_id?: string | null
           entry_context?: string | null
@@ -124,17 +129,19 @@ export type Database = {
           mistakes?: number
           puzzle_id?: string
           rainbow_solve_index?: number | null
+          rainbow_source?: string | null
           share_grid?: string | null
           solve_order?: Json | null
           started_at?: string | null
           status?: string
           user_id?: string | null
-          won?: boolean
+          won?: boolean | null
         }
         Relationships: []
       }
       guess_events: {
         Row: {
+          attempt_type: string | null
           active_time_seconds: number | null
           correct: boolean
           game_session_id: string
@@ -149,6 +156,7 @@ export type Database = {
           words: Json
         }
         Insert: {
+          attempt_type?: string | null
           active_time_seconds?: number | null
           correct: boolean
           game_session_id: string
@@ -163,6 +171,7 @@ export type Database = {
           words: Json
         }
         Update: {
+          attempt_type?: string | null
           active_time_seconds?: number | null
           correct?: boolean
           game_session_id?: string

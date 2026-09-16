@@ -33,8 +33,30 @@ export function getDeviceId(): string {
 export const COMPLETED_STATUSES = ["won", "lost"] as const;
 
 /**
- * Flips found_rainbow (and the solve position it implies) on the session the
- * post-completion "Spot the Rainbow" bonus belongs to.
+ * Records ONE explicit post-completion "Spot the Rainbow" submission —
+ * success or failure alike.
+ *
+ * This is the single write path for the bonus flow, and the only place in the
+ * codebase that produces `attempt_type = 'bonus_rainbow'`. That matters: it
+ * is what makes "did the player explicitly try Spot the Rainbow?" answerable
+ * from intent rather than from the is_rainbow_attempt SHAPE heuristic, which
+ * an ordinary in-game guess can satisfy by accident.
+ *
+ * Writes two things, both idempotent:
+ *
+ *   1. the guess event, carrying attempt_type = 'bonus_rainbow'. guessNumber
+ *      comes from the caller's own guess history, so it shares the
+ *      (game_session_id, guess_number) key with every other guess rather than
+ *      deriving a number from a non-atomic COUNT(*) as the previous
+ *      implementation did;
+ *   2. the session summary — bonus_rainbow_attempted always, plus the
+ *      found_rainbow / rainbow_source / rainbow_solve_index trio when the
+ *      attempt was correct.
+ *
+ * PRODUCT RULE (firm): this counts after a formal LOSS as much as after a
+ * win. The post-game prompt is shown on both outcomes on purpose — failing
+ * the main puzzle does not forfeit the Rainbow — so nothing here is gated on
+ * the session having been won.
  *
  * Targets the session BY ID rather than re-deriving it from
  * puzzle_id + identity as the previous implementation did. That lookup can
@@ -42,37 +64,11 @@ export const COMPLETED_STATUSES = ["won", "lost"] as const;
  * more than one session (a completed official one plus a later in-progress
  * replay); an id cannot be ambiguous.
  *
- * The bonus prompt only ever appears once all 4 categories are solved, so a
- * find via this path is always at position 4 — the one value this path can
- * produce, not a recalculation.
- */
-export async function markRainbowFoundInSession(sessionId: string): Promise<void> {
-  try {
-    const { error } = await supabase
-      .from("game_sessions")
-      .update({ found_rainbow: true, rainbow_solve_index: 4 })
-      .eq("id", sessionId);
-    if (error) console.error("Failed to mark rainbow found:", error);
-  } catch (err) {
-    console.error("markRainbowFoundInSession error:", err);
-  }
-}
-
-/**
- * Records one Rainbow-attempt guess event from the post-completion "Spot the
- * Rainbow" bonus modal — success or failure alike, since a failed bonus
- * attempt would otherwise vanish entirely.
- *
- * guessNumber is supplied by the caller from the same guess history the live
- * path uses, so this shares the (game_session_id, guess_number) idempotency
- * key with every other guess instead of deriving a number from a non-atomic
- * COUNT(*) as the previous implementation did.
- *
  * Active time is snapshotted as-is: the solve timer has already stopped at
  * formal completion, so a bonus attempt records the final solve time and
  * cannot inflate it.
  */
-export async function recordRainbowAttempt(params: {
+export async function recordBonusRainbowAttempt(params: {
   sessionId: string;
   guessNumber: number;
   words: string[];
@@ -81,14 +77,21 @@ export async function recordRainbowAttempt(params: {
   activeTimeSeconds: number;
   groupsSolved: number;
 }): Promise<void> {
+  const { sessionId, correct } = params;
+
   try {
-    const { error } = await supabase.from("guess_events").upsert(
+    const { error: guessError } = await supabase.from("guess_events").upsert(
       {
-        game_session_id: params.sessionId,
+        game_session_id: sessionId,
         guess_number: params.guessNumber,
         words: params.words,
-        correct: params.correct,
+        correct,
         group_name: null,
+        // The authoritative intent signal.
+        attempt_type: "bonus_rainbow",
+        // Kept true for compatibility with the existing shape-based column:
+        // a bonus submission is by construction one word per category. It is
+        // NOT what marks this as an explicit attempt — attempt_type is.
         is_rainbow_attempt: true,
         guessed_at: params.guessedAt,
         active_time_seconds: params.activeTimeSeconds,
@@ -96,9 +99,33 @@ export async function recordRainbowAttempt(params: {
       },
       { onConflict: "game_session_id,guess_number", ignoreDuplicates: true }
     );
-    if (error) console.error("Failed to record rainbow attempt:", error);
+    if (guessError) console.error("Failed to record bonus Rainbow attempt:", guessError);
+
+    // The session summary. bonus_rainbow_attempted is set on every explicit
+    // submission, which is precisely what separates outcome B (attempted and
+    // failed) from outcome A (never attempted) — the two are otherwise
+    // identical, both having found_rainbow = false.
+    const summary = {
+      bonus_rainbow_attempted: true,
+      ...(correct
+        ? {
+            found_rainbow: true,
+            rainbow_source: "post_game",
+            // The bonus prompt only ever appears once the board is finished,
+            // so a find via this path is always at position 4 — the one value
+            // this path can produce, not a recalculation.
+            rainbow_solve_index: 4,
+          }
+        : {}),
+    };
+
+    const { error: sessionError } = await supabase
+      .from("game_sessions")
+      .update(summary)
+      .eq("id", sessionId);
+    if (sessionError) console.error("Failed to update bonus Rainbow summary:", sessionError);
   } catch (err) {
-    console.error("recordRainbowAttempt error:", err);
+    console.error("recordBonusRainbowAttempt error:", err);
   }
 }
 
@@ -235,6 +262,13 @@ export async function finalizeGameSession(params: FinalizeGameSessionParams): Pr
       active_time_seconds: activeTimeSeconds,
       found_rainbow: foundRainbow,
       rainbow_solve_index: rainbowSolveIndex,
+      // At finalize time, a found Rainbow can ONLY have been found during
+      // normal play — the post-game bonus prompt is not even shown until
+      // after this runs, and when it does find one it sets
+      // rainbow_source = post_game itself (see recordBonusRainbowAttempt).
+      // So there is exactly one writer per outcome and no way for the two
+      // to disagree. NULL when not found, never a placeholder.
+      rainbow_source: foundRainbow ? "in_game" : null,
       solve_order: solveOrder,
       hints_used: hintsUsed,
       share_grid: shareGrid,
@@ -472,6 +506,17 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
           inOrderCount++;
         }
       }
+      // Rainbows Spotted counts ANY completed official session with
+      // found_rainbow = true. Deliberately OUTSIDE the `if (r.won)` block
+      // above, and deliberately indifferent to rainbow_source: a Rainbow
+      // found in normal play, one found through the post-game "Spot the
+      // Rainbow" prompt after a win, and one found through that same prompt
+      // after a FORMAL LOSS all count equally.
+      //
+      // The post-loss case is a firm product rule, not an oversight: the
+      // bonus prompt is shown after a loss on purpose (see showEndState in
+      // GameBoard.tsx) so that failing the main puzzle does not forfeit the
+      // Rainbow. Do not add a win requirement here.
       if (isRainbowEligible) {
         rainbowEligible++;
         if (r.found_rainbow) rainbowFound++;

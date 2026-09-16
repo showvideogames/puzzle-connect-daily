@@ -115,11 +115,13 @@ export async function createGameSession(params: {
         started_at: now,
         last_activity_at: now,
         completed_at: null,
-        // NOT NULL columns that only become meaningful at completion. These
-        // are placeholders for an unfinished game, which is precisely why
-        // `status` exists and why no player-facing stat may read them without
-        // filtering on it first.
-        won: false,
+        // NULL, not false: the outcome of an unfinished game is not yet
+        // knowable, and a placeholder `false` would read as "this player
+        // lost" to anything that failed to check `status` first. The
+        // three-state mapping (in_progress -> NULL, won -> TRUE, lost ->
+        // FALSE) is enforced by a CHECK constraint, so the two columns
+        // cannot drift apart.
+        won: null,
         mistakes: snapshot.mistakes,
         active_time_seconds: snapshot.activeTimeSeconds,
         found_rainbow: false,
@@ -176,6 +178,21 @@ export async function touchSession(
   }
 }
 
+/**
+ * What KIND of submission a guess event was.
+ *
+ *   "normal"        - an ordinary in-game guess. Includes one that happens to
+ *                     be Rainbow-SHAPED, and the in-game find where the player
+ *                     submits the herring set as a normal guess. In both the
+ *                     player was playing the board, not invoking a Rainbow flow.
+ *   "bonus_rainbow" - an EXPLICIT submission of the post-completion "Spot the
+ *                     Rainbow" modal, correct or not.
+ *
+ * This is the field that carries player INTENT. isRainbowAttempt cannot: it is
+ * a shape heuristic that a player can satisfy by accident.
+ */
+export type GuessAttemptType = "normal" | "bonus_rainbow";
+
 export interface GuessEventInput {
   guessNumber: number;
   words: string[];
@@ -200,9 +217,19 @@ export interface GuessEventInput {
    * player idly picking four unrelated words can produce that shape by
    * accident. The name and behavior are preserved for compatibility with
    * existing rows, but the metric should be read as a shape signal, never as
-   * explicit user intent.
+   * explicit user intent — attemptType below is what does that.
    */
   isRainbowAttempt: boolean;
+  /**
+   * The authoritative intent signal: was this an explicit post-completion
+   * "Spot the Rainbow" submission, or an ordinary in-game guess?
+   *
+   * Every guess written through this module is "normal". Only the bonus
+   * modal path (recordBonusRainbowAttempt in gameStats.ts) writes
+   * "bonus_rainbow", which is why a Rainbow-shaped ordinary guess can never
+   * be misread as the player having tried the bonus flow.
+   */
+  attemptType: GuessAttemptType;
   isOneAway: boolean | null;
   isAlmostRainbow: boolean | null;
   snapshot: EventSnapshot;
@@ -244,6 +271,7 @@ export async function recordGuessEvent(
           group_name: guess.groupName,
           guessed_at: guess.guessedAt,
           is_rainbow_attempt: guess.isRainbowAttempt,
+          attempt_type: guess.attemptType,
           is_one_away: guess.isOneAway,
           is_almost_rainbow: guess.isAlmostRainbow,
           active_time_seconds: guess.snapshot.activeTimeSeconds,
@@ -293,6 +321,7 @@ export async function backfillGuessEvents(
         group_name: g.groupName,
         guessed_at: g.guessedAt,
         is_rainbow_attempt: g.isRainbowAttempt,
+        attempt_type: g.attemptType,
         is_one_away: g.isOneAway,
         is_almost_rainbow: g.isAlmostRainbow,
         active_time_seconds: g.snapshot.activeTimeSeconds,

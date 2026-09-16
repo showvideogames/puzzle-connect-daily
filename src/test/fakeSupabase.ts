@@ -28,6 +28,30 @@ const UNIQUE_KEYS: Record<string, string[]> = {
   hint_events: ["game_session_id", "hint_type"],
 };
 
+/**
+ * Column defaults, mirroring the migrated schema.
+ *
+ * These matter for correctness, not convenience: `bonus_rainbow_attempted`
+ * and `is_official` are NOT NULL with a default of false, so a real row read
+ * back always has a boolean there. Without modelling that, a test would see
+ * `undefined` and could pass or fail for reasons the production database
+ * would never reproduce.
+ *
+ * Applied only when the insert does not mention the column, exactly as a SQL
+ * DEFAULT behaves — an explicit null stays null.
+ */
+const COLUMN_DEFAULTS: Record<string, FakeRow> = {
+  game_sessions: {
+    status: "in_progress",
+    is_official: false,
+    bonus_rainbow_attempted: false,
+    found_rainbow: false,
+    hints_used: false,
+    rainbow_source: null,
+    won: null,
+  },
+};
+
 export class FakeSupabase {
   tables: Record<string, FakeRow[]> = {
     game_sessions: [],
@@ -99,6 +123,16 @@ export class FakeSupabase {
   }
   _uniqueKey(table: string) {
     return UNIQUE_KEYS[table];
+  }
+  /** Applies column DEFAULTs to keys the insert did not mention. */
+  _withDefaults(table: string, row: FakeRow): FakeRow {
+    const defaults = COLUMN_DEFAULTS[table];
+    if (!defaults) return row;
+    const out: FakeRow = { ...row };
+    for (const [k, v] of Object.entries(defaults)) {
+      if (!(k in out)) out[k] = v;
+    }
+    return out;
   }
 }
 
@@ -183,7 +217,7 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: unknown }> {
     const p = this.pending ?? { op: "select" as const };
 
     if (p.op === "insert") {
-      const inserted = p.rows.map((r) => ({ id: this.db._newId(), ...r }));
+      const inserted = p.rows.map((r) => this.db._withDefaults(this.table, { id: this.db._newId(), ...r }));
       rows.push(...inserted);
       this.db._log(this.table, "insert");
       return this.shape(inserted);
@@ -203,7 +237,7 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: unknown }> {
             error: { code: "23505", message: "duplicate key value violates unique constraint" },
           };
         }
-        const row = { id: this.db._newId(), ...r };
+        const row = this.db._withDefaults(this.table, { id: this.db._newId(), ...r });
         rows.push(row);
         inserted.push(row);
       }
