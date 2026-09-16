@@ -328,9 +328,18 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
       // which made bucket 4 structurally impossible: a win can never reach
       // 4 mistakes (that's a loss), so every loss — the only rows that ever
       // have mistakes === 4 — was silently excluded from the distribution
-      // entirely. Math.min(..., 4) is defensive clamping only; real rows
-      // are always 0-4 by game logic.
-      guessDistribution[Math.min(r.mistakes ?? 0, 4)]++;
+      // entirely.
+      //
+      // A row with a null/undefined/non-integer/out-of-range mistakes value
+      // is deliberately EXCLUDED from the distribution rather than folded
+      // into bucket 0 — unknown is not the same fact as zero, and treating
+      // it as zero would misrepresent a genuine "no mistakes" game. This
+      // row is still counted everywhere else (Played, totalMistakes for
+      // Average Mistakes, etc. below) exactly as before; only this one
+      // bucketing decision excludes it.
+      if (Number.isInteger(r.mistakes) && (r.mistakes as number) >= 0 && (r.mistakes as number) <= 4) {
+        guessDistribution[r.mistakes as number]++;
+      }
 
       if (r.won) {
         gamesWon++;
