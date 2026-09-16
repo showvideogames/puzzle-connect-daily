@@ -30,8 +30,8 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
       key: "darkMode" as const,
     },
     {
-      label: "Rainbow Colors",
-      description: "Show rainbow animation on spotted tiles",
+      label: "Rainbow Animation",
+      description: "Animate the rainbow on spotted tiles",
       key: "showRainbowColors" as const,
     },
     {

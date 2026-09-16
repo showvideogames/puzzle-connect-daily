@@ -1023,11 +1023,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 word={word}
                 isSelected={state.selectedWords.includes(word)}
                 isRainbow={
-                  (showRainbow && rainbowWords.includes(word)) ||
+                  rainbowWords.includes(word) ||
                   bonusRainbowWords.includes(word)
                 }
                 rainbowGradient={theme.isDefault ? undefined : theme.gradient}
                 rainbowTextShadow={theme.textShadow}
+                rainbowAnimated={showRainbow}
                 isMatched={matchedWords.includes(word)}
                 hiddenForReveal={isRevealingWord}
                 isChecking={checkingWords.includes(word)}
@@ -1098,13 +1099,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         document.body
       )}
 
-      {/* Rainbow Spotted popup — animated rainbow-tile for the default theme,
-          static themed gradient otherwise */}
+      {/* Rainbow Spotted popup — animated (or static, per the Rainbow
+          Animation setting) rainbow-tile for the default theme; themed
+          gradients are already static images and always show regardless
+          of that setting, same as the actual game tiles. */}
       {showRainbowPopup && (
         <div className="flex justify-center mt-3 animate-fade-up">
           <div
-            className={`${showRainbow && theme.isDefault ? "rainbow-tile" : "bg-foreground"} px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg`}
-            style={showRainbow && !theme.isDefault ? { background: theme.gradient, textShadow: theme.textShadow } : undefined}
+            className={`${theme.isDefault ? `rainbow-tile${showRainbow ? "" : " rainbow-tile-static"}` : ""} px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg`}
+            style={!theme.isDefault ? { background: theme.gradient, textShadow: theme.textShadow } : undefined}
           >
             {theme.spottedMessage}
           </div>

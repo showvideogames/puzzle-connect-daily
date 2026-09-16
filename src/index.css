@@ -290,6 +290,10 @@ html {
   .animate-tile-checking { animation: none; }
   .animate-group-appear { animation: none; }
   .animate-solved-arrival { animation: none; }
+  /* Same override as .rainbow-tile-static below — freezes the rainbow
+     gradient into one static full-width pass instead of an oversized
+     background scrolling through it. */
+  .rainbow-tile { animation: none; background-size: 100% 100%; }
 }
 
 /* Rainbow Herring tile effect */
@@ -313,6 +317,15 @@ html {
   );
   background-size: 300% 100%;
   animation: rainbow-shift 3s ease-in-out infinite;
+}
+
+/* "Rainbow Animation" setting off — same gradient as .rainbow-tile above
+   (reused, not redefined), just stretched to fill the tile in one static
+   pass instead of an oversized scrolling background, with the animation
+   removed. Still unmistakably the full rainbow, just frozen in place. */
+.rainbow-tile.rainbow-tile-static {
+  animation: none;
+  background-size: 100% 100%;
 }
 
 /* ── Rainbow curtain reveal: wipes in left to right ── */
