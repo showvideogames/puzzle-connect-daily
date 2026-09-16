@@ -317,9 +317,32 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     for (const r of rows) {
       totalMistakes += r.mistakes ?? 0;
       const isRainbowEligible = !!r.puzzle_id && rainbowPuzzleIds.has(r.puzzle_id);
+
+      // Mistake Distribution: every completed official session (win OR
+      // formal loss — game_sessions rows only ever exist for one of those
+      // two outcomes; there is no "abandoned" row today), bucketed by its
+      // own mistake count. A formal loss always has mistakes === 4 (the
+      // game ends the instant the 4th mistake is made — see MAX_MISTAKES in
+      // useGame.ts), so this is what actually lets bucket 4 populate.
+      // Previously this increment lived inside the `if (r.won)` block below,
+      // which made bucket 4 structurally impossible: a win can never reach
+      // 4 mistakes (that's a loss), so every loss — the only rows that ever
+      // have mistakes === 4 — was silently excluded from the distribution
+      // entirely.
+      //
+      // A row with a null/undefined/non-integer/out-of-range mistakes value
+      // is deliberately EXCLUDED from the distribution rather than folded
+      // into bucket 0 — unknown is not the same fact as zero, and treating
+      // it as zero would misrepresent a genuine "no mistakes" game. This
+      // row is still counted everywhere else (Played, totalMistakes for
+      // Average Mistakes, etc. below) exactly as before; only this one
+      // bucketing decision excludes it.
+      if (Number.isInteger(r.mistakes) && (r.mistakes as number) >= 0 && (r.mistakes as number) <= 4) {
+        guessDistribution[r.mistakes as number]++;
+      }
+
       if (r.won) {
         gamesWon++;
-        guessDistribution[Math.min(r.mistakes ?? 0, 4)]++;
         if ((r.mistakes ?? 0) === 0) perfectGamesCount++;
         if (r.hints_used === false) noHintsUsedCount++;
 
