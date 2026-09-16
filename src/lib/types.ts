@@ -71,7 +71,8 @@ export interface GuessAttempt {
   // new Date().toISOString() at the moment submitGuess/handleSpotResult
   // runs — NOT when it's later bulk-inserted into guess_events). Absent on
   // guessHistory entries saved before this field existed (see
-  // gameStats.ts's saveGameStats for the legacy DB-insert fallback) and on
+  // useGame.ts's toGuessEventInputs, which writes guessed_at as NULL rather
+  // than a fabricated timestamp for those) and on
   // hint markers, which are never persisted to guess_events.
   guessedAt?: string;
 }

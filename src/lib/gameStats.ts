@@ -1,5 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
 import { GameStats } from "./types";
+import type { EntryContext } from "./entryContext";
+import {
+  backfillGuessEvents,
+  createGameSession,
+  getIdentity,
+  isMissingSchemaError,
+  type GuessEventInput,
+} from "./gameSession";
 
 // Gets or creates a stable device ID for anonymous players
 export function getDeviceId(): string {
@@ -15,129 +23,232 @@ export function getDeviceId(): string {
   }
 }
 
-interface GuessEvent {
-  words: string[];
-  correct: boolean;
-  group_name: string | null;
-  is_rainbow_attempt?: boolean;
-  // Real submission time captured client-side at guess time (see
-  // GuessAttempt.guessedAt in types.ts). null on guessHistory entries saved
-  // before this field existed — saveGameStats below falls back to the save
-  // time for those, which is NOT historically accurate; see its comment.
-  guessed_at?: string | null;
+/**
+ * Statuses that represent a formally COMPLETED game.
+ *
+ * Sessions are now created on the first meaningful gameplay action, so the
+ * existence of a game_sessions row NO LONGER implies "Played". Every
+ * player-facing stat, and every "has this been finished?" check, must filter
+ * on these values — that assumption is false everywhere it is left implicit.
+ */
+export const COMPLETED_STATUSES = ["won", "lost"] as const;
+
+/**
+ * One row as returned by the get_own_completed_sessions RPC: the caller's own
+ * completed official sessions, already filtered server-side for both
+ * completion and ownership.
+ */
+export interface OwnCompletedSession {
+  puzzle_id: string;
+  won: boolean | null;
+  mistakes: number | null;
+  found_rainbow: boolean | null;
+  solve_order: unknown;
+  hints_used: boolean | null;
+  rainbow_solve_index: number | null;
+  rainbow_source: string | null;
+  bonus_rainbow_attempted: boolean | null;
+  status: string;
 }
 
-interface SaveGameStatsParams {
+/**
+ * Records ONE explicit post-completion "Spot the Rainbow" submission —
+ * success or failure alike.
+ *
+ * This is the single write path for the bonus flow, and the only place in the
+ * codebase that produces `attempt_type = 'bonus_rainbow'`. That matters: it
+ * is what makes "did the player explicitly try Spot the Rainbow?" answerable
+ * from intent rather than from the is_rainbow_attempt SHAPE heuristic, which
+ * an ordinary in-game guess can satisfy by accident.
+ *
+ * Writes two things, both idempotent:
+ *
+ *   1. the guess event, carrying attempt_type = 'bonus_rainbow'. guessNumber
+ *      comes from the caller's own guess history, so it shares the
+ *      (game_session_id, guess_number) key with every other guess rather than
+ *      deriving a number from a non-atomic COUNT(*) as the previous
+ *      implementation did;
+ *   2. the session summary — bonus_rainbow_attempted always, plus the
+ *      found_rainbow / rainbow_source / rainbow_solve_index trio when the
+ *      attempt was correct.
+ *
+ * PRODUCT RULE (firm): this counts after a formal LOSS as much as after a
+ * win. The post-game prompt is shown on both outcomes on purpose — failing
+ * the main puzzle does not forfeit the Rainbow — so nothing here is gated on
+ * the session having been won.
+ *
+ * Targets the session BY ID rather than re-deriving it from
+ * puzzle_id + identity as the previous implementation did. That lookup can
+ * now match the wrong row, because a puzzle+identity may legitimately have
+ * more than one session (a completed official one plus a later in-progress
+ * replay); an id cannot be ambiguous.
+ *
+ * Active time is snapshotted as-is: the solve timer has already stopped at
+ * formal completion, so a bonus attempt records the final solve time and
+ * cannot inflate it.
+ */
+export async function recordBonusRainbowAttempt(params: {
+  sessionId: string;
+  guessNumber: number;
+  words: string[];
+  correct: boolean;
+  guessedAt: string;
+  activeTimeSeconds: number;
+  groupsSolved: number;
+}): Promise<void> {
+  try {
+    const { deviceId } = await getIdentity();
+    // One function call does both writes: the bonus guess event and the
+    // session summary. It is the ONLY producer of
+    // attempt_type = 'bonus_rainbow' in the system, and record_guess_events
+    // forces 'normal' for everything else, so that value is a trustworthy
+    // record of explicit intent rather than something a client can assert.
+    //
+    // The function also enforces what the client used to be trusted with:
+    // the session must be COMPLETED (the prompt only exists after the board
+    // finishes), and a Rainbow already found in normal play cannot have its
+    // rainbow_source rewritten to post_game.
+    const { error } = await supabase.rpc("record_bonus_rainbow", {
+      _session_id: params.sessionId,
+      _device_id: deviceId,
+      _guess_number: params.guessNumber,
+      _words: params.words,
+      _correct: params.correct,
+      _guessed_at: params.guessedAt,
+      _active_time_seconds: params.activeTimeSeconds,
+      _groups_solved: params.groupsSolved,
+    });
+    if (error) console.error("Failed to record bonus Rainbow attempt:", error);
+  } catch (err) {
+    console.error("recordBonusRainbowAttempt error:", err);
+  }
+}
+
+/**
+ * Does a COMPLETED, OFFICIAL result already exist for this puzzle + identity?
+ *
+ * This replaces the old hasExistingSession(), and the distinction is the most
+ * important correctness point of the durable-session work. "A session row
+ * exists" and "this puzzle has been officially completed" used to be the same
+ * fact; they are not any more. Conflating them would mean a player's own
+ * unfinished session locked them out of finishing that puzzle and
+ * permanently blocked their real result from being saved.
+ *
+ * Used for two things: locking a board that has already been officially
+ * finished, and enforcing the rule that the FIRST completed official attempt
+ * is the permanent one.
+ */
+export async function hasOfficialResult(puzzleId: string): Promise<boolean> {
+  try {
+    const { deviceId } = await getIdentity();
+
+    // Answered by an RPC rather than a table read. game_sessions is no longer
+    // directly readable by anonymous clients (see section 6 of the
+    // migration), and this function returns a bare boolean — it cannot be
+    // used to page through the table or to discover a device_id the caller
+    // does not already hold. The signed-in half of ownership is resolved
+    // inside the function from auth.uid(), so it is not something the client
+    // can assert.
+    const { data, error } = await supabase.rpc("has_official_result", {
+      _puzzle_id: puzzleId,
+      _device_id: deviceId,
+    });
+
+    // Deploy-order insurance. This code REQUIRES the durable-session
+    // migration; if it ever runs against a database that has not had it
+    // applied, the function does not exist. Silently returning false there
+    // would be the dangerous direction: every completion would look like a
+    // first attempt, so replays would duplicate Played and re-run the streak.
+    // Falling back to the pre-migration semantics — where any session row DID
+    // mean an official completed result — preserves the old, correct
+    // behavior instead.
+    if (isMissingSchemaError(error)) {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id ?? null;
+      const legacy = userId
+        ? await supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId)
+            .or(`user_id.eq.${userId},device_id.eq.${deviceId}`).limit(1).maybeSingle()
+        : await supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId)
+            .eq("device_id", deviceId).limit(1).maybeSingle();
+      return !!legacy.data;
+    }
+
+    if (error) {
+      console.error("hasOfficialResult failed:", error);
+      return false;
+    }
+
+    return data === true;
+  } catch {
+    // Network failure. Returning false preserves the existing behavior: a
+    // real result is still saved rather than dropped because a check could
+    // not be reached.
+    return false;
+  }
+}
+
+export interface FinalizeGameSessionParams {
   puzzleId: string;
+  /**
+   * The durable session this game has been writing to, or null when there is
+   * none — a legacy local progress blob from before durable sessions, or a
+   * session whose creation failed. A null id is handled by inserting a
+   * completed row directly, which is exactly the pre-durable-session
+   * behavior.
+   */
+  sessionId: string | null;
+  entryContext: EntryContext;
+  // NOTE: there is deliberately no `isOfficial` parameter. Whether a session
+  // owns the permanent official result is decided by finalize_game_session
+  // from the session's OWN stored identity, and returned to the caller. A
+  // replay that completes after an official result already exists is still
+  // finalized truthfully (it really did finish) but comes back
+  // is_official = false, so it adds no Played, re-runs no streak, and
+  // increments no aggregate.
   won: boolean;
   mistakes: number;
   activeTimeSeconds: number;
   foundRainbow: boolean;
-  // How many categories were already solved when the Rainbow was found
-  // (0-4), or null if it wasn't found this game — see the doc comment on
-  // game_sessions.rainbow_solve_index in the migration file. Never
-  // recalculated here; passed straight through from useGame.ts's
-  // authoritative GameState.rainbowSolveIndex.
+  /**
+   * How many categories were already solved when the Rainbow was found (0-4),
+   * or null if it wasn't found this game — see the doc comment on
+   * game_sessions.rainbow_solve_index in the migration file. Never
+   * recalculated here; passed straight through from useGame.ts's
+   * authoritative GameState.rainbowSolveIndex.
+   */
   rainbowSolveIndex: number | null;
   solveOrder: string[];
-  guessHistory: GuessEvent[];
+  guessHistory: GuessEventInput[];
   skipStreak?: boolean;
   hintsUsed?: boolean;
   shareGrid?: string;
 }
 
-// Flips found_rainbow to true on an already-saved session — used when the
-// rainbow is spotted via the post-completion bonus prompt, after
-// saveGameStats already inserted the row with found_rainbow: false.
-export async function markRainbowFoundInSession(puzzleId: string): Promise<void> {
-  try {
-    const deviceId = getDeviceId();
-    const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.id ?? null;
-    const query = userId
-      ? supabase.from("game_sessions").update({ found_rainbow: true }).eq("puzzle_id", puzzleId).or(`user_id.eq.${userId},device_id.eq.${deviceId}`)
-      : supabase.from("game_sessions").update({ found_rainbow: true }).eq("puzzle_id", puzzleId).eq("device_id", deviceId);
-    const { error } = await query;
-    if (error) console.error("Failed to mark rainbow found:", error);
-
-    // Best-effort, isolated from the update above: the bonus "Spot the
-    // Rainbow" prompt only ever appears after all 4 categories are solved,
-    // so a find via this path is always at position 4 — not recalculated,
-    // just the one value this path can ever produce. Kept as a separate
-    // call so a not-yet-migrated database (missing rainbow_solve_index)
-    // can never affect the found_rainbow flip above.
-    const rsiQuery = userId
-      ? supabase.from("game_sessions").update({ rainbow_solve_index: 4 }).eq("puzzle_id", puzzleId).or(`user_id.eq.${userId},device_id.eq.${deviceId}`)
-      : supabase.from("game_sessions").update({ rainbow_solve_index: 4 }).eq("puzzle_id", puzzleId).eq("device_id", deviceId);
-    const { error: rsiError } = await rsiQuery;
-    if (rsiError) console.error("Failed to record rainbow_solve_index (has the migration been applied?):", rsiError);
-  } catch (err) {
-    console.error("markRainbowFoundInSession error:", err);
-  }
-}
-
-// Records one Rainbow-attempt guess event for the post-completion "Spot the
-// Rainbow" bonus modal — success or failure — since that flow happens after
-// saveGameStats' one-time guessHistory bulk insert already ran, so it has no
-// other way to reach guess_events. Looks up the already-saved session the
-// same way markRainbowFoundInSession does.
-// guessedAt should be the real submission time captured by the caller at the
-// moment the bonus modal was actually submitted (see GameBoard's
-// handleSpotResult). The default here only covers a caller that omits it —
-// it evaluates at call time, not historically accurate for that case.
-export async function recordRainbowAttempt(
-  puzzleId: string,
-  words: string[],
-  correct: boolean,
-  guessedAt: string = new Date().toISOString()
-): Promise<void> {
-  try {
-    const deviceId = getDeviceId();
-    const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.id ?? null;
-    const sessionQuery = userId
-      ? supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId).or(`user_id.eq.${userId},device_id.eq.${deviceId}`).limit(1).maybeSingle()
-      : supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId).eq("device_id", deviceId).limit(1).maybeSingle();
-    const { data: session } = await sessionQuery;
-    if (!session) return;
-
-    const { count } = await supabase
-      .from("guess_events")
-      .select("id", { count: "exact", head: true })
-      .eq("game_session_id", session.id);
-
-    const { error } = await supabase.from("guess_events").insert({
-      game_session_id: session.id,
-      guess_number: (count ?? 0) + 1,
-      words,
-      correct,
-      group_name: null,
-      is_rainbow_attempt: true,
-      guessed_at: guessedAt,
-    });
-    if (error) console.error("Failed to record rainbow attempt (has the migration been applied?):", error);
-  } catch (err) {
-    console.error("recordRainbowAttempt error:", err);
-  }
-}
-
-export async function hasExistingSession(puzzleId: string): Promise<boolean> {
-  try {
-    const deviceId = getDeviceId();
-    const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.id ?? null;
-    const { data } = userId
-      ? await supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId).or(`user_id.eq.${userId},device_id.eq.${deviceId}`).limit(1).maybeSingle()
-      : await supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId).eq("device_id", deviceId).limit(1).maybeSingle();
-    return !!data;
-  } catch {
-    return false;
-  }
-}
-
-export async function saveGameStats(params: SaveGameStatsParams): Promise<void> {
+/**
+ * Formal win/loss: finalize the game.
+ *
+ * Completes the session that has been accumulating events all along, rather
+ * than inserting a second row at the end. The summary fields
+ * (won / mistakes / active_time_seconds / found_rainbow / solve_order /
+ * completed_at / hints_used / share_grid / rainbow_solve_index /
+ * rainbow_source) carry exactly what they did before.
+ *
+ * Returns whether THIS completion became the official one — decided by the
+ * database, not asserted by the client. That matters twice over: "the first
+ * completed official attempt is permanent" is a product rule, and a rule
+ * enforced by whatever the client happens to send is not enforced at all; and
+ * computing it inside the same statement closes the read-then-write race that
+ * an application-level check cannot.
+ *
+ * Streak and puzzle-aggregate side effects still happen exactly once, at
+ * official completion only — never at session start, and never for a replay.
+ */
+export async function finalizeGameSession(
+  params: FinalizeGameSessionParams
+): Promise<boolean> {
   const {
     puzzleId,
+    entryContext,
     won,
     mistakes,
     activeTimeSeconds,
@@ -151,71 +262,60 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
   } = params;
 
   try {
-    const deviceId = getDeviceId();
-    const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.id ?? null;
+    const { userId, deviceId } = await getIdentity();
 
-    // 1. Save game session
-    const { data: session, error: sessionError } = await supabase
-      .from("game_sessions")
-      .insert({
-        puzzle_id: puzzleId,
-        user_id: userId,
-        device_id: deviceId,
-        won,
-        mistakes,
-        active_time_seconds: activeTimeSeconds,
-        found_rainbow: foundRainbow,
-        solve_order: solveOrder,
-        hints_used: hintsUsed,
-        share_grid: shareGrid,
-      })
-      .select("id")
-      .single();
-
-    if (sessionError || !session) {
-      console.error("Failed to save game session:", sessionError);
-      return;
-    }
-
-    // 1.5. Best-effort, isolated from the insert above: record Rainbow solve
-    // position. Deliberately NOT part of the main insert payload — that way
-    // a database that hasn't run the rainbow_solve_index migration yet still
-    // saves every game session normally, just without this one extra field.
-    if (rainbowSolveIndex !== null) {
-      const { error: rsiError } = await supabase
-        .from("game_sessions")
-        .update({ rainbow_solve_index: rainbowSolveIndex })
-        .eq("id", session.id);
-      if (rsiError) console.error("Failed to record rainbow_solve_index (has the migration been applied?):", rsiError);
-    }
-
-    // 2. Save individual guess events
-    if (guessHistory.length > 0) {
-      // Legacy fallback: guess.guessed_at is only absent for guessHistory
-      // entries carried over in localStorage from before GuessAttempt had a
-      // guessedAt field (a game already in progress at deploy time). There is
-      // no reliable way to recover their real submission time, so they fall
-      // back to this save-time timestamp — the same "now" the DB default
-      // used to produce for every row, just explicit and scoped to only the
-      // rows that actually lack one. This is NOT historically accurate for
-      // those rows; it is a defensive fallback, not a reconstruction.
-      const fallbackGuessedAt = new Date().toISOString();
-      const guessRows = guessHistory.map((guess, index) => ({
-        game_session_id: session.id,
-        guess_number: index + 1,
-        words: guess.words,
-        correct: guess.correct,
-        group_name: guess.group_name,
-        is_rainbow_attempt: guess.is_rainbow_attempt ?? false,
-        guessed_at: guess.guessed_at ?? fallbackGuessedAt,
+    // A session to finalize. Normally the one this game has been writing to;
+    // otherwise (a legacy local progress blob, or a creation that failed) one
+    // is created now and completed immediately. Two writes on that rare
+    // fallback buys a single completion code path — and is now the only way it
+    // can work at all, since a direct insert cannot return its own id to an
+    // anonymous client.
+    const sessionId =
+      params.sessionId ??
+      (await createGameSession({
+        puzzleId,
+        entryContext,
+        snapshot: { activeTimeSeconds, groupsSolved: solveOrder.length, mistakes },
       }));
-      const { error: guessError } = await supabase.from("guess_events").insert(guessRows);
-      if (guessError) console.error("Failed to save guess events:", guessError);
+
+    if (!sessionId) {
+      console.error("Failed to obtain a session to finalize");
+      return false;
     }
 
-    // 3. Update puzzle aggregates via secure RPC
-    //    (the database does the math — no client-side tampering possible)
+    const { data: isOfficial, error } = await supabase.rpc("finalize_game_session", {
+      _session_id: sessionId,
+      _device_id: deviceId,
+      _won: won,
+      _mistakes: mistakes,
+      _active_time_seconds: activeTimeSeconds,
+      _found_rainbow: foundRainbow,
+      _rainbow_solve_index: rainbowSolveIndex,
+      _solve_order: solveOrder,
+      _hints_used: hintsUsed,
+      _share_grid: shareGrid,
+    });
+
+    if (error) {
+      console.error("Failed to finalize game session:", error);
+      return false;
+    }
+
+    // Idempotent: guesses already written live are left untouched, and only
+    // the ones this session never managed to write (a legacy local history, or
+    // a live write that failed) get added.
+    await backfillGuessEvents(sessionId, guessHistory);
+
+    // null means the session was already finished, or the capability check
+    // failed. Either way this playthrough did not become the official result,
+    // and must not run the side effects again.
+    if (isOfficial !== true) return false;
+
+    // Community aggregates count official completions only. A session merely
+    // starting must never increment them, or "total plays" would silently
+    // change meaning from "finished" to "opened". If we later want "puzzle
+    // started" or an abandonment rate, that comes from sessions/events — not
+    // from redefining this counter.
     const firstSolve = solveOrder[0] ?? null;
     const { error: rpcError } = await supabase.rpc("increment_puzzle_aggregate", {
       _puzzle_id: puzzleId,
@@ -226,13 +326,14 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
     });
     if (rpcError) console.error("Failed to update puzzle aggregates:", rpcError);
 
-    // 4. Update streak
     if (!skipStreak) {
       await updateStreak(userId, deviceId, won);
     }
 
+    return true;
   } catch (err) {
-    console.error("saveGameStats error:", err);
+    console.error("finalizeGameSession error:", err);
+    return false;
   }
 }
 
@@ -270,12 +371,30 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
       return (b.longest_streak ?? 0) - (a.longest_streak ?? 0);
     })[0] ?? null;
 
-    const sessionsQuery = userId
-      ? supabase.from("game_sessions").select("puzzle_id, won, mistakes, found_rainbow, solve_order, hints_used, rainbow_solve_index").or(`user_id.eq.${userId},device_id.eq.${deviceId}`)
-      : supabase.from("game_sessions").select("puzzle_id, won, mistakes, found_rainbow, solve_order, hints_used, rainbow_solve_index").eq("device_id", deviceId);
-    const { data: sessions } = await sessionsQuery;
+    // EVERY player-facing stat below is derived from `rows`, so this single
+    // filter is what keeps all of them — Played, Win %, Mistake Distribution,
+    // Rainbows Spotted, Hardest Category First, Perfect Games, No Hints Used,
+    // In Order, Reverse Rainbow, Average Mistakes — describing COMPLETED
+    // OFFICIAL games only.
+    //
+    //   status in (won, lost) excludes sessions still in progress, which is
+    //     newly necessary: a row existing no longer means a game was played.
+    //   is_official excludes a replay that completed after the permanent
+    //     result already existed, so a later replay can never add a Played,
+    //     change Win %, or contribute a better or worse outcome.
+    //
+    // (Current Streak / Max Streak come from user_streaks above, which is
+    // only ever written at official completion — see finalizeGameSession.)
+    // Fetched through the get_own_completed_sessions RPC rather than a table
+    // query. game_sessions is no longer directly readable by anonymous
+    // clients (migration section 6), and the function applies BOTH the
+    // completed-official filter and the ownership predicate server-side, so
+    // there is no query shape a caller could vary to widen the result set.
+    const { data: sessions } = await supabase.rpc("get_own_completed_sessions", {
+      _device_id: deviceId,
+    });
 
-    const rows = sessions ?? [];
+    const rows = (sessions ?? []) as unknown as OwnCompletedSession[];
 
     // Separate query: which of these puzzles actually had a rainbow herring?
     const puzzleIds = Array.from(new Set(rows.map((r) => r.puzzle_id).filter(Boolean)));
@@ -331,16 +450,18 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
       const isRainbowEligible = !!r.puzzle_id && rainbowPuzzleIds.has(r.puzzle_id);
 
       // Mistake Distribution: every completed official session (win OR
-      // formal loss — game_sessions rows only ever exist for one of those
-      // two outcomes; there is no "abandoned" row today), bucketed by its
-      // own mistake count. A formal loss always has mistakes === 4 (the
-      // game ends the instant the 4th mistake is made — see MAX_MISTAKES in
-      // useGame.ts), so this is what actually lets bucket 4 populate.
-      // Previously this increment lived inside the `if (r.won)` block below,
-      // which made bucket 4 structurally impossible: a win can never reach
-      // 4 mistakes (that's a loss), so every loss — the only rows that ever
-      // have mistakes === 4 — was silently excluded from the distribution
-      // entirely.
+      // formal loss), bucketed by its own mistake count. A formal loss
+      // always has mistakes === 4 (the game ends the instant the 4th
+      // mistake is made — see MAX_MISTAKES in useGame.ts), so this is what
+      // actually lets bucket 4 populate. Previously this increment lived
+      // inside the `if (r.won)` block below, which made bucket 4
+      // structurally impossible: a win can never reach 4 mistakes (that's a
+      // loss), so every loss — the only rows that ever have mistakes === 4
+      // — was silently excluded from the distribution entirely.
+      //
+      // Unfinished sessions cannot reach here at all: the query above
+      // filters them out, so an abandoned game with 2 mistakes so far never
+      // pollutes bucket 2.
       //
       // A row with a null/undefined/non-integer/out-of-range mistakes value
       // is deliberately EXCLUDED from the distribution rather than folded
@@ -372,6 +493,17 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
           inOrderCount++;
         }
       }
+      // Rainbows Spotted counts ANY completed official session with
+      // found_rainbow = true. Deliberately OUTSIDE the `if (r.won)` block
+      // above, and deliberately indifferent to rainbow_source: a Rainbow
+      // found in normal play, one found through the post-game "Spot the
+      // Rainbow" prompt after a win, and one found through that same prompt
+      // after a FORMAL LOSS all count equally.
+      //
+      // The post-loss case is a firm product rule, not an oversight: the
+      // bonus prompt is shown after a loss on purpose (see showEndState in
+      // GameBoard.tsx) so that failing the main puzzle does not forfeit the
+      // Rainbow. Do not add a win requirement here.
       if (isRainbowEligible) {
         rainbowEligible++;
         if (r.found_rainbow) rainbowFound++;

@@ -167,7 +167,13 @@ function GiftBox({
       // Archive URL (including ?month=, if any) lets that page's "Archive"
       // button return here instead of always resetting to today's month.
       navigate(`/archive/${puzzle.id}`, {
-        state: { archiveReturnPath: `${location.pathname}${location.search}` },
+        state: {
+          archiveReturnPath: `${location.pathname}${location.search}`,
+          // Which collection this play came FROM. The three entry points
+          // below all navigate to the same /archive/:id path, so this is
+          // the only thing that distinguishes them for entry_context.
+          entrySource: "free_collection",
+        },
       });
       return;
     }
@@ -270,7 +276,10 @@ function EmojiPuzzleCard({ puzzle, index }: { puzzle: EmojiPuzzleItem; index: nu
     <button
       onClick={() =>
         navigate(`/archive/${puzzle.id}`, {
-          state: { archiveReturnPath: `${location.pathname}${location.search}` },
+          state: {
+            archiveReturnPath: `${location.pathname}${location.search}`,
+            entrySource: "emoji_collection",
+          },
         })
       }
       aria-label="Play emoji puzzle"
@@ -364,7 +373,7 @@ export default function Archive() {
   const [puzzles, setPuzzles] = useState<ArchivePuzzle[]>([]);
   // Per-puzzle best-outcome summary (won/failed/rainbow) — reuses the same
   // game_sessions table already written by useGame.ts's win AND loss paths
-  // (see saveGameStats), so no new tracking is needed to distinguish those
+  // (see finalizeGameSession), so no new tracking is needed to distinguish those
   // states from a bare "a session exists" check.
   const [sessionsByPuzzleId, setSessionsByPuzzleId] = useState<Map<string, SessionSummary>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -427,10 +436,22 @@ export default function Archive() {
       setPuzzles((archiveData as ArchivePuzzle[]) || []);
 
       const deviceId = getDeviceId();
-      const sessionsQuery = user
-        ? supabase.from("game_sessions").select("puzzle_id, won, found_rainbow").or(`user_id.eq.${user.id},device_id.eq.${deviceId}`)
-        : supabase.from("game_sessions").select("puzzle_id, won, found_rainbow").eq("device_id", deviceId);
-      const { data: sessionRows } = await sessionsQuery;
+      // The player's own COMPLETED sessions, via the same RPC My Stats uses.
+      //
+      // Completed-only matters here: sessions are now created on the first
+      // meaningful gameplay action, so a raw table read would return
+      // still-in-progress rows and paint every half-played archive puzzle as
+      // a red "failed" calendar cell. A genuinely unfinished game is still
+      // shown as "in-progress", but from the local progress blob
+      // (hasInProgressGame below), which is what has always answered that.
+      //
+      // Read through the function rather than the table because game_sessions
+      // is no longer directly readable by anonymous clients, and because the
+      // completed/official/ownership filtering then lives in one place that
+      // every caller shares instead of being restated per query.
+      const { data: sessionRows } = await supabase.rpc("get_own_completed_sessions", {
+        _device_id: deviceId,
+      });
 
       const summaries = new Map<string, SessionSummary>();
       for (const row of (sessionRows ?? []) as { puzzle_id: string; won: boolean; found_rainbow: boolean | null }[]) {
@@ -545,7 +566,10 @@ export default function Archive() {
     const puzzle = puzzleByDate[dateStr];
     if (!puzzle) return;
     navigate(`/archive/${puzzle.id}`, {
-      state: { archiveReturnPath: `/archive?month=${monthParam(viewYear, viewMonth)}` },
+      state: {
+        archiveReturnPath: `/archive?month=${monthParam(viewYear, viewMonth)}`,
+        entrySource: "archive_calendar",
+      },
     });
   }
 

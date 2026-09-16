@@ -73,85 +73,165 @@ export type Database = {
       game_sessions: {
         Row: {
           active_time_seconds: number | null
+          bonus_rainbow_attempted: boolean
           completed_at: string | null
           device_id: string | null
+          entry_context: string | null
           found_rainbow: boolean | null
           hints_used: boolean | null
           id: string
+          is_official: boolean
+          last_activity_at: string | null
           mistakes: number
           puzzle_id: string
           rainbow_solve_index: number | null
+          rainbow_source: string | null
           share_grid: string | null
           solve_order: Json | null
+          started_at: string | null
+          status: string
           user_id: string | null
-          won: boolean
+          won: boolean | null
         }
         Insert: {
           active_time_seconds?: number | null
+          bonus_rainbow_attempted?: boolean
           completed_at?: string | null
           device_id?: string | null
+          entry_context?: string | null
           found_rainbow?: boolean | null
           hints_used?: boolean | null
           id?: string
+          is_official?: boolean
+          last_activity_at?: string | null
           mistakes: number
           puzzle_id: string
           rainbow_solve_index?: number | null
+          rainbow_source?: string | null
           share_grid?: string | null
           solve_order?: Json | null
+          started_at?: string | null
+          status?: string
           user_id?: string | null
-          won: boolean
+          won?: boolean | null
         }
         Update: {
           active_time_seconds?: number | null
+          bonus_rainbow_attempted?: boolean
           completed_at?: string | null
           device_id?: string | null
+          entry_context?: string | null
           found_rainbow?: boolean | null
           hints_used?: boolean | null
           id?: string
+          is_official?: boolean
+          last_activity_at?: string | null
           mistakes?: number
           puzzle_id?: string
           rainbow_solve_index?: number | null
+          rainbow_source?: string | null
           share_grid?: string | null
           solve_order?: Json | null
+          started_at?: string | null
+          status?: string
           user_id?: string | null
-          won?: boolean
+          won?: boolean | null
         }
         Relationships: []
       }
       guess_events: {
         Row: {
+          attempt_type: string | null
+          active_time_seconds: number | null
           correct: boolean
           game_session_id: string
           group_name: string | null
           guess_number: number
           guessed_at: string | null
+          groups_solved: number | null
           id: string
+          is_almost_rainbow: boolean | null
+          is_one_away: boolean | null
           is_rainbow_attempt: boolean | null
           words: Json
         }
         Insert: {
+          attempt_type?: string | null
+          active_time_seconds?: number | null
           correct: boolean
           game_session_id: string
           group_name?: string | null
           guess_number: number
           guessed_at?: string | null
+          groups_solved?: number | null
           id?: string
+          is_almost_rainbow?: boolean | null
+          is_one_away?: boolean | null
           is_rainbow_attempt?: boolean | null
           words: Json
         }
         Update: {
+          attempt_type?: string | null
+          active_time_seconds?: number | null
           correct?: boolean
           game_session_id?: string
           group_name?: string | null
           guess_number?: number
           guessed_at?: string | null
+          groups_solved?: number | null
           id?: string
+          is_almost_rainbow?: boolean | null
+          is_one_away?: boolean | null
           is_rainbow_attempt?: boolean | null
           words?: Json
         }
         Relationships: [
           {
             foreignKeyName: "guess_events_game_session_id_fkey"
+            columns: ["game_session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hint_events: {
+        Row: {
+          active_time_seconds: number | null
+          game_session_id: string
+          groups_solved: number | null
+          guess_count: number | null
+          hint_type: string
+          id: string
+          mistakes: number | null
+          rainbow_found: boolean | null
+          revealed_at: string
+        }
+        Insert: {
+          active_time_seconds?: number | null
+          game_session_id: string
+          groups_solved?: number | null
+          guess_count?: number | null
+          hint_type: string
+          id?: string
+          mistakes?: number | null
+          rainbow_found?: boolean | null
+          revealed_at?: string
+        }
+        Update: {
+          active_time_seconds?: number | null
+          game_session_id?: string
+          groups_solved?: number | null
+          guess_count?: number | null
+          hint_type?: string
+          id?: string
+          mistakes?: number | null
+          rainbow_found?: boolean | null
+          revealed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hint_events_game_session_id_fkey"
             columns: ["game_session_id"]
             isOneToOne: false
             referencedRelation: "game_sessions"
@@ -412,6 +492,112 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_anonymous_sessions: {
+        Args: { _device_id: string }
+        Returns: number
+      }
+      finalize_game_session: {
+        Args: {
+          _active_time_seconds: number
+          _device_id: string
+          _found_rainbow: boolean
+          _hints_used: boolean
+          _mistakes: number
+          _rainbow_solve_index: number
+          _session_id: string
+          _share_grid: string
+          _solve_order: Json
+          _won: boolean
+        }
+        Returns: boolean
+      }
+      record_bonus_rainbow: {
+        Args: {
+          _active_time_seconds: number
+          _correct: boolean
+          _device_id: string
+          _groups_solved: number
+          _guess_number: number
+          _guessed_at: string
+          _session_id: string
+          _words: Json
+        }
+        Returns: boolean
+      }
+      record_guess_events: {
+        Args: { _device_id: string; _events: Json; _session_id: string }
+        Returns: number
+      }
+      record_hint_event: {
+        Args: {
+          _active_time_seconds: number
+          _device_id: string
+          _groups_solved: number
+          _guess_count: number
+          _hint_type: string
+          _mistakes: number
+          _rainbow_found: boolean
+          _revealed_at: string
+          _session_id: string
+        }
+        Returns: boolean
+      }
+      session_capability_ok: {
+        Args: { _device_id: string; _session_id: string }
+        Returns: boolean
+      }
+      touch_game_session: {
+        Args: {
+          _active_time_seconds: number
+          _device_id: string
+          _mistakes: number
+          _session_id: string
+        }
+        Returns: boolean
+      }
+      count_own_anonymous_sessions: {
+        Args: { _device_id: string }
+        Returns: number
+      }
+      create_game_session: {
+        Args: {
+          _active_time_seconds?: number
+          _device_id: string
+          _entry_context: string
+          _mistakes?: number
+          _puzzle_id: string
+        }
+        Returns: string
+      }
+      get_own_completed_sessions: {
+        Args: { _device_id: string }
+        Returns: {
+          bonus_rainbow_attempted: boolean
+          found_rainbow: boolean
+          hints_used: boolean
+          mistakes: number
+          puzzle_id: string
+          rainbow_solve_index: number
+          rainbow_source: string
+          solve_order: Json
+          status: string
+          won: boolean
+        }[]
+      }
+      has_official_result: {
+        Args: { _device_id: string; _puzzle_id: string }
+        Returns: boolean
+      }
+      increment_puzzle_aggregate: {
+        Args: {
+          _first_solve: string
+          _mistakes: number
+          _puzzle_id: string
+          _time_seconds: number
+          _won: boolean
+        }
+        Returns: undefined
+      }
       get_archive_puzzles: {
         Args: never
         Returns: {
