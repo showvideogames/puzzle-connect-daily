@@ -290,10 +290,14 @@ html {
   .animate-tile-checking { animation: none; }
   .animate-group-appear { animation: none; }
   .animate-solved-arrival { animation: none; }
-  /* Same override as .rainbow-tile-static below — freezes the rainbow
-     gradient into one static full-width pass instead of an oversized
-     background scrolling through it. */
-  .rainbow-tile { animation: none; background-size: 100% 100%; }
+  /* Same treatment as .rainbow-tile-static below, applied directly to
+     .rainbow-tile since a reduced-motion OS preference should look the
+     same as turning the Rainbow Animation setting off. */
+  .rainbow-tile {
+    animation: none;
+    background-image: var(--rainbow-static-gradient);
+    background-size: 100% 100%;
+  }
 }
 
 /* Rainbow Herring tile effect */
@@ -301,6 +305,29 @@ html {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
+}
+
+/* Shared by .rainbow-tile-static below and the reduced-motion override
+   above — the exact same soft, diagonal-banded gradient as the
+   Share/Result grid's rainbow cell (ResultGrid.tsx's RAINBOW_GRADIENT:
+   yellow/green/blue/purple/red with short blend zones at each boundary),
+   so the "off"/reduced-motion look is its own polished, on-brand
+   treatment rather than a frozen frame of the busier full-spectrum
+   animated gradient below. */
+:root {
+  --rainbow-static-gradient: linear-gradient(
+    115deg,
+    #F6D968 0%,
+    #F6D968 16%,
+    #8CCB91 24%,
+    #8CCB91 36%,
+    #7DB9DD 44%,
+    #7DB9DD 56%,
+    #9B7BE5 64%,
+    #9B7BE5 76%,
+    #E9786D 84%,
+    #E9786D 100%
+  );
 }
 
 .rainbow-tile {
@@ -319,13 +346,11 @@ html {
   animation: rainbow-shift 3s ease-in-out infinite;
 }
 
-/* "Rainbow Animation" setting off — same gradient as .rainbow-tile above
-   (reused, not redefined), just stretched to fill the tile in one static
-   pass instead of an oversized scrolling background, with the animation
-   removed. Still unmistakably the full rainbow, just frozen in place. */
-.rainbow-tile.rainbow-tile-static {
-  animation: none;
-  background-size: 100% 100%;
+/* "Rainbow Animation" setting off — its own static treatment (not the
+   animated gradient frozen in place). Applied instead of .rainbow-tile,
+   never alongside it. */
+.rainbow-tile-static {
+  background-image: var(--rainbow-static-gradient);
 }
 
 /* ── Rainbow curtain reveal: wipes in left to right ── */

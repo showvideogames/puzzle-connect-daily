@@ -120,10 +120,11 @@ interface WordTileProps {
   // Controls motion only, not whether the tile IS rainbow-colored — a
   // spotted/bonus rainbow tile always gets the rainbow treatment (isRainbow
   // decides that); this just chooses the animated .rainbow-tile gradient
-  // (true, default) vs the same gradient frozen in place via the
-  // .rainbow-tile-static modifier (false), matching the "Rainbow Animation"
-  // setting. Has no effect on themed (non-default) rainbow gradients, which
-  // are already static images regardless of this setting.
+  // (true, default) or the unrelated, purpose-built .rainbow-tile-static
+  // gradient (false — not the animated one frozen in place), matching the
+  // "Rainbow Animation" setting. Has no effect on themed (non-default)
+  // rainbow gradients, which are already static images regardless of this
+  // setting.
   rainbowAnimated?: boolean;
   // True while this tile's group is mid-reveal-animation: a clone is standing
   // in for it in a document.body overlay, so the real tile is hidden (but
@@ -356,7 +357,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   const stateClasses = isMatched
     ? "bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
-      ? `${themedRainbow ? "" : `rainbow-tile${rainbowAnimated ? "" : " rainbow-tile-static"}`} text-white shadow-md border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
+      ? `${themedRainbow ? "" : (rainbowAnimated ? "rainbow-tile" : "rainbow-tile-static")} text-white shadow-md border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
       : colorStyle
         ? `${colorStyle.bg} hover:shadow-sm active:scale-95 border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
         : isSelected

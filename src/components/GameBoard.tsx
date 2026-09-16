@@ -1106,7 +1106,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {showRainbowPopup && (
         <div className="flex justify-center mt-3 animate-fade-up">
           <div
-            className={`${theme.isDefault ? `rainbow-tile${showRainbow ? "" : " rainbow-tile-static"}` : ""} px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg`}
+            className={`${theme.isDefault ? (showRainbow ? "rainbow-tile" : "rainbow-tile-static") : ""} px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg`}
             style={!theme.isDefault ? { background: theme.gradient, textShadow: theme.textShadow } : undefined}
           >
             {theme.spottedMessage}
