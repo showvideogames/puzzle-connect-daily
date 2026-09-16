@@ -1,7 +1,9 @@
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
 import { loadStatsFromSupabase } from "@/lib/gameStats";
 import { GameStats } from "@/lib/types";
-import { X } from "lucide-react";
+import { X, Puzzle, Trophy, Flame, Crown, Star, LightbulbOff, BarChart3 } from "lucide-react";
+import { RainbowIcon } from "./RainbowIcon";
 
 interface StatsModalProps {
   open: boolean;
@@ -11,7 +13,6 @@ interface StatsModalProps {
 export function StatsModal({ open, onClose }: StatsModalProps) {
   const [stats, setStats] = useState<GameStats | null>(null);
   const [loading, setLoading] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -21,8 +22,6 @@ export function StatsModal({ open, onClose }: StatsModalProps) {
       setLoading(false);
     });
   }, [open]);
-
-  if (!open) return null;
 
   const winRate = stats && stats.gamesPlayed > 0
     ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100)
@@ -41,93 +40,143 @@ export function StatsModal({ open, onClose }: StatsModalProps) {
       : 0;
   })();
 
-  const statItems = stats
+  const topStats = stats
     ? [
-        { value: stats.gamesPlayed, label: "Played" },
-        { value: winRate, label: "Win %" },
-        { value: displayStreak, label: "Streak" },
-        { value: stats.maxStreak, label: "Max Streak" },
+        { value: stats.gamesPlayed, label: "Played", icon: Puzzle, colorClass: "text-[hsl(var(--brand-purple-from))]" },
+        { value: winRate, label: "Win %", icon: Trophy, colorClass: "text-group-2" },
+        { value: displayStreak, label: "Streak", icon: Flame, colorClass: "text-orange-500" },
+        { value: stats.maxStreak, label: "Max Streak", icon: Crown, colorClass: "text-amber-500" },
+      ]
+    : [];
+
+  // Advanced Stats intentionally omits "Reverse Rainbow" and "In Order" —
+  // those concepts have no authoritative definition anywhere in the
+  // codebase (achievements, share-card, or game-history logic) as of this
+  // pass, so they're left out rather than guessed at. See the PR/commit
+  // notes for what's needed to add them.
+  const advancedStats = stats
+    ? [
+        { key: "rainbows", label: "Rainbows Spotted", value: stats.rainbowSpottedCount, icon: <RainbowIcon className="w-4 h-4" /> },
+        { key: "hardest", label: "Hardest Category First", value: stats.hardestFirstCount, icon: <span className="w-3 h-3 rounded-[3px] bg-group-4 inline-block" /> },
+        { key: "perfect", label: "Perfect Games", value: stats.perfectGamesCount, icon: <Star className="w-4 h-4 text-amber-500" fill="currentColor" /> },
+        { key: "nohints", label: "No Hints Used", value: stats.noHintsUsedCount, icon: <LightbulbOff className="w-4 h-4 text-[hsl(var(--brand-purple-from))]" /> },
+        { key: "avgmistakes", label: "Average Mistakes", value: stats.averageMistakes.toFixed(1), icon: <BarChart3 className="w-4 h-4 text-muted-foreground" /> },
       ]
     : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-card rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4 animate-pop">
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-secondary transition-colors active:scale-95"
+    <DialogPrimitive.Root open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay
+          className="fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out
+            data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+        />
+        {/* Same centering/height-capped/scroll shell as SettingsModal, so this
+            page never spills off a short phone viewport regardless of how
+            much content Advanced Stats ends up with. */}
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none
+            pt-[max(12px,env(safe-area-inset-top))] pb-[max(12px,env(safe-area-inset-bottom))]"
         >
-          <X className="w-4 h-4" />
-        </button>
-
-        <h2 className="text-lg font-bold text-center mb-4">Statistics</h2>
-
-        {loading && (
-          <div className="flex justify-center items-center h-32">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
-
-        {!loading && stats && (
-          <>
-            <div className="grid grid-cols-4 gap-2 text-center mb-6">
-              {statItems.map((item) => (
-                <div key={item.label}>
-                  <div className="text-2xl font-bold tabular-nums">{item.value}</div>
-                  <div className="text-xs text-muted-foreground">{item.label}</div>
-                </div>
-              ))}
+          <DialogPrimitive.Content
+            className="pointer-events-auto w-full max-w-md
+              max-h-[calc(100vh-24px)] max-h-[calc(100dvh-24px)]
+              flex flex-col
+              bg-background border shadow-lg rounded-none sm:rounded-2xl
+              data-[state=open]:animate-in data-[state=closed]:animate-out
+              data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0
+              data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95
+              focus:outline-none"
+          >
+            <div className="shrink-0 flex items-center justify-between gap-2 px-6 pt-6 pb-2">
+              <DialogPrimitive.Title className="text-2xl font-extrabold tracking-tight">My Stats</DialogPrimitive.Title>
+              <DialogPrimitive.Close
+                aria-label="Close"
+                className="shrink-0 -mr-2 -mt-1 w-9 h-9 flex items-center justify-center rounded-full
+                  text-muted-foreground hover:bg-secondary transition-colors active:scale-95
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <X className="w-4 h-4" />
+              </DialogPrimitive.Close>
             </div>
 
-            <h3 className="text-sm font-semibold text-center mb-2">Mistake Distribution</h3>
-            <div className="space-y-1.5">
-              {stats.guessDistribution.map((count, i) => {
-                const max = Math.max(...stats.guessDistribution, 1);
-                const pct = (count / max) * 100;
-                return (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-xs w-3 text-right tabular-nums text-muted-foreground">{i}</span>
-                    <div className="flex-1 h-5 bg-secondary rounded overflow-hidden">
-                      <div
-                        className="h-full bg-primary rounded flex items-center justify-end pr-1.5 transition-all duration-500"
-                        style={{ width: `${Math.max(pct, count > 0 ? 12 : 0)}%` }}
-                      >
-                        {count > 0 && (
-                          <span className="text-[10px] font-semibold text-primary-foreground tabular-nums">{count}</span>
-                        )}
+            <div className="min-h-0 overflow-y-auto px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+              {loading && (
+                <div className="flex justify-center items-center h-40">
+                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+
+              {!loading && stats && (
+                <div className="space-y-5 pt-2">
+                  {/* Top stat cards */}
+                  <div className="grid grid-cols-4 gap-2">
+                    {topStats.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <div
+                          key={item.label}
+                          className="flex flex-col items-center gap-1 rounded-2xl border border-border bg-card px-1.5 py-3"
+                        >
+                          <Icon className={`w-5 h-5 ${item.colorClass}`} />
+                          <div className="text-2xl font-extrabold tabular-nums leading-none">{item.value}</div>
+                          <div className="text-[11px] text-muted-foreground text-center leading-tight">{item.label}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Mistake Distribution */}
+                  <div className="rounded-2xl border border-border bg-card px-4 py-4">
+                    <h3 className="text-base font-bold mb-3">Mistake Distribution</h3>
+                    <div className="space-y-2">
+                      {stats.guessDistribution.map((count, i) => {
+                        const max = Math.max(...stats.guessDistribution, 1);
+                        const pct = count > 0 ? Math.max((count / max) * 100, 4) : 0;
+                        return (
+                          <div key={i} className="flex items-center gap-3">
+                            <span className="w-3 text-sm text-muted-foreground text-right shrink-0 tabular-nums">{i}</span>
+                            <div className="flex-1 h-3.5 rounded-full bg-muted overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-[hsl(var(--brand-purple-from))] transition-all duration-500"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className="w-5 text-sm font-semibold tabular-nums text-right shrink-0">{count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Advanced Stats — hidden until the player has at least one
+                      recorded game, so a brand-new player doesn't see a wall
+                      of zeroes (same gate the previous version used). */}
+                  {stats.gamesPlayed > 0 && (
+                    <div className="rounded-2xl border border-border bg-card px-4 py-4">
+                      <h3 className="text-base font-bold mb-1">Advanced Stats</h3>
+                      <div>
+                        {advancedStats.map((item) => (
+                          <div
+                            key={item.key}
+                            className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-0"
+                          >
+                            <span className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                              <span className="w-4 h-4 flex items-center justify-center shrink-0">{item.icon}</span>
+                              {item.label}
+                            </span>
+                            <span className="text-sm font-semibold tabular-nums">{item.value}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  )}
+                </div>
+              )}
             </div>
-
-            {stats.gamesPlayed > 0 && (
-              <>
-                <button
-                  onClick={() => setAdvancedOpen((v) => !v)}
-                  className="mt-6 mb-2 w-full text-sm font-semibold text-center hover:text-primary transition-colors"
-                >
-                  Advanced Stats {advancedOpen ? "▴" : "▾"}
-                </button>
-                {advancedOpen && (
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span>🌈 Rainbows Spotted</span>
-                      <span className="font-semibold tabular-nums">{stats.rainbowSpottedCount}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>🟥 Hardest Category First</span>
-                      <span className="font-semibold tabular-nums">{stats.hardestFirstCount}</span>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+          </DialogPrimitive.Content>
+        </div>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

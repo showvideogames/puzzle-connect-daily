@@ -34,6 +34,9 @@ export interface GameStats {
   rainbowSpotRate: number | null; // % of rainbow-eligible games where rainbow was found; null if no eligible games
   rainbowSpottedCount: number; // raw count of games where rainbow was found
   hardestFirstCount: number; // games where solve_order[0] === "red" (difficulty 4)
+  perfectGamesCount: number; // wins with zero mistakes
+  noHintsUsedCount: number; // wins where hints_used is false
+  averageMistakes: number; // mean mistakes across gamesPlayed (0 when gamesPlayed is 0)
 }
 
 export interface GuessAttempt {

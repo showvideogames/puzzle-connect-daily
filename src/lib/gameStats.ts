@@ -154,6 +154,9 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     rainbowSpotRate: null,
     rainbowSpottedCount: 0,
     hardestFirstCount: 0,
+    perfectGamesCount: 0,
+    noHintsUsedCount: 0,
+    averageMistakes: 0,
   };
 
   try {
@@ -172,9 +175,12 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
       return (b.longest_streak ?? 0) - (a.longest_streak ?? 0);
     })[0] ?? null;
 
+    // hints_used isn't in the generated Supabase types (added to the table
+    // directly, same situation as puzzles.rainbow_herring below) — selected
+    // and read via an `any` cast rather than widening the shared type.
     const sessionsQuery = userId
-      ? supabase.from("game_sessions").select("puzzle_id, won, mistakes, found_rainbow, solve_order").or(`user_id.eq.${userId},device_id.eq.${deviceId}`)
-      : supabase.from("game_sessions").select("puzzle_id, won, mistakes, found_rainbow, solve_order").eq("device_id", deviceId);
+      ? supabase.from("game_sessions").select("puzzle_id, won, mistakes, found_rainbow, solve_order, hints_used").or(`user_id.eq.${userId},device_id.eq.${deviceId}`)
+      : supabase.from("game_sessions").select("puzzle_id, won, mistakes, found_rainbow, solve_order, hints_used").eq("device_id", deviceId);
     const { data: sessions } = await sessionsQuery;
 
     const rows = sessions ?? [];
@@ -200,10 +206,16 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     let rainbowEligible = 0;
     let rainbowFound = 0;
     let hardestFirstCount = 0;
+    let perfectGamesCount = 0;
+    let noHintsUsedCount = 0;
+    let totalMistakes = 0;
     for (const r of rows) {
+      totalMistakes += r.mistakes ?? 0;
       if (r.won) {
         gamesWon++;
         guessDistribution[Math.min(r.mistakes ?? 0, 4)]++;
+        if ((r.mistakes ?? 0) === 0) perfectGamesCount++;
+        if ((r as any).hints_used === false) noHintsUsedCount++;
       }
       if (r.puzzle_id && rainbowPuzzleIds.has(r.puzzle_id)) {
         rainbowEligible++;
@@ -222,6 +234,9 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
       rainbowSpotRate: rainbowEligible > 0 ? Math.round((rainbowFound / rainbowEligible) * 100) : null,
       rainbowSpottedCount: rainbowFound,
       hardestFirstCount,
+      perfectGamesCount,
+      noHintsUsedCount,
+      averageMistakes: rows.length > 0 ? totalMistakes / rows.length : 0,
     };
   } catch (err) {
     console.error("loadStatsFromSupabase error:", err);
