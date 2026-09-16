@@ -20,6 +20,11 @@ interface GuessEvent {
   correct: boolean;
   group_name: string | null;
   is_rainbow_attempt?: boolean;
+  // Real submission time captured client-side at guess time (see
+  // GuessAttempt.guessedAt in types.ts). null on guessHistory entries saved
+  // before this field existed — saveGameStats below falls back to the save
+  // time for those, which is NOT historically accurate; see its comment.
+  guessed_at?: string | null;
 }
 
 interface SaveGameStatsParams {
@@ -76,7 +81,16 @@ export async function markRainbowFoundInSession(puzzleId: string): Promise<void>
 // saveGameStats' one-time guessHistory bulk insert already ran, so it has no
 // other way to reach guess_events. Looks up the already-saved session the
 // same way markRainbowFoundInSession does.
-export async function recordRainbowAttempt(puzzleId: string, words: string[], correct: boolean): Promise<void> {
+// guessedAt should be the real submission time captured by the caller at the
+// moment the bonus modal was actually submitted (see GameBoard's
+// handleSpotResult). The default here only covers a caller that omits it —
+// it evaluates at call time, not historically accurate for that case.
+export async function recordRainbowAttempt(
+  puzzleId: string,
+  words: string[],
+  correct: boolean,
+  guessedAt: string = new Date().toISOString()
+): Promise<void> {
   try {
     const deviceId = getDeviceId();
     const { data: { user } } = await supabase.auth.getUser();
@@ -99,6 +113,7 @@ export async function recordRainbowAttempt(puzzleId: string, words: string[], co
       correct,
       group_name: null,
       is_rainbow_attempt: true,
+      guessed_at: guessedAt,
     });
     if (error) console.error("Failed to record rainbow attempt (has the migration been applied?):", error);
   } catch (err) {
@@ -177,6 +192,15 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
 
     // 2. Save individual guess events
     if (guessHistory.length > 0) {
+      // Legacy fallback: guess.guessed_at is only absent for guessHistory
+      // entries carried over in localStorage from before GuessAttempt had a
+      // guessedAt field (a game already in progress at deploy time). There is
+      // no reliable way to recover their real submission time, so they fall
+      // back to this save-time timestamp — the same "now" the DB default
+      // used to produce for every row, just explicit and scoped to only the
+      // rows that actually lack one. This is NOT historically accurate for
+      // those rows; it is a defensive fallback, not a reconstruction.
+      const fallbackGuessedAt = new Date().toISOString();
       const guessRows = guessHistory.map((guess, index) => ({
         game_session_id: session.id,
         guess_number: index + 1,
@@ -184,6 +208,7 @@ export async function saveGameStats(params: SaveGameStatsParams): Promise<void> 
         correct: guess.correct,
         group_name: guess.group_name,
         is_rainbow_attempt: guess.is_rainbow_attempt ?? false,
+        guessed_at: guess.guessed_at ?? fallbackGuessedAt,
       }));
       const { error: guessError } = await supabase.from("guess_events").insert(guessRows);
       if (guessError) console.error("Failed to save guess events:", guessError);
