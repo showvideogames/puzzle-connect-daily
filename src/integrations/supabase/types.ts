@@ -76,9 +76,11 @@ export type Database = {
           completed_at: string | null
           device_id: string | null
           found_rainbow: boolean | null
+          hints_used: boolean | null
           id: string
           mistakes: number
           puzzle_id: string
+          share_grid: string | null
           solve_order: Json | null
           user_id: string | null
           won: boolean
@@ -88,9 +90,11 @@ export type Database = {
           completed_at?: string | null
           device_id?: string | null
           found_rainbow?: boolean | null
+          hints_used?: boolean | null
           id?: string
           mistakes: number
           puzzle_id: string
+          share_grid?: string | null
           solve_order?: Json | null
           user_id?: string | null
           won: boolean
@@ -100,9 +104,11 @@ export type Database = {
           completed_at?: string | null
           device_id?: string | null
           found_rainbow?: boolean | null
+          hints_used?: boolean | null
           id?: string
           mistakes?: number
           puzzle_id?: string
+          share_grid?: string | null
           solve_order?: Json | null
           user_id?: string | null
           won?: boolean

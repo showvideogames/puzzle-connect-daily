@@ -156,6 +156,7 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     hardestFirstCount: 0,
     perfectGamesCount: 0,
     noHintsUsedCount: 0,
+    inOrderCount: 0,
     averageMistakes: 0,
   };
 
@@ -175,9 +176,6 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
       return (b.longest_streak ?? 0) - (a.longest_streak ?? 0);
     })[0] ?? null;
 
-    // hints_used isn't in the generated Supabase types (added to the table
-    // directly, same situation as puzzles.rainbow_herring below) — selected
-    // and read via an `any` cast rather than widening the shared type.
     const sessionsQuery = userId
       ? supabase.from("game_sessions").select("puzzle_id, won, mistakes, found_rainbow, solve_order, hints_used").or(`user_id.eq.${userId},device_id.eq.${deviceId}`)
       : supabase.from("game_sessions").select("puzzle_id, won, mistakes, found_rainbow, solve_order, hints_used").eq("device_id", deviceId);
@@ -201,6 +199,13 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
       }
     }
 
+    // Ascending-difficulty solve order ("Yellow -> Green -> Blue -> Red" in
+    // player-facing terms). getSolveOrder() (useGame.ts) names difficulty-1
+    // "orange" internally — an existing naming quirk, not something this
+    // file invents — so this is the literal array it writes when the 4
+    // categories are solved easiest-to-hardest.
+    const ASCENDING_ORDER = ["orange", "green", "blue", "red"];
+
     const guessDistribution: number[] = [0, 0, 0, 0, 0];
     let gamesWon = 0;
     let rainbowEligible = 0;
@@ -208,16 +213,26 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     let hardestFirstCount = 0;
     let perfectGamesCount = 0;
     let noHintsUsedCount = 0;
+    let inOrderCount = 0;
     let totalMistakes = 0;
     for (const r of rows) {
       totalMistakes += r.mistakes ?? 0;
+      const isRainbowEligible = !!r.puzzle_id && rainbowPuzzleIds.has(r.puzzle_id);
       if (r.won) {
         gamesWon++;
         guessDistribution[Math.min(r.mistakes ?? 0, 4)]++;
         if ((r.mistakes ?? 0) === 0) perfectGamesCount++;
-        if ((r as any).hints_used === false) noHintsUsedCount++;
+        if (r.hints_used === false) noHintsUsedCount++;
+
+        // "In Order" — see the long comment on GameStats.inOrderCount in
+        // types.ts for why rainbow-eligible puzzles are excluded here
+        // rather than also requiring found_rainbow.
+        const solvedAscending = Array.isArray(r.solve_order) &&
+          r.solve_order.length === 4 &&
+          r.solve_order.every((c: string, i: number) => c === ASCENDING_ORDER[i]);
+        if (solvedAscending && !isRainbowEligible) inOrderCount++;
       }
-      if (r.puzzle_id && rainbowPuzzleIds.has(r.puzzle_id)) {
+      if (isRainbowEligible) {
         rainbowEligible++;
         if (r.found_rainbow) rainbowFound++;
       }
@@ -236,6 +251,7 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
       hardestFirstCount,
       perfectGamesCount,
       noHintsUsedCount,
+      inOrderCount,
       averageMistakes: rows.length > 0 ? totalMistakes / rows.length : 0,
     };
   } catch (err) {

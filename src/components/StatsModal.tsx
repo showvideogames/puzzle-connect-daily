@@ -2,7 +2,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
 import { loadStatsFromSupabase } from "@/lib/gameStats";
 import { GameStats } from "@/lib/types";
-import { X, Puzzle, Trophy, Flame, Crown, Star, LightbulbOff, BarChart3 } from "lucide-react";
+import { X, Puzzle, Trophy, Flame, Crown, Star, LightbulbOff, BarChart3, ListOrdered } from "lucide-react";
 import { RainbowIcon } from "./RainbowIcon";
 
 interface StatsModalProps {
@@ -49,17 +49,17 @@ export function StatsModal({ open, onClose }: StatsModalProps) {
       ]
     : [];
 
-  // Advanced Stats intentionally omits "Reverse Rainbow" and "In Order" —
-  // those concepts have no authoritative definition anywhere in the
-  // codebase (achievements, share-card, or game-history logic) as of this
-  // pass, so they're left out rather than guessed at. See the PR/commit
-  // notes for what's needed to add them.
+  // "Reverse Rainbow" is still omitted — it has a real definition now (see
+  // GameStats.inOrderCount's comment in types.ts for the shared blocker),
+  // but no data to back it, unlike "In Order" which has a fully-verifiable
+  // non-rainbow subset.
   const advancedStats = stats
     ? [
         { key: "rainbows", label: "Rainbows Spotted", value: stats.rainbowSpottedCount, icon: <RainbowIcon className="w-4 h-4" /> },
         { key: "hardest", label: "Hardest Category First", value: stats.hardestFirstCount, icon: <span className="w-3 h-3 rounded-[3px] bg-group-4 inline-block" /> },
         { key: "perfect", label: "Perfect Games", value: stats.perfectGamesCount, icon: <Star className="w-4 h-4 text-amber-500" fill="currentColor" /> },
         { key: "nohints", label: "No Hints Used", value: stats.noHintsUsedCount, icon: <LightbulbOff className="w-4 h-4 text-[hsl(var(--brand-purple-from))]" /> },
+        { key: "inorder", label: "In Order", value: stats.inOrderCount, icon: <ListOrdered className="w-4 h-4 text-group-3" /> },
         { key: "avgmistakes", label: "Average Mistakes", value: stats.averageMistakes.toFixed(1), icon: <BarChart3 className="w-4 h-4 text-muted-foreground" /> },
       ]
     : [];
