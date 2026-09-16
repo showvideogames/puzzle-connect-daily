@@ -547,6 +547,83 @@ create index if not exists guess_events_bonus_rainbow_idx
 
 
 -- ===========================================================================
+-- 4b. One-row historical correction, required before the indexes in section 5
+--
+-- Found by the pre-apply check at the top of this file: exactly one duplicate
+-- official-session group exists in the current data.
+--
+--   puzzle 0776cd94-92cc-4e8c-879a-2e17a69b8e60 -- "Emoji Puzzle #4", 2026-05-19
+--   user   589ce95b-e515-4b58-81f2-62f5439c3590
+--
+--   attempt 1  5a0aadb3-7990-47f9-b581-a9502f938c6c
+--              completed 2026-05-19 20:01:53Z, won, 2 mistakes, 411s, 6 guesses
+--   attempt 2  6dd52b7d-61d2-4071-960c-62e4c09d4c28
+--              completed 2026-05-20 05:34:58Z, won, 0 mistakes,  71s, 4 guesses
+--
+-- A genuine replay: the same account, on two different device_ids, ~9.5 hours
+-- apart. (Two devices is why the per-device pre-apply check came back clean
+-- and only the per-user one did not.) Under the firm product rule the FIRST
+-- completed attempt is the permanent official result, so attempt 1 stays
+-- official and attempt 2 is demoted -- which is precisely the state
+-- is_official exists to express.
+--
+-- This runs HERE, not earlier and not later, because it depends on the
+-- is_official backfill in section 1 (which sets every historical row to true)
+-- and must precede the partial unique indexes in section 5 (which that
+-- duplicate would otherwise break).
+--
+-- NON-DESTRUCTIVE. The session row is preserved in full and its 4 guess_events
+-- are untouched; only is_official changes. Nothing is deleted anywhere in this
+-- migration.
+-- ===========================================================================
+
+update public.game_sessions
+   set is_official = false
+ where id = '6dd52b7d-61d2-4071-960c-62e4c09d4c28';
+
+
+-- ---------------------------------------------------------------------------
+-- Self-verifying guard.
+--
+-- Aborts BEFORE the indexes are created if any duplicate official-session
+-- group still exists -- for the known row above, or for anything that landed
+-- after the pre-apply check was run.
+--
+-- This is deliberately stronger than a manual checkpoint: it cannot be
+-- skipped or forgotten, it re-checks the data as it actually is at apply
+-- time, and because the whole migration runs in one transaction, raising here
+-- rolls back every change in this file rather than leaving the schema half
+-- applied. The two queries mirror the pre-apply checks at the top of the file
+-- exactly, scoped to is_official as section 5's indexes are.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  n integer;
+begin
+  select count(*) into n from (
+    select 1
+      from public.game_sessions
+     where is_official and user_id is not null
+     group by puzzle_id, user_id
+    having count(*) > 1
+    union all
+    select 1
+      from public.game_sessions
+     where is_official and user_id is null
+       and device_id is not null and device_id <> 'unknown'
+     group by puzzle_id, device_id
+    having count(*) > 1
+  ) d;
+
+  if n > 0 then
+    raise exception
+      'Aborting: % duplicate official-session group(s) remain. Resolve them before the unique indexes in section 5 can be created.', n;
+  end if;
+end
+$$;
+
+
+-- ===========================================================================
 -- 5. One official result per puzzle per identity -- OPTIONAL, see note
 --
 -- This replaces the broader version parked in
