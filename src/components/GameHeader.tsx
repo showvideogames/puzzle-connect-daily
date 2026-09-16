@@ -89,7 +89,7 @@ export function GameHeader({
             <img
               src={STACKED_LOGO}
               alt="Rainbow Connect"
-              className="hidden lg:block h-11 w-auto"
+              className="hidden lg:block h-14 w-auto"
             />
           </>
         )}
