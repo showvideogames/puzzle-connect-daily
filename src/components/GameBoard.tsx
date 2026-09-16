@@ -254,6 +254,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     handleTouchDragMove,
     handleTouchDragEnd,
     alreadyGuessed,
+    isOfficialAttemptRef,
   } = useGame(puzzle, { isArchive, smallHintUsed, fullHintUsed });
 
   // Preload custom emoji images so they don't pop in after the board renders
@@ -676,21 +677,35 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     setSpotShaking(true);
     setTimeout(() => {
       setSpotShaking(false);
+      // Local UI/share state always reflects what actually happened THIS
+      // playthrough — that part is unconditional (see markRainbowFound
+      // below). But the two network calls that mutate the official
+      // game_sessions row (found_rainbow/rainbow_solve_index, plus its own
+      // guess_events row) are skipped when this playthrough is a confirmed
+      // replay/duplicate (isOfficialAttemptRef.current === false — see
+      // commitOfficialResult in useGame.ts) — otherwise a replay's bonus
+      // Rainbow find could silently rewrite the real official result's
+      // Rainbows Spotted outcome. Defaults to proceeding (undetermined or
+      // confirmed official both pass) since the check resolves well before
+      // a human could reach this bonus prompt in the normal, non-replay case.
+      const isDuplicateAttempt = isOfficialAttemptRef.current === false;
       if (correct && puzzle.rainbowHerring) {
         setBonusRainbowWords([...puzzle.rainbowHerring]);
         confetti({ particleCount: 100, spread: 80, origin: { y: 0.55 } });
         playRainbowSound();
         markRainbowFound(puzzle.rainbowHerring, guessedAt);
-        void markRainbowFoundInSession(puzzle.id);
-        void recordRainbowAttempt(puzzle.id, words, true, guessedAt);
-      } else {
+        if (!isDuplicateAttempt) {
+          void markRainbowFoundInSession(puzzle.id);
+          void recordRainbowAttempt(puzzle.id, words, true, guessedAt);
+        }
+      } else if (!isDuplicateAttempt) {
         // Failed bonus attempts previously vanished entirely — this is the
         // only durable record of them (see recordRainbowAttempt).
         void recordRainbowAttempt(puzzle.id, words, false, guessedAt);
       }
       setTimeout(() => setBonusRainbowCorrect(correct), correct ? 600 : 0);
     }, 400);
-  }, [puzzle.rainbowHerring, puzzle.id, markRainbowFound]);
+  }, [puzzle.rainbowHerring, puzzle.id, markRainbowFound, isOfficialAttemptRef]);
 
   const hintItems = useCallback((): { color?: string; squareEmoji?: string; emoji: string }[] => {
     const sorted = [...puzzle.groups].sort((a, b) => a.difficulty - b.difficulty);

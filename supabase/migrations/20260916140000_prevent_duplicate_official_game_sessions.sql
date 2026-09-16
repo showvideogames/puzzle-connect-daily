@@ -1,0 +1,73 @@
+-- Prevent duplicate OFFICIAL game_sessions rows for the same puzzle+identity.
+--
+-- Audit finding: replaying the Daily puzzle (most commonly by clearing
+-- localStorage, which also wipes the anonymous device id) could create a
+-- second game_sessions row for the same puzzle, inflating Played/Win %/
+-- every derived stat and re-triggering the streak update a second time.
+-- The application already guards this (see commitOfficialResult in
+-- useGame.ts) via a read-then-write check, but that check is not atomic —
+-- two concurrent requests (e.g. two tabs finishing within the same race
+-- window) could both pass it. These two partial unique indexes make the
+-- "one official attempt per puzzle per identity" rule — already the de
+-- facto behavior of every entry route via the application-level guard —
+-- atomic and enforced by the database itself, as a safety net alongside
+-- that application-level check, not a replacement for it.
+--
+-- Two separate partial indexes, not one combined constraint, because the
+-- identity model is genuinely two different things depending on whether a
+-- user_id is present:
+--
+-- 1. Signed-in players: user_id is a real, collision-free UUID from
+--    auth.users, so it is always safe to treat (puzzle_id, user_id) as
+--    unique.
+--
+-- 2. Anonymous players: device_id is a client-generated
+--    crypto.randomUUID() and safe to treat as unique EXCEPT for the
+--    literal fallback string "unknown" that getDeviceId() (gameStats.ts)
+--    returns when localStorage is unavailable (private-browsing edge
+--    cases, some in-app browsers, storage blocked by policy). Every such
+--    player shares that same literal device_id, so a naive unique index
+--    on (puzzle_id, device_id) would let the first such player's row
+--    block every OTHER unrelated anonymous player with blocked storage
+--    from ever saving an official result for that puzzle again — a real
+--    correctness regression, not a hypothetical one. The
+--    "device_id <> 'unknown'" exclusion is what prevents that: those
+--    specific sessions fall back to relying on the existing
+--    application-level guard alone, exactly as today, rather than being
+--    silently blocked by a false collision between unrelated players.
+--
+-- Both indexes apply uniformly to every puzzle_id regardless of how it was
+-- entered (Daily home page, Archive calendar, Free Puzzles, Emoji
+-- Puzzles) because game_sessions has no entry_context column to
+-- distinguish them, AND because every existing entry route already
+-- enforces "at most one official session per puzzle per identity" at the
+-- application level (see hasExistingSession/commitOfficialResult in
+-- useGame.ts) — this migration makes that already-intended, already-
+-- uniform rule atomic. It does not introduce a new restriction anywhere
+-- it didn't already apply.
+--
+-- BEFORE APPLYING: if the database may already contain duplicate rows for
+-- the same puzzle_id + identity (plausible, since this exact gap is what
+-- this migration closes for the Daily route going forward), creating
+-- these indexes will fail with a uniqueness violation. Run this check
+-- first, in a read-only query:
+--
+--   select puzzle_id, user_id, count(*) from public.game_sessions
+--     where user_id is not null group by puzzle_id, user_id having count(*) > 1;
+--
+--   select puzzle_id, device_id, count(*) from public.game_sessions
+--     where user_id is null and device_id <> 'unknown'
+--     group by puzzle_id, device_id having count(*) > 1;
+--
+-- If either returns rows, STOP — do not apply this migration until those
+-- duplicates have been reviewed and resolved. This migration intentionally
+-- does not delete, merge, or otherwise rewrite any existing data; see the
+-- audit's "legacy duplicates" note for why that is a separate decision.
+
+create unique index if not exists game_sessions_one_official_per_user
+  on public.game_sessions (puzzle_id, user_id)
+  where user_id is not null;
+
+create unique index if not exists game_sessions_one_official_per_device
+  on public.game_sessions (puzzle_id, device_id)
+  where user_id is null and device_id is not null and device_id <> 'unknown';

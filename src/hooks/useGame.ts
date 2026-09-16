@@ -456,6 +456,43 @@ export function useGame(
     }
   }, [puzzle.id]);
 
+  // Whether THIS mount's completed playthrough is the one that owns the
+  // official game_sessions row for this puzzle+identity (see
+  // commitOfficialResult below) — null until that's determined, right after
+  // completion. Exposed so GameBoard's post-completion "Spot the Rainbow"
+  // bonus can avoid mutating an already-existing official session's
+  // found_rainbow/rainbow_solve_index (via markRainbowFoundInSession /
+  // recordRainbowAttempt) when THIS playthrough is a detected replay —
+  // otherwise a replay that finds the Rainbow could silently rewrite the
+  // real official result. Defaults to proceeding (treated as official)
+  // until a replay is positively confirmed, rather than blocking on the
+  // narrow window before that async check resolves.
+  const isOfficialAttemptRef = useRef<boolean | null>(null);
+
+  // Writes the official game_sessions row (+ game_results/puzzle_aggregates/
+  // streak side effects inside saveGameStats) for this completed puzzle —
+  // but ONLY if no official session already exists for this identity+
+  // puzzle. This is the "first completed attempt is the official record"
+  // rule: a replay (localStorage cleared, a stale in-progress board that
+  // somehow still let a guess through, etc.) must not create a second
+  // official row, must not touch the streak again, and must not increment
+  // puzzle_aggregates again. Shared by both the Daily and Archive
+  // completion paths below — the only per-route difference is streak
+  // handling: Archive intentionally never updates the streak, even for its
+  // own genuine first completion (existing product behavior, unchanged
+  // here — see skipStreak below).
+  const commitOfficialResult = useCallback(async (
+    won: boolean,
+    mistakes: number,
+    statsParams: Omit<Parameters<typeof saveGameStats>[0], "skipStreak">
+  ) => {
+    const alreadyOfficial = await hasExistingSession(puzzle.id);
+    isOfficialAttemptRef.current = !alreadyOfficial;
+    if (alreadyOfficial) return;
+    saveResultToDb(won, mistakes);
+    saveGameStats({ ...statsParams, skipStreak: isArchive });
+  }, [puzzle.id, isArchive, saveResultToDb]);
+
   const setTileColor = useCallback((word: string, color: string | null) => {
     setTileColors((prev) => ({ ...prev, [word]: color }));
   }, []);
@@ -758,16 +795,7 @@ export function useGame(
             })),
           };
 
-          if (isArchive) {
-            void (async () => {
-              if (await hasExistingSession(puzzle.id)) return;
-              saveResultToDb(true, state.mistakes);
-              saveGameStats({ ...winStatsParams, skipStreak: true });
-            })();
-          } else {
-            saveResultToDb(true, state.mistakes);
-            saveGameStats(winStatsParams);
-          }
+          void commitOfficialResult(true, state.mistakes, winStatsParams);
 
           const allGroupIndices = puzzle.groups.map((_, i) => i);
           saveProgress(puzzle.id, {
@@ -852,16 +880,7 @@ export function useGame(
             })),
           };
 
-          if (isArchive) {
-            void (async () => {
-              if (await hasExistingSession(puzzle.id)) return;
-              saveResultToDb(false, newMistakes);
-              saveGameStats({ ...lossStatsParams, skipStreak: true });
-            })();
-          } else {
-            saveResultToDb(false, newMistakes);
-            saveGameStats(lossStatsParams);
-          }
+          void commitOfficialResult(false, newMistakes, lossStatsParams);
 
           const sortedIndices = puzzle.groups
             .map((g, i) => ({ idx: i, diff: g.difficulty }))
@@ -940,5 +959,6 @@ export function useGame(
     handleTouchDragMove,
     handleTouchDragEnd,
     alreadyGuessed,
+    isOfficialAttemptRef,
   };
 }
