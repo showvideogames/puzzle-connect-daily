@@ -36,6 +36,13 @@ interface SavedProgress {
   // this field existed (see hintUsedInHistory for the legacy fallback).
   smallHintUsed?: boolean;
   fullHintUsed?: boolean;
+  // Cumulative ACTIVE play seconds accumulated so far this puzzle attempt
+  // (background-tab time already excluded — see activeSecondsRef/isVisibleRef
+  // below). Persisted so a refresh/resume continues counting from here
+  // instead of restarting at 0. Absent on progress blobs saved before this
+  // field existed; that earlier time cannot be reconstructed and is not
+  // guessed at — see the activeSecondsRef initializer.
+  activeTimeSeconds?: number;
 }
 
 export function progressKey(puzzleId: string) {
@@ -64,6 +71,28 @@ function loadProgress(puzzleId: string): SavedProgress | null {
   } catch {
     return null;
   }
+}
+
+// Lightweight active-time checkpoint: updates ONLY activeTimeSeconds on an
+// ALREADY-existing progress blob — never creates one. The other saveProgress
+// call sites already carry activeTimeSeconds on every real state change
+// (guess, hint, tile color), which is frequent enough most of the time; this
+// covers the gap where a player spends a long stretch just thinking — no
+// guess, no hint — and then refreshes, closes, or backgrounds the tab before
+// any of those fire. Reading-then-writing the existing blob (rather than a
+// full saveProgress()) keeps this cheap and side-effect-free, and returning
+// early when no blob exists yet preserves the "an untouched puzzle has no
+// progress row" invariant the tileColorsMountedRef mount-guard relies on
+// (see below) — this can never turn a merely-opened puzzle into one that
+// looks "in progress".
+function checkpointActiveTime(puzzleId: string, activeTimeSeconds: number) {
+  try {
+    const raw = localStorage.getItem(progressKey(puzzleId));
+    if (!raw) return;
+    const existing = JSON.parse(raw) as SavedProgress;
+    existing.activeTimeSeconds = activeTimeSeconds;
+    localStorage.setItem(progressKey(puzzleId), JSON.stringify(existing));
+  } catch {}
 }
 
 function clearProgress(puzzleId: string) {
@@ -259,7 +288,14 @@ export function useGame(
   const [matchedWords, setMatchedWords] = useState<string[]>([]);
   const [draggedWord, setDraggedWord] = useState<string | null>(null);
 
-  const activeSecondsRef = useRef<number>(0);
+  // Seeded from the restored progress blob (0 for a brand-new puzzle, or a
+  // legacy blob saved before activeTimeSeconds existed — never guessed at,
+  // never reconstructed). Every subsequent active second, in every mount,
+  // adds onto this same ref, so the final value sent to saveGameStats is
+  // genuinely cumulative across refresh/resume rather than resetting per
+  // mount. This is the single timer for the puzzle attempt — nothing below
+  // introduces a second one.
+  const activeSecondsRef = useRef<number>(saved?.activeTimeSeconds ?? 0);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isVisibleRef = useRef<boolean>(true);
 
@@ -269,22 +305,51 @@ export function useGame(
       return;
     }
 
+    // How often (in active seconds) the running total below is checkpointed
+    // into localStorage, independent of the full saveProgress() writes that
+    // already fire on every real state change (guess/hint/tile color — see
+    // those call sites' own activeTimeSeconds field). Those cover most
+    // cases; this only fills the gap where a player spends a long stretch
+    // purely thinking — no guess, no hint — and then refreshes or closes
+    // before any of those fire. Cheap (localStorage only, no network) and
+    // infrequent enough not to be "excessive writes" even during a long
+    // idle-but-focused stretch.
+    const CHECKPOINT_INTERVAL_SECONDS = 10;
+    let ticksSinceCheckpoint = 0;
+
     const handleVisibilityChange = () => {
       isVisibleRef.current = !document.hidden;
+      // Checkpoint the instant the tab backgrounds — the moment most likely
+      // to precede a refresh/close, and visibilitychange fires reliably for
+      // that even when beforeunload/unload do not.
+      if (document.hidden) {
+        checkpointActiveTime(puzzle.id, activeSecondsRef.current);
+      }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     timerIntervalRef.current = setInterval(() => {
       if (isVisibleRef.current) {
         activeSecondsRef.current += 1;
+        ticksSinceCheckpoint += 1;
+        if (ticksSinceCheckpoint >= CHECKPOINT_INTERVAL_SECONDS) {
+          ticksSinceCheckpoint = 0;
+          checkpointActiveTime(puzzle.id, activeSecondsRef.current);
+        }
       }
     }, 1000);
 
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      // Final checkpoint so the seconds since the last periodic/visibility
+      // checkpoint aren't lost to a React-level unmount (e.g. SPA navigation
+      // away) that never fires visibilitychange, and so a live completion
+      // (isComplete just flipped true, tearing this effect down) leaves the
+      // exact final total behind too.
+      checkpointActiveTime(puzzle.id, activeSecondsRef.current);
     };
-  }, [state.isComplete]);
+  }, [state.isComplete, puzzle.id]);
 
   // --- Hint marker injection ---
   // Track previous hint-boolean values so we can detect the false→true transition
@@ -336,6 +401,7 @@ export function useGame(
         tileColors,
         smallHintUsed: effectiveSmallHintUsed,
         fullHintUsed: effectiveFullHintUsed,
+        activeTimeSeconds: activeSecondsRef.current,
       });
     }
   }, [state, shuffledWords, rainbowWords, tileColors, puzzle.id, effectiveSmallHintUsed, effectiveFullHintUsed]);
@@ -367,6 +433,7 @@ export function useGame(
       tileColors,
       smallHintUsed: effectiveSmallHintUsed,
       fullHintUsed: effectiveFullHintUsed,
+      activeTimeSeconds: activeSecondsRef.current,
       ...(existing?.finalSolvedGroups ? { finalSolvedGroups: existing.finalSolvedGroups } : {}),
     });
   }, [tileColors]);
@@ -717,6 +784,7 @@ export function useGame(
             tileColors,
             smallHintUsed: effectiveSmallHintUsed,
             fullHintUsed: effectiveFullHintUsed,
+            activeTimeSeconds: activeSecondsRef.current,
           });
         }
       } else {
@@ -825,6 +893,7 @@ export function useGame(
                   tileColors,
                   smallHintUsed: effectiveSmallHintUsed,
                   fullHintUsed: effectiveFullHintUsed,
+                  activeTimeSeconds: activeSecondsRef.current,
                 });
               }
             }, 800 + i * 1500);
