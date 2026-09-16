@@ -307,25 +307,20 @@ html {
   100% { background-position: 0% 50%; }
 }
 
-/* Shared by .rainbow-tile-static below and the reduced-motion override
-   above — the exact same soft, diagonal-banded gradient as the
-   Share/Result grid's rainbow cell (ResultGrid.tsx's RAINBOW_GRADIENT:
-   yellow/green/blue/purple/red with short blend zones at each boundary),
-   so the "off"/reduced-motion look is its own polished, on-brand
-   treatment rather than a frozen frame of the busier full-spectrum
-   animated gradient below. */
+/* Shared by .rainbow-tile-static below, the reduced-motion override above,
+   and the solved-rainbow-card/popup elements in GameBoard.tsx that also
+   respect the Rainbow Animation setting. A smoothly blended diagonal
+   gradient (loosely based on the Share/Result grid's yellow/green/blue/
+   purple/red palette, ResultGrid.tsx's RAINBOW_GRADIENT) rather than
+   distinct color bands — meant to read as one designed background, not
+   five rainbow stripes. */
 :root {
   --rainbow-static-gradient: linear-gradient(
-    115deg,
+    135deg,
     #F6D968 0%,
-    #F6D968 16%,
-    #8CCB91 24%,
-    #8CCB91 36%,
-    #7DB9DD 44%,
-    #7DB9DD 56%,
-    #9B7BE5 64%,
-    #9B7BE5 76%,
-    #E9786D 84%,
+    #A8D783 22%,
+    #7DB9DD 46%,
+    #A98DDB 70%,
     #E9786D 100%
   );
 }

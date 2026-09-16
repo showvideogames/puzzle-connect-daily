@@ -357,7 +357,18 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   const stateClasses = isMatched
     ? "bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
-      ? `${themedRainbow ? "" : (rainbowAnimated ? "rainbow-tile" : "rainbow-tile-static")} text-white shadow-md border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
+      ? themedRainbow
+        ? `text-white shadow-md border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
+        : rainbowAnimated
+          ? `rainbow-tile text-white shadow-md border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
+          // Static rainbow: the smooth blended gradient reads better with
+          // dark ink text than white (much stronger contrast across its
+          // lighter bands), and with the tile's normal hairline border
+          // instead of the animated variant's reserved 3px selection
+          // border — that border read as its own thin multicolor edge
+          // against this softer gradient, which this design intentionally
+          // avoids.
+          : `rainbow-tile-static text-ink shadow-md border ${isSelected ? "border-foreground" : "border-tile-border"}`
       : colorStyle
         ? `${colorStyle.bg} hover:shadow-sm active:scale-95 border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
         : isSelected

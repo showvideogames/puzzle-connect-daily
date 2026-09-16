@@ -863,6 +863,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // as before, since it has no victory animation to wait on.
   const showEndState = state.isComplete && (!state.isWon || victoryRevealReady);
 
+  // The solved-rainbow reveal card (both the direct-guess and Spot the
+  // Rainbow paths below) isn't itself gated by the Rainbow Animation
+  // setting today, but should still show the same static treatment as the
+  // tiles when it's off — for the default theme only; a themed (non-
+  // default) bonus's gradient is a fixed image regardless of this setting.
+  const rainbowCardStatic = theme.isDefault && !showRainbow;
+  const rainbowCardBg = rainbowCardStatic ? "var(--rainbow-static-gradient)" : theme.gradient;
+  const rainbowCardTextClass = rainbowCardStatic ? "text-ink" : "text-white";
+  const rainbowCardTextShadow = rainbowCardStatic ? undefined : theme.textShadow;
+
   return (
     <>
       {!imagesReady ? (
@@ -890,12 +900,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           slot.kind === "rainbow" ? (
             <div
               key="rainbow-reveal"
-              className={`w-full rounded-lg py-3 px-4 text-center text-white ${
+              className={`w-full rounded-lg py-3 px-4 text-center ${rainbowCardTextClass} ${
                 rainbowVisible ? "animate-rainbow-curtain" : ""
               }`}
               style={{
-                background: theme.gradient,
-                textShadow: theme.textShadow,
+                background: rainbowCardBg,
+                textShadow: rainbowCardTextShadow,
                 clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
               }}
             >
@@ -940,12 +950,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             </button>
           ) : (
             <div
-              className={`w-full rounded-lg py-3 px-4 text-center text-white ${
+              className={`w-full rounded-lg py-3 px-4 text-center ${rainbowCardTextClass} ${
                 rainbowVisible ? "animate-rainbow-curtain" : ""
               }`}
               style={{
-                background: theme.gradient,
-                textShadow: theme.textShadow,
+                background: rainbowCardBg,
+                textShadow: rainbowCardTextShadow,
                 clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
               }}
             >
@@ -1102,11 +1112,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* Rainbow Spotted popup — animated (or static, per the Rainbow
           Animation setting) rainbow-tile for the default theme; themed
           gradients are already static images and always show regardless
-          of that setting, same as the actual game tiles. */}
+          of that setting, same as the actual game tiles. Static uses dark
+          ink text (better contrast on that softer gradient); animated and
+          themed keep the original white text. */}
       {showRainbowPopup && (
         <div className="flex justify-center mt-3 animate-fade-up">
           <div
-            className={`${theme.isDefault ? (showRainbow ? "rainbow-tile" : "rainbow-tile-static") : ""} px-6 py-2.5 rounded-full text-sm font-bold text-white shadow-lg`}
+            className={`${
+              theme.isDefault
+                ? showRainbow ? "rainbow-tile text-white" : "rainbow-tile-static text-ink"
+                : "text-white"
+            } px-6 py-2.5 rounded-full text-sm font-bold shadow-lg`}
             style={!theme.isDefault ? { background: theme.gradient, textShadow: theme.textShadow } : undefined}
           >
             {theme.spottedMessage}
