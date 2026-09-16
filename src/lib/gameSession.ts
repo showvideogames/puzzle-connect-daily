@@ -176,19 +176,21 @@ export async function touchSession(
   activity: SessionActivity
 ): Promise<void> {
   try {
-    const { error } = await supabase
-      .from("game_sessions")
-      .update({
-        last_activity_at: new Date().toISOString(),
-        active_time_seconds: activity.activeTimeSeconds,
-        mistakes: activity.mistakes,
-      })
-      .eq("id", sessionId)
-      // Never resurrect or rewrite a finished game. Without this, a late
-      // in-flight touch could reopen a session that completed in the
-      // meantime, and the post-completion Rainbow bonus could inflate a
-      // finished game's active time.
-      .eq("status", "in_progress");
+    const { deviceId } = await getIdentity();
+    // Through a function, not an UPDATE: game_sessions has no update policy
+    // at all any more. The function verifies this session against the device
+    // capability before touching anything, and can only write these three
+    // columns on a still-in-progress session.
+    const { error } = await supabase.rpc("touch_game_session", {
+      _session_id: sessionId,
+      _device_id: deviceId,
+      _active_time_seconds: activity.activeTimeSeconds,
+      _mistakes: activity.mistakes,
+    });
+    // The "only while in_progress" guard moved INTO the function, where a
+    // caller cannot omit it: a late in-flight touch arriving after completion
+    // is discarded rather than reopening a finished game or inflating its
+    // recorded solve time.
     if (error) console.error("touchSession failed:", error);
   } catch (err) {
     console.error("touchSession error:", err);
@@ -272,36 +274,58 @@ export interface GuessEventInput {
  * the caller can recover (see useGameSession) rather than silently dropping
  * every subsequent event.
  */
+/**
+ * Shapes one guess for the record_guess_events function.
+ *
+ * attemptType is deliberately NOT sent: that function forces 'normal' for
+ * everything it writes, so a client cannot claim 'bonus_rainbow' through this
+ * path. That is what makes attempt_type trustworthy as an intent signal —
+ * the only producer of 'bonus_rainbow' anywhere is the bonus function itself.
+ */
+function toGuessPayload(guess: GuessEventInput) {
+  return {
+    guess_number: guess.guessNumber,
+    words: guess.words,
+    correct: guess.correct,
+    group_name: guess.groupName,
+    guessed_at: guess.guessedAt,
+    is_rainbow_attempt: guess.isRainbowAttempt,
+    is_one_away: guess.isOneAway,
+    is_almost_rainbow: guess.isAlmostRainbow,
+    active_time_seconds: guess.snapshot.activeTimeSeconds,
+    groups_solved: guess.snapshot.groupsSolved,
+  };
+}
+
 export async function recordGuessEvent(
   sessionId: string,
   guess: GuessEventInput
 ): Promise<"ok" | "missing_session" | "error"> {
   try {
-    const { error } = await supabase
-      .from("guess_events")
-      .upsert(
-        {
-          game_session_id: sessionId,
-          guess_number: guess.guessNumber,
-          words: guess.words,
-          correct: guess.correct,
-          group_name: guess.groupName,
-          guessed_at: guess.guessedAt,
-          is_rainbow_attempt: guess.isRainbowAttempt,
-          attempt_type: guess.attemptType,
-          is_one_away: guess.isOneAway,
-          is_almost_rainbow: guess.isAlmostRainbow,
-          active_time_seconds: guess.snapshot.activeTimeSeconds,
-          groups_solved: guess.snapshot.groupsSolved,
-        },
-        { onConflict: "game_session_id,guess_number", ignoreDuplicates: true }
-      );
+    const { deviceId } = await getIdentity();
+    // Through the function rather than a table insert: guess_events has no
+    // insert policy any more. The function verifies the session capability
+    // first, so possession of a session id alone cannot inject events into
+    // someone else's game.
+    //
+    // Idempotency is unchanged — it moved into the function's
+    // ON CONFLICT DO NOTHING, keyed on (game_session_id, guess_number) exactly
+    // as before.
+    const { data, error } = await supabase.rpc("record_guess_events", {
+      _session_id: sessionId,
+      _device_id: deviceId,
+      _events: [toGuessPayload(guess)],
+    });
 
     if (isMissingSessionError(error)) return "missing_session";
     if (error) {
       console.error("recordGuessEvent failed:", error);
       return "error";
     }
+    // null means the capability check failed, which for a client that holds
+    // the session id means the session itself is gone — the same recovery
+    // case a foreign-key violation used to signal.
+    if (data === null) return "missing_session";
     return "ok";
   } catch (err) {
     console.error("recordGuessEvent error:", err);
@@ -329,23 +353,16 @@ export async function backfillGuessEvents(
 ): Promise<void> {
   if (guesses.length === 0) return;
   try {
-    const { error } = await supabase.from("guess_events").upsert(
-      guesses.map((g) => ({
-        game_session_id: sessionId,
-        guess_number: g.guessNumber,
-        words: g.words,
-        correct: g.correct,
-        group_name: g.groupName,
-        guessed_at: g.guessedAt,
-        is_rainbow_attempt: g.isRainbowAttempt,
-        attempt_type: g.attemptType,
-        is_one_away: g.isOneAway,
-        is_almost_rainbow: g.isAlmostRainbow,
-        active_time_seconds: g.snapshot.activeTimeSeconds,
-        groups_solved: g.snapshot.groupsSolved,
-      })),
-      { onConflict: "game_session_id,guess_number", ignoreDuplicates: true }
-    );
+    const { deviceId } = await getIdentity();
+    // Same function as the live path, given the whole array at once — one
+    // code path, one set of rules, one idempotency key. Guesses already
+    // written live collide on (game_session_id, guess_number) and are
+    // discarded; only the ones that never reached the server are added.
+    const { error } = await supabase.rpc("record_guess_events", {
+      _session_id: sessionId,
+      _device_id: deviceId,
+      _events: guesses.map(toGuessPayload),
+    });
     if (error) console.error("backfillGuessEvents failed:", error);
   } catch (err) {
     console.error("backfillGuessEvents error:", err);
@@ -388,27 +405,32 @@ export async function recordHintEvent(
   hint: HintEventInput
 ): Promise<"ok" | "missing_session" | "error"> {
   try {
-    const { error } = await supabase
-      .from("hint_events")
-      .upsert(
-        {
-          game_session_id: sessionId,
-          hint_type: hint.hintType,
-          revealed_at: hint.revealedAt,
-          active_time_seconds: hint.snapshot.activeTimeSeconds,
-          guess_count: hint.guessCount,
-          mistakes: hint.snapshot.mistakes,
-          groups_solved: hint.snapshot.groupsSolved,
-          rainbow_found: hint.rainbowFound,
-        },
-        { onConflict: "game_session_id,hint_type", ignoreDuplicates: true }
-      );
+    const { deviceId } = await getIdentity();
+    // Through the function: hint_events has no insert policy any more, and
+    // the session capability is checked before anything is written.
+    // Idempotency on (game_session_id, hint_type) moved into the function's
+    // ON CONFLICT DO NOTHING and is otherwise unchanged.
+    const { data, error } = await supabase.rpc("record_hint_event", {
+      _session_id: sessionId,
+      _device_id: deviceId,
+      _hint_type: hint.hintType,
+      _revealed_at: hint.revealedAt,
+      _active_time_seconds: hint.snapshot.activeTimeSeconds,
+      _guess_count: hint.guessCount,
+      _mistakes: hint.snapshot.mistakes,
+      _groups_solved: hint.snapshot.groupsSolved,
+      _rainbow_found: hint.rainbowFound,
+    });
 
     if (isMissingSessionError(error)) return "missing_session";
     if (error) {
       console.error("recordHintEvent failed:", error);
       return "error";
     }
+    // false means the capability check failed; for a client holding the
+    // session id that means the session is gone, so the caller recovers by
+    // starting a fresh one.
+    if (data === false) return "missing_session";
     return "ok";
   } catch (err) {
     console.error("recordHintEvent error:", err);

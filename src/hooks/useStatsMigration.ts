@@ -120,12 +120,14 @@ export function useStatsMigration() {
         .update({ user_id: userId, device_id: null })
         .eq("id", migrationData.streakRowId);
 
-      // Claim all orphaned game sessions from this device
-      await supabase
-        .from("game_sessions")
-        .update({ user_id: userId })
-        .eq("device_id", deviceId)
-        .is("user_id", null);
+      // Claim all orphaned game sessions from this device.
+      //
+      // The one write in the app that intentionally changes ownership, so it
+      // is the most tightly constrained: the function requires an
+      // authenticated caller, takes the target account from auth.uid() rather
+      // than any supplied id, and can only move rows FROM anonymous TO the
+      // caller — never between accounts and never back to anonymous.
+      await supabase.rpc("claim_anonymous_sessions", { _device_id: deviceId });
     } catch (err) {
       console.error("importStats error:", err);
     }

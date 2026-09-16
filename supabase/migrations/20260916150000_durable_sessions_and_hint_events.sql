@@ -1035,3 +1035,531 @@ with check (public.game_session_exists(game_session_id));
 --   select count(*) from public.get_own_completed_sessions(gen_random_uuid()::text);
 --   reset role;
 -- ---------------------------------------------------------------------------
+
+
+-- ===========================================================================
+-- 7. WRITE PATH: every session mutation goes through a scoped function
+--
+-- Section 6 closed anonymous READ access. This closes anonymous WRITE access,
+-- which was the last thing RLS alone could not express.
+--
+-- The gap RLS leaves: a policy restricts WHICH ROWS are exposed to a
+-- statement, but it cannot require that the caller NAME a specific row. With
+-- a policy of USING (user_id is null), an anonymous caller could issue one
+-- unfiltered UPDATE and rewrite every anonymous session in the table. There is
+-- no anonymous identity to scope that by, so there is no policy that fixes it.
+--
+-- A function can require what a policy cannot. Each one below takes a specific
+-- session id AND the device capability for it, verifies the pair, and touches
+-- only the columns its own operation owns. The result is that
+-- game_sessions has NO update policy at all -- for anonymous or authenticated
+-- callers -- and every legitimate mutation still works.
+--
+-- OWNERSHIP, checked identically everywhere (see session_capability_ok):
+--   authenticated session -> gs.user_id = auth.uid(), and a supplied device_id
+--                            is IGNORED, so an anonymous caller can never
+--                            reach an account-owned session;
+--   anonymous session     -> gs.user_id IS NULL AND gs.device_id = the
+--                            supplied device_id.
+--
+-- So a caller holding only a session id cannot mutate anything: they must also
+-- hold the device_id that session was created with. Both live in the same
+-- browser's localStorage, so a legitimate player always has both, and a leaked
+-- session id on its own is inert.
+--
+-- None of these functions can change puzzle_id, user_id, device_id,
+-- entry_context or started_at. Identity and provenance are fixed at creation.
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- 7a. The shared capability check.
+--
+-- One definition, used by every write function, so the rule cannot drift
+-- between operations. SECURITY DEFINER because it reads game_sessions, which
+-- the caller cannot.
+-- ---------------------------------------------------------------------------
+create or replace function public.session_capability_ok(
+  _session_id uuid,
+  _device_id text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+      from public.game_sessions gs
+     where gs.id = _session_id
+       and (
+         -- Account-owned session: ownership comes from the signed JWT only.
+         -- A device_id is deliberately not accepted as an alternative here,
+         -- so possession of a device_id can never unlock an account's games.
+         (gs.user_id is not null and gs.user_id = auth.uid())
+         -- Anonymous session: the device_id it was created with is the
+         -- capability. 'unknown' is excluded because every storage-blocked
+         -- player shares that literal, making it the one guessable value.
+         or (
+           gs.user_id is null
+           and _device_id is not null
+           and _device_id <> 'unknown'
+           and gs.device_id = _device_id
+         )
+       )
+  )
+$$;
+
+revoke all on function public.session_capability_ok(uuid, text) from public;
+grant execute on function public.session_capability_ok(uuid, text) to anon, authenticated, service_role;
+
+
+-- ---------------------------------------------------------------------------
+-- 7b. Activity heartbeat.
+--
+-- The only function that may touch the live counters, and it may touch
+-- nothing else. Restricted to status = 'in_progress', so it can never
+-- resurrect, extend or rewrite a finished game -- which also means a late
+-- in-flight heartbeat arriving after completion is silently discarded rather
+-- than corrupting the final solve time.
+--
+-- mistakes is the player's CURRENT real count, not a placeholder: 0 on a
+-- fresh session, 2 after two wrong guesses, 4 at a formal loss.
+-- ---------------------------------------------------------------------------
+create or replace function public.touch_game_session(
+  _session_id uuid,
+  _device_id text,
+  _active_time_seconds integer,
+  _mistakes integer
+)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+begin
+  if not public.session_capability_ok(_session_id, _device_id) then
+    return false;
+  end if;
+
+  update public.game_sessions
+     set last_activity_at = now(),
+         active_time_seconds = coalesce(_active_time_seconds, active_time_seconds),
+         mistakes = coalesce(_mistakes, mistakes)
+   where id = _session_id
+     and status = 'in_progress';
+
+  return found;
+end;
+$$;
+
+revoke all on function public.touch_game_session(uuid, text, integer, integer) from public;
+grant execute on function public.touch_game_session(uuid, text, integer, integer) to anon, authenticated, service_role;
+
+
+-- ---------------------------------------------------------------------------
+-- 7c. Formal completion.
+--
+-- Decides is_official ITSELF rather than accepting it from the client. That
+-- is the point: "the first completed official attempt is permanent" is a
+-- product rule, and a rule enforced by whatever the client happens to send is
+-- not enforced at all. Computing it here also makes the check atomic with the
+-- write, closing the read-then-write race the application-level guard cannot.
+--
+-- Restricted to status = 'in_progress', so an already-completed session can
+-- never be re-finalized -- not with a better result, a worse one, fewer
+-- mistakes, a no-hint result or a Rainbow.
+--
+-- Returns whether THIS completion became the official one, so the caller
+-- knows whether to run the streak and aggregate side effects. Returns NULL
+-- when the capability check fails or the session was already finished.
+--
+-- won is written three-state by construction: this function only ever
+-- produces 'won'/TRUE or 'lost'/FALSE, and only ever alongside a real
+-- completed_at.
+-- ---------------------------------------------------------------------------
+create or replace function public.finalize_game_session(
+  _session_id uuid,
+  _device_id text,
+  _won boolean,
+  _mistakes integer,
+  _active_time_seconds integer,
+  _found_rainbow boolean,
+  _rainbow_solve_index smallint,
+  _solve_order jsonb,
+  _hints_used boolean,
+  _share_grid text
+)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  _puzzle_id text;
+  _user_id uuid;
+  _session_device text;
+  _is_official boolean;
+  _completed_at timestamptz := now();
+begin
+  if _won is null then
+    raise exception 'finalize_game_session requires a definite outcome';
+  end if;
+
+  if not public.session_capability_ok(_session_id, _device_id) then
+    return null;
+  end if;
+
+  select gs.puzzle_id, gs.user_id, gs.device_id
+    into _puzzle_id, _user_id, _session_device
+    from public.game_sessions gs
+   where gs.id = _session_id
+     and gs.status = 'in_progress';
+
+  -- Already finished, or gone. Nothing to do, and nothing to overwrite.
+  if _puzzle_id is null then
+    return null;
+  end if;
+
+  -- Does an official completed result already exist for this identity and
+  -- puzzle? Read from the session's OWN stored identity, never from anything
+  -- the caller supplied.
+  _is_official := not exists (
+    select 1
+      from public.game_sessions other
+     where other.puzzle_id = _puzzle_id
+       and other.id <> _session_id
+       and other.status in ('won', 'lost')
+       and other.is_official
+       and (
+         (_user_id is not null and other.user_id = _user_id)
+         or (
+           _user_id is null
+           and _session_device is not null
+           and _session_device <> 'unknown'
+           and other.device_id = _session_device
+         )
+       )
+  );
+
+  update public.game_sessions
+     set status = case when _won then 'won' else 'lost' end,
+         won = _won,
+         completed_at = _completed_at,
+         last_activity_at = _completed_at,
+         is_official = _is_official,
+         mistakes = coalesce(_mistakes, mistakes),
+         active_time_seconds = coalesce(_active_time_seconds, active_time_seconds),
+         found_rainbow = coalesce(_found_rainbow, found_rainbow),
+         rainbow_solve_index = coalesce(_rainbow_solve_index, rainbow_solve_index),
+         -- At completion a found Rainbow can only have been found in normal
+         -- play; the post-game prompt has not been shown yet. The post_game
+         -- value is written solely by record_bonus_rainbow, so there is
+         -- exactly one writer per outcome.
+         rainbow_source = case
+                            when coalesce(_found_rainbow, false) then 'in_game'
+                            else rainbow_source
+                          end,
+         solve_order = coalesce(_solve_order, solve_order),
+         hints_used = coalesce(_hints_used, hints_used),
+         share_grid = coalesce(_share_grid, share_grid)
+   where id = _session_id
+     and status = 'in_progress';
+
+  return _is_official;
+end;
+$$;
+
+revoke all on function public.finalize_game_session(uuid, text, boolean, integer, integer, boolean, smallint, jsonb, boolean, text) from public;
+grant execute on function public.finalize_game_session(uuid, text, boolean, integer, integer, boolean, smallint, jsonb, boolean, text) to anon, authenticated, service_role;
+
+
+-- ---------------------------------------------------------------------------
+-- 7d. Guess events.
+--
+-- One function for both the live single write and the completion-time
+-- backfill, taking an array so the two share one code path and one set of
+-- rules.
+--
+-- FORCES attempt_type = 'normal'. A client cannot claim 'bonus_rainbow'
+-- through this path at all, which is what makes that value trustworthy as an
+-- intent signal: it can only originate from record_bonus_rainbow below, i.e.
+-- from a genuine post-completion submission. The is_rainbow_attempt SHAPE
+-- heuristic stays caller-supplied, because it is only ever a shape signal.
+--
+-- ON CONFLICT DO NOTHING preserves the existing idempotency guarantee exactly:
+-- the same guess recomputes the same guess_number on every mount, so refresh,
+-- resume and retry all collide harmlessly instead of duplicating.
+-- ---------------------------------------------------------------------------
+create or replace function public.record_guess_events(
+  _session_id uuid,
+  _device_id text,
+  _events jsonb
+)
+returns integer
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  _inserted integer;
+begin
+  if not public.session_capability_ok(_session_id, _device_id) then
+    return null;
+  end if;
+
+  with rows as (
+    insert into public.guess_events (
+      game_session_id, guess_number, words, correct, group_name, guessed_at,
+      is_rainbow_attempt, attempt_type, is_one_away, is_almost_rainbow,
+      active_time_seconds, groups_solved
+    )
+    select
+      _session_id,
+      (e ->> 'guess_number')::integer,
+      e -> 'words',
+      (e ->> 'correct')::boolean,
+      e ->> 'group_name',
+      (e ->> 'guessed_at')::timestamptz,
+      (e ->> 'is_rainbow_attempt')::boolean,
+      'normal',
+      (e ->> 'is_one_away')::boolean,
+      (e ->> 'is_almost_rainbow')::boolean,
+      (e ->> 'active_time_seconds')::integer,
+      (e ->> 'groups_solved')::smallint
+      from jsonb_array_elements(_events) as e
+    on conflict (game_session_id, guess_number) do nothing
+    returning 1
+  )
+  select count(*)::integer into _inserted from rows;
+
+  return _inserted;
+end;
+$$;
+
+revoke all on function public.record_guess_events(uuid, text, jsonb) from public;
+grant execute on function public.record_guess_events(uuid, text, jsonb) to anon, authenticated, service_role;
+
+
+-- ---------------------------------------------------------------------------
+-- 7e. Hint events.
+--
+-- Idempotent on (game_session_id, hint_type), the same natural key as before:
+-- a hint used before a refresh cannot produce a second event because the page
+-- resumed.
+-- ---------------------------------------------------------------------------
+create or replace function public.record_hint_event(
+  _session_id uuid,
+  _device_id text,
+  _hint_type text,
+  _revealed_at timestamptz,
+  _active_time_seconds integer,
+  _guess_count smallint,
+  _mistakes smallint,
+  _groups_solved smallint,
+  _rainbow_found boolean
+)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+begin
+  if not public.session_capability_ok(_session_id, _device_id) then
+    return false;
+  end if;
+
+  insert into public.hint_events (
+    game_session_id, hint_type, revealed_at, active_time_seconds,
+    guess_count, mistakes, groups_solved, rainbow_found
+  ) values (
+    _session_id, _hint_type, coalesce(_revealed_at, now()), _active_time_seconds,
+    _guess_count, _mistakes, _groups_solved, _rainbow_found
+  )
+  on conflict (game_session_id, hint_type) do nothing;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.record_hint_event(uuid, text, text, timestamptz, integer, smallint, smallint, smallint, boolean) from public;
+grant execute on function public.record_hint_event(uuid, text, text, timestamptz, integer, smallint, smallint, smallint, boolean) to anon, authenticated, service_role;
+
+
+-- ---------------------------------------------------------------------------
+-- 7f. The post-completion "Spot the Rainbow" bonus.
+--
+-- The ONLY producer of attempt_type = 'bonus_rainbow' anywhere in the system.
+-- Combined with record_guess_events forcing 'normal', that makes the column a
+-- trustworthy record of explicit player intent rather than something a client
+-- can assert.
+--
+-- Runs only against a COMPLETED session, because the prompt only exists after
+-- the board is finished -- and deliberately after a formal LOSS as much as
+-- after a win. That post-loss opportunity is intentional product behaviour:
+-- failing the main puzzle does not forfeit the Rainbow, and a find there
+-- counts as found_rainbow and toward Rainbows Spotted.
+--
+-- The found_rainbow guard means a session that already found the Rainbow in
+-- normal play cannot have its rainbow_source rewritten from in_game to
+-- post_game. bonus_rainbow_attempted is set regardless of outcome, which is
+-- precisely what separates "attempted and failed" from "never attempted" --
+-- the two are otherwise identical rows.
+--
+-- The solve timer stopped at completion, so active_time_seconds is passed
+-- through to the event only and the session's own total is never touched: a
+-- bonus round cannot inflate a recorded solve time.
+-- ---------------------------------------------------------------------------
+create or replace function public.record_bonus_rainbow(
+  _session_id uuid,
+  _device_id text,
+  _guess_number integer,
+  _words jsonb,
+  _correct boolean,
+  _guessed_at timestamptz,
+  _active_time_seconds integer,
+  _groups_solved smallint
+)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+begin
+  if not public.session_capability_ok(_session_id, _device_id) then
+    return false;
+  end if;
+
+  if not exists (
+    select 1 from public.game_sessions
+     where id = _session_id and status in ('won', 'lost')
+  ) then
+    return false;
+  end if;
+
+  insert into public.guess_events (
+    game_session_id, guess_number, words, correct, group_name,
+    is_rainbow_attempt, attempt_type, guessed_at, active_time_seconds,
+    groups_solved
+  ) values (
+    _session_id, _guess_number, _words, _correct, null,
+    -- A bonus submission is one word per category by construction, so the
+    -- shape flag is true -- but it is attempt_type that records the intent.
+    true, 'bonus_rainbow', coalesce(_guessed_at, now()), _active_time_seconds,
+    _groups_solved
+  )
+  on conflict (game_session_id, guess_number) do nothing;
+
+  update public.game_sessions
+     set bonus_rainbow_attempted = true,
+         found_rainbow = case when _correct then true else found_rainbow end,
+         rainbow_source = case when _correct then 'post_game' else rainbow_source end,
+         rainbow_solve_index = case when _correct then 4::smallint else rainbow_solve_index end
+   where id = _session_id
+     and status in ('won', 'lost')
+     and not coalesce(found_rainbow, false);
+
+  return true;
+end;
+$$;
+
+revoke all on function public.record_bonus_rainbow(uuid, text, integer, jsonb, boolean, timestamptz, integer, smallint) from public;
+grant execute on function public.record_bonus_rainbow(uuid, text, integer, jsonb, boolean, timestamptz, integer, smallint) to anon, authenticated, service_role;
+
+
+-- ---------------------------------------------------------------------------
+-- 7g. Claiming guest sessions on sign-in.
+--
+-- The "import your guest stats?" flow, and the one write that intentionally
+-- changes ownership. It is therefore the most tightly constrained: it can only
+-- ever move rows FROM anonymous TO the caller's own account, never between
+-- accounts and never back to anonymous.
+--
+-- Requires an authenticated caller, so there is no anonymous path to it at
+-- all. Returns how many sessions were claimed.
+-- ---------------------------------------------------------------------------
+create or replace function public.claim_anonymous_sessions(_device_id text)
+returns integer
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  _claimed integer;
+begin
+  if auth.uid() is null then
+    return 0;
+  end if;
+  if _device_id is null or _device_id = 'unknown' then
+    return 0;
+  end if;
+
+  update public.game_sessions
+     set user_id = auth.uid()
+   where device_id = _device_id
+     and user_id is null;
+
+  get diagnostics _claimed = row_count;
+  return _claimed;
+end;
+$$;
+
+revoke all on function public.claim_anonymous_sessions(text) from public;
+grant execute on function public.claim_anonymous_sessions(text) to authenticated, service_role;
+
+
+-- ---------------------------------------------------------------------------
+-- 7h. Remove the direct write policies these functions replace.
+--
+-- After this, game_sessions has NO update policy, and the child tables have no
+-- insert policy, for any non-privileged role. Every write goes through a
+-- function above that verifies the session capability first.
+--
+-- The game_sessions INSERT policy is deliberately KEPT, for one reason: a
+-- browser running a CACHED older bundle still inserts a completed session
+-- directly, and the trigger in section 1b exists to accept it. Dropping this
+-- would make those players lose real finished games until their cache turns
+-- over. It is narrow (a row may be stamped with the caller's own account id or
+-- left anonymous, never someone else's) and it can be dropped once cached
+-- bundles have aged out:
+--
+--   drop policy "Users can insert own or anonymous game sessions"
+--     on public.game_sessions;
+--
+-- Those same stale clients also bulk-insert guess_events, which will now fail.
+-- That is the accepted trade: the SESSION is what carries the player's result
+-- and it still saves; only the per-guess detail of an old client's game is
+-- lost, and only until its cache turns over.
+-- ---------------------------------------------------------------------------
+drop policy if exists "Players can update own or anonymous game sessions" on public.game_sessions;
+drop policy if exists "Anyone can insert guess events for a real session" on public.guess_events;
+drop policy if exists "Anyone can insert hint events for a real session" on public.hint_events;
+
+-- game_session_exists() existed only to let those child INSERT policies check
+-- their parent without tripping over game_sessions' own RLS. The policies are
+-- gone, so the helper has no remaining caller.
+drop function if exists public.game_session_exists(uuid);
+
+
+-- ---------------------------------------------------------------------------
+-- 7i. Post-apply verification for the write path
+--
+-- As the anon role, each of these must fail or affect zero rows:
+--
+--   set role anon;
+--   update public.game_sessions set mistakes = 0;                  -- expect 0 rows / denied
+--   update public.game_sessions set won = true where id = '<known id>';
+--   insert into public.guess_events (game_session_id, guess_number, words, correct)
+--     values ('<known id>', 99, '[]'::jsonb, true);                -- expect denied
+--
+--   -- and a session id WITHOUT its device capability must be inert:
+--   select public.touch_game_session('<known session id>', 'not-the-device-id', 10, 1);
+--   -- expect false, and the row unchanged
+--   reset role;
+-- ---------------------------------------------------------------------------

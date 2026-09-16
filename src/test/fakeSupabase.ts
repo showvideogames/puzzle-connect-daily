@@ -198,6 +198,171 @@ export class FakeSupabase {
         ).length;
         return { data: n, error: null };
       }
+      case "session_capability_ok": {
+        return { data: this._capabilityOk(args._session_id as string, deviceId), error: null };
+      }
+      case "touch_game_session": {
+        if (!this._capabilityOk(args._session_id as string, deviceId)) {
+          return { data: false, error: null };
+        }
+        const row = this.tables.game_sessions.find(
+          (r) => r.id === args._session_id && r.status === "in_progress"
+        );
+        if (!row) return { data: false, error: null };
+        row.last_activity_at = new Date().toISOString();
+        row.active_time_seconds = args._active_time_seconds ?? row.active_time_seconds;
+        row.mistakes = args._mistakes ?? row.mistakes;
+        this._log("game_sessions", "update");
+        return { data: true, error: null };
+      }
+      case "finalize_game_session": {
+        if (!this._capabilityOk(args._session_id as string, deviceId)) {
+          return { data: null, error: null };
+        }
+        const row = this.tables.game_sessions.find(
+          (r) => r.id === args._session_id && r.status === "in_progress"
+        );
+        // Already finished, or gone — nothing to overwrite.
+        if (!row) return { data: null, error: null };
+
+        const won = args._won as boolean;
+        // is_official is decided HERE, from the session's own stored identity,
+        // never from anything the caller supplied.
+        const isOfficial = !this.tables.game_sessions.some(
+          (o) =>
+            o.puzzle_id === row.puzzle_id &&
+            o.id !== row.id &&
+            (o.status === "won" || o.status === "lost") &&
+            o.is_official === true &&
+            ((row.user_id !== null && o.user_id === row.user_id) ||
+              (row.user_id === null &&
+                !!row.device_id &&
+                row.device_id !== "unknown" &&
+                o.device_id === row.device_id))
+        );
+        const completedAt = new Date().toISOString();
+        Object.assign(row, {
+          status: won ? "won" : "lost",
+          won,
+          completed_at: completedAt,
+          last_activity_at: completedAt,
+          is_official: isOfficial,
+          mistakes: args._mistakes ?? row.mistakes,
+          active_time_seconds: args._active_time_seconds ?? row.active_time_seconds,
+          found_rainbow: args._found_rainbow ?? row.found_rainbow,
+          rainbow_solve_index: args._rainbow_solve_index ?? row.rainbow_solve_index,
+          rainbow_source: args._found_rainbow ? "in_game" : row.rainbow_source,
+          solve_order: args._solve_order ?? row.solve_order,
+          hints_used: args._hints_used ?? row.hints_used,
+          share_grid: args._share_grid ?? row.share_grid,
+        });
+        this._log("game_sessions", "update");
+        return { data: isOfficial, error: null };
+      }
+      case "record_guess_events": {
+        if (!this._capabilityOk(args._session_id as string, deviceId)) {
+          return { data: null, error: null };
+        }
+        const events = (args._events as Record<string, unknown>[]) ?? [];
+        let inserted = 0;
+        for (const e of events) {
+          const clash = this.tables.guess_events.some(
+            (g) =>
+              g.game_session_id === args._session_id && g.guess_number === e.guess_number
+          );
+          if (clash) continue;
+          this.tables.guess_events.push({
+            id: this._newId(),
+            game_session_id: args._session_id,
+            ...e,
+            // Forced server-side: a client cannot claim 'bonus_rainbow' here.
+            attempt_type: "normal",
+          });
+          inserted++;
+        }
+        this._log("guess_events", "upsert");
+        return { data: inserted, error: null };
+      }
+      case "record_hint_event": {
+        if (!this._capabilityOk(args._session_id as string, deviceId)) {
+          return { data: false, error: null };
+        }
+        const clash = this.tables.hint_events.some(
+          (h) =>
+            h.game_session_id === args._session_id && h.hint_type === args._hint_type
+        );
+        if (!clash) {
+          this.tables.hint_events.push({
+            id: this._newId(),
+            game_session_id: args._session_id,
+            hint_type: args._hint_type,
+            revealed_at: args._revealed_at ?? new Date().toISOString(),
+            active_time_seconds: args._active_time_seconds,
+            guess_count: args._guess_count,
+            mistakes: args._mistakes,
+            groups_solved: args._groups_solved,
+            rainbow_found: args._rainbow_found,
+          });
+        }
+        this._log("hint_events", "upsert");
+        return { data: true, error: null };
+      }
+      case "record_bonus_rainbow": {
+        if (!this._capabilityOk(args._session_id as string, deviceId)) {
+          return { data: false, error: null };
+        }
+        const row = this.tables.game_sessions.find(
+          (r) =>
+            r.id === args._session_id && (r.status === "won" || r.status === "lost")
+        );
+        // The prompt only exists after the board is finished.
+        if (!row) return { data: false, error: null };
+
+        const clash = this.tables.guess_events.some(
+          (g) =>
+            g.game_session_id === args._session_id && g.guess_number === args._guess_number
+        );
+        if (!clash) {
+          this.tables.guess_events.push({
+            id: this._newId(),
+            game_session_id: args._session_id,
+            guess_number: args._guess_number,
+            words: args._words,
+            correct: args._correct,
+            group_name: null,
+            is_rainbow_attempt: true,
+            // The ONLY producer of this value anywhere.
+            attempt_type: "bonus_rainbow",
+            guessed_at: args._guessed_at ?? new Date().toISOString(),
+            active_time_seconds: args._active_time_seconds,
+            groups_solved: args._groups_solved,
+          });
+        }
+        // A Rainbow already found in normal play keeps its in_game source.
+        if (!row.found_rainbow) {
+          row.bonus_rainbow_attempted = true;
+          if (args._correct) {
+            row.found_rainbow = true;
+            row.rainbow_source = "post_game";
+            row.rainbow_solve_index = 4;
+          }
+        }
+        this._log("game_sessions", "update");
+        return { data: true, error: null };
+      }
+      case "claim_anonymous_sessions": {
+        if (uid === null) return { data: 0, error: null };
+        if (!deviceId || deviceId === "unknown") return { data: 0, error: null };
+        let claimed = 0;
+        for (const r of this.tables.game_sessions) {
+          if (r.user_id === null && r.device_id === deviceId) {
+            r.user_id = uid;
+            claimed++;
+          }
+        }
+        this._log("game_sessions", "update");
+        return { data: claimed, error: null };
+      }
       default:
         return { data: null, error: null };
     }
@@ -243,9 +408,42 @@ export class FakeSupabase {
   _match(row: FakeRow, filters: Filter[]) {
     return this.matches(row, filters);
   }
+  /**
+   * Which direct writes the post-migration policies refuse.
+   *
+   * game_sessions keeps its narrow INSERT policy on purpose, for cached
+   * older client bundles; everything else about it, and every child-table
+   * insert, now goes through a capability-checked function.
+   */
+  _writeDenied(table: string, op: string): string | null {
+    if (op === "select") return null;
+    if (table === "game_sessions" && (op === "update" || op === "upsert")) {
+      return "no update policy on game_sessions: use a scoped function";
+    }
+    if (table === "guess_events" || table === "hint_events") {
+      return `no ${op} policy on ${table}: use a scoped function`;
+    }
+    return null;
+  }
   _uniqueKey(table: string) {
     return UNIQUE_KEYS[table];
   }
+  /**
+   * The session-capability check from migration section 7a, mirrored exactly.
+   *
+   * An account-owned session is unlocked ONLY by a matching auth.uid(); a
+   * supplied device_id is ignored for it. An anonymous session is unlocked
+   * only by the device_id it was created with, and never by the shared
+   * unknown literal.
+   */
+  _capabilityOk(sessionId: string, deviceId: string | undefined): boolean {
+    const gs = this.tables.game_sessions.find((r) => r.id === sessionId);
+    if (!gs) return false;
+    const uid = this.authUser?.id ?? null;
+    if (gs.user_id !== null && gs.user_id !== undefined) return uid !== null && gs.user_id === uid;
+    return !!deviceId && deviceId !== "unknown" && gs.device_id === deviceId;
+  }
+
   /** Applies column DEFAULTs to keys the insert did not mention. */
   _withDefaults(table: string, row: FakeRow): FakeRow {
     const defaults = COLUMN_DEFAULTS[table];
@@ -337,6 +535,19 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: unknown }> {
   private run(): { data: unknown; error: unknown; count?: number } {
     const rows = this.db._rows(this.table);
     const p = this.pending ?? { op: "select" as const };
+
+    // Modelled write policies. After migration section 7 there is no
+    // UPDATE policy on game_sessions and no INSERT policy on either child
+    // table, so a direct write from application code is refused outright.
+    // Refusing loudly here is the point: if any code path regresses to a
+    // direct write, it fails in tests rather than silently in production.
+    const deniedWrite = this.db._writeDenied(this.table, p.op);
+    if (deniedWrite) {
+      return {
+        data: null,
+        error: { code: "42501", message: deniedWrite },
+      };
+    }
 
     if (p.op === "insert") {
       const inserted = p.rows.map((r) => this.db._withDefaults(this.table, { id: this.db._newId(), ...r }));

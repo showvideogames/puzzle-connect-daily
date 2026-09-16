@@ -566,21 +566,25 @@ export function useGame(
     mistakes: number,
     statsParams: Omit<
       Parameters<typeof finalizeGameSession>[0],
-      "skipStreak" | "sessionId" | "entryContext" | "isOfficial"
+      "skipStreak" | "sessionId" | "entryContext"
     >
   ) => {
-    const alreadyOfficial = await hasOfficialResult(puzzle.id);
-    const isOfficial = !alreadyOfficial;
-    isOfficialAttemptRef.current = isOfficial;
-    if (isOfficial) saveResultToDb(won, mistakes);
-    await finalizeGameSession({
+    // The database decides whether this completion is the official one, and
+    // says so in its return value. The client no longer asserts it: a rule
+    // enforced by whatever the client sends is not enforced, and computing it
+    // inside the completing statement also closes the read-then-write race
+    // that two tabs finishing at once could slip through.
+    const isOfficial = await finalizeGameSession({
       ...statsParams,
       sessionId: sessionIdRef.current,
       entryContext,
-      isOfficial,
       skipStreak: isArchive,
     });
-  }, [puzzle.id, isArchive, saveResultToDb, sessionIdRef, entryContext]);
+    isOfficialAttemptRef.current = isOfficial;
+    // game_results is a separate per-account table; only the official
+    // completion writes it, and only when signed in.
+    if (isOfficial) saveResultToDb(won, mistakes);
+  }, [isArchive, saveResultToDb, sessionIdRef, entryContext]);
 
   const setTileColor = useCallback((word: string, color: string | null) => {
     setTileColors((prev) => ({ ...prev, [word]: color }));

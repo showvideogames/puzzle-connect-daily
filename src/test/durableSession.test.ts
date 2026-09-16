@@ -512,11 +512,13 @@ describe("K. daily replay", () => {
     const alreadyOfficial = await hasOfficialResult(PUZZLE_ID);
     expect(alreadyOfficial).toBe(true);
 
-    await finalizeGameSession({
+    // Note what is NOT passed: isOfficial. The database decides it from
+    // the session's own stored identity and returns the answer, so a
+    // client claiming to be official cannot make itself official.
+    const becameOfficial = await finalizeGameSession({
       puzzleId: PUZZLE_ID,
       sessionId: replayId,
       entryContext: "daily_home",
-      isOfficial: !alreadyOfficial,
       won: true,
       mistakes: 0,
       activeTimeSeconds: 30,
@@ -527,6 +529,8 @@ describe("K. daily replay", () => {
       hintsUsed: false,
       shareGrid: "",
     });
+
+    expect(becameOfficial).toBe(false);
 
     // The permanent official result is untouched — not improved, not
     // worsened, not given a Rainbow it never earned.
@@ -566,11 +570,10 @@ describe("K. daily replay", () => {
     await playToLoss(view);
     const s = sessions()[0];
 
-    await finalizeGameSession({
+    const reFinalized = await finalizeGameSession({
       puzzleId: PUZZLE_ID,
       sessionId: s.id as string,
       entryContext: "daily_home",
-      isOfficial: true,
       won: true,
       mistakes: 0,
       activeTimeSeconds: 1,
@@ -580,6 +583,8 @@ describe("K. daily replay", () => {
       guessHistory: [],
     });
 
+    // Refused outright: the session is no longer in_progress.
+    expect(reFinalized).toBe(false);
     expect(sessions()[0].status).toBe("lost");
     expect(sessions()[0].won).toBe(false);
     expect(sessions()[0].mistakes).toBe(4);
@@ -1332,6 +1337,455 @@ describe("access control", () => {
     expect(db.rpcLog).toContain("has_official_result");
     expect(db.rpcLog).toContain("get_own_completed_sessions");
     expect(db.rpcLog).toContain("create_game_session");
+  });
+});
+
+
+// ── ANONYMOUS WRITE ACCESS ─────────────────────────────────────────────────
+// Section 7 of the migration removed the last generic anonymous mutation
+// path. game_sessions has no UPDATE policy at all, and neither child table has
+// an INSERT policy; every write goes through a function that verifies the
+// session against its device capability first.
+//
+// As with the read tests, the fake models those policies. It is not a
+// substitute for running the SQL — see section 7i of the migration for the
+// queries that verify it against the live database once applied.
+describe("anonymous write access", () => {
+  /** A completed anonymous session belonging to somebody else. */
+  function seedStrangerSession(id = "stranger-session") {
+    db.tables.game_sessions.push({
+      id,
+      puzzle_id: "someone-elses-puzzle",
+      user_id: null,
+      device_id: "stranger-device-id",
+      status: "won",
+      is_official: true,
+      won: true,
+      mistakes: 1,
+      found_rainbow: false,
+      bonus_rainbow_attempted: false,
+      completed_at: new Date().toISOString(),
+    });
+    return id;
+  }
+
+  /** An in-progress session belonging to somebody else. */
+  function seedStrangerInProgress(id = "stranger-live") {
+    db.tables.game_sessions.push({
+      id,
+      puzzle_id: "someone-elses-puzzle",
+      user_id: null,
+      device_id: "stranger-device-id",
+      status: "in_progress",
+      is_official: false,
+      won: null,
+      mistakes: 1,
+      completed_at: null,
+    });
+    return id;
+  }
+
+  // B. Generic anonymous UPDATE is not permitted.
+  it("B. an anonymous client cannot issue a blanket UPDATE", async () => {
+    seedStrangerSession();
+    seedStrangerInProgress();
+    db.signIn(null);
+
+    // The attack RLS alone could never prevent: one unfiltered statement.
+    const { error } = await db.from("game_sessions").update({ mistakes: 0 });
+    expect(error).toBeTruthy();
+    expect((error as { code: string }).code).toBe("42501");
+
+    // Nothing moved.
+    expect(sessions().find((s) => s.id === "stranger-session")!.mistakes).toBe(1);
+    expect(sessions().find((s) => s.id === "stranger-live")!.mistakes).toBe(1);
+  });
+
+  it("B2. an anonymous client cannot insert guess or hint events directly", async () => {
+    const id = seedStrangerInProgress();
+    db.signIn(null);
+
+    const g = await db.from("guess_events").insert({
+      game_session_id: id,
+      guess_number: 99,
+      words: ["x", "y", "z", "w"],
+      correct: true,
+    });
+    const h = await db.from("hint_events").insert({
+      game_session_id: id,
+      hint_type: "small",
+    });
+    expect(g.error).toBeTruthy();
+    expect(h.error).toBeTruthy();
+    expect(guesses()).toHaveLength(0);
+    expect(hints()).toHaveLength(0);
+  });
+
+  // C. A session ID alone is not enough.
+  it("C. knowing only a session id cannot mutate that session", async () => {
+    const liveId = seedStrangerInProgress();
+    const doneId = seedStrangerSession();
+    db.signIn(null);
+
+    // Every write function, called with the right session id but the WRONG
+    // device capability. The session id is not a secret worth much on its own
+    // — the device_id it was created with is the second factor.
+    const wrongDevice = "attacker-device-id";
+
+    expect(
+      (await db.rpc("touch_game_session", {
+        _session_id: liveId,
+        _device_id: wrongDevice,
+        _active_time_seconds: 9999,
+        _mistakes: 0,
+      })).data
+    ).toBe(false);
+
+    expect(
+      (await db.rpc("finalize_game_session", {
+        _session_id: liveId,
+        _device_id: wrongDevice,
+        _won: true,
+        _mistakes: 0,
+        _active_time_seconds: 1,
+        _found_rainbow: true,
+        _rainbow_solve_index: 0,
+        _solve_order: [],
+        _hints_used: false,
+        _share_grid: "",
+      })).data
+    ).toBeNull();
+
+    expect(
+      (await db.rpc("record_guess_events", {
+        _session_id: liveId,
+        _device_id: wrongDevice,
+        _events: [{ guess_number: 1, words: ["a"], correct: true }],
+      })).data
+    ).toBeNull();
+
+    expect(
+      (await db.rpc("record_hint_event", {
+        _session_id: liveId,
+        _device_id: wrongDevice,
+        _hint_type: "small",
+      })).data
+    ).toBe(false);
+
+    expect(
+      (await db.rpc("record_bonus_rainbow", {
+        _session_id: doneId,
+        _device_id: wrongDevice,
+        _guess_number: 5,
+        _words: ["a", "b", "c", "d"],
+        _correct: true,
+      })).data
+    ).toBe(false);
+
+    // Every field is exactly as seeded.
+    const live = sessions().find((s) => s.id === liveId)!;
+    expect(live.status).toBe("in_progress");
+    expect(live.mistakes).toBe(1);
+    expect(live.active_time_seconds).toBeUndefined();
+    const done = sessions().find((s) => s.id === doneId)!;
+    expect(done.found_rainbow).toBe(false);
+    expect(done.bonus_rainbow_attempted).toBe(false);
+    expect(guesses()).toHaveLength(0);
+    expect(hints()).toHaveLength(0);
+  });
+
+  // D. The legitimate holder of both can do the scoped operations.
+  it("D. the matching device capability performs the legitimate operations", async () => {
+    const liveId = seedStrangerInProgress();
+    db.signIn(null);
+    const right = "stranger-device-id";
+
+    expect(
+      (await db.rpc("touch_game_session", {
+        _session_id: liveId,
+        _device_id: right,
+        _active_time_seconds: 42,
+        _mistakes: 2,
+      })).data
+    ).toBe(true);
+
+    const live = sessions().find((s) => s.id === liveId)!;
+    expect(live.active_time_seconds).toBe(42);
+    expect(live.mistakes).toBe(2);
+    expect(live.last_activity_at).toEqual(expect.any(String));
+    // Still in progress, still outcome-free — the heartbeat owns three
+    // columns and nothing else.
+    expect(live.status).toBe("in_progress");
+    expect(live.won).toBeNull();
+    expect(live.completed_at).toBeNull();
+  });
+
+  it("D2. the heartbeat cannot reopen or rewrite a finished game", async () => {
+    const doneId = seedStrangerSession();
+    db.signIn(null);
+
+    const { data } = await db.rpc("touch_game_session", {
+      _session_id: doneId,
+      _device_id: "stranger-device-id",
+      _active_time_seconds: 99999,
+      _mistakes: 0,
+    });
+    // Capability is fine; the session is simply no longer in progress.
+    expect(data).toBe(false);
+    const done = sessions().find((s) => s.id === doneId)!;
+    expect(done.status).toBe("won");
+    expect(done.mistakes).toBe(1);
+  });
+
+  // E. The shared 'unknown' device id is not a capability.
+  it("E. device_id 'unknown' unlocks nothing on the write path either", async () => {
+    db.tables.game_sessions.push({
+      id: "storage-blocked",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "unknown",
+      status: "in_progress",
+      is_official: false,
+      won: null,
+      mistakes: 1,
+      completed_at: null,
+    });
+    db.signIn(null);
+
+    const { data } = await db.rpc("touch_game_session", {
+      _session_id: "storage-blocked",
+      _device_id: "unknown",
+      _active_time_seconds: 500,
+      _mistakes: 4,
+    });
+    expect(data).toBe(false);
+    expect(sessions().find((s) => s.id === "storage-blocked")!.mistakes).toBe(1);
+  });
+
+  // F / G. Authenticated ownership.
+  it("F. a signed-in player can finalize their own session", async () => {
+    db.signIn("me-user-id");
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    const s = sessions()[0];
+    expect(s.user_id).toBe("me-user-id");
+    expect(s.status).toBe("won");
+    expect(s.is_official).toBe(true);
+  });
+
+  it("G. a signed-in player cannot touch another user's session", async () => {
+    db.tables.game_sessions.push({
+      id: "other-account-session",
+      puzzle_id: PUZZLE_ID,
+      user_id: "other-user-id",
+      device_id: "shared-device-id",
+      status: "in_progress",
+      is_official: false,
+      won: null,
+      mistakes: 1,
+      completed_at: null,
+    });
+    db.signIn("me-user-id");
+
+    // Not via the capability check...
+    expect(
+      (await db.rpc("touch_game_session", {
+        _session_id: "other-account-session",
+        _device_id: "shared-device-id",
+        _active_time_seconds: 1,
+        _mistakes: 4,
+      })).data
+    ).toBe(false);
+
+    // ...and not by supplying the device_id that session carries either: for
+    // an ACCOUNT-owned session, only a matching auth.uid() unlocks it, so
+    // possession of a device id can never reach someone's account games.
+    expect(
+      (await db.rpc("finalize_game_session", {
+        _session_id: "other-account-session",
+        _device_id: "shared-device-id",
+        _won: true,
+        _mistakes: 0,
+        _active_time_seconds: 1,
+        _found_rainbow: false,
+        _rainbow_solve_index: null,
+        _solve_order: [],
+        _hints_used: false,
+        _share_grid: "",
+      })).data
+    ).toBeNull();
+
+    const other = sessions().find((s) => s.id === "other-account-session")!;
+    expect(other.status).toBe("in_progress");
+    expect(other.mistakes).toBe(1);
+  });
+
+  it("G2. an anonymous caller cannot reach an account-owned session", async () => {
+    db.tables.game_sessions.push({
+      id: "account-session",
+      puzzle_id: PUZZLE_ID,
+      user_id: "some-user-id",
+      device_id: "known-device-id",
+      status: "in_progress",
+      is_official: false,
+      won: null,
+      mistakes: 0,
+      completed_at: null,
+    });
+    db.signIn(null);
+
+    expect(
+      (await db.rpc("touch_game_session", {
+        _session_id: "account-session",
+        _device_id: "known-device-id",
+        _active_time_seconds: 1,
+        _mistakes: 4,
+      })).data
+    ).toBe(false);
+    expect(sessions().find((s) => s.id === "account-session")!.mistakes).toBe(0);
+  });
+
+  it("claiming guest sessions requires an account and only moves rows to it", async () => {
+    db.tables.game_sessions.push({
+      id: "guest-1",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "my-device",
+      status: "won",
+      is_official: true,
+      won: true,
+      mistakes: 0,
+      completed_at: new Date().toISOString(),
+    });
+    db.tables.game_sessions.push({
+      id: "other-account",
+      puzzle_id: PUZZLE_ID,
+      user_id: "other-user-id",
+      device_id: "my-device",
+      status: "won",
+      is_official: true,
+      won: true,
+      mistakes: 0,
+      completed_at: new Date().toISOString(),
+    });
+
+    // Anonymous: refused outright.
+    db.signIn(null);
+    expect((await db.rpc("claim_anonymous_sessions", { _device_id: "my-device" })).data).toBe(0);
+    expect(sessions().find((s) => s.id === "guest-1")!.user_id).toBeNull();
+
+    // Signed in: claims only the anonymous row, never another account's.
+    db.signIn("me-user-id");
+    expect((await db.rpc("claim_anonymous_sessions", { _device_id: "my-device" })).data).toBe(1);
+    expect(sessions().find((s) => s.id === "guest-1")!.user_id).toBe("me-user-id");
+    expect(sessions().find((s) => s.id === "other-account")!.user_id).toBe("other-user-id");
+  });
+
+  it("a client cannot forge attempt_type = bonus_rainbow on a normal guess", async () => {
+    // record_guess_events forces 'normal', so the bonus value can only ever
+    // originate from the genuine post-completion flow. That is what makes it
+    // usable as an intent signal at all.
+    db.signIn(null);
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "g1"]);
+    const sessionId = sessions()[0].id as string;
+
+    await db.rpc("record_guess_events", {
+      _session_id: sessionId,
+      _device_id: getDeviceId(),
+      _events: [
+        {
+          guess_number: 50,
+          words: ["y1", "g1", "b1", "r1"],
+          correct: true,
+          attempt_type: "bonus_rainbow",
+          is_rainbow_attempt: true,
+        },
+      ],
+    });
+
+    const forged = guesses().find((g) => g.guess_number === 50)!;
+    expect(forged.attempt_type).toBe("normal");
+    expect(guesses().filter((g) => g.attempt_type === "bonus_rainbow")).toHaveLength(0);
+    expect(sessions()[0].bonus_rainbow_attempted).toBe(false);
+  });
+
+  // H. Full anonymous gameplay, end to end, through the scoped write path.
+  it("H. full anonymous game: start, guesses, hint, resume, win, bonus, stats", async () => {
+    db.signIn(null);
+    const first = mount(puzzle, { smallHintUsed: false });
+
+    await guess(first, ["y1", "y2", "y3", "g1"]); // a miss
+    const sessionId = sessions()[0].id;
+    expect(sessions()[0].mistakes).toBe(1);
+
+    // A hint reveal.
+    await act(async () => first.rerender({ o: { smallHintUsed: true } }));
+    await settle();
+    expect(hints()).toHaveLength(1);
+
+    // Refresh.
+    first.unmount();
+    const second = mount();
+    await settle();
+    expect(second.result.current.sessionIdRef.current).toBe(sessionId);
+
+    await guess(second, ["y1", "y2", "y3", "y4"]);
+    await guess(second, ["g1", "g2", "g3", "g4"]);
+    await guess(second, ["b1", "b2", "b3", "b4"]);
+    await guess(second, ["r1", "r2", "r3", "r4"]);
+
+    expect(sessions()).toHaveLength(1);
+    const s = sessions()[0];
+    expect(s.status).toBe("won");
+    expect(s.is_official).toBe(true);
+    expect(s.mistakes).toBe(1);
+    expect(s.hints_used).toBe(true);
+    expect(hints()).toHaveLength(1);
+
+    // Bonus Rainbow, after the win.
+    const { recordBonusRainbowAttempt } = await import("@/lib/gameStats");
+    await recordBonusRainbowAttempt({
+      sessionId: s.id as string,
+      guessNumber: second.result.current.nextGuessNumber(0),
+      words: ["y1", "g1", "b1", "r1"],
+      correct: true,
+      guessedAt: new Date().toISOString(),
+      activeTimeSeconds: second.result.current.activeSecondsRef.current,
+      groupsSolved: 4,
+    });
+    expect(sessions()[0].found_rainbow).toBe(true);
+    expect(sessions()[0].rainbow_source).toBe("post_game");
+    expect(sessions()[0].bonus_rainbow_attempted).toBe(true);
+
+    const stats = await loadStatsFromSupabase();
+    expect(stats.gamesPlayed).toBe(1);
+    expect(stats.gamesWon).toBe(1);
+    expect(stats.rainbowSpottedCount).toBe(1);
+  });
+
+  // I. Signed-in gameplay, end to end.
+  it("I. full signed-in game still works", async () => {
+    db.signIn("me-user-id");
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "g1"]);
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    const s = sessions()[0];
+    expect(s.user_id).toBe("me-user-id");
+    expect(s.status).toBe("won");
+    expect(s.mistakes).toBe(1);
+
+    const stats = await loadStatsFromSupabase();
+    expect(stats.gamesPlayed).toBe(1);
+    expect(stats.gamesWon).toBe(1);
   });
 });
 

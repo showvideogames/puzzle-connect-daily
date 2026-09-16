@@ -492,6 +492,69 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_anonymous_sessions: {
+        Args: { _device_id: string }
+        Returns: number
+      }
+      finalize_game_session: {
+        Args: {
+          _active_time_seconds: number
+          _device_id: string
+          _found_rainbow: boolean
+          _hints_used: boolean
+          _mistakes: number
+          _rainbow_solve_index: number
+          _session_id: string
+          _share_grid: string
+          _solve_order: Json
+          _won: boolean
+        }
+        Returns: boolean
+      }
+      record_bonus_rainbow: {
+        Args: {
+          _active_time_seconds: number
+          _correct: boolean
+          _device_id: string
+          _groups_solved: number
+          _guess_number: number
+          _guessed_at: string
+          _session_id: string
+          _words: Json
+        }
+        Returns: boolean
+      }
+      record_guess_events: {
+        Args: { _device_id: string; _events: Json; _session_id: string }
+        Returns: number
+      }
+      record_hint_event: {
+        Args: {
+          _active_time_seconds: number
+          _device_id: string
+          _groups_solved: number
+          _guess_count: number
+          _hint_type: string
+          _mistakes: number
+          _rainbow_found: boolean
+          _revealed_at: string
+          _session_id: string
+        }
+        Returns: boolean
+      }
+      session_capability_ok: {
+        Args: { _device_id: string; _session_id: string }
+        Returns: boolean
+      }
+      touch_game_session: {
+        Args: {
+          _active_time_seconds: number
+          _device_id: string
+          _mistakes: number
+          _session_id: string
+        }
+        Returns: boolean
+      }
       count_own_anonymous_sessions: {
         Args: { _device_id: string }
         Returns: number
@@ -506,7 +569,6 @@ export type Database = {
         }
         Returns: string
       }
-      game_session_exists: { Args: { _id: string }; Returns: boolean }
       get_own_completed_sessions: {
         Args: { _device_id: string }
         Returns: {

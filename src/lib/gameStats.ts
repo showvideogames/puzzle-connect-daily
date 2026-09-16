@@ -96,53 +96,29 @@ export async function recordBonusRainbowAttempt(params: {
   activeTimeSeconds: number;
   groupsSolved: number;
 }): Promise<void> {
-  const { sessionId, correct } = params;
-
   try {
-    const { error: guessError } = await supabase.from("guess_events").upsert(
-      {
-        game_session_id: sessionId,
-        guess_number: params.guessNumber,
-        words: params.words,
-        correct,
-        group_name: null,
-        // The authoritative intent signal.
-        attempt_type: "bonus_rainbow",
-        // Kept true for compatibility with the existing shape-based column:
-        // a bonus submission is by construction one word per category. It is
-        // NOT what marks this as an explicit attempt — attempt_type is.
-        is_rainbow_attempt: true,
-        guessed_at: params.guessedAt,
-        active_time_seconds: params.activeTimeSeconds,
-        groups_solved: params.groupsSolved,
-      },
-      { onConflict: "game_session_id,guess_number", ignoreDuplicates: true }
-    );
-    if (guessError) console.error("Failed to record bonus Rainbow attempt:", guessError);
-
-    // The session summary. bonus_rainbow_attempted is set on every explicit
-    // submission, which is precisely what separates outcome B (attempted and
-    // failed) from outcome A (never attempted) — the two are otherwise
-    // identical, both having found_rainbow = false.
-    const summary = {
-      bonus_rainbow_attempted: true,
-      ...(correct
-        ? {
-            found_rainbow: true,
-            rainbow_source: "post_game",
-            // The bonus prompt only ever appears once the board is finished,
-            // so a find via this path is always at position 4 — the one value
-            // this path can produce, not a recalculation.
-            rainbow_solve_index: 4,
-          }
-        : {}),
-    };
-
-    const { error: sessionError } = await supabase
-      .from("game_sessions")
-      .update(summary)
-      .eq("id", sessionId);
-    if (sessionError) console.error("Failed to update bonus Rainbow summary:", sessionError);
+    const { deviceId } = await getIdentity();
+    // One function call does both writes: the bonus guess event and the
+    // session summary. It is the ONLY producer of
+    // attempt_type = 'bonus_rainbow' in the system, and record_guess_events
+    // forces 'normal' for everything else, so that value is a trustworthy
+    // record of explicit intent rather than something a client can assert.
+    //
+    // The function also enforces what the client used to be trusted with:
+    // the session must be COMPLETED (the prompt only exists after the board
+    // finishes), and a Rainbow already found in normal play cannot have its
+    // rainbow_source rewritten to post_game.
+    const { error } = await supabase.rpc("record_bonus_rainbow", {
+      _session_id: params.sessionId,
+      _device_id: deviceId,
+      _guess_number: params.guessNumber,
+      _words: params.words,
+      _correct: params.correct,
+      _guessed_at: params.guessedAt,
+      _active_time_seconds: params.activeTimeSeconds,
+      _groups_solved: params.groupsSolved,
+    });
+    if (error) console.error("Failed to record bonus Rainbow attempt:", error);
   } catch (err) {
     console.error("recordBonusRainbowAttempt error:", err);
   }
@@ -222,14 +198,13 @@ export interface FinalizeGameSessionParams {
    */
   sessionId: string | null;
   entryContext: EntryContext;
-  /**
-   * Whether this session owns the permanent official result. False for a
-   * replay that completed after an official result already existed: its own
-   * row is still finalized truthfully (it really did finish), but it must not
-   * create a second Played, must not re-run the streak, and must not
-   * increment puzzle aggregates.
-   */
-  isOfficial: boolean;
+  // NOTE: there is deliberately no `isOfficial` parameter. Whether a session
+  // owns the permanent official result is decided by finalize_game_session
+  // from the session's OWN stored identity, and returned to the caller. A
+  // replay that completes after an official result already exists is still
+  // finalized truthfully (it really did finish) but comes back
+  // is_official = false, so it adds no Played, re-runs no streak, and
+  // increments no aggregate.
   won: boolean;
   mistakes: number;
   activeTimeSeconds: number;
@@ -252,20 +227,28 @@ export interface FinalizeGameSessionParams {
 /**
  * Formal win/loss: finalize the game.
  *
- * UPDATEs the session that has been accumulating events all along, rather
- * than inserting a second row at the end. The session summary fields
+ * Completes the session that has been accumulating events all along, rather
+ * than inserting a second row at the end. The summary fields
  * (won / mistakes / active_time_seconds / found_rainbow / solve_order /
- * completed_at / hints_used / share_grid / rainbow_solve_index) carry exactly
- * what they did before, joined by the new lifecycle fields.
+ * completed_at / hints_used / share_grid / rainbow_solve_index /
+ * rainbow_source) carry exactly what they did before.
+ *
+ * Returns whether THIS completion became the official one — decided by the
+ * database, not asserted by the client. That matters twice over: "the first
+ * completed official attempt is permanent" is a product rule, and a rule
+ * enforced by whatever the client happens to send is not enforced at all; and
+ * computing it inside the same statement closes the read-then-write race that
+ * an application-level check cannot.
  *
  * Streak and puzzle-aggregate side effects still happen exactly once, at
  * official completion only — never at session start, and never for a replay.
  */
-export async function finalizeGameSession(params: FinalizeGameSessionParams): Promise<void> {
+export async function finalizeGameSession(
+  params: FinalizeGameSessionParams
+): Promise<boolean> {
   const {
     puzzleId,
     entryContext,
-    isOfficial,
     won,
     mistakes,
     activeTimeSeconds,
@@ -280,83 +263,53 @@ export async function finalizeGameSession(params: FinalizeGameSessionParams): Pr
 
   try {
     const { userId, deviceId } = await getIdentity();
-    const completedAt = new Date().toISOString();
 
-    const summary = {
-      status: won ? "won" : "lost",
-      is_official: isOfficial,
-      won,
-      mistakes,
-      active_time_seconds: activeTimeSeconds,
-      found_rainbow: foundRainbow,
-      rainbow_solve_index: rainbowSolveIndex,
-      // At finalize time, a found Rainbow can ONLY have been found during
-      // normal play — the post-game bonus prompt is not even shown until
-      // after this runs, and when it does find one it sets
-      // rainbow_source = post_game itself (see recordBonusRainbowAttempt).
-      // So there is exactly one writer per outcome and no way for the two
-      // to disagree. NULL when not found, never a placeholder.
-      rainbow_source: foundRainbow ? "in_game" : null,
-      solve_order: solveOrder,
-      hints_used: hintsUsed,
-      share_grid: shareGrid,
-      completed_at: completedAt,
-      last_activity_at: completedAt,
-    };
-
-    let sessionId = params.sessionId;
-
-    if (sessionId) {
-      const { error } = await supabase
-        .from("game_sessions")
-        .update(summary)
-        .eq("id", sessionId)
-        // Only an unfinished session may be finalized. This is what enforces
-        // "the first completed official attempt is permanent" at the row
-        // level: a session that already completed can never be rewritten by a
-        // later pass — not with a better result, a worse one, fewer mistakes,
-        // a no-hint result, or a Rainbow.
-        .eq("status", "in_progress");
-      if (error) {
-        console.error("Failed to finalize game session:", error);
-        return;
-      }
-    } else {
-      // No durable session: a legacy in-flight game, or one whose creation
-      // failed. Create one now and then finalize it through the same path
-      // above, rather than inserting a completed row directly.
-      //
-      // Two writes instead of one on this rare fallback, in exchange for a
-      // single completion code path and no second insert site — and it is now
-      // the only way this can work at all, since a direct insert could not
-      // return its own id to an anonymous client once table SELECT is removed.
-      const created = await createGameSession({
+    // A session to finalize. Normally the one this game has been writing to;
+    // otherwise (a legacy local progress blob, or a creation that failed) one
+    // is created now and completed immediately. Two writes on that rare
+    // fallback buys a single completion code path — and is now the only way it
+    // can work at all, since a direct insert cannot return its own id to an
+    // anonymous client.
+    const sessionId =
+      params.sessionId ??
+      (await createGameSession({
         puzzleId,
         entryContext,
         snapshot: { activeTimeSeconds, groupsSolved: solveOrder.length, mistakes },
-      });
-      if (!created) {
-        console.error("Failed to create a session to finalize");
-        return;
-      }
-      const { error } = await supabase
-        .from("game_sessions")
-        .update(summary)
-        .eq("id", created)
-        .eq("status", "in_progress");
-      if (error) {
-        console.error("Failed to finalize fallback game session:", error);
-        return;
-      }
-      sessionId = created;
+      }));
+
+    if (!sessionId) {
+      console.error("Failed to obtain a session to finalize");
+      return false;
+    }
+
+    const { data: isOfficial, error } = await supabase.rpc("finalize_game_session", {
+      _session_id: sessionId,
+      _device_id: deviceId,
+      _won: won,
+      _mistakes: mistakes,
+      _active_time_seconds: activeTimeSeconds,
+      _found_rainbow: foundRainbow,
+      _rainbow_solve_index: rainbowSolveIndex,
+      _solve_order: solveOrder,
+      _hints_used: hintsUsed,
+      _share_grid: shareGrid,
+    });
+
+    if (error) {
+      console.error("Failed to finalize game session:", error);
+      return false;
     }
 
     // Idempotent: guesses already written live are left untouched, and only
-    // the ones this session never managed to write (a legacy local history,
-    // or a live write that failed) get added.
+    // the ones this session never managed to write (a legacy local history, or
+    // a live write that failed) get added.
     await backfillGuessEvents(sessionId, guessHistory);
 
-    if (!isOfficial) return;
+    // null means the session was already finished, or the capability check
+    // failed. Either way this playthrough did not become the official result,
+    // and must not run the side effects again.
+    if (isOfficial !== true) return false;
 
     // Community aggregates count official completions only. A session merely
     // starting must never increment them, or "total plays" would silently
@@ -376,8 +329,11 @@ export async function finalizeGameSession(params: FinalizeGameSessionParams): Pr
     if (!skipStreak) {
       await updateStreak(userId, deviceId, won);
     }
+
+    return true;
   } catch (err) {
     console.error("finalizeGameSession error:", err);
+    return false;
   }
 }
 
