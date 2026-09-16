@@ -80,6 +80,7 @@ export type Database = {
           id: string
           mistakes: number
           puzzle_id: string
+          rainbow_solve_index: number | null
           share_grid: string | null
           solve_order: Json | null
           user_id: string | null
@@ -94,6 +95,7 @@ export type Database = {
           id?: string
           mistakes: number
           puzzle_id: string
+          rainbow_solve_index?: number | null
           share_grid?: string | null
           solve_order?: Json | null
           user_id?: string | null
@@ -108,6 +110,7 @@ export type Database = {
           id?: string
           mistakes?: number
           puzzle_id?: string
+          rainbow_solve_index?: number | null
           share_grid?: string | null
           solve_order?: Json | null
           user_id?: string | null
@@ -123,6 +126,7 @@ export type Database = {
           guess_number: number
           guessed_at: string | null
           id: string
+          is_rainbow_attempt: boolean | null
           words: Json
         }
         Insert: {
@@ -132,6 +136,7 @@ export type Database = {
           guess_number: number
           guessed_at?: string | null
           id?: string
+          is_rainbow_attempt?: boolean | null
           words: Json
         }
         Update: {
@@ -141,6 +146,7 @@ export type Database = {
           guess_number?: number
           guessed_at?: string | null
           id?: string
+          is_rainbow_attempt?: boolean | null
           words?: Json
         }
         Relationships: [

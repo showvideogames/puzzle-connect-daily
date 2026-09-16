@@ -18,7 +18,7 @@ import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
 import { supabase } from "@/integrations/supabase/client";
-import { getDeviceId, markRainbowFoundInSession } from "@/lib/gameStats";
+import { getDeviceId, markRainbowFoundInSession, recordRainbowAttempt } from "@/lib/gameStats";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { trackEvent } from "@/lib/analytics";
 import { resolveTheme } from "@/lib/themes";
@@ -666,7 +666,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     if (fullHintUsed) setHintVisible(true);
   }, [fullHintUsed]);
 
-  const handleSpotResult = useCallback((correct: boolean) => {
+  const handleSpotResult = useCallback((correct: boolean, words: string[]) => {
     setShowSpotModal(false);
     setSpotShaking(true);
     setTimeout(() => {
@@ -677,6 +677,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         playRainbowSound();
         markRainbowFound(puzzle.rainbowHerring);
         void markRainbowFoundInSession(puzzle.id);
+        void recordRainbowAttempt(puzzle.id, words, true);
+      } else {
+        // Failed bonus attempts previously vanished entirely — this is the
+        // only durable record of them (see recordRainbowAttempt).
+        void recordRainbowAttempt(puzzle.id, words, false);
       }
       setTimeout(() => setBonusRainbowCorrect(correct), correct ? 600 : 0);
     }, 400);

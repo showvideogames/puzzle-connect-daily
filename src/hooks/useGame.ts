@@ -365,6 +365,7 @@ export function useGame(
         groupIndices: [],
         isCorrect: false,
         isRainbow: true,
+        isRainbowAttempt: true,
       };
       return {
         ...s,
@@ -561,6 +562,7 @@ export function useGame(
           groupIndices: guessGroupIndices,
           isCorrect: false,
           isRainbow: true,
+          isRainbowAttempt: true,
         };
         setRainbowWords(state.selectedWords);
         setShowRainbowPopup(true);
@@ -583,6 +585,7 @@ export function useGame(
           words: [...state.selectedWords],
           groupIndices: guessGroupIndices,
           isCorrect: true,
+          isRainbowAttempt: new Set(guessGroupIndices).size === 4,
         };
 
         vibrateSuccess();
@@ -621,6 +624,7 @@ export function useGame(
             mistakes: state.mistakes,
             activeTimeSeconds: activeSecondsRef.current,
             foundRainbow: state.gotRainbow,
+            rainbowSolveIndex: state.rainbowSolveIndex,
             solveOrder: getSolveOrder(newSolved),
             hintsUsed: smallHintUsed || fullHintUsed,
             shareGrid,
@@ -628,6 +632,7 @@ export function useGame(
               words: g.words,
               correct: g.isCorrect,
               group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
+              is_rainbow_attempt: g.isRainbowAttempt ?? false,
             })),
           };
 
@@ -675,6 +680,7 @@ export function useGame(
           isCorrect: false,
           isOneAway: isOneAway && !isAlmostRainbow,
           isAlmostRainbow,
+          isRainbowAttempt: new Set(guessGroupIndices).size === 4,
         };
 
         // Miss: now that the suspense is over, the grid "reject" shake and the
@@ -707,6 +713,7 @@ export function useGame(
             mistakes: newMistakes,
             activeTimeSeconds: activeSecondsRef.current,
             foundRainbow: state.gotRainbow,
+            rainbowSolveIndex: state.rainbowSolveIndex,
             solveOrder: getSolveOrder(state.solvedGroups),
             hintsUsed: smallHintUsed || fullHintUsed,
             shareGrid,
@@ -714,6 +721,7 @@ export function useGame(
               words: g.words,
               correct: g.isCorrect,
               group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
+              is_rainbow_attempt: g.isRainbowAttempt ?? false,
             })),
           };
 

@@ -16,7 +16,7 @@ const GROUP_COLORS: Record<number, { bg: string; text: string }> = {
 interface SpotTheRainbowModalProps {
   open: boolean;
   puzzle: Puzzle;
-  onResult: (correct: boolean) => void;
+  onResult: (correct: boolean, words: string[]) => void;
   // Closes the modal without submitting anything — no result, no mistake,
   // no change to solved categories. Reopening later starts fresh (the
   // existing behavior already resets `selected` on close, since this
@@ -48,7 +48,7 @@ export function SpotTheRainbowModal({ open, puzzle, onResult, onClose }: SpotThe
       chosenSorted.every((w, i) => w === correctSorted[i]);
 
     // Pass result immediately — GameBoard handles the shake + reveal sequence
-    onResult(isCorrect);
+    onResult(isCorrect, Object.values(selected));
   };
 
   return (
