@@ -28,6 +28,14 @@ interface SavedProgress {
   finalSolvedGroups?: number[];
   tileColors?: Record<string, string | null>;
   rainbowSolveIndex?: number | null;
+  // Whether Small/Full Hint had been revealed at any point in this puzzle
+  // session. Persisted alongside the rest of progress so a refresh/resume
+  // doesn't lose it — see the effectiveSmallHintUsed/effectiveFullHintUsed
+  // restoration below in useGame(), which is what actually keeps
+  // game_sessions.hints_used correct. Absent on progress blobs saved before
+  // this field existed (see hintUsedInHistory for the legacy fallback).
+  smallHintUsed?: boolean;
+  fullHintUsed?: boolean;
 }
 
 export function progressKey(puzzleId: string) {
@@ -97,6 +105,15 @@ function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle): string {
   return lines.join("\n");
 }
 
+// Legacy-progress fallback: does the restored guessHistory already contain a
+// marker for this hint type? The only local evidence available for a
+// progress blob saved before SavedProgress.smallHintUsed/fullHintUsed
+// existed. Reflects an actual past hint reveal (addHintMarker below) —
+// never inferred without that evidence.
+function hintUsedInHistory(guessHistory: GuessAttempt[] | undefined, type: "small" | "full"): boolean {
+  return (guessHistory ?? []).some((g) => g.isHintMarker && g.hintType === type);
+}
+
 function prefersReducedMotion(): boolean {
   try {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -135,6 +152,26 @@ export function useGame(
   const saved = useMemo(() => {
     return loadProgress(puzzle.id);
   }, [puzzle.id]);
+
+  // Authoritative "was a hint ever revealed this session" state. The
+  // smallHintUsed/fullHintUsed PROPS above are owned by the page (Index.tsx/
+  // ArchivePuzzle.tsx via HintModal) and reset to false on every remount —
+  // they only signal "just clicked in THIS mount." Root cause of the
+  // hints_used-goes-false-after-refresh bug: nothing previously restored
+  // that signal from a prior mount. These refs seed it once from the
+  // persisted progress blob (falling back to scanning guessHistory for
+  // pre-migration blobs — see hintUsedInHistory) and never regress once
+  // true, so effectiveSmallHintUsed/effectiveFullHintUsed below stay
+  // correct across refresh/resume regardless of what the fresh page-level
+  // state happens to be.
+  const restoredSmallHintUsedRef = useRef(
+    saved?.smallHintUsed ?? hintUsedInHistory(saved?.guessHistory, "small")
+  );
+  const restoredFullHintUsedRef = useRef(
+    saved?.fullHintUsed ?? hintUsedInHistory(saved?.guessHistory, "full")
+  );
+  const effectiveSmallHintUsed = smallHintUsed || restoredSmallHintUsedRef.current;
+  const effectiveFullHintUsed = fullHintUsed || restoredFullHintUsedRef.current;
 
   const [shuffledWords, setShuffledWords] = useState(() => {
     if (saved) return saved.shuffledWords;
@@ -297,9 +334,11 @@ export function useGame(
         isComplete: state.isComplete,
         isWon: state.isWon,
         tileColors,
+        smallHintUsed: effectiveSmallHintUsed,
+        fullHintUsed: effectiveFullHintUsed,
       });
     }
-  }, [state, shuffledWords, rainbowWords, tileColors, puzzle.id]);
+  }, [state, shuffledWords, rainbowWords, tileColors, puzzle.id, effectiveSmallHintUsed, effectiveFullHintUsed]);
 
   // Skip the very first run (mount) — otherwise merely opening a puzzle
   // would immediately persist a progress row (tileColors' own useState
@@ -326,6 +365,8 @@ export function useGame(
       isComplete: state.isComplete,
       isWon: state.isWon,
       tileColors,
+      smallHintUsed: effectiveSmallHintUsed,
+      fullHintUsed: effectiveFullHintUsed,
       ...(existing?.finalSolvedGroups ? { finalSolvedGroups: existing.finalSolvedGroups } : {}),
     });
   }, [tileColors]);
@@ -626,7 +667,7 @@ export function useGame(
             foundRainbow: state.gotRainbow,
             rainbowSolveIndex: state.rainbowSolveIndex,
             solveOrder: getSolveOrder(newSolved),
-            hintsUsed: smallHintUsed || fullHintUsed,
+            hintsUsed: effectiveSmallHintUsed || effectiveFullHintUsed,
             shareGrid,
             guessHistory: fullGuessHistory.filter((g) => !g.isHintMarker).map((g) => ({
               words: g.words,
@@ -660,6 +701,8 @@ export function useGame(
             isComplete: true,
             isWon: true,
             tileColors,
+            smallHintUsed: effectiveSmallHintUsed,
+            fullHintUsed: effectiveFullHintUsed,
           });
         }
       } else {
@@ -715,7 +758,7 @@ export function useGame(
             foundRainbow: state.gotRainbow,
             rainbowSolveIndex: state.rainbowSolveIndex,
             solveOrder: getSolveOrder(state.solvedGroups),
-            hintsUsed: smallHintUsed || fullHintUsed,
+            hintsUsed: effectiveSmallHintUsed || effectiveFullHintUsed,
             shareGrid,
             guessHistory: fullGuessHistory.filter((g) => !g.isHintMarker).map((g) => ({
               words: g.words,
@@ -764,6 +807,8 @@ export function useGame(
                   isComplete: true,
                   isWon: false,
                   tileColors,
+                  smallHintUsed: effectiveSmallHintUsed,
+                  fullHintUsed: effectiveFullHintUsed,
                 });
               }
             }, 800 + i * 1500);
