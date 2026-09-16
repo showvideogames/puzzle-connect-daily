@@ -9,7 +9,8 @@ import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
 import { ResultGrid, ResultCellKind, ResultRow } from "./ResultGrid";
-import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown, Rainbow, Grid2x2 } from "lucide-react";
+import { PuzzleModeBadge } from "./PuzzleModeBadge";
+import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown } from "lucide-react";
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useImagePreload } from "@/hooks/useImagePreload";
@@ -21,11 +22,6 @@ import { getDeviceId, markRainbowFoundInSession } from "@/lib/gameStats";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { trackEvent } from "@/lib/analytics";
 import { resolveTheme } from "@/lib/themes";
-
-const RAINBOW_MODE_TITLE = "Hidden Rainbow";
-const RAINBOW_MODE_BODY = "This puzzle contains a fifth connection made from one word in each group.";
-const NO_RAINBOW_MODE_TITLE = "Four Groups Only";
-const NO_RAINBOW_MODE_BODY = "This puzzle does not contain a hidden Rainbow.";
 
 function extractTrailingEmojis(str: string): string {
   try {
@@ -118,67 +114,6 @@ function prefersReducedMotion(): boolean {
   } catch {
     return false;
   }
-}
-
-// Compact puzzle-mode badge shown above the board — RAINBOW when the puzzle
-// has hidden-Rainbow data, 4 GROUPS otherwise. Both variants share the exact
-// same geometry (height/radius/padding/font/icon size/border width); only
-// the fill color, icon, and label differ, so neither reads as more "correct"
-// than the other. Rainbow's fill reuses the existing .rainbow-tile gradient
-// (the same one real in-game rainbow tiles use) rather than introducing a
-// new brand color, per "use the current Rainbow Connect visual language."
-function PuzzleModeBadge({ isRainbow }: { isRainbow: boolean }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent | TouchEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("touchstart", handleClick);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("touchstart", handleClick);
-    };
-  }, [open]);
-
-  const Icon = isRainbow ? Rainbow : Grid2x2;
-  const title = isRainbow ? RAINBOW_MODE_TITLE : NO_RAINBOW_MODE_TITLE;
-  const body = isRainbow ? RAINBOW_MODE_BODY : NO_RAINBOW_MODE_BODY;
-
-  return (
-    <div ref={ref} className="relative shrink-0">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-label={`${isRainbow ? "Rainbow" : "4 Groups"} puzzle mode — tap for details`}
-        className={`inline-flex items-center gap-1 sm:gap-1.5 h-6 sm:h-7 pl-1.5 pr-2 sm:pl-2 sm:pr-2.5
-          rounded-full border text-[10px] sm:text-[11px] font-bold uppercase tracking-wide
-          transition-transform active:scale-95
-          ${isRainbow
-            ? "rainbow-tile text-white border-transparent"
-            : "bg-secondary text-muted-foreground border-border"}`}
-      >
-        <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
-        {isRainbow ? "Rainbow" : "4 Groups"}
-      </button>
-
-      {open && (
-        <div
-          className="absolute right-0 top-full mt-2 z-50 w-max max-w-[220px]
-            rounded-xl px-3 py-2.5 shadow-lg text-left bg-foreground text-background"
-        >
-          <p className="text-[10px] font-bold uppercase tracking-wide mb-0.5">{title}</p>
-          <p className="text-xs leading-snug opacity-90">{body}</p>
-        </div>
-      )}
-    </div>
-  );
 }
 
 function getResultHeadline(isWon: boolean, mistakes: number): string {
@@ -275,9 +210,14 @@ interface GameBoardProps {
   fullHintUsed?: boolean;
   onHintClick?: () => void;
   onComplete?: () => void;
+  // Whether to show the RAINBOW / 4 GROUPS PuzzleModeBadge above the board.
+  // Defaults to true so every current call site keeps rendering it exactly
+  // as before; pass false for contexts that shouldn't show it (e.g. a future
+  // Daily homepage that opts out) without touching this component further.
+  showModeBadge?: boolean;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, showModeBadge = true }: GameBoardProps) {
   const isDailyHomepage = variant === "dailyHomepage";
   const showRainbow = settings?.showRainbowColors ?? true;
   const arrangeTiles = settings?.arrangeTiles ?? false;
@@ -881,14 +821,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       ) : (
     <div className={`w-full mx-auto animate-fade-up ${isDailyHomepage ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
-      {/* Puzzle-mode badge on its own right-aligned row, then the centered
-          instruction directly beneath — stacked (not sharing one row) so
-          both read clearly against the reference layout, with minimal
-          margin between each so this whole block stays compact above the
-          board. */}
-      <div className="flex justify-end mb-1">
-        <PuzzleModeBadge isRainbow={!!puzzle.rainbowHerring} />
-      </div>
+      {/* Puzzle-mode badge on its own right-aligned row (opt-in via
+          showModeBadge — see its prop doc), then the centered instruction
+          directly beneath — stacked (not sharing one row) so both read
+          clearly against the reference layout, with minimal margin between
+          each so this whole block stays compact above the board. */}
+      {showModeBadge && (
+        <div className="flex justify-end mb-1">
+          <PuzzleModeBadge isRainbow={!!puzzle.rainbowHerring} />
+        </div>
+      )}
       <p className="text-center font-sans text-[clamp(13px,4.2vw,16px)] font-bold tracking-wide text-foreground mb-2">
         Select four words that share a connection!
       </p>
