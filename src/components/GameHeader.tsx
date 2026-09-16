@@ -1,8 +1,10 @@
 import { BarChart3, Lightbulb, BookOpen, Archive, Calendar, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PlayerAuth } from "./PlayerAuth";
-import { todaysLogo } from "@/lib/themes";
+import { todaysLogo, isJuly4 } from "@/lib/themes";
 import type { User as AuthUser } from "@supabase/supabase-js";
+
+const STACKED_LOGO = "/rainbow-connect-logo-stacked.png";
 
 interface GameHeaderProps {
   onStatsClick: () => void;
@@ -54,21 +56,43 @@ export function GameHeader({
   return (
     <header className={`flex items-center w-full mx-auto py-3 gap-1 sm:gap-2 ${isMinimal ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-1.5 sm:px-2"}`}>
       <Link to="/" className="active:scale-95 transition-transform shrink-0" aria-label="Home">
-        <img
-          src={todaysLogo()}
-          alt="Rainbow Connect"
-          // Scales down at narrow viewports (aspect ratio preserved via
-          // width:auto) — the floor/vw-coefficient are tuned against the
-          // tightest case (the default variant's full 6-icon header at
-          // 320px, see hideExtraIcons above) so the header never
-          // horizontally overflows there. The 28px→40px ceiling
-          // bump only matters well past mobile: every variant's header hits
-          // its own max-width (840px minimal / 512px default) long before
-          // 40px-tall renders, so this just stops the logo from staying
-          // capped at a comparatively tiny 28px on desktop, where there was
-          // hundreds of pixels of unused gap before the icons.
-          className="h-[clamp(14px,5.8vw,40px)] w-auto"
-        />
+        {isJuly4() ? (
+          // Holiday override applies to both sizes — there's no stacked
+          // variant of the flag logo, so it isn't part of the mobile/desktop
+          // swap below; this one <img> just keeps today's existing behavior.
+          <img src={todaysLogo()} alt="Rainbow Connect" className="h-[clamp(14px,5.8vw,40px)] w-auto" />
+        ) : (
+          <>
+            <img
+              src={todaysLogo()}
+              alt="Rainbow Connect"
+              // Scales down at narrow viewports (aspect ratio preserved via
+              // width:auto) — the floor/vw-coefficient are tuned against the
+              // tightest case (the default variant's full 6-icon header at
+              // 320px, see hideExtraIcons above) so the header never
+              // horizontally overflows there. The 28px→40px ceiling
+              // bump only matters well past mobile: every variant's header hits
+              // its own max-width (840px minimal / 512px default) long before
+              // 40px-tall renders, so this just stops the logo from staying
+              // capped at a comparatively tiny 28px on desktop, where there was
+              // hundreds of pixels of unused gap before the icons.
+              // Hidden at lg+ in favor of the stacked wordmark below — md/tablet
+              // widths keep this one-line logo, since a tablet-sized header
+              // still reads as "mobile/tablet" for this design.
+              className="block lg:hidden h-[clamp(14px,5.8vw,40px)] w-auto"
+            />
+            {/* Desktop-only stacked two-line wordmark ("Rainbow" / "Connect"),
+                shown from lg (1024px) up. Fixed height rather than fluid —
+                unlike the mobile logo, desktop headers don't have the same
+                narrow-viewport pressure, and a fixed cap keeps it from ever
+                reading as oversized on very wide screens. */}
+            <img
+              src={STACKED_LOGO}
+              alt="Rainbow Connect"
+              className="hidden lg:block h-11 w-auto"
+            />
+          </>
+        )}
       </Link>
 
       <div className={`ml-auto flex items-center shrink-0 ${hideExtraIcons ? "gap-1.5 sm:gap-2" : "gap-0 sm:gap-1"}`}>
