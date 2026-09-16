@@ -202,10 +202,17 @@ interface GameBoardProps {
   clearColorsTrigger?: number;
   isArchive?: boolean;
   // "dailyHomepage" is an explicit, dedicated signal for the redesigned daily
-  // homepage layout (hides the intro subtitle/sparkles, widens the board) —
-  // deliberately separate from `isArchive` so it can never be conflated with
-  // "is this an archive page" for FreePuzzle or any future route.
+  // homepage layout — deliberately separate from `isArchive` so it can never
+  // be conflated with "is this an archive page" for FreePuzzle or any future
+  // route.
   variant?: "default" | "dailyHomepage";
+  // Opts into the SAME desktop board width/tile geometry as variant
+  // "dailyHomepage" (see useWideBoard below), without setting
+  // isDailyHomepage itself — so a context that isn't literally the daily
+  // homepage (e.g. ArchivePuzzle) can render an identically-sized board on
+  // desktop while staying distinct from `isDailyHomepage`/`isArchive`. Purely
+  // a container/geometry flag; carries no other behavior.
+  wideBoard?: boolean;
   smallHintUsed?: boolean;
   fullHintUsed?: boolean;
   onHintClick?: () => void;
@@ -217,8 +224,14 @@ interface GameBoardProps {
   showModeBadge?: boolean;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, showModeBadge = true }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", wideBoard = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, showModeBadge = true }: GameBoardProps) {
   const isDailyHomepage = variant === "dailyHomepage";
+  // Drives the board's own desktop width/tile-gap classes below — true for
+  // the daily homepage itself, or any other context that explicitly opted
+  // into matching its geometry via `wideBoard` (e.g. ArchivePuzzle). Kept
+  // separate from `isDailyHomepage` so nothing else keyed on "is this
+  // literally the daily homepage" changes for those other contexts.
+  const useWideBoard = isDailyHomepage || wideBoard;
   const showRainbow = settings?.showRainbowColors ?? true;
   const arrangeTiles = settings?.arrangeTiles ?? false;
   const colorCodeTiles = settings?.colorCodeTiles ?? false;
@@ -841,11 +854,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   return (
     <>
       {!imagesReady ? (
-        <div className={`w-full mx-auto flex flex-col items-center justify-center py-20 ${isDailyHomepage ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
+        <div className={`w-full mx-auto flex flex-col items-center justify-center py-20 ${useWideBoard ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-    <div className={`w-full mx-auto animate-fade-up ${isDailyHomepage ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
+    <div className={`w-full mx-auto animate-fade-up ${useWideBoard ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
       {/* Puzzle-mode badge on its own right-aligned row (opt-in via
           showModeBadge — see its prop doc), then the centered instruction
           directly beneath — stacked (not sharing one row) so both read
@@ -990,7 +1003,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* Word grid */}
       {remainingWords.length > 0 && (
         <div className="relative">
-          <div className={`grid grid-cols-4 gap-1.5 ${isDailyHomepage ? "md:gap-3" : ""} ${shaking || spotShaking ? "animate-shake" : ""}`}>
+          <div className={`grid grid-cols-4 gap-1.5 ${useWideBoard ? "md:gap-3" : ""} ${shaking || spotShaking ? "animate-shake" : ""}`}>
           {remainingWords.map((word, index) => {
             const isRevealingWord = reveal?.words.includes(word) ?? false;
             return (

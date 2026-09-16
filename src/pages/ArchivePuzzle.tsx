@@ -233,6 +233,11 @@ export default function ArchivePuzzle() {
           settings={settings}
           user={user ?? null}
           isArchive
+          // Matches the Daily homepage's desktop board width/tile geometry
+          // (see GameBoard's wideBoard prop doc) — the Archive-specific
+          // header above (Back to Archive / title / date / Today) keeps its
+          // own independent max-w-lg width regardless.
+          wideBoard
           smallHintUsed={smallHintUsed}
           fullHintUsed={fullHintUsed}
           onHintClick={handleHeaderHintClick}
