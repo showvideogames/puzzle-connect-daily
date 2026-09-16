@@ -889,7 +889,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       <div className="flex justify-end mb-1">
         <PuzzleModeBadge isRainbow={!!puzzle.rainbowHerring} />
       </div>
-      <p className="text-center text-[11px] sm:text-[13px] font-medium tracking-wide text-muted-foreground mb-2">
+      <p className="text-center font-sans text-[clamp(13px,4.2vw,16px)] font-bold tracking-wide text-foreground mb-2">
         Select four words that share a connection!
       </p>
 
