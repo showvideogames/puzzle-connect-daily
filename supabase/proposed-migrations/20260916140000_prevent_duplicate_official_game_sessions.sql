@@ -1,4 +1,29 @@
 -- ============================================================================
+-- SUPERSEDED — DO NOT APPLY THIS FILE. Kept for history only.
+--
+-- The rule this file describes now lives, correctly scoped, in section 5 of
+--   supabase/migrations/20260916150000_durable_sessions_and_hint_events.sql
+--
+-- Do NOT simply move this file back into supabase/migrations/. As written it
+-- is now actively WRONG, for a reason that did not exist when it was parked:
+-- sessions are created BEFORE completion, so one (puzzle, identity) can
+-- legitimately have a completed official row AND a later in_progress replay
+-- row at the same time. These unscoped indexes would reject that legitimate
+-- state and block the replay session from being created at all.
+--
+-- The replacement adds a "where is_official" clause to both partial indexes,
+-- restricting them to completed official rows — exactly the rows the rule was
+-- always meant to cover. The hold condition stated below ("needs an
+-- entry_context/mode column, or equivalent, so the index can be scoped") has
+-- therefore been met by is_official rather than by entry_context: whether a
+-- session owns the permanent result turned out to be the property the rule
+-- actually depends on, and a future Beta/Mini/Mega session that wants
+-- unlimited replays simply never sets is_official.
+--
+-- The original header follows unchanged, for the record.
+-- ============================================================================
+
+-- ============================================================================
 -- PARKED — NOT CURRENTLY APPLIED, DO NOT APPLY YET.
 --
 -- This file lives in supabase/proposed-migrations/, a directory the Supabase

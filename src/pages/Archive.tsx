@@ -11,7 +11,7 @@ import { SEO } from "@/components/SEO";
 import { ChevronLeft, ChevronRight, Grid2x2 } from "lucide-react";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { playGiftOpenSound } from "@/lib/sounds";
-import { getDeviceId } from "@/lib/gameStats";
+import { getDeviceId, COMPLETED_STATUSES } from "@/lib/gameStats";
 import { hasInProgressGame } from "@/hooks/useGame";
 import confetti from "canvas-confetti";
 import type { User } from "@supabase/supabase-js";
@@ -167,7 +167,13 @@ function GiftBox({
       // Archive URL (including ?month=, if any) lets that page's "Archive"
       // button return here instead of always resetting to today's month.
       navigate(`/archive/${puzzle.id}`, {
-        state: { archiveReturnPath: `${location.pathname}${location.search}` },
+        state: {
+          archiveReturnPath: `${location.pathname}${location.search}`,
+          // Which collection this play came FROM. The three entry points
+          // below all navigate to the same /archive/:id path, so this is
+          // the only thing that distinguishes them for entry_context.
+          entrySource: "free_collection",
+        },
       });
       return;
     }
@@ -270,7 +276,10 @@ function EmojiPuzzleCard({ puzzle, index }: { puzzle: EmojiPuzzleItem; index: nu
     <button
       onClick={() =>
         navigate(`/archive/${puzzle.id}`, {
-          state: { archiveReturnPath: `${location.pathname}${location.search}` },
+          state: {
+            archiveReturnPath: `${location.pathname}${location.search}`,
+            entrySource: "emoji_collection",
+          },
         })
       }
       aria-label="Play emoji puzzle"
@@ -364,7 +373,7 @@ export default function Archive() {
   const [puzzles, setPuzzles] = useState<ArchivePuzzle[]>([]);
   // Per-puzzle best-outcome summary (won/failed/rainbow) — reuses the same
   // game_sessions table already written by useGame.ts's win AND loss paths
-  // (see saveGameStats), so no new tracking is needed to distinguish those
+  // (see finalizeGameSession), so no new tracking is needed to distinguish those
   // states from a bare "a session exists" check.
   const [sessionsByPuzzleId, setSessionsByPuzzleId] = useState<Map<string, SessionSummary>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -427,9 +436,20 @@ export default function Archive() {
       setPuzzles((archiveData as ArchivePuzzle[]) || []);
 
       const deviceId = getDeviceId();
+      // COMPLETED sessions only. Since sessions are now created on the first
+      // meaningful gameplay action, an unfiltered query would return
+      // still-in-progress rows whose `won` is a placeholder false — turning
+      // every half-played archive puzzle into a red "failed" calendar cell.
+      // A genuinely unfinished game is still shown as "in-progress", but from
+      // the local progress blob (hasInProgressGame below), which is what has
+      // always answered that question.
+      const baseSessions = supabase
+        .from("game_sessions")
+        .select("puzzle_id, won, found_rainbow")
+        .in("status", COMPLETED_STATUSES as unknown as string[]);
       const sessionsQuery = user
-        ? supabase.from("game_sessions").select("puzzle_id, won, found_rainbow").or(`user_id.eq.${user.id},device_id.eq.${deviceId}`)
-        : supabase.from("game_sessions").select("puzzle_id, won, found_rainbow").eq("device_id", deviceId);
+        ? baseSessions.or(`user_id.eq.${user.id},device_id.eq.${deviceId}`)
+        : baseSessions.eq("device_id", deviceId);
       const { data: sessionRows } = await sessionsQuery;
 
       const summaries = new Map<string, SessionSummary>();
@@ -545,7 +565,10 @@ export default function Archive() {
     const puzzle = puzzleByDate[dateStr];
     if (!puzzle) return;
     navigate(`/archive/${puzzle.id}`, {
-      state: { archiveReturnPath: `/archive?month=${monthParam(viewYear, viewMonth)}` },
+      state: {
+        archiveReturnPath: `/archive?month=${monthParam(viewYear, viewMonth)}`,
+        entrySource: "archive_calendar",
+      },
     });
   }
 

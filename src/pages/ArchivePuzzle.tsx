@@ -15,6 +15,7 @@ import { getPuzzleById } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
+import { resolveArchiveEntryContext } from "@/lib/entryContext";
 import type { User } from "@supabase/supabase-js";
 
 type ModalName = "stats" | "help" | "settings" | "feedback" | null;
@@ -23,6 +24,13 @@ export default function ArchivePuzzle() {
   const { puzzleId } = useParams<{ puzzleId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  // How the player reached this puzzle. /archive/:id and the legacy
+  // /free/:id both render this page, and the three in-app entry points
+  // (calendar cell, Free Puzzles card, Emoji Puzzles card) all resolve to
+  // the same path — so router state is the only thing that can tell them
+  // apart. When there is none (deep link, bookmark, fresh-tab reload),
+  // this resolves to the honest "archive_direct" rather than guessing.
+  const entryContext = resolveArchiveEntryContext(puzzleId, location.state, location.pathname);
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -242,6 +250,7 @@ export default function ArchivePuzzle() {
           fullHintUsed={fullHintUsed}
           onHintClick={handleHeaderHintClick}
           onComplete={() => setIsPuzzleComplete(true)}
+          entryContext={entryContext}
         />
       ) : null}
 

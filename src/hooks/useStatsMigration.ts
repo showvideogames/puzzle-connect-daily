@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getDeviceId } from "@/lib/gameStats";
+import { getDeviceId, COMPLETED_STATUSES } from "@/lib/gameStats";
 import type { User } from "@supabase/supabase-js";
 
 interface GuestStats {
@@ -79,9 +79,13 @@ export function useStatsMigration() {
       }
 
       // 3. Count guest game sessions on this device
+      // COMPLETED sessions only — this count is shown to the player as
+      // "games played" in the migration prompt, so an unfinished session
+      // must not inflate it.
       const { count } = await supabase
         .from("game_sessions")
         .select("id", { count: "exact", head: true })
+        .in("status", COMPLETED_STATUSES as unknown as string[])
         .eq("device_id", deviceId)
         .is("user_id", null);
 

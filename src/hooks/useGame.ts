@@ -3,9 +3,24 @@ import { Puzzle, GameState, GuessAttempt } from "@/lib/types";
 import { vibrateSuccess, vibrateError, vibrateCelebration } from "@/lib/haptics";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
-import { saveGameStats, hasExistingSession } from "@/lib/gameStats";
+import { finalizeGameSession, hasOfficialResult } from "@/lib/gameStats";
 import { playRainbowSound } from "@/lib/sounds";
 import { trackEvent } from "@/lib/analytics";
+import type { EntryContext } from "@/lib/entryContext";
+import type { EventSnapshot, GuessEventInput } from "@/lib/gameSession";
+import { useGameSession } from "./useGameSession";
+import {
+  checkpointActiveTime,
+  loadProgress,
+  saveProgress,
+  type SavedProgress,
+} from "@/lib/gameProgress";
+
+// Re-exported so existing importers (Index.tsx, Archive.tsx) keep working —
+// the implementations moved to lib/gameProgress.ts so that both this hook and
+// the durable-session layer can read and write the same blob without an
+// import cycle.
+export { progressKey, hasInProgressGame, clearProgress } from "@/lib/gameProgress";
 
 function shuffleArray<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -14,91 +29,6 @@ function shuffleArray<T>(arr: T[]): T[] {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
-}
-
-interface SavedProgress {
-  solvedGroups: number[];
-  mistakes: number;
-  guessHistory: GuessAttempt[];
-  gotRainbow: boolean;
-  shuffledWords: string[];
-  rainbowWords: string[];
-  isComplete?: boolean;
-  isWon?: boolean;
-  finalSolvedGroups?: number[];
-  tileColors?: Record<string, string | null>;
-  rainbowSolveIndex?: number | null;
-  // Whether Small/Full Hint had been revealed at any point in this puzzle
-  // session. Persisted alongside the rest of progress so a refresh/resume
-  // doesn't lose it — see the effectiveSmallHintUsed/effectiveFullHintUsed
-  // restoration below in useGame(), which is what actually keeps
-  // game_sessions.hints_used correct. Absent on progress blobs saved before
-  // this field existed (see hintUsedInHistory for the legacy fallback).
-  smallHintUsed?: boolean;
-  fullHintUsed?: boolean;
-  // Cumulative ACTIVE play seconds accumulated so far this puzzle attempt
-  // (background-tab time already excluded — see activeSecondsRef/isVisibleRef
-  // below). Persisted so a refresh/resume continues counting from here
-  // instead of restarting at 0. Absent on progress blobs saved before this
-  // field existed; that earlier time cannot be reconstructed and is not
-  // guessed at — see the activeSecondsRef initializer.
-  activeTimeSeconds?: number;
-}
-
-export function progressKey(puzzleId: string) {
-  return `connections-progress-${puzzleId}`;
-}
-
-export function hasInProgressGame(puzzleId: string): boolean {
-  try {
-    return localStorage.getItem(progressKey(puzzleId)) !== null;
-  } catch {
-    return false;
-  }
-}
-
-function saveProgress(puzzleId: string, data: SavedProgress) {
-  try {
-    localStorage.setItem(progressKey(puzzleId), JSON.stringify(data));
-  } catch {}
-}
-
-function loadProgress(puzzleId: string): SavedProgress | null {
-  try {
-    const raw = localStorage.getItem(progressKey(puzzleId));
-    if (!raw) return null;
-    return JSON.parse(raw) as SavedProgress;
-  } catch {
-    return null;
-  }
-}
-
-// Lightweight active-time checkpoint: updates ONLY activeTimeSeconds on an
-// ALREADY-existing progress blob — never creates one. The other saveProgress
-// call sites already carry activeTimeSeconds on every real state change
-// (guess, hint, tile color), which is frequent enough most of the time; this
-// covers the gap where a player spends a long stretch just thinking — no
-// guess, no hint — and then refreshes, closes, or backgrounds the tab before
-// any of those fire. Reading-then-writing the existing blob (rather than a
-// full saveProgress()) keeps this cheap and side-effect-free, and returning
-// early when no blob exists yet preserves the "an untouched puzzle has no
-// progress row" invariant the tileColorsMountedRef mount-guard relies on
-// (see below) — this can never turn a merely-opened puzzle into one that
-// looks "in progress".
-function checkpointActiveTime(puzzleId: string, activeTimeSeconds: number) {
-  try {
-    const raw = localStorage.getItem(progressKey(puzzleId));
-    if (!raw) return;
-    const existing = JSON.parse(raw) as SavedProgress;
-    existing.activeTimeSeconds = activeTimeSeconds;
-    localStorage.setItem(progressKey(puzzleId), JSON.stringify(existing));
-  } catch {}
-}
-
-function clearProgress(puzzleId: string) {
-  try {
-    localStorage.removeItem(progressKey(puzzleId));
-  } catch {}
 }
 
 const DIFFICULTY_SQUARE: Record<number, string> = {
@@ -157,7 +87,16 @@ export function useGame(
     isArchive = false,
     smallHintUsed = false,
     fullHintUsed = false,
-  }: { isArchive?: boolean; smallHintUsed?: boolean; fullHintUsed?: boolean } = {}
+    // How the player reached this game. Recorded once, on the durable
+    // session, at creation — see lib/entryContext.ts. Defaults to the Daily
+    // home route because that is the only caller that does not pass one.
+    entryContext = "daily_home",
+  }: {
+    isArchive?: boolean;
+    smallHintUsed?: boolean;
+    fullHintUsed?: boolean;
+    entryContext?: EntryContext;
+  } = {}
 ) {
   const MAX_MISTAKES = 4;
   // Shared "checking guess" suspense: every submitted guess (correct OR
@@ -247,10 +186,19 @@ export function useGame(
     };
   });
 
+  // Lock the board when this puzzle has already been OFFICIALLY COMPLETED by
+  // this identity — most often a player who cleared localStorage but is still
+  // signed in.
+  //
+  // hasOfficialResult(), not the old hasExistingSession(): now that a session
+  // row is created on the first meaningful action, "a session exists" and
+  // "this puzzle has been finished" are different facts. Checking mere
+  // existence here would lock a player out of the game they are in the middle
+  // of playing the moment they refreshed.
   useEffect(() => {
     if (saved) return;
     let cancelled = false;
-    hasExistingSession(puzzle.id).then((played) => {
+    hasOfficialResult(puzzle.id).then((played) => {
       if (!cancelled && played) {
         setState((s) => ({ ...s, isComplete: true }));
       }
@@ -291,7 +239,7 @@ export function useGame(
   // Seeded from the restored progress blob (0 for a brand-new puzzle, or a
   // legacy blob saved before activeTimeSeconds existed — never guessed at,
   // never reconstructed). Every subsequent active second, in every mount,
-  // adds onto this same ref, so the final value sent to saveGameStats is
+  // adds onto this same ref, so the final value sent to finalizeGameSession is
   // genuinely cumulative across refresh/resume rather than resetting per
   // mount. This is the single timer for the puzzle attempt — nothing below
   // introduces a second one.
@@ -351,9 +299,99 @@ export function useGame(
     };
   }, [state.isComplete, puzzle.id]);
 
+  // --- Durable session + live gameplay events ---
+  // The session this attempt writes to. Resumed from the local progress blob
+  // when one exists, and otherwise created lazily on the first meaningful
+  // gameplay action. Nothing below runs on mount: merely opening a puzzle
+  // must leave no gameplay session behind.
+  const { sessionIdRef, recordGuess, recordHint } = useGameSession(puzzle.id, entryContext);
+
+  /**
+   * Game state at the moment a durable event happened.
+   *
+   * activeSecondsRef is the single resume-safe active-play timer, so a guess
+   * and a hint recorded moments apart carry directly comparable times. No
+   * idle detection, and nothing is written every second — this is only ever
+   * read at the instant an event is already being persisted.
+   */
+  const eventSnapshot = useCallback(
+    (overrides?: Partial<EventSnapshot>): EventSnapshot => ({
+      activeTimeSeconds: activeSecondsRef.current,
+      groupsSolved: state.solvedGroups.length,
+      mistakes: state.mistakes,
+      ...overrides,
+    }),
+    [state.solvedGroups.length, state.mistakes]
+  );
+
+  /**
+   * How many real guesses have been submitted so far.
+   *
+   * Hint markers are synthetic guessHistory entries used for the share grid
+   * and are never guess events, so they are excluded. Because this counts the
+   * player's own restored history, it yields the SAME number for the same
+   * guess on every mount — which is exactly what makes
+   * (game_session_id, guess_number) a usable idempotency key across refresh
+   * and resume.
+   */
+  const submittedGuessCount = useCallback(
+    (history: GuessAttempt[]) => history.filter((g) => !g.isHintMarker).length,
+    []
+  );
+
+  /**
+   * The whole local guess history as durable guess events, for the
+   * completion-time backfill.
+   *
+   * Numbering matches the live path exactly (position among non-hint-marker
+   * entries, 1-based), so a guess already written live collides with itself
+   * and is discarded rather than duplicated — the backfill only ever adds the
+   * guesses that never made it to the server: a game already underway when
+   * durable sessions shipped, or a live write that failed.
+   *
+   * `guessedAt: null` is deliberate for an entry whose real submission time
+   * was never captured (a progress blob predating GuessAttempt.guessedAt).
+   * The previous implementation substituted the save time there, which reads
+   * as a real measurement but isn't one. An honest gap is better than an
+   * invented timestamp; every other field of those guesses is genuine local
+   * history and is preserved.
+   *
+   * groupsSolved/activeTimeSeconds cannot be reconstructed per historical
+   * guess and are NOT guessed at either — the backfilled rows carry the
+   * final-state snapshot only because that is the one value actually known at
+   * write time, and live-written rows (the overwhelming majority) carry their
+   * true per-guess snapshot.
+   */
+  const toGuessEventInputs = useCallback(
+    (history: GuessAttempt[], snapshot: EventSnapshot): GuessEventInput[] =>
+      history
+        .filter((g) => !g.isHintMarker)
+        .map((g, index) => ({
+          guessNumber: index + 1,
+          words: g.words,
+          correct: g.isCorrect,
+          groupName: g.isCorrect
+            ? (["orange", "green", "blue", "red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null)
+            : null,
+          guessedAt: g.guessedAt ?? null,
+          isRainbowAttempt: g.isRainbowAttempt ?? false,
+          isOneAway: g.isOneAway ?? null,
+          isAlmostRainbow: g.isAlmostRainbow ?? null,
+          snapshot,
+        })),
+    [puzzle]
+  );
+
   // --- Hint marker injection ---
   // Track previous hint-boolean values so we can detect the false→true transition
   // and insert a synthetic marker into guessHistory at the right position.
+  //
+  // That same transition is the ONLY place a hint event is persisted, which
+  // is what keeps "revealed" and "considered" distinct: the page's hint flag
+  // flips when the player clicks a specific hint in HintModal, never when the
+  // modal merely opens. A resumed page restores hint state through
+  // restoredSmallHintUsedRef WITHOUT touching these props, so a refresh
+  // cannot replay a reveal that already happened.
   const prevSmallHintRef = useRef(smallHintUsed);
   const prevFullHintRef = useRef(fullHintUsed);
 
@@ -367,19 +405,42 @@ export function useGame(
     }));
   }, []);
 
+  /**
+   * A hint reveal is a meaningful gameplay action in its own right: it
+   * creates the durable session if this is the first one, so a player who
+   * asks for a hint before guessing is recorded truthfully — one session, one
+   * hint event, and no fabricated guess.
+   */
+  const persistHintReveal = useCallback(
+    (type: "small" | "full") => {
+      void recordHint({
+        hintType: type,
+        revealedAt: new Date().toISOString(),
+        guessCount: submittedGuessCount(state.guessHistory),
+        // null, not false, when the puzzle has no Rainbow at all — "there was
+        // no Rainbow to find" must not be recorded as "hadn't found it yet".
+        rainbowFound: puzzle.rainbowHerring ? state.gotRainbow : null,
+        snapshot: eventSnapshot(),
+      });
+    },
+    [recordHint, submittedGuessCount, state.guessHistory, state.gotRainbow, puzzle.rainbowHerring, eventSnapshot]
+  );
+
   useEffect(() => {
     if (smallHintUsed && !prevSmallHintRef.current) {
       addHintMarker("small");
+      persistHintReveal("small");
     }
     prevSmallHintRef.current = smallHintUsed;
-  }, [smallHintUsed, addHintMarker]);
+  }, [smallHintUsed, addHintMarker, persistHintReveal]);
 
   useEffect(() => {
     if (fullHintUsed && !prevFullHintRef.current) {
       addHintMarker("full");
+      persistHintReveal("full");
     }
     prevFullHintRef.current = fullHintUsed;
-  }, [fullHintUsed, addHintMarker]);
+  }, [fullHintUsed, addHintMarker, persistHintReveal]);
 
   useEffect(() => {
     if (oneAway) setOneAway(false);
@@ -402,6 +463,7 @@ export function useGame(
         smallHintUsed: effectiveSmallHintUsed,
         fullHintUsed: effectiveFullHintUsed,
         activeTimeSeconds: activeSecondsRef.current,
+        gameSessionId: sessionIdRef.current,
       });
     }
   }, [state, shuffledWords, rainbowWords, tileColors, puzzle.id, effectiveSmallHintUsed, effectiveFullHintUsed]);
@@ -434,6 +496,7 @@ export function useGame(
       smallHintUsed: effectiveSmallHintUsed,
       fullHintUsed: effectiveFullHintUsed,
       activeTimeSeconds: activeSecondsRef.current,
+        gameSessionId: sessionIdRef.current,
       ...(existing?.finalSolvedGroups ? { finalSolvedGroups: existing.finalSolvedGroups } : {}),
     });
   }, [tileColors]);
@@ -456,42 +519,64 @@ export function useGame(
     }
   }, [puzzle.id]);
 
-  // Whether THIS mount's completed playthrough is the one that owns the
-  // official game_sessions row for this puzzle+identity (see
-  // commitOfficialResult below) — null until that's determined, right after
-  // completion. Exposed so GameBoard's post-completion "Spot the Rainbow"
-  // bonus can avoid mutating an already-existing official session's
-  // found_rainbow/rainbow_solve_index (via markRainbowFoundInSession /
-  // recordRainbowAttempt) when THIS playthrough is a detected replay —
-  // otherwise a replay that finds the Rainbow could silently rewrite the
-  // real official result. Defaults to proceeding (treated as official)
-  // until a replay is positively confirmed, rather than blocking on the
-  // narrow window before that async check resolves.
+  // Whether THIS mount's completed playthrough owns the permanent official
+  // result for this puzzle+identity (see commitOfficialResult below) — null
+  // until that's determined, right after completion. Exposed so GameBoard's
+  // post-completion "Spot the Rainbow" bonus skips its
+  // found_rainbow/rainbow_solve_index write when this playthrough is a
+  // detected replay, so a replay's Rainbow find can never rewrite the real
+  // official result's Rainbows Spotted outcome. Defaults to proceeding
+  // (treated as official) until a replay is positively confirmed, rather
+  // than blocking on the narrow window before that async check resolves.
+  //
+  // Belt and braces since the durable-session work: those writes now target
+  // the session by id, so a replay's bonus lands on the replay's OWN row
+  // rather than the official one regardless — and that row is excluded from
+  // Stats by is_official anyway. This guard is kept so the protection does
+  // not depend on any one of those three mechanisms holding alone.
   const isOfficialAttemptRef = useRef<boolean | null>(null);
 
-  // Writes the official game_sessions row (+ game_results/puzzle_aggregates/
-  // streak side effects inside saveGameStats) for this completed puzzle —
-  // but ONLY if no official session already exists for this identity+
-  // puzzle. This is the "first completed attempt is the official record"
-  // rule: a replay (localStorage cleared, a stale in-progress board that
-  // somehow still let a guess through, etc.) must not create a second
-  // official row, must not touch the streak again, and must not increment
-  // puzzle_aggregates again. Shared by both the Daily and Archive
-  // completion paths below — the only per-route difference is streak
-  // handling: Archive intentionally never updates the streak, even for its
-  // own genuine first completion (existing product behavior, unchanged
-  // here — see skipStreak below).
+  // Finalizes this completed playthrough.
+  //
+  // The "first completed attempt is the official record" rule is unchanged:
+  // a replay must not create a second Played, must not touch the streak
+  // again, and must not increment puzzle_aggregates again. What changed is
+  // WHERE that decision lands. The replay's own session row genuinely
+  // finished, so it is still finalized truthfully (status won/lost) — just
+  // with is_official = false, which every player-facing stat filters on.
+  // Leaving it parked at in_progress forever would be both a lie and a
+  // corruption of abandonment analytics.
+  //
+  // Note the asymmetry this preserves: "a session row exists for this
+  // puzzle" is NOT the same question as "an official completed attempt
+  // exists" — hasOfficialResult() asks only the latter, so the player's own
+  // unfinished session can never be mistaken for a prior official result and
+  // block their real one from being saved.
+  //
+  // Shared by both the Daily and Archive completion paths below — the only
+  // per-route difference is streak handling: Archive intentionally never
+  // updates the Daily streak, even for its own genuine first completion
+  // (existing product behavior, unchanged here — see skipStreak below).
   const commitOfficialResult = useCallback(async (
     won: boolean,
     mistakes: number,
-    statsParams: Omit<Parameters<typeof saveGameStats>[0], "skipStreak">
+    statsParams: Omit<
+      Parameters<typeof finalizeGameSession>[0],
+      "skipStreak" | "sessionId" | "entryContext" | "isOfficial"
+    >
   ) => {
-    const alreadyOfficial = await hasExistingSession(puzzle.id);
-    isOfficialAttemptRef.current = !alreadyOfficial;
-    if (alreadyOfficial) return;
-    saveResultToDb(won, mistakes);
-    saveGameStats({ ...statsParams, skipStreak: isArchive });
-  }, [puzzle.id, isArchive, saveResultToDb]);
+    const alreadyOfficial = await hasOfficialResult(puzzle.id);
+    const isOfficial = !alreadyOfficial;
+    isOfficialAttemptRef.current = isOfficial;
+    if (isOfficial) saveResultToDb(won, mistakes);
+    await finalizeGameSession({
+      ...statsParams,
+      sessionId: sessionIdRef.current,
+      entryContext,
+      isOfficial,
+      skipStreak: isArchive,
+    });
+  }, [puzzle.id, isArchive, saveResultToDb, sessionIdRef, entryContext]);
 
   const setTileColor = useCallback((word: string, color: string | null) => {
     setTileColors((prev) => ({ ...prev, [word]: color }));
@@ -695,6 +780,51 @@ export function useGame(
     );
     const isCorrect = matchedGroupIndex !== -1;
 
+    // Near-miss classification, hoisted out of the miss branch below so the
+    // durable guess event can carry it too. Pure functions of the state this
+    // guess was made against, so computing them here rather than after the
+    // suspense delay changes nothing about the values.
+    const rainbowHerringWords = puzzle.rainbowHerring ?? [];
+    const rainbowHits = state.selectedWords.filter((w) => rainbowHerringWords.includes(w)).length;
+    const isAlmostRainbow =
+      rainbowHerringWords.length === 4 && rainbowWords.length === 0 && rainbowHits === 3;
+    const isOneAway = puzzle.groups.some(
+      (g, idx) => !state.solvedGroups.includes(idx) && g.words.filter((w) => state.selectedWords.includes(w)).length === 3
+    );
+
+    // ── Durable guess event, written as it happens ──
+    // Persisted HERE, on submission, rather than batched at game end. A
+    // player who makes six guesses and then leaves frustrated used to leave
+    // no server-side trace at all; now every one of those guesses is already
+    // durable. Written before the suspense animation resolves for the same
+    // reason guessedAt is captured above: the delay is presentation, the
+    // guess already happened.
+    //
+    // guess_number comes from the player's own restored history, so the same
+    // guess always computes the same number across refresh and resume — which
+    // is what makes the (game_session_id, guess_number) unique index an
+    // effective idempotency key rather than a hope that the client won't
+    // call twice.
+    //
+    // This is also the first-meaningful-action trigger: if no durable session
+    // exists yet, recordGuess creates one.
+    void recordGuess({
+      guessNumber: submittedGuessCount(state.guessHistory) + 1,
+      words: [...state.selectedWords],
+      correct: isCorrect,
+      groupName: isCorrect
+        ? (["orange", "green", "blue", "red"][puzzle.groups[matchedGroupIndex].difficulty - 1] ?? null)
+        : null,
+      guessedAt,
+      // HEURISTIC, by shape only — one word from each of the 4 categories.
+      // Does not prove the player intended a Rainbow guess. Preserved exactly
+      // as previously defined; see GuessEventInput.isRainbowAttempt.
+      isRainbowAttempt: isRainbowHerring || new Set(guessGroupIndices).size === 4,
+      isOneAway: isOneAway && !isAlmostRainbow,
+      isAlmostRainbow,
+      snapshot: eventSnapshot(),
+    });
+
     // ── Shared "checking guess" suspense ──
     // Every outcome — category, hidden rainbow/flag, or miss — first plays the
     // same staggered per-tile bounce, then holds a beat, before the result is
@@ -776,6 +906,12 @@ export function useGame(
           const fullGuessHistory = [...state.guessHistory, attempt];
           const shareGrid = buildShareGrid(fullGuessHistory, puzzle);
 
+          // The timer has already stopped at this win (see the isComplete
+          // guard on the active-time effect), so this snapshot is the final
+          // solve time — and the post-completion Rainbow bonus cannot extend
+          // it.
+          const winSnapshot = eventSnapshot({ groupsSolved: newSolved.length });
+
           const winStatsParams = {
             puzzleId: puzzle.id,
             won: true,
@@ -786,13 +922,7 @@ export function useGame(
             solveOrder: getSolveOrder(newSolved),
             hintsUsed: effectiveSmallHintUsed || effectiveFullHintUsed,
             shareGrid,
-            guessHistory: fullGuessHistory.filter((g) => !g.isHintMarker).map((g) => ({
-              words: g.words,
-              correct: g.isCorrect,
-              group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
-              is_rainbow_attempt: g.isRainbowAttempt ?? false,
-              guessed_at: g.guessedAt ?? null,
-            })),
+            guessHistory: toGuessEventInputs(fullGuessHistory, winSnapshot),
           };
 
           void commitOfficialResult(true, state.mistakes, winStatsParams);
@@ -813,20 +943,13 @@ export function useGame(
             smallHintUsed: effectiveSmallHintUsed,
             fullHintUsed: effectiveFullHintUsed,
             activeTimeSeconds: activeSecondsRef.current,
+        gameSessionId: sessionIdRef.current,
           });
         }
       } else {
-        const rainbowHerring = puzzle.rainbowHerring ?? [];
-        const rainbowHits = state.selectedWords.filter((w) => rainbowHerring.includes(w)).length;
-        const isAlmostRainbow =
-          rainbowHerring.length === 4 &&
-          rainbowWords.length === 0 &&
-          rainbowHits === 3;
-
-        const isOneAway = puzzle.groups.some(
-          (g, idx) => !state.solvedGroups.includes(idx) && g.words.filter((w) => state.selectedWords.includes(w)).length === 3
-        );
-
+        // isOneAway / isAlmostRainbow are computed once at submission time
+        // above, so the local attempt and the durable guess event can never
+        // disagree about the same guess.
         const attempt: GuessAttempt = {
           words: [...state.selectedWords],
           groupIndices: guessGroupIndices,
@@ -861,6 +984,8 @@ export function useGame(
           const fullGuessHistory = [...state.guessHistory, attempt];
           const shareGrid = buildShareGrid(fullGuessHistory, puzzle);
 
+          const lossSnapshot = eventSnapshot({ mistakes: newMistakes });
+
           const lossStatsParams = {
             puzzleId: puzzle.id,
             won: false,
@@ -871,13 +996,7 @@ export function useGame(
             solveOrder: getSolveOrder(state.solvedGroups),
             hintsUsed: effectiveSmallHintUsed || effectiveFullHintUsed,
             shareGrid,
-            guessHistory: fullGuessHistory.filter((g) => !g.isHintMarker).map((g) => ({
-              words: g.words,
-              correct: g.isCorrect,
-              group_name: g.isCorrect ? (["orange","green","blue","red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null) : null,
-              is_rainbow_attempt: g.isRainbowAttempt ?? false,
-              guessed_at: g.guessedAt ?? null,
-            })),
+            guessHistory: toGuessEventInputs(fullGuessHistory, lossSnapshot),
           };
 
           void commitOfficialResult(false, newMistakes, lossStatsParams);
@@ -913,6 +1032,7 @@ export function useGame(
                   smallHintUsed: effectiveSmallHintUsed,
                   fullHintUsed: effectiveFullHintUsed,
                   activeTimeSeconds: activeSecondsRef.current,
+        gameSessionId: sessionIdRef.current,
                 });
               }
             }, 800 + i * 1500);
@@ -920,7 +1040,7 @@ export function useGame(
         }
       }
     }, totalDelay);
-  }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, tileColors, smallHintUsed, fullHintUsed]);
+  }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, tileColors, smallHintUsed, fullHintUsed, recordGuess, submittedGuessCount, toGuessEventInputs, eventSnapshot, commitOfficialResult, effectiveSmallHintUsed, effectiveFullHintUsed, getSolveOrder]);
 
   const remainingWords = useMemo(() => {
     const solvedWords = state.solvedGroups
@@ -960,5 +1080,37 @@ export function useGame(
     handleTouchDragEnd,
     alreadyGuessed,
     isOfficialAttemptRef,
+    /**
+     * The durable session this attempt belongs to. Exposed so GameBoard's
+     * post-completion "Spot the Rainbow" bonus can attach its own writes to
+     * the CORRECT session by id, instead of re-deriving one from
+     * puzzle + identity — a lookup that can now match the wrong row, since a
+     * puzzle+identity may legitimately have both a completed official session
+     * and a later in-progress replay.
+     */
+    sessionIdRef,
+    /**
+     * The single resume-safe active-play timer for this attempt. Exposed so
+     * the post-completion Rainbow bonus can stamp its guess event with the
+     * same active-time basis as every other event.
+     *
+     * Reading it after completion yields the FINAL solve time: the timer
+     * effect tears down the moment isComplete flips, so time spent in the
+     * bonus round is deliberately never added to it.
+     */
+    activeSecondsRef,
+    /**
+     * The guess number the next durable guess event should use, shared with
+     * the bonus Rainbow path so it participates in the same
+     * (game_session_id, guess_number) idempotency key as every other guess.
+     *
+     * A successful bonus attempt is appended to guessHistory, so the count
+     * advances on its own. A FAILED one is not (it has no share-grid row), so
+     * failedBonusAttempts is added separately — without it, a player who
+     * failed the bonus, refreshed and failed again would have the second
+     * attempt silently discarded as a duplicate.
+     */
+    nextGuessNumber: (failedBonusAttempts = 0) =>
+      submittedGuessCount(state.guessHistory) + failedBonusAttempts + 1,
   };
 }

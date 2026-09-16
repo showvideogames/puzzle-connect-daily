@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { COMPLETED_STATUSES } from "@/lib/gameStats";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -345,9 +346,12 @@ export default function Admin() {
         { data: currentStreakData },
         { data: longestStreakData },
       ] = await Promise.all([
-        supabase.from("game_sessions").select("*", { count: "exact", head: true }),
-        supabase.from("game_sessions").select("*", { count: "exact", head: true }).eq("won", true),
-        supabase.from("game_sessions").select("*", { count: "exact", head: true }).eq("found_rainbow", true),
+        // COMPLETED sessions only, so these admin totals keep meaning
+        // "games finished" rather than silently becoming "games opened"
+        // now that a session row is created on the first gameplay action.
+        supabase.from("game_sessions").select("*", { count: "exact", head: true }).in("status", COMPLETED_STATUSES as unknown as string[]),
+        supabase.from("game_sessions").select("*", { count: "exact", head: true }).in("status", COMPLETED_STATUSES as unknown as string[]).eq("won", true),
+        supabase.from("game_sessions").select("*", { count: "exact", head: true }).in("status", COMPLETED_STATUSES as unknown as string[]).eq("found_rainbow", true),
         supabase.from("user_streaks").select("*", { count: "exact", head: true }).not("user_id", "is", null),
         supabase.from("user_streaks").select("current_streak").order("current_streak", { ascending: false }).limit(1),
         supabase.from("user_streaks").select("longest_streak").order("longest_streak", { ascending: false }).limit(1),

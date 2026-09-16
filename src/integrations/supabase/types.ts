@@ -75,14 +75,19 @@ export type Database = {
           active_time_seconds: number | null
           completed_at: string | null
           device_id: string | null
+          entry_context: string | null
           found_rainbow: boolean | null
           hints_used: boolean | null
           id: string
+          is_official: boolean
+          last_activity_at: string | null
           mistakes: number
           puzzle_id: string
           rainbow_solve_index: number | null
           share_grid: string | null
           solve_order: Json | null
+          started_at: string | null
+          status: string
           user_id: string | null
           won: boolean
         }
@@ -90,14 +95,19 @@ export type Database = {
           active_time_seconds?: number | null
           completed_at?: string | null
           device_id?: string | null
+          entry_context?: string | null
           found_rainbow?: boolean | null
           hints_used?: boolean | null
           id?: string
+          is_official?: boolean
+          last_activity_at?: string | null
           mistakes: number
           puzzle_id: string
           rainbow_solve_index?: number | null
           share_grid?: string | null
           solve_order?: Json | null
+          started_at?: string | null
+          status?: string
           user_id?: string | null
           won: boolean
         }
@@ -105,14 +115,19 @@ export type Database = {
           active_time_seconds?: number | null
           completed_at?: string | null
           device_id?: string | null
+          entry_context?: string | null
           found_rainbow?: boolean | null
           hints_used?: boolean | null
           id?: string
+          is_official?: boolean
+          last_activity_at?: string | null
           mistakes?: number
           puzzle_id?: string
           rainbow_solve_index?: number | null
           share_grid?: string | null
           solve_order?: Json | null
+          started_at?: string | null
+          status?: string
           user_id?: string | null
           won?: boolean
         }
@@ -120,38 +135,94 @@ export type Database = {
       }
       guess_events: {
         Row: {
+          active_time_seconds: number | null
           correct: boolean
           game_session_id: string
           group_name: string | null
           guess_number: number
           guessed_at: string | null
+          groups_solved: number | null
           id: string
+          is_almost_rainbow: boolean | null
+          is_one_away: boolean | null
           is_rainbow_attempt: boolean | null
           words: Json
         }
         Insert: {
+          active_time_seconds?: number | null
           correct: boolean
           game_session_id: string
           group_name?: string | null
           guess_number: number
           guessed_at?: string | null
+          groups_solved?: number | null
           id?: string
+          is_almost_rainbow?: boolean | null
+          is_one_away?: boolean | null
           is_rainbow_attempt?: boolean | null
           words: Json
         }
         Update: {
+          active_time_seconds?: number | null
           correct?: boolean
           game_session_id?: string
           group_name?: string | null
           guess_number?: number
           guessed_at?: string | null
+          groups_solved?: number | null
           id?: string
+          is_almost_rainbow?: boolean | null
+          is_one_away?: boolean | null
           is_rainbow_attempt?: boolean | null
           words?: Json
         }
         Relationships: [
           {
             foreignKeyName: "guess_events_game_session_id_fkey"
+            columns: ["game_session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hint_events: {
+        Row: {
+          active_time_seconds: number | null
+          game_session_id: string
+          groups_solved: number | null
+          guess_count: number | null
+          hint_type: string
+          id: string
+          mistakes: number | null
+          rainbow_found: boolean | null
+          revealed_at: string
+        }
+        Insert: {
+          active_time_seconds?: number | null
+          game_session_id: string
+          groups_solved?: number | null
+          guess_count?: number | null
+          hint_type: string
+          id?: string
+          mistakes?: number | null
+          rainbow_found?: boolean | null
+          revealed_at?: string
+        }
+        Update: {
+          active_time_seconds?: number | null
+          game_session_id?: string
+          groups_solved?: number | null
+          guess_count?: number | null
+          hint_type?: string
+          id?: string
+          mistakes?: number | null
+          rainbow_found?: boolean | null
+          revealed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hint_events_game_session_id_fkey"
             columns: ["game_session_id"]
             isOneToOne: false
             referencedRelation: "game_sessions"
