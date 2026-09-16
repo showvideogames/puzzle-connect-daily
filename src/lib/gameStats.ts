@@ -314,8 +314,20 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     let inOrderCount = 0;
     let reverseRainbowCount = 0;
     let totalMistakes = 0;
+    // Denominator for Average Mistakes — counts only rows that actually
+    // contributed to totalMistakes below, NOT rows.length. A row with a
+    // null/undefined/non-integer/out-of-range mistakes value means
+    // "unknown," not "zero mistakes," so it must be excluded from both the
+    // numerator and this denominator rather than silently averaged in as a
+    // 0 (the previous `?? 0` behavior did exactly that, understating the
+    // average). This has no effect on Played — gamesPlayed below still
+    // counts every row in `rows` regardless of its mistakes value.
+    let mistakesKnownCount = 0;
     for (const r of rows) {
-      totalMistakes += r.mistakes ?? 0;
+      if (Number.isInteger(r.mistakes) && (r.mistakes as number) >= 0 && (r.mistakes as number) <= 4) {
+        totalMistakes += r.mistakes as number;
+        mistakesKnownCount++;
+      }
       const isRainbowEligible = !!r.puzzle_id && rainbowPuzzleIds.has(r.puzzle_id);
 
       // Mistake Distribution: every completed official session (win OR
@@ -381,7 +393,7 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
       noHintsUsedCount,
       inOrderCount,
       reverseRainbowCount,
-      averageMistakes: rows.length > 0 ? totalMistakes / rows.length : 0,
+      averageMistakes: mistakesKnownCount > 0 ? totalMistakes / mistakesKnownCount : 0,
     };
   } catch (err) {
     console.error("loadStatsFromSupabase error:", err);
