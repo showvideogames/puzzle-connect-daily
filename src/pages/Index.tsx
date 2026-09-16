@@ -237,7 +237,7 @@ export default function Index() {
         onSignOut={handleSignOut}
         variant="minimal"
       />
-      <div className="w-full max-w-[840px] border-b border-divider mb-6" />
+      <div className="w-full max-w-[840px] border-b border-divider mb-2" />
 
       {/* Silly goose toast — shown when hint tapped after puzzle complete */}
       {showSillyGoose && (

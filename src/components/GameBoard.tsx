@@ -881,17 +881,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       ) : (
     <div className={`w-full mx-auto animate-fade-up ${isDailyHomepage ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
-      {/* Instruction + puzzle-mode badge share one row: instruction on the
-          left (shrinks/truncates first — min-w-0 is required for that on a
-          flex item), badge fixed-size on the right (shrink-0), so on tight
-          widths the badge always stays fully readable and only the
-          instruction ever gives up space. */}
-      <div className="flex items-center justify-between gap-2 sm:gap-3 mb-4">
-        <p className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] sm:text-[13px] font-medium tracking-wide text-muted-foreground">
-          Select four words that share a connection!
-        </p>
+      {/* Puzzle-mode badge on its own right-aligned row, then the centered
+          instruction directly beneath — stacked (not sharing one row) so
+          both read clearly against the reference layout, with minimal
+          margin between each so this whole block stays compact above the
+          board. */}
+      <div className="flex justify-end mb-1">
         <PuzzleModeBadge isRainbow={!!puzzle.rainbowHerring} />
       </div>
+      <p className="text-center text-[11px] sm:text-[13px] font-medium tracking-wide text-muted-foreground mb-2">
+        Select four words that share a connection!
+      </p>
 
       {/* Solved groups — rainbow is interleaved at the position it was actually
           found (boardSlots), not always pinned to the top */}
