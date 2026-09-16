@@ -3,6 +3,7 @@ import { GameStats } from "./types";
 import type { EntryContext } from "./entryContext";
 import {
   backfillGuessEvents,
+  createGameSession,
   getIdentity,
   isMissingSchemaError,
   type GuessEventInput,
@@ -31,6 +32,24 @@ export function getDeviceId(): string {
  * on these values — that assumption is false everywhere it is left implicit.
  */
 export const COMPLETED_STATUSES = ["won", "lost"] as const;
+
+/**
+ * One row as returned by the get_own_completed_sessions RPC: the caller's own
+ * completed official sessions, already filtered server-side for both
+ * completion and ownership.
+ */
+export interface OwnCompletedSession {
+  puzzle_id: string;
+  won: boolean | null;
+  mistakes: number | null;
+  found_rainbow: boolean | null;
+  solve_order: unknown;
+  hints_used: boolean | null;
+  rainbow_solve_index: number | null;
+  rainbow_source: string | null;
+  bonus_rainbow_attempted: boolean | null;
+  status: string;
+}
 
 /**
  * Records ONE explicit post-completion "Spot the Rainbow" submission —
@@ -145,36 +164,45 @@ export async function recordBonusRainbowAttempt(params: {
  */
 export async function hasOfficialResult(puzzleId: string): Promise<boolean> {
   try {
-    const { userId, deviceId } = await getIdentity();
+    const { deviceId } = await getIdentity();
 
-    const build = (withLifecycle: boolean) => {
-      let q = supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId);
-      if (withLifecycle) {
-        q = q
-          .in("status", COMPLETED_STATUSES as unknown as string[])
-          .eq("is_official", true);
-      }
-      return userId
-        ? q.or(`user_id.eq.${userId},device_id.eq.${deviceId}`)
-        : q.eq("device_id", deviceId);
-    };
-
-    const { data, error } = await build(true).limit(1).maybeSingle();
+    // Answered by an RPC rather than a table read. game_sessions is no longer
+    // directly readable by anonymous clients (see section 6 of the
+    // migration), and this function returns a bare boolean — it cannot be
+    // used to page through the table or to discover a device_id the caller
+    // does not already hold. The signed-in half of ownership is resolved
+    // inside the function from auth.uid(), so it is not something the client
+    // can assert.
+    const { data, error } = await supabase.rpc("has_official_result", {
+      _puzzle_id: puzzleId,
+      _device_id: deviceId,
+    });
 
     // Deploy-order insurance. This code REQUIRES the durable-session
-    // migration, but if it ever runs against a database that has not had it
-    // applied, the lifecycle columns are missing and this query fails with
-    // 42703. Silently returning false there would be the dangerous direction:
-    // every completion would look like a first attempt, so replays would
-    // duplicate Played and re-run the streak. Falling back to the
-    // pre-migration semantics — where any row DID mean an official completed
-    // result — preserves the old, correct behavior instead.
+    // migration; if it ever runs against a database that has not had it
+    // applied, the function does not exist. Silently returning false there
+    // would be the dangerous direction: every completion would look like a
+    // first attempt, so replays would duplicate Played and re-run the streak.
+    // Falling back to the pre-migration semantics — where any session row DID
+    // mean an official completed result — preserves the old, correct
+    // behavior instead.
     if (isMissingSchemaError(error)) {
-      const legacy = await build(false).limit(1).maybeSingle();
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id ?? null;
+      const legacy = userId
+        ? await supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId)
+            .or(`user_id.eq.${userId},device_id.eq.${deviceId}`).limit(1).maybeSingle()
+        : await supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId)
+            .eq("device_id", deviceId).limit(1).maybeSingle();
       return !!legacy.data;
     }
 
-    return !!data;
+    if (error) {
+      console.error("hasOfficialResult failed:", error);
+      return false;
+    }
+
+    return data === true;
   } catch {
     // Network failure. Returning false preserves the existing behavior: a
     // real result is still saved rather than dropped because a check could
@@ -294,28 +322,33 @@ export async function finalizeGameSession(params: FinalizeGameSessionParams): Pr
         return;
       }
     } else {
-      // No durable session: a legacy in-flight game, or one whose session
-      // creation failed. Insert the completed row directly — the
-      // pre-durable-session behavior, unchanged. started_at is explicitly
-      // null because this game's real start time was never captured, and a
-      // fabricated one would be worse than an admitted gap.
-      const { data, error } = await supabase
-        .from("game_sessions")
-        .insert({
-          puzzle_id: puzzleId,
-          user_id: userId,
-          device_id: deviceId,
-          entry_context: entryContext,
-          started_at: null,
-          ...summary,
-        })
-        .select("id")
-        .single();
-      if (error || !data) {
-        console.error("Failed to save game session:", error);
+      // No durable session: a legacy in-flight game, or one whose creation
+      // failed. Create one now and then finalize it through the same path
+      // above, rather than inserting a completed row directly.
+      //
+      // Two writes instead of one on this rare fallback, in exchange for a
+      // single completion code path and no second insert site — and it is now
+      // the only way this can work at all, since a direct insert could not
+      // return its own id to an anonymous client once table SELECT is removed.
+      const created = await createGameSession({
+        puzzleId,
+        entryContext,
+        snapshot: { activeTimeSeconds, groupsSolved: solveOrder.length, mistakes },
+      });
+      if (!created) {
+        console.error("Failed to create a session to finalize");
         return;
       }
-      sessionId = data.id;
+      const { error } = await supabase
+        .from("game_sessions")
+        .update(summary)
+        .eq("id", created)
+        .eq("status", "in_progress");
+      if (error) {
+        console.error("Failed to finalize fallback game session:", error);
+        return;
+      }
+      sessionId = created;
     }
 
     // Idempotent: guesses already written live are left untouched, and only
@@ -396,18 +429,16 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     //
     // (Current Streak / Max Streak come from user_streaks above, which is
     // only ever written at official completion — see finalizeGameSession.)
-    const SESSION_FIELDS = "puzzle_id, won, mistakes, found_rainbow, solve_order, hints_used, rainbow_solve_index";
-    const baseSessions = supabase
-      .from("game_sessions")
-      .select(SESSION_FIELDS)
-      .in("status", COMPLETED_STATUSES as unknown as string[])
-      .eq("is_official", true);
-    const sessionsQuery = userId
-      ? baseSessions.or(`user_id.eq.${userId},device_id.eq.${deviceId}`)
-      : baseSessions.eq("device_id", deviceId);
-    const { data: sessions } = await sessionsQuery;
+    // Fetched through the get_own_completed_sessions RPC rather than a table
+    // query. game_sessions is no longer directly readable by anonymous
+    // clients (migration section 6), and the function applies BOTH the
+    // completed-official filter and the ownership predicate server-side, so
+    // there is no query shape a caller could vary to widen the result set.
+    const { data: sessions } = await supabase.rpc("get_own_completed_sessions", {
+      _device_id: deviceId,
+    });
 
-    const rows = sessions ?? [];
+    const rows = (sessions ?? []) as unknown as OwnCompletedSession[];
 
     // Separate query: which of these puzzles actually had a rainbow herring?
     const puzzleIds = Array.from(new Set(rows.map((r) => r.puzzle_id).filter(Boolean)));

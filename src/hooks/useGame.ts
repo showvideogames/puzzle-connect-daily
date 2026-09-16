@@ -835,6 +835,19 @@ export function useGame(
       isOneAway: isOneAway && !isAlmostRainbow,
       isAlmostRainbow,
       snapshot: eventSnapshot(),
+    }, {
+      // The session's LIVE counters, as they stand once this guess resolves —
+      // distinct from the event snapshot above, which records the state the
+      // guess was made against.
+      //
+      // game_sessions.mistakes is meant to be the player's current real
+      // mistake count at all times (0 on a fresh session, 2 after two wrong
+      // guesses, 4 at a formal loss), not a placeholder that only becomes true
+      // at completion. That is what lets an abandoned session say how badly it
+      // was going when the player walked away. Reusing the pre-guess snapshot
+      // here left it trailing the real count by one after every miss.
+      activeTimeSeconds: activeSecondsRef.current,
+      mistakes: isCorrect || isRainbowHerring ? state.mistakes : state.mistakes + 1,
     });
 
     // ── Shared "checking guess" suspense ──

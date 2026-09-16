@@ -11,7 +11,7 @@ import { SEO } from "@/components/SEO";
 import { ChevronLeft, ChevronRight, Grid2x2 } from "lucide-react";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { playGiftOpenSound } from "@/lib/sounds";
-import { getDeviceId, COMPLETED_STATUSES } from "@/lib/gameStats";
+import { getDeviceId } from "@/lib/gameStats";
 import { hasInProgressGame } from "@/hooks/useGame";
 import confetti from "canvas-confetti";
 import type { User } from "@supabase/supabase-js";
@@ -436,21 +436,22 @@ export default function Archive() {
       setPuzzles((archiveData as ArchivePuzzle[]) || []);
 
       const deviceId = getDeviceId();
-      // COMPLETED sessions only. Since sessions are now created on the first
-      // meaningful gameplay action, an unfiltered query would return
-      // still-in-progress rows whose `won` is a placeholder false — turning
-      // every half-played archive puzzle into a red "failed" calendar cell.
-      // A genuinely unfinished game is still shown as "in-progress", but from
-      // the local progress blob (hasInProgressGame below), which is what has
-      // always answered that question.
-      const baseSessions = supabase
-        .from("game_sessions")
-        .select("puzzle_id, won, found_rainbow")
-        .in("status", COMPLETED_STATUSES as unknown as string[]);
-      const sessionsQuery = user
-        ? baseSessions.or(`user_id.eq.${user.id},device_id.eq.${deviceId}`)
-        : baseSessions.eq("device_id", deviceId);
-      const { data: sessionRows } = await sessionsQuery;
+      // The player's own COMPLETED sessions, via the same RPC My Stats uses.
+      //
+      // Completed-only matters here: sessions are now created on the first
+      // meaningful gameplay action, so a raw table read would return
+      // still-in-progress rows and paint every half-played archive puzzle as
+      // a red "failed" calendar cell. A genuinely unfinished game is still
+      // shown as "in-progress", but from the local progress blob
+      // (hasInProgressGame below), which is what has always answered that.
+      //
+      // Read through the function rather than the table because game_sessions
+      // is no longer directly readable by anonymous clients, and because the
+      // completed/official/ownership filtering then lives in one place that
+      // every caller shares instead of being restated per query.
+      const { data: sessionRows } = await supabase.rpc("get_own_completed_sessions", {
+        _device_id: deviceId,
+      });
 
       const summaries = new Map<string, SessionSummary>();
       for (const row of (sessionRows ?? []) as { puzzle_id: string; won: boolean; found_rainbow: boolean | null }[]) {

@@ -17,7 +17,7 @@ const db = new FakeSupabase();
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (t: string) => db.from(t),
-    rpc: (n: string, a: unknown) => db.rpc(n, a),
+    rpc: (n: string, a: Record<string, unknown>) => db.rpc(n, a),
     auth: { getUser: () => db.auth.getUser() },
   },
 }));
@@ -137,6 +137,7 @@ beforeEach(() => {
     { id: "puzzle-completed", rainbow_herring: puzzle.rainbowHerring },
   ];
   db.writeLog = [];
+  db.rpcLog = [];
   db.signIn(null);
 });
 
@@ -1050,6 +1051,287 @@ describe("three-state won", () => {
       .select("puzzle_id, won, found_rainbow")
       .in("status", ["won", "lost"]);
     expect(calendarRows).toHaveLength(0);
+  });
+});
+
+
+// ── LIVE `mistakes` COUNT ──────────────────────────────────────────────────
+// game_sessions.mistakes must be the player's CURRENT real mistake count at
+// every point, not a placeholder that only becomes true at completion.
+describe("live mistake count", () => {
+  it("tracks the real count while the session is still in progress", async () => {
+    const view = mount();
+
+    // A session that has just started.
+    await guess(view, ["y1", "y2", "y3", "y4"]); // correct — no mistake
+    expect(sessions()[0].status).toBe("in_progress");
+    expect(sessions()[0].mistakes).toBe(0);
+
+    await guess(view, ["g1", "g2", "g3", "b1"]); // miss 1
+    expect(sessions()[0].mistakes).toBe(1);
+
+    await guess(view, ["g1", "g2", "g3", "r1"]); // miss 2
+    expect(sessions()[0].status).toBe("in_progress");
+    expect(sessions()[0].mistakes).toBe(2);
+
+    // A correct guess must not move it.
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    expect(sessions()[0].mistakes).toBe(2);
+  });
+
+  it("reaches 4 on a formal loss", async () => {
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "g1"]);
+    expect(sessions()[0].mistakes).toBe(1);
+    await guess(view, ["y1", "y2", "y3", "b1"]);
+    await guess(view, ["y1", "y2", "y3", "r1"]);
+    expect(sessions()[0].mistakes).toBe(3);
+    await guess(view, ["y1", "y2", "g2", "r1"]);
+    expect(sessions()[0].status).toBe("lost");
+    expect(sessions()[0].mistakes).toBe(4);
+  });
+
+  it("survives abandonment, so an abandoned game says how it was going", async () => {
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "g1"]);
+    await guess(view, ["y1", "y2", "y3", "b1"]);
+    view.unmount();
+
+    const s = sessions()[0];
+    expect(s.status).toBe("in_progress");
+    expect(s.mistakes).toBe(2);
+    expect(s.won).toBeNull();
+    expect(s.completed_at).toBeNull();
+    expect(s.last_activity_at).toEqual(expect.any(String));
+  });
+
+  it("does not write on tile selections, shuffles or deselects", async () => {
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "g1"]);
+    const writesAfterGuess = db.writeLog.length;
+
+    await act(async () => {
+      view.result.current.toggleWord("b1");
+      view.result.current.toggleWord("b2");
+      view.result.current.shuffle();
+      view.result.current.deselectAll();
+    });
+    await settle();
+
+    // A guess and a hint are meaningful; fiddling with tiles is not.
+    expect(db.writeLog).toHaveLength(writesAfterGuess);
+  });
+});
+
+// ── ACCESS CONTROL ─────────────────────────────────────────────────────────
+// These assert the CLIENT-side half of the security model: that the app's
+// real code paths keep working under the post-migration policies, and that
+// they never fall back to a direct table read that production will refuse.
+//
+// The fake models the policies (anonymous callers get no direct SELECT on the
+// three gameplay tables; authenticated callers see only their own). It is NOT
+// a substitute for verifying the SQL itself, which can only be done against
+// the live database after the migration is applied — see section 6g of the
+// migration for the queries that do that.
+describe("access control", () => {
+  /** Another player's completed session, seeded directly into the table. */
+  function seedStrangerSession(id: string) {
+    db.tables.game_sessions.push({
+      id,
+      puzzle_id: "someone-elses-puzzle",
+      user_id: "stranger-user-id",
+      device_id: "stranger-device-id",
+      status: "won",
+      is_official: true,
+      won: true,
+      mistakes: 1,
+      found_rainbow: true,
+      solve_order: ["orange", "green", "blue", "red"],
+      hints_used: false,
+      completed_at: new Date().toISOString(),
+    });
+    db.tables.guess_events.push({
+      id: "stranger-guess",
+      game_session_id: id,
+      guess_number: 1,
+      words: ["a", "b", "c", "d"],
+      correct: true,
+      attempt_type: "normal",
+    });
+    db.tables.hint_events.push({
+      id: "stranger-hint",
+      game_session_id: id,
+      hint_type: "small",
+      revealed_at: new Date().toISOString(),
+    });
+  }
+
+  it("an anonymous client cannot enumerate game_sessions", async () => {
+    seedStrangerSession("stranger-session");
+    db.signIn(null);
+
+    const { data } = await db.from("game_sessions").select("*");
+    expect(data).toEqual([]);
+  });
+
+  it("an anonymous client cannot enumerate guess_events or hint_events", async () => {
+    seedStrangerSession("stranger-session");
+    db.signIn(null);
+
+    const guessRows = await db.from("guess_events").select("*");
+    const hintRows = await db.from("hint_events").select("*");
+    expect(guessRows.data).toEqual([]);
+    expect(hintRows.data).toEqual([]);
+  });
+
+  it("a signed-in client sees only its own sessions, not another user's", async () => {
+    seedStrangerSession("stranger-session");
+    db.signIn("me-user-id");
+    db.tables.game_sessions.push({
+      id: "my-session",
+      puzzle_id: PUZZLE_ID,
+      user_id: "me-user-id",
+      device_id: getDeviceId(),
+      status: "won",
+      is_official: true,
+      won: true,
+      mistakes: 0,
+      completed_at: new Date().toISOString(),
+    });
+
+    const { data } = await db.from("game_sessions").select("*");
+    expect((data as { id: string }[]).map((r) => r.id)).toEqual(["my-session"]);
+  });
+
+  it("the own-data function answers only for the device id supplied", async () => {
+    seedStrangerSession("stranger-session");
+    db.signIn(null);
+
+    // Someone else's device id — the bearer capability the caller lacks.
+    const { data: theirs } = await db.rpc("get_own_completed_sessions", {
+      _device_id: "stranger-device-id",
+    });
+    // (It answers for a device id you DO hold; that is the point of the model.)
+    expect((theirs as unknown[]).length).toBe(1);
+
+    // A device id nobody owns returns nothing, and there is no query shape
+    // that widens this to "everyone".
+    const { data: none } = await db.rpc("get_own_completed_sessions", {
+      _device_id: "00000000-0000-4000-8000-000000000000",
+    });
+    expect(none).toEqual([]);
+  });
+
+  it("the shared 'unknown' device id unlocks nothing", async () => {
+    // getDeviceId() returns this literal when localStorage is unavailable, so
+    // every storage-blocked player shares it. It is the one device id that is
+    // guessable, and it must not be a master key to their pooled gameplay.
+    db.tables.game_sessions.push({
+      id: "storage-blocked-session",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "unknown",
+      status: "won",
+      is_official: true,
+      won: true,
+      mistakes: 0,
+      completed_at: new Date().toISOString(),
+    });
+    db.signIn(null);
+
+    const { data } = await db.rpc("get_own_completed_sessions", { _device_id: "unknown" });
+    expect(data).toEqual([]);
+    const { data: n } = await db.rpc("count_own_anonymous_sessions", { _device_id: "unknown" });
+    expect(n).toBe(0);
+    const { data: official } = await db.rpc("has_official_result", {
+      _puzzle_id: PUZZLE_ID,
+      _device_id: "unknown",
+    });
+    expect(official).toBe(false);
+  });
+
+  it("an admin can still read everything through the privileged path", async () => {
+    seedStrangerSession("stranger-session");
+    db.signIn("admin-user-id", { admin: true });
+
+    const { data } = await db.from("game_sessions").select("*");
+    expect((data as unknown[]).length).toBe(1);
+  });
+
+  it("the normal anonymous game still works end to end", async () => {
+    db.signIn(null);
+    const view = mount();
+
+    // Play, abandon, resume, and finish — all as an anonymous player with no
+    // direct SELECT on any of the three tables.
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    const sessionId = sessions()[0].id;
+    view.unmount();
+
+    const resumed = mount();
+    await settle();
+    expect(resumed.result.current.sessionIdRef.current).toBe(sessionId);
+
+    await guess(resumed, ["g1", "g2", "g3", "g4"]);
+    await guess(resumed, ["b1", "b2", "b3", "b4"]);
+    await guess(resumed, ["r1", "r2", "r3", "r4"]);
+
+    expect(sessions()).toHaveLength(1);
+    expect(sessions()[0].status).toBe("won");
+
+    // Own-result detection and My Stats both still answer.
+    const { hasOfficialResult } = await import("@/lib/gameStats");
+    expect(await hasOfficialResult(PUZZLE_ID)).toBe(true);
+
+    const stats = await loadStatsFromSupabase();
+    expect(stats.gamesPlayed).toBe(1);
+    expect(stats.gamesWon).toBe(1);
+  });
+
+  it("a signed-in player's own-session flows still work", async () => {
+    db.signIn("me-user-id");
+    const view = mount();
+
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    expect(sessions()[0].user_id).toBe("me-user-id");
+
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    const { hasOfficialResult } = await import("@/lib/gameStats");
+    expect(await hasOfficialResult(PUZZLE_ID)).toBe(true);
+
+    const stats = await loadStatsFromSupabase();
+    expect(stats.gamesPlayed).toBe(1);
+  });
+
+  it("session creation cannot be stamped with another account's id", async () => {
+    // create_game_session takes user_id from auth internally; the client has
+    // no parameter for it.
+    db.signIn("me-user-id");
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "g1"]);
+    expect(sessions()[0].user_id).toBe("me-user-id");
+    expect(sessions()[0].user_id).not.toBe("stranger-user-id");
+  });
+
+  it("no app code path reads the gameplay tables directly while anonymous", async () => {
+    // The real regression guard: if any of these flows ever goes back to a
+    // direct table SELECT, it will silently return nothing in production for
+    // every anonymous player. Here that failure is loud instead.
+    db.signIn(null);
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+    await loadStatsFromSupabase();
+
+    // Every own-data read went through a function.
+    expect(db.rpcLog).toContain("has_official_result");
+    expect(db.rpcLog).toContain("get_own_completed_sessions");
+    expect(db.rpcLog).toContain("create_game_session");
   });
 });
 

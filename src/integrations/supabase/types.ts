@@ -492,6 +492,50 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      count_own_anonymous_sessions: {
+        Args: { _device_id: string }
+        Returns: number
+      }
+      create_game_session: {
+        Args: {
+          _active_time_seconds?: number
+          _device_id: string
+          _entry_context: string
+          _mistakes?: number
+          _puzzle_id: string
+        }
+        Returns: string
+      }
+      game_session_exists: { Args: { _id: string }; Returns: boolean }
+      get_own_completed_sessions: {
+        Args: { _device_id: string }
+        Returns: {
+          bonus_rainbow_attempted: boolean
+          found_rainbow: boolean
+          hints_used: boolean
+          mistakes: number
+          puzzle_id: string
+          rainbow_solve_index: number
+          rainbow_source: string
+          solve_order: Json
+          status: string
+          won: boolean
+        }[]
+      }
+      has_official_result: {
+        Args: { _device_id: string; _puzzle_id: string }
+        Returns: boolean
+      }
+      increment_puzzle_aggregate: {
+        Args: {
+          _first_solve: string
+          _mistakes: number
+          _puzzle_id: string
+          _time_seconds: number
+          _won: boolean
+        }
+        Returns: undefined
+      }
       get_archive_puzzles: {
         Args: never
         Returns: {

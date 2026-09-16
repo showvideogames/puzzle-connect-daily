@@ -101,40 +101,35 @@ export async function createGameSession(params: {
 }): Promise<string | null> {
   const { puzzleId, entryContext, snapshot } = params;
   try {
-    const { userId, deviceId } = await getIdentity();
-    const now = new Date().toISOString();
+    const { deviceId } = await getIdentity();
 
-    const { data, error } = await supabase
-      .from("game_sessions")
-      .insert({
-        puzzle_id: puzzleId,
-        user_id: userId,
-        device_id: deviceId,
-        status: "in_progress",
-        entry_context: entryContext,
-        started_at: now,
-        last_activity_at: now,
-        completed_at: null,
-        // NULL, not false: the outcome of an unfinished game is not yet
-        // knowable, and a placeholder `false` would read as "this player
-        // lost" to anything that failed to check `status` first. The
-        // three-state mapping (in_progress -> NULL, won -> TRUE, lost ->
-        // FALSE) is enforced by a CHECK constraint, so the two columns
-        // cannot drift apart.
-        won: null,
-        mistakes: snapshot.mistakes,
-        active_time_seconds: snapshot.activeTimeSeconds,
-        found_rainbow: false,
-        hints_used: false,
-      })
-      .select("id")
-      .single();
+    // Goes through the create_game_session RPC rather than a direct insert,
+    // for two reasons.
+    //
+    // Necessity: anonymous clients no longer have SELECT on game_sessions
+    // (see section 6 of the migration), and INSERT ... RETURNING is subject
+    // to the SELECT policy — so a direct insert would succeed but fail to
+    // hand back the id, leaving this session unable to attach any events.
+    //
+    // Hardening: the function stamps user_id from auth.uid() internally, so
+    // the client cannot claim someone else's account.
+    //
+    // The row it creates is strictly in_progress: won and completed_at are
+    // NULL because the outcome is not knowable yet, and this path has no way
+    // to complete a game.
+    const { data, error } = await supabase.rpc("create_game_session", {
+      _puzzle_id: puzzleId,
+      _device_id: deviceId,
+      _entry_context: entryContext,
+      _active_time_seconds: snapshot.activeTimeSeconds,
+      _mistakes: snapshot.mistakes,
+    });
 
     if (error || !data) {
       console.error("createGameSession failed:", error);
       return null;
     }
-    return data.id;
+    return data as unknown as string;
   } catch (err) {
     console.error("createGameSession error:", err);
     return null;
@@ -142,7 +137,28 @@ export async function createGameSession(params: {
 }
 
 /**
- * Touch a session's activity heartbeat and running active-time total.
+ * The live session counters, as they stand AFTER the action being recorded.
+ *
+ * Deliberately a separate type from EventSnapshot, which describes the state a
+ * guess was made AGAINST (i.e. before it resolved). Conflating the two is what
+ * previously left game_sessions.mistakes trailing the real count by one after
+ * every wrong guess.
+ */
+export interface SessionActivity {
+  /** Cumulative ACTIVE play seconds (background-tab time already excluded). */
+  activeTimeSeconds: number;
+  /**
+   * The player's CURRENT real mistake count, including the guess just
+   * recorded. 0 on a fresh session, 2 after two wrong guesses, 4 at a formal
+   * loss — truthful at every point, not a placeholder that only becomes real
+   * at completion. This is what makes an abandoned session say how badly it
+   * was going when the player walked away.
+   */
+  mistakes: number;
+}
+
+/**
+ * Touch a session's activity heartbeat and live counters.
  *
  * Called only at meaningful moments — session creation, a guess, a hint,
  * completion — never from timer ticks, tile selections, shuffles, hovers or
@@ -151,20 +167,21 @@ export async function createGameSession(params: {
  * pretending to know the exact moment a player gave up (which is also why
  * there is deliberately no beforeunload handler anywhere in this module).
  *
- * Carrying active_time_seconds along on the same write means an abandoned
- * session still reports roughly how long it was played, for free.
+ * Carrying active_time_seconds and the live mistake count on the same write
+ * means an abandoned session reports both how long it was played and how it
+ * was going, for free — no extra round trip.
  */
 export async function touchSession(
   sessionId: string,
-  snapshot: EventSnapshot
+  activity: SessionActivity
 ): Promise<void> {
   try {
     const { error } = await supabase
       .from("game_sessions")
       .update({
         last_activity_at: new Date().toISOString(),
-        active_time_seconds: snapshot.activeTimeSeconds,
-        mistakes: snapshot.mistakes,
+        active_time_seconds: activity.activeTimeSeconds,
+        mistakes: activity.mistakes,
       })
       .eq("id", sessionId)
       // Never resurrect or rewrite a finished game. Without this, a late

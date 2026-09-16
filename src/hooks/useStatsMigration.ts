@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getDeviceId, COMPLETED_STATUSES } from "@/lib/gameStats";
+import { getDeviceId } from "@/lib/gameStats";
 import type { User } from "@supabase/supabase-js";
 
 interface GuestStats {
@@ -79,15 +79,16 @@ export function useStatsMigration() {
       }
 
       // 3. Count guest game sessions on this device
-      // COMPLETED sessions only — this count is shown to the player as
-      // "games played" in the migration prompt, so an unfinished session
-      // must not inflate it.
-      const { count } = await supabase
-        .from("game_sessions")
-        .select("id", { count: "exact", head: true })
-        .in("status", COMPLETED_STATUSES as unknown as string[])
-        .eq("device_id", deviceId)
-        .is("user_id", null);
+      // COMPLETED, still-unclaimed sessions on this device. Shown to the
+      // player as "games played" in the migration prompt, so an unfinished
+      // session must not inflate it.
+      //
+      // Counted by an RPC: game_sessions is no longer directly readable by
+      // anonymous clients, and a count is all this prompt needs — the
+      // function returns a number and never a row.
+      const { data: count } = await supabase.rpc("count_own_anonymous_sessions", {
+        _device_id: deviceId,
+      });
 
       setMigrationData({
         streakRowId: guestRow.id,

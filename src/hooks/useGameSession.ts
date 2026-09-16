@@ -7,6 +7,7 @@ import {
   recordHintEvent,
   touchSession,
   type EventSnapshot,
+  type SessionActivity,
   type GuessEventInput,
   type HintEventInput,
 } from "@/lib/gameSession";
@@ -114,9 +115,13 @@ export function useGameSession(puzzleId: string, entryContext: EntryContext) {
    * and shuffles are UI, not gameplay decisions, and are never persisted.
    */
   const recordGuess = useCallback(
-    async (guess: GuessEventInput) => {
+    async (guess: GuessEventInput, activity: SessionActivity) => {
       const sessionId = await withSession(guess.snapshot, (id) => recordGuessEvent(id, guess));
-      if (sessionId) await touchSession(sessionId, guess.snapshot);
+      // `activity`, not `guess.snapshot`: the event records the state the
+      // guess was made AGAINST, while the session must carry the state that
+      // now holds. Passing the snapshot here left game_sessions.mistakes one
+      // behind the real count after every wrong guess.
+      if (sessionId) await touchSession(sessionId, activity);
     },
     [withSession]
   );
@@ -130,6 +135,8 @@ export function useGameSession(puzzleId: string, entryContext: EntryContext) {
   const recordHint = useCallback(
     async (hint: HintEventInput) => {
       const sessionId = await withSession(hint.snapshot, (id) => recordHintEvent(id, hint));
+      // A hint reveal changes neither the mistake count nor the solved count,
+      // so the state it was revealed against IS the state that now holds.
       if (sessionId) await touchSession(sessionId, hint.snapshot);
     },
     [withSession]

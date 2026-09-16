@@ -62,12 +62,12 @@
 --   'lost'        = formally completed as a loss (always mistakes = 4; the
 --                   game ends the instant the 4th mistake lands).
 --
--- `won` is intentionally NOT renamed or dropped -- it is NOT NULL, every
--- existing consumer reads it, and it stays the authoritative win flag for
--- completed rows. `status` adds the one thing `won` structurally cannot
--- express: "this game has not finished yet." For an in_progress row `won` is
--- simply not yet meaningful, which is exactly why every player-facing stat
--- now filters on `status` rather than assuming a row implies a played game.
+-- `won` is intentionally NOT renamed or dropped -- every existing consumer
+-- reads it, and it stays the authoritative outcome flag for completed rows.
+-- `status` adds the one thing a boolean structurally cannot express: "this
+-- game has not finished yet." `won` is made three-state below so it can say
+-- the same thing honestly (NULL while in progress) instead of carrying a
+-- placeholder, and the two are kept in lockstep by a CHECK constraint.
 --
 -- DEFAULT 'in_progress' is what makes the new create-early flow natural, but
 -- it would silently mislabel an insert from an OLD cached client bundle (one
@@ -138,6 +138,32 @@ alter table public.game_sessions
 
 comment on column public.game_sessions.won is
   'Three-state: NULL while in_progress (not yet knowable), TRUE when status=won, FALSE when status=lost. Enforced by game_sessions_status_won_check. Never read without filtering on status first.';
+
+
+-- ---------------------------------------------------------------------------
+-- completed_at loses its DEFAULT now().
+--
+-- That default predates sessions existing before completion, when every insert
+-- WAS a completed game and stamping "now" was correct. It is now actively
+-- misleading: the honest value for a session that has just started is NULL,
+-- and the only thing standing between the default and a board full of games
+-- marked finished the instant they began is every insert site remembering to
+-- pass an explicit null. That is not an invariant, it is a habit.
+--
+-- After this, the truthful shape falls out on its own:
+--   in-progress creation omits the column  -> NULL
+--   completion supplies the real timestamp -> that timestamp
+--
+-- DROP DEFAULT changes no existing row; all 256 historical completion
+-- timestamps are preserved exactly as they are. The biconditional CHECK added
+-- above still enforces both directions:
+--   in_progress  <-> completed_at IS NULL
+--   won / lost   <-> completed_at IS NOT NULL
+alter table public.game_sessions
+  alter column completed_at drop default;
+
+comment on column public.game_sessions.completed_at is
+  'When the game formally ended. NULL while in_progress, a real timestamp on won/lost -- both directions enforced by game_sessions_status_completed_at_check. No column default: completion code supplies the value explicitly.';
 
 
 -- Does this session own the permanent official result for its
@@ -310,21 +336,31 @@ comment on column public.game_sessions.last_activity_at is
 -- 1b. Stale-client safety net
 --
 -- After this ships, a browser may still be running a CACHED older bundle for
--- some time. That bundle inserts one fully-completed session and never sets
--- `status`, so it would land on DEFAULT 'in_progress' -- and a real, finished
--- game would silently vanish from the player's Stats.
+-- some time. That bundle inserts one fully-completed session in a single
+-- write: it sets `won` to a real boolean, and it knows nothing about `status`
+-- or about supplying `completed_at`.
 --
--- The distinguishing fact is completed_at: the new client explicitly inserts
--- completed_at = NULL for an in-progress session, while an old client's
--- insert takes the column's DEFAULT now(). "status says unfinished but a
--- completion timestamp exists" is therefore always a contradiction, and the
--- only thing that produces it is an old client. This trigger resolves that
--- contradiction from the row's own `won` value.
+-- Both of those are now hostile to it. `status` would land on DEFAULT
+-- 'in_progress', and with the DEFAULT now() dropped `completed_at` would land
+-- on NULL -- a combination the three-state CHECK rejects outright, so the
+-- insert would FAIL and the player would lose a real, finished game. That is a
+-- worse outcome than the one this trigger originally existed to prevent.
 --
--- It can never affect a correct row: a new in-progress insert has
--- completed_at NULL, and a completion UPDATE sets status to 'won'/'lost'
--- before this runs, so both fail the guard condition. It also runs BEFORE the
--- CHECK constraints above, so it repairs such a row rather than rejecting it.
+-- The reliable discriminator is `won`, not `completed_at`. The new client
+-- never sends a non-null `won` on an in-progress insert -- it cannot, because
+-- the outcome is not knowable yet -- so "status says unfinished but an outcome
+-- is already present" is a contradiction only an old client can produce. This
+-- resolves it from the row's own data and supplies the missing completion
+-- timestamp.
+--
+-- It can never affect a correct row:
+--   new in-progress insert  -> won IS NULL, so the guard fails;
+--   completion UPDATE       -> status is already won/lost, so the guard fails.
+-- And it runs BEFORE the CHECK constraints, so such a row is repaired rather
+-- than rejected.
+--
+-- coalesce() on the timestamp means an old client that DID send one keeps its
+-- own value; only a genuinely missing one falls back to now().
 -- ---------------------------------------------------------------------------
 create or replace function public.game_sessions_sync_status()
 returns trigger
@@ -332,14 +368,9 @@ language plpgsql
 set search_path = public
 as $$
 begin
-  -- `won is not null` matters now that won is three-state: an old client
-  -- always sends a real boolean alongside its completed_at, so requiring one
-  -- here keeps the repair to the case it was written for. A row with a
-  -- completion timestamp but no outcome is not something this can honestly
-  -- resolve, so it is left for the CHECK constraints to reject rather than
-  -- being guessed into 'lost'.
-  if new.status = 'in_progress' and new.completed_at is not null and new.won is not null then
+  if new.status = 'in_progress' and new.won is not null then
     new.status := case when new.won then 'won' else 'lost' end;
+    new.completed_at := coalesce(new.completed_at, now());
   end if;
   return new;
 end;
@@ -473,61 +504,11 @@ comment on table public.hint_events is
 
 alter table public.hint_events enable row level security;
 
--- RLS: deliberately mirrors the existing guess_events model rather than
--- inventing a new one for a sibling child-event table.
---
--- INSERT: anonymous play is a first-class mode of this game (no login
--- required), so the anonymous client must be able to write its own events.
--- Ownership is constrained through the parent session: a row may only be
--- inserted if it points at a game_sessions row the caller can actually see
--- under game_sessions' own RLS. There is no client-supplied user_id or
--- device_id on this table to forge -- the parent session is the only identity
--- link, which is why that link is what gets checked.
---
--- NOTE FOR THE LATER SECURITY PASS (not fixed here -- it is pre-existing and
--- out of scope for this task): game_sessions currently allows anonymous
--- SELECT of EVERY row, so "a session the caller can see" is today a weak
--- constraint on this table, exactly as it already is on guess_events. This
--- migration does not widen that hole, but it does inherit it. Tightening
--- game_sessions' SELECT policy is the fix, and it belongs in the dedicated
--- security audit alongside the other policies on that table.
-drop policy if exists "Anyone can insert hint events for a visible session" on public.hint_events;
-create policy "Anyone can insert hint events for a visible session"
-on public.hint_events
-for insert
-to public
-with check (
-  exists (select 1 from public.game_sessions gs where gs.id = game_session_id)
-);
-
--- SELECT: own rows only -- a signed-in player's own sessions, or the
--- anonymous rows belonging to sessions with no user_id. Nothing in the app
--- reads this table today; the policy exists so the table is not silently
--- world-readable the moment something does.
-drop policy if exists "Users can read own hint events" on public.hint_events;
-create policy "Users can read own hint events"
-on public.hint_events
-for select
-to public
-using (
-  exists (
-    select 1 from public.game_sessions gs
-     where gs.id = game_session_id
-       and (gs.user_id = auth.uid() or gs.user_id is null)
-  )
-);
-
--- Admins can read everything, matching every other gameplay table.
-drop policy if exists "Admins can read all hint events" on public.hint_events;
-create policy "Admins can read all hint events"
-on public.hint_events
-for select
-to authenticated
-using (public.has_role(auth.uid(), 'admin'));
-
--- No UPDATE and no DELETE policy is created, so neither is permitted for any
--- non-service role. A hint reveal is a historical fact; nothing should edit
--- or erase one.
+-- Policies for this table are defined in section 6f, alongside those for
+-- game_sessions and guess_events. They belong together: the correct policy
+-- here depends entirely on what the PARENT table exposes, and writing them
+-- apart is how the original version ended up inheriting a globally-readable
+-- parent and calling it ownership.
 
 
 -- ===========================================================================
@@ -606,3 +587,451 @@ create unique index if not exists game_sessions_one_official_per_user
 create unique index if not exists game_sessions_one_official_per_device
   on public.game_sessions (puzzle_id, device_id)
   where is_official and user_id is null and device_id is not null and device_id <> 'unknown';
+
+
+-- ===========================================================================
+-- 6. ACCESS CONTROL for the three gameplay tables
+--
+-- THE PROBLEM THIS FIXES
+--
+-- game_sessions currently allows anonymous SELECT of EVERY row: an
+-- unauthenticated caller with nothing but the public anon key can page
+-- through the whole table and enumerate every player's gameplay. That was
+-- already true before this work, but this work makes it materially worse by
+-- adding richer behavioural data (live mistake counts, activity timestamps,
+-- entry context, hint timing, per-guess history), so it is fixed here rather
+-- than deferred to the later security pass.
+--
+-- THE IDENTITY CONSTRAINT, STATED HONESTLY
+--
+-- An authenticated player has a trustworthy identity: auth.uid() comes from a
+-- signed JWT the client cannot forge, so ownership for signed-in rows is
+-- genuinely enforceable.
+--
+-- An ANONYMOUS player does not. device_id is a crypto.randomUUID() generated
+-- and stored by the browser, sent as ordinary request data. No RLS policy can
+-- verify that a caller "is" a given device_id, because there is nothing
+-- signed to check it against. A policy like USING (device_id = <client
+-- claim>) would therefore not be ownership enforcement at all -- it would let
+-- any caller read any device's rows simply by claiming that device_id, while
+-- looking secure.
+--
+-- So anonymous access is modelled for what it actually is: device_id is a
+-- BEARER CAPABILITY. Knowing the 122 bits of a v4 UUID is what grants access
+-- to that device's own rows, and it is not guessable or enumerable. The
+-- meaningful distinction this buys us is exactly the one that matters:
+--
+--   * you can read the rows whose device_id you already possess;
+--   * you CANNOT enumerate the table, so you cannot discover any device_id
+--     you do not already have.
+--
+-- That is implemented by removing direct table SELECT for anonymous callers
+-- entirely and routing the handful of lookups the app genuinely needs through
+-- narrowly scoped SECURITY DEFINER functions, each of which requires the
+-- caller to SUPPLY the device_id and returns only that device's rows. A
+-- function cannot be used to browse; it answers one question.
+--
+-- Not solved here, and not solvable with the current identity model: a
+-- player who loses their device_id loses access to their own anonymous
+-- history, and anyone who obtains a device_id can read that device's
+-- gameplay. Fixing that properly needs the real accounts/Player-ID work,
+-- which is deliberately out of scope.
+--
+-- NO NEW PII: none of this adds IP logging, fingerprinting, geolocation or
+-- any identifier beyond the device_id and auth user id that already existed.
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- 6a. Helper: does this session exist?
+--
+-- The child-event INSERT policies below need to check that the parent session
+-- is real. A plain EXISTS subquery inside a policy runs as the INVOKING user
+-- and is itself subject to RLS on game_sessions -- so once anonymous SELECT
+-- is removed, such a check would evaluate to false for every anonymous player
+-- and silently break all guess/hint writes. This SECURITY DEFINER helper
+-- answers the existence question without granting any read access: it returns
+-- a boolean and never a row.
+-- ---------------------------------------------------------------------------
+create or replace function public.game_session_exists(_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from public.game_sessions where id = _id)
+$$;
+
+revoke all on function public.game_session_exists(uuid) from public;
+grant execute on function public.game_session_exists(uuid) to anon, authenticated, service_role;
+
+
+-- ---------------------------------------------------------------------------
+-- 6b. Session creation
+--
+-- Creation moves behind a function for two reasons.
+--
+-- First, necessity: the client needs the new row's id back, and
+-- INSERT ... RETURNING is subject to the SELECT policy. With anonymous SELECT
+-- removed, a direct insert would succeed and then fail to return the id,
+-- leaving the client unable to attach any events to the session it just
+-- created.
+--
+-- Second, hardening: user_id is taken from auth.uid() INSIDE the function and
+-- the caller has no say in it, so a session cannot be stamped with someone
+-- else's account id.
+--
+-- The row is created strictly in_progress. won and completed_at are left NULL
+-- because the outcome is not knowable yet, and this function has no way to
+-- complete a game -- completion is an UPDATE, guarded separately.
+-- ---------------------------------------------------------------------------
+create or replace function public.create_game_session(
+  _puzzle_id text,
+  _device_id text,
+  _entry_context text,
+  _active_time_seconds integer default 0,
+  _mistakes integer default 0
+)
+returns uuid
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  _id uuid;
+begin
+  insert into public.game_sessions (
+    puzzle_id, user_id, device_id, entry_context,
+    status, won, completed_at, started_at, last_activity_at,
+    active_time_seconds, mistakes, found_rainbow, hints_used
+  ) values (
+    _puzzle_id, auth.uid(), _device_id, _entry_context,
+    'in_progress', null, null, now(), now(),
+    coalesce(_active_time_seconds, 0), coalesce(_mistakes, 0), false, false
+  )
+  returning id into _id;
+  return _id;
+end;
+$$;
+
+revoke all on function public.create_game_session(text, text, text, integer, integer) from public;
+grant execute on function public.create_game_session(text, text, text, integer, integer) to anon, authenticated, service_role;
+
+
+-- ---------------------------------------------------------------------------
+-- 6c. Own-data lookups
+--
+-- Each of these answers ONE question about the caller's own data. They are
+-- the complete set of reads the application performs against game_sessions;
+-- there is deliberately no general-purpose "fetch sessions" function, because
+-- that would just reintroduce table-wide access through a different door.
+--
+-- The shared ownership predicate is the same in all three:
+--     signed-in  -> user_id = auth.uid()          (trusted, from the JWT)
+--     anonymous  -> device_id = the supplied id   (bearer capability)
+--
+-- device_id = 'unknown' is excluded everywhere. getDeviceId() returns that
+-- literal when localStorage is unavailable (private browsing, some in-app
+-- browsers, storage blocked by policy), so EVERY such player shares it. Left
+-- in, it would be a single well-known key unlocking the pooled gameplay of
+-- every storage-blocked player at once -- the one device_id that IS guessable.
+-- Those players consequently cannot read their own history; they already
+-- could not resume across a reload, so this takes nothing further away.
+-- ---------------------------------------------------------------------------
+
+-- Has this puzzle already been completed officially by this player?
+-- Returns a bare boolean -- no ids, no row contents.
+create or replace function public.has_official_result(
+  _puzzle_id text,
+  _device_id text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+      from public.game_sessions
+     where puzzle_id = _puzzle_id
+       and status in ('won', 'lost')
+       and is_official
+       and (
+         (auth.uid() is not null and user_id = auth.uid())
+         or (_device_id is not null and _device_id <> 'unknown' and device_id = _device_id)
+       )
+  )
+$$;
+
+revoke all on function public.has_official_result(text, text) from public;
+grant execute on function public.has_official_result(text, text) to anon, authenticated, service_role;
+
+-- The caller's own COMPLETED OFFICIAL sessions. Serves both My Stats and the
+-- Archive calendar; the calendar simply uses a subset of the columns.
+-- Returns only completed official rows, so an in-progress session can never
+-- leak into a player-facing stat through this path either.
+create or replace function public.get_own_completed_sessions(_device_id text)
+returns table (
+  puzzle_id text,
+  won boolean,
+  mistakes integer,
+  found_rainbow boolean,
+  solve_order jsonb,
+  hints_used boolean,
+  rainbow_solve_index smallint,
+  rainbow_source text,
+  bonus_rainbow_attempted boolean,
+  status text
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select gs.puzzle_id, gs.won, gs.mistakes, gs.found_rainbow, gs.solve_order,
+         gs.hints_used, gs.rainbow_solve_index, gs.rainbow_source,
+         gs.bonus_rainbow_attempted, gs.status
+    from public.game_sessions gs
+   where gs.status in ('won', 'lost')
+     and gs.is_official
+     and (
+       (auth.uid() is not null and gs.user_id = auth.uid())
+       or (_device_id is not null and _device_id <> 'unknown' and gs.device_id = _device_id)
+     )
+$$;
+
+revoke all on function public.get_own_completed_sessions(text) from public;
+grant execute on function public.get_own_completed_sessions(text) to anon, authenticated, service_role;
+
+-- How many completed sessions on this device are still unclaimed by any
+-- account? Drives the "import your guest stats?" prompt, which needs a count
+-- and nothing else.
+create or replace function public.count_own_anonymous_sessions(_device_id text)
+returns integer
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select count(*)::integer
+    from public.game_sessions
+   where user_id is null
+     and status in ('won', 'lost')
+     and _device_id is not null
+     and _device_id <> 'unknown'
+     and device_id = _device_id
+$$;
+
+revoke all on function public.count_own_anonymous_sessions(text) from public;
+grant execute on function public.count_own_anonymous_sessions(text) to anon, authenticated, service_role;
+
+
+-- ---------------------------------------------------------------------------
+-- 6d. game_sessions policies
+--
+-- Every existing policy is dropped first, by iterating pg_policies rather than
+-- naming them. These tables were created outside this repository, so the
+-- migration history here does not describe the live policy set and a
+-- DROP POLICY IF EXISTS by guessed name could silently leave a permissive
+-- policy in place -- policies are OR-ed, so one missed permissive SELECT would
+-- undo this entire section. Iterating guarantees a known-good starting state.
+-- ---------------------------------------------------------------------------
+do $$
+declare p record;
+begin
+  for p in
+    select policyname from pg_policies
+     where schemaname = 'public' and tablename = 'game_sessions'
+  loop
+    execute format('drop policy %I on public.game_sessions', p.policyname);
+  end loop;
+end
+$$;
+
+alter table public.game_sessions enable row level security;
+
+-- SELECT: signed-in players see their OWN sessions and nothing else.
+-- Anonymous callers get no direct SELECT at all; their reads go through the
+-- functions in 6c. This is what ends table-wide enumeration.
+create policy "Users can read own game sessions"
+on public.game_sessions
+for select
+to authenticated
+using (user_id = auth.uid());
+
+create policy "Admins can read all game sessions"
+on public.game_sessions
+for select
+to authenticated
+using (public.has_role(auth.uid(), 'admin'));
+
+-- INSERT: kept for stale cached client bundles, which still insert a
+-- completed session directly (see the trigger in 1b). The new client creates
+-- sessions through create_game_session() instead. Unchanged in substance from
+-- the previously tightened policy: a row may be stamped with the caller's own
+-- account id, or left anonymous -- never with someone else's id.
+create policy "Users can insert own or anonymous game sessions"
+on public.game_sessions
+for insert
+to public
+with check (user_id = auth.uid() or user_id is null);
+
+-- UPDATE: completion, activity heartbeats, the bonus Rainbow result, and the
+-- guest-stats claim. A signed-in player may update their own rows; anonymous
+-- rows remain updatable by anonymous callers, because an anonymous player has
+-- no verifiable identity to check against and their own game must still be
+-- able to finish.
+--
+-- LIMITATION, STATED PLAINLY AND NOT PAPERED OVER: this does not stop a
+-- determined anonymous caller from issuing an unfiltered UPDATE against
+-- anonymous rows. RLS can restrict WHICH rows a policy exposes, but it cannot
+-- require that a caller name a specific row, and there is no trustworthy
+-- anonymous identity to scope by. Reads were the stated priority here and are
+-- now closed; anonymous write scoping needs either authenticated-only writes
+-- or a signed session token, which is a product decision, not a policy tweak.
+-- Flagged for the dedicated security pass.
+--
+-- WITH CHECK blocks the one escalation that IS expressible: reassigning a row
+-- to another account.
+create policy "Players can update own or anonymous game sessions"
+on public.game_sessions
+for update
+to public
+using (user_id = auth.uid() or user_id is null)
+with check (user_id = auth.uid() or user_id is null);
+
+-- No DELETE policy: gameplay history is not client-erasable.
+
+
+-- ---------------------------------------------------------------------------
+-- 6e. guess_events policies
+--
+-- Same treatment, and the same starting-state guarantee.
+--
+-- Nothing in the application reads this table, so no read access is granted
+-- to players at all beyond a signed-in player's own rows. In particular there
+-- is no "parent session is anonymous, so anyone may read it" clause: that
+-- would make every anonymous player's guess history world-readable, which is
+-- precisely the shape of the problem being fixed.
+-- ---------------------------------------------------------------------------
+do $$
+declare p record;
+begin
+  for p in
+    select policyname from pg_policies
+     where schemaname = 'public' and tablename = 'guess_events'
+  loop
+    execute format('drop policy %I on public.guess_events', p.policyname);
+  end loop;
+end
+$$;
+
+alter table public.guess_events enable row level security;
+
+create policy "Users can read own guess events"
+on public.guess_events
+for select
+to authenticated
+using (
+  exists (
+    select 1 from public.game_sessions gs
+     where gs.id = game_session_id
+       and gs.user_id = auth.uid()
+  )
+);
+
+create policy "Admins can read all guess events"
+on public.guess_events
+for select
+to authenticated
+using (public.has_role(auth.uid(), 'admin'));
+
+-- INSERT: anonymous play is first-class, so anonymous clients must be able to
+-- write their own events. The only constraint expressible here is that the
+-- parent session is real -- checked through the SECURITY DEFINER helper,
+-- because a direct subquery would be blocked by game_sessions' own SELECT
+-- policy for exactly the callers that need to write.
+create policy "Anyone can insert guess events for a real session"
+on public.guess_events
+for insert
+to public
+with check (public.game_session_exists(game_session_id));
+
+-- No UPDATE and no DELETE: a submitted guess is a historical fact.
+
+
+-- ---------------------------------------------------------------------------
+-- 6f. hint_events policies
+--
+-- Re-stated here rather than relying on what section 3 created, because those
+-- policies were written against a globally-readable game_sessions and inherit
+-- its weakness: "the parent session is visible to me" was a near-empty
+-- constraint, and the SELECT policy's `or gs.user_id is null` clause made
+-- every anonymous player's hint timing readable by anyone. Both are replaced.
+-- ---------------------------------------------------------------------------
+do $$
+declare p record;
+begin
+  for p in
+    select policyname from pg_policies
+     where schemaname = 'public' and tablename = 'hint_events'
+  loop
+    execute format('drop policy %I on public.hint_events', p.policyname);
+  end loop;
+end
+$$;
+
+alter table public.hint_events enable row level security;
+
+create policy "Users can read own hint events"
+on public.hint_events
+for select
+to authenticated
+using (
+  exists (
+    select 1 from public.game_sessions gs
+     where gs.id = game_session_id
+       and gs.user_id = auth.uid()
+  )
+);
+
+create policy "Admins can read all hint events"
+on public.hint_events
+for select
+to authenticated
+using (public.has_role(auth.uid(), 'admin'));
+
+create policy "Anyone can insert hint events for a real session"
+on public.hint_events
+for insert
+to public
+with check (public.game_session_exists(game_session_id));
+
+-- No UPDATE and no DELETE: a hint reveal is a historical fact.
+
+
+-- ---------------------------------------------------------------------------
+-- 6g. Post-apply verification
+--
+-- Run these against the live project AFTER applying, as the anon role, to
+-- confirm the enumeration hole is actually closed. Each must return zero rows
+-- (or an error), NOT a page of other players' gameplay:
+--
+--   set role anon;
+--   select count(*) from public.game_sessions;   -- expect 0
+--   select count(*) from public.guess_events;    -- expect 0
+--   select count(*) from public.hint_events;     -- expect 0
+--   reset role;
+--
+-- And confirm the legitimate anonymous paths still answer:
+--
+--   set role anon;
+--   select public.has_official_result('<a real puzzle id>', '<a real device id>');
+--   select count(*) from public.get_own_completed_sessions('<a real device id>');
+--   select public.count_own_anonymous_sessions('<a real device id>');
+--   -- and that a device id you do NOT own returns nothing:
+--   select count(*) from public.get_own_completed_sessions(gen_random_uuid()::text);
+--   reset role;
+-- ---------------------------------------------------------------------------

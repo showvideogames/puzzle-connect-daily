@@ -72,13 +72,135 @@ export class FakeSupabase {
     getUser: async () => ({ data: { user: this.authUser } }),
   };
 
-  signIn(userId: string | null) {
+  /**
+   * Tables whose direct SELECT is restricted by the durable-session
+   * migration's RLS policies.
+   *
+   * Modelled so the tests can prove the CLIENT never depends on reads that
+   * production will refuse. This is a model of the policies, not the policies
+   * themselves — the SQL is verified separately, after it is applied.
+   */
+  private static readonly RLS_READ_PROTECTED = ["game_sessions", "guess_events", "hint_events"];
+
+  /** True when the caller is an admin, which unlocks the admin SELECT policies. */
+  isAdmin = false;
+
+  signIn(userId: string | null, opts?: { admin?: boolean }) {
     this.authUser = userId ? { id: userId } : null;
+    this.isAdmin = !!opts?.admin;
   }
 
-  rpc = async (name: string, _args: unknown) => {
-    this.writeLog.push({ table: `rpc:${name}`, op: "rpc" });
-    return { data: null, error: null };
+  /**
+   * Applies the modelled SELECT policies to a direct table read.
+   *
+   * anon           -> no rows at all (no anonymous SELECT policy exists)
+   * authenticated  -> only rows whose owning session is the caller's own
+   * admin          -> everything
+   */
+  _visibleForRead(table: string, rows: FakeRow[]): FakeRow[] {
+    if (!FakeSupabase.RLS_READ_PROTECTED.includes(table)) return rows;
+    if (this.isAdmin) return rows;
+    const uid = this.authUser?.id;
+    if (!uid) return [];
+    if (table === "game_sessions") return rows.filter((r) => r.user_id === uid);
+    const ownSessionIds = new Set(
+      this.tables.game_sessions.filter((s) => s.user_id === uid).map((s) => s.id)
+    );
+    return rows.filter((r) => ownSessionIds.has(r.game_session_id));
+  }
+
+  /**
+   * The SECURITY DEFINER functions from migration section 6.
+   *
+   * They bypass RLS by design, which is the whole point: each answers one
+   * narrow question about the caller's own data, requiring the caller to
+   * SUPPLY the device_id, and none of them can be used to browse the table.
+   * The ownership predicate and the device_id <> 'unknown' exclusion are
+   * mirrored exactly from the SQL.
+   */
+  /** Every RPC call, read-only ones included. */
+  rpcLog: string[] = [];
+
+  rpc = async (name: string, args: Record<string, unknown> = {}) => {
+    this.rpcLog.push(name);
+    // Only MUTATING functions count as writes. has_official_result and
+    // friends are reads that merely happen to be delivered as functions,
+    // and counting them here would make the write-volume assertions — and
+    // the "a page view writes nothing" guarantee — quietly wrong.
+    // create_game_session records itself as a game_sessions INSERT below,
+    // since writeLog describes WHICH TABLE was written rather than how the
+    // write was delivered.
+    if (name === "increment_puzzle_aggregate") {
+      this.writeLog.push({ table: `rpc:${name}`, op: "rpc" });
+    }
+    const uid = this.authUser?.id ?? null;
+    const deviceId = args._device_id as string | undefined;
+    const ownsRow = (r: FakeRow) =>
+      (uid !== null && r.user_id === uid) ||
+      (!!deviceId && deviceId !== "unknown" && r.device_id === deviceId);
+    const completed = (r: FakeRow) => r.status === "won" || r.status === "lost";
+
+    switch (name) {
+      case "create_game_session": {
+        const row = this._withDefaults("game_sessions", {
+          id: this._newId(),
+          puzzle_id: args._puzzle_id,
+          // user_id comes from auth inside the function; the caller has no say.
+          user_id: uid,
+          device_id: args._device_id,
+          entry_context: args._entry_context,
+          status: "in_progress",
+          won: null,
+          completed_at: null,
+          started_at: new Date().toISOString(),
+          last_activity_at: new Date().toISOString(),
+          active_time_seconds: (args._active_time_seconds as number) ?? 0,
+          mistakes: (args._mistakes as number) ?? 0,
+          found_rainbow: false,
+          hints_used: false,
+        });
+        this.tables.game_sessions.push(row);
+        this._log("game_sessions", "insert");
+        return { data: row.id as string, error: null };
+      }
+      case "has_official_result": {
+        const found = this.tables.game_sessions.some(
+          (r) =>
+            r.puzzle_id === args._puzzle_id && completed(r) && r.is_official === true && ownsRow(r)
+        );
+        return { data: found, error: null };
+      }
+      case "get_own_completed_sessions": {
+        const rows = this.tables.game_sessions
+          .filter((r) => completed(r) && r.is_official === true && ownsRow(r))
+          .map((r) => ({
+            puzzle_id: r.puzzle_id,
+            won: r.won,
+            mistakes: r.mistakes,
+            found_rainbow: r.found_rainbow,
+            solve_order: r.solve_order,
+            hints_used: r.hints_used,
+            rainbow_solve_index: r.rainbow_solve_index,
+            rainbow_source: r.rainbow_source ?? null,
+            bonus_rainbow_attempted: r.bonus_rainbow_attempted ?? false,
+            status: r.status,
+          }));
+        return { data: rows, error: null };
+      }
+      case "count_own_anonymous_sessions": {
+        const n = this.tables.game_sessions.filter(
+          (r) =>
+            r.user_id === null &&
+            completed(r) &&
+            !!deviceId &&
+            deviceId !== "unknown" &&
+            r.device_id === deviceId
+        ).length;
+        return { data: n, error: null };
+      }
+      default:
+        return { data: null, error: null };
+    }
   };
 
   private nextId() {
@@ -252,7 +374,10 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: unknown }> {
       return this.shape(targets);
     }
 
-    let out = rows.filter((r) => this.db._match(r, this.filters));
+    // Modelled SELECT policies apply before any client filter, exactly as
+    // RLS does: a policy restricts the visible set, the WHERE clause then
+    // narrows it further.
+    let out = this.db._visibleForRead(this.table, rows).filter((r) => this.db._match(r, this.filters));
     if (this.limitCount !== null) out = out.slice(0, this.limitCount);
     if (this.headCount) return { data: null, error: null, count: out.length };
     return this.shape(out);
