@@ -353,9 +353,26 @@ export class FakeSupabase {
       case "claim_anonymous_sessions": {
         if (uid === null) return { data: 0, error: null };
         if (!deviceId || deviceId === "unknown") return { data: 0, error: null };
+        // Mirrors the fixed SQL: every device-owned row's official/account
+        // check reads the table as it stood BEFORE this call (a single SQL
+        // UPDATE statement sees one pre-statement snapshot), so this loop
+        // must decide every row's fate from a snapshot taken up front rather
+        // than against `this.tables.game_sessions` as it mutates.
+        const preClaimRows = this.tables.game_sessions.map((r) => ({ ...r }));
+        const hasExistingAccountOfficial = (puzzleId: unknown) =>
+          preClaimRows.some(
+            (o) =>
+              o.puzzle_id === puzzleId &&
+              o.user_id === uid &&
+              completed(o) &&
+              o.is_official === true
+          );
         let claimed = 0;
         for (const r of this.tables.game_sessions) {
           if (r.user_id === null && r.device_id === deviceId) {
+            if (r.is_official === true && hasExistingAccountOfficial(r.puzzle_id)) {
+              r.is_official = false;
+            }
             r.user_id = uid;
             claimed++;
           }

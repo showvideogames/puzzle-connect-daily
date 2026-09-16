@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
-import { FakeSupabase } from "./fakeSupabase";
+import { FakeSupabase, type FakeRow } from "./fakeSupabase";
 import type { Puzzle } from "@/lib/types";
 
 const db = new FakeSupabase();
@@ -1786,6 +1786,361 @@ describe("anonymous write access", () => {
     const stats = await loadStatsFromSupabase();
     expect(stats.gamesPlayed).toBe(1);
     expect(stats.gamesWon).toBe(1);
+  });
+});
+
+// ── claim_anonymous_sessions: official-result priority ─────────────────────
+//
+// The permanent product rule is "the first completed official result for an
+// identity is permanent." Signing in and importing anonymous history must
+// never let a later anonymous result override an account's existing official
+// result -- regardless of which one is objectively "better". These cases
+// mirror the fixed claim_anonymous_sessions SQL (see
+// supabase/migrations/20260916230000_claim_preserves_existing_official_result.sql);
+// the fake's own case at src/test/fakeSupabase.ts is the model under test.
+describe("claim_anonymous_sessions: official-result priority", () => {
+  const PUZZLE_2 = "puzzle-2";
+
+  function seedSession(overrides: FakeRow & { id: string }) {
+    db.tables.game_sessions.push({
+      status: "won",
+      won: true,
+      mistakes: 0,
+      completed_at: new Date().toISOString(),
+      found_rainbow: false,
+      hints_used: false,
+      ...overrides,
+    });
+  }
+
+  it("A. account has an official loss; anon has a perfect official win -> account loss stays official, anon win preserved but demoted", async () => {
+    seedSession({
+      id: "acct-loss",
+      puzzle_id: PUZZLE_ID,
+      user_id: "me",
+      device_id: null,
+      status: "lost",
+      won: false,
+      mistakes: 4,
+      is_official: true,
+    });
+    seedSession({
+      id: "guest-perfect-win",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "guest-device",
+      status: "won",
+      won: true,
+      mistakes: 0,
+      found_rainbow: true,
+      is_official: true,
+    });
+
+    db.signIn("me");
+    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
+    expect(data).toBe(1);
+
+    const acct = sessions().find((s) => s.id === "acct-loss")!;
+    const guest = sessions().find((s) => s.id === "guest-perfect-win")!;
+    expect(acct.is_official).toBe(true);
+    expect(acct.status).toBe("lost");
+    // The claimed row is preserved in full -- only is_official and user_id change.
+    expect(guest.user_id).toBe("me");
+    expect(guest.is_official).toBe(false);
+    expect(guest.status).toBe("won");
+    expect(guest.mistakes).toBe(0);
+    expect(guest.found_rainbow).toBe(true);
+  });
+
+  it("B. account has an official win; anon has an official loss -> account win stays official, anon loss preserved but demoted", async () => {
+    seedSession({
+      id: "acct-win",
+      puzzle_id: PUZZLE_ID,
+      user_id: "me",
+      device_id: null,
+      status: "won",
+      won: true,
+      mistakes: 0,
+      is_official: true,
+    });
+    seedSession({
+      id: "guest-loss",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "guest-device",
+      status: "lost",
+      won: false,
+      mistakes: 4,
+      is_official: true,
+    });
+
+    db.signIn("me");
+    await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
+
+    expect(sessions().find((s) => s.id === "acct-win")!.is_official).toBe(true);
+    const guest = sessions().find((s) => s.id === "guest-loss")!;
+    expect(guest.user_id).toBe("me");
+    expect(guest.is_official).toBe(false);
+    expect(guest.status).toBe("lost");
+  });
+
+  it("C. account has no result for the puzzle -> the claimed anonymous official result becomes the account's official result", async () => {
+    seedSession({
+      id: "guest-only",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "guest-device",
+      is_official: true,
+    });
+
+    db.signIn("me");
+    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
+    expect(data).toBe(1);
+
+    const row = sessions().find((s) => s.id === "guest-only")!;
+    expect(row.user_id).toBe("me");
+    expect(row.is_official).toBe(true);
+  });
+
+  it("D. account has no result; multiple completed anon sessions exist for the puzzle -> only the one already official is promoted, the rest stay non-official", async () => {
+    // Mirrors production: finalize_game_session/the legacy trigger already
+    // enforce at most one is_official=true row per (puzzle, device), so an
+    // earlier replay landed here as is_official=false. Claim must not
+    // re-derive "best" or "earliest" itself -- it only carries that decision
+    // forward.
+    seedSession({
+      id: "guest-first",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "guest-device",
+      status: "lost",
+      won: false,
+      mistakes: 4,
+      is_official: true,
+      completed_at: "2026-01-01T00:00:00Z",
+    });
+    seedSession({
+      id: "guest-replay",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "guest-device",
+      status: "won",
+      won: true,
+      mistakes: 0,
+      is_official: false,
+      completed_at: "2026-01-02T00:00:00Z",
+    });
+
+    db.signIn("me");
+    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
+    expect(data).toBe(2);
+
+    expect(sessions().find((s) => s.id === "guest-first")!.is_official).toBe(true);
+    expect(sessions().find((s) => s.id === "guest-replay")!.is_official).toBe(false);
+  });
+
+  it("E. account has a result; an in-progress anon session for a DIFFERENT puzzle is claimed -> account result unchanged, session stays in_progress and non-official", async () => {
+    seedSession({
+      id: "acct-result",
+      puzzle_id: PUZZLE_ID,
+      user_id: "me",
+      device_id: null,
+      is_official: true,
+    });
+    db.tables.game_sessions.push({
+      id: "guest-in-progress",
+      puzzle_id: PUZZLE_2,
+      user_id: null,
+      device_id: "guest-device",
+      status: "in_progress",
+      won: null,
+      completed_at: null,
+      is_official: false,
+      mistakes: 1,
+    });
+
+    db.signIn("me");
+    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
+    expect(data).toBe(1);
+
+    expect(sessions().find((s) => s.id === "acct-result")!.is_official).toBe(true);
+    const inProgress = sessions().find((s) => s.id === "guest-in-progress")!;
+    expect(inProgress.user_id).toBe("me");
+    expect(inProgress.status).toBe("in_progress");
+    expect(inProgress.is_official).toBe(false);
+
+    // Resuming still works: session_capability_ok now recognises the caller
+    // by account, not by the (still-present) device id.
+    expect(await db.rpc("session_capability_ok", { _session_id: "guest-in-progress", _device_id: "guest-device" })
+      .then((r) => r.data)).toBe(true);
+  });
+
+  it("F. no account result; anon session is in-progress only -> transfers and remains in_progress/non-official", async () => {
+    db.tables.game_sessions.push({
+      id: "guest-in-progress",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "guest-device",
+      status: "in_progress",
+      won: null,
+      completed_at: null,
+      is_official: false,
+      mistakes: 0,
+    });
+
+    db.signIn("me");
+    await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
+
+    const row = sessions().find((s) => s.id === "guest-in-progress")!;
+    expect(row.user_id).toBe("me");
+    expect(row.status).toBe("in_progress");
+    expect(row.is_official).toBe(false);
+  });
+
+  it("G. claiming the same device twice is idempotent", async () => {
+    seedSession({
+      id: "acct-loss",
+      puzzle_id: PUZZLE_ID,
+      user_id: "me",
+      device_id: null,
+      status: "lost",
+      won: false,
+      mistakes: 4,
+      is_official: true,
+    });
+    seedSession({
+      id: "guest-win",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "guest-device",
+      is_official: true,
+    });
+
+    db.signIn("me");
+    const first = await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
+    expect(first.data).toBe(1);
+    const guestAfterFirst = { ...sessions().find((s) => s.id === "guest-win")! };
+
+    const second = await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
+    expect(second.data).toBe(0);
+    expect(sessions().find((s) => s.id === "guest-win")).toEqual(guestAfterFirst);
+    expect(sessions().find((s) => s.id === "acct-loss")!.is_official).toBe(true);
+  });
+
+  it("H. the wrong device id claims nothing", async () => {
+    seedSession({ id: "guest-win", puzzle_id: PUZZLE_ID, user_id: null, device_id: "guest-device", is_official: true });
+
+    db.signIn("me");
+    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "not-the-device" });
+    expect(data).toBe(0);
+    expect(sessions().find((s) => s.id === "guest-win")!.user_id).toBeNull();
+  });
+
+  it("I. device_id 'unknown' claims nothing", async () => {
+    seedSession({ id: "guest-win", puzzle_id: PUZZLE_ID, user_id: null, device_id: "unknown", is_official: true });
+
+    db.signIn("me");
+    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "unknown" });
+    expect(data).toBe(0);
+    expect(sessions().find((s) => s.id === "guest-win")!.user_id).toBeNull();
+  });
+
+  it("J. a second account cannot claim sessions already owned by the first account", async () => {
+    seedSession({
+      id: "already-owned",
+      puzzle_id: PUZZLE_ID,
+      user_id: "user-a",
+      device_id: "shared-device",
+      is_official: true,
+    });
+
+    db.signIn("user-b");
+    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "shared-device" });
+    expect(data).toBe(0);
+    expect(sessions().find((s) => s.id === "already-owned")!.user_id).toBe("user-a");
+  });
+
+  it("K. after claim, get_own_completed_sessions reflects exactly one official result per puzzle -- no duplicate, no replacement", async () => {
+    seedSession({
+      id: "acct-loss",
+      puzzle_id: PUZZLE_ID,
+      user_id: "me",
+      device_id: null,
+      status: "lost",
+      won: false,
+      mistakes: 4,
+      is_official: true,
+    });
+    seedSession({
+      id: "guest-win",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "guest-device",
+      status: "won",
+      won: true,
+      is_official: true,
+    });
+    seedSession({
+      id: "guest-other-puzzle",
+      puzzle_id: PUZZLE_2,
+      user_id: null,
+      device_id: "guest-device",
+      status: "won",
+      won: true,
+      is_official: true,
+    });
+
+    db.signIn("me");
+    await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
+
+    const { data: own } = await db.rpc("get_own_completed_sessions", { _device_id: "guest-device" });
+    const forPuzzle1 = (own as { puzzle_id: string; won: boolean }[]).filter((r) => r.puzzle_id === PUZZLE_ID);
+    expect(forPuzzle1).toHaveLength(1);
+    // The account's original loss remains the official result, not the
+    // claimed win.
+    expect(forPuzzle1[0].won).toBe(false);
+    expect((own as { puzzle_id: string }[]).some((r) => r.puzzle_id === PUZZLE_2)).toBe(true);
+  });
+
+  it("L. guess and hint events remain attached to a claimed and demoted session", async () => {
+    seedSession({
+      id: "acct-loss",
+      puzzle_id: PUZZLE_ID,
+      user_id: "me",
+      device_id: null,
+      status: "lost",
+      won: false,
+      mistakes: 4,
+      is_official: true,
+    });
+    seedSession({
+      id: "guest-win",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "guest-device",
+      is_official: true,
+    });
+    db.tables.guess_events.push({
+      id: "g1",
+      game_session_id: "guest-win",
+      guess_number: 1,
+      words: ["a", "b", "c", "d"],
+      correct: true,
+      attempt_type: "normal",
+    });
+    db.tables.hint_events.push({
+      id: "h1",
+      game_session_id: "guest-win",
+      hint_type: "small",
+      revealed_at: new Date().toISOString(),
+    });
+
+    db.signIn("me");
+    await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
+
+    expect(guesses().find((g) => g.id === "g1")!.game_session_id).toBe("guest-win");
+    expect(hints().find((h) => h.id === "h1")!.game_session_id).toBe("guest-win");
+    expect(sessions().find((s) => s.id === "guest-win")!.is_official).toBe(false);
   });
 });
 
