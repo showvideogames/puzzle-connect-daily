@@ -120,15 +120,16 @@ html {
     --input: 220 10% 22%;
     --ring: 40 15% 90%;
 
-    /* Dark mode group colors — same hues, darker/muted */
-    --group-1: 25 75% 35%;
-    --group-1-fg: 25 80% 90%;
-    --group-2: 130 40% 30%;
-    --group-2-fg: 130 45% 88%;
-    --group-3: 200 60% 35%;
-    --group-3-fg: 200 65% 90%;
-    --group-4: 0 55% 35%;
-    --group-4-fg: 0 60% 90%;
+    /* Solved category colors (--group-1..4 and their -fg text pair) are
+       DELIBERATELY not redeclared here — dark mode used to have its own
+       darker/muted "same hues" set, but the product decision now is that
+       Yellow/Green/Blue/Red must render identically in light and dark, so
+       this block simply falls through to :root's values above. The -fg
+       pair falls through too (not just the backgrounds): SolvedGroup.tsx
+       renders bg-group-N with text-group-N-fg together, and the old dark
+       -fg values were tuned for the old dark background — leaving them
+       behind while the background reverts to the light value would make
+       the solved-category text illegible. */
 
     --tile: 220 12% 18%;
     --tile-selected: 40 15% 85%;
