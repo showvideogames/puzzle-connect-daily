@@ -1,3 +1,30 @@
+-- ============================================================================
+-- PARKED — NOT CURRENTLY APPLIED, DO NOT APPLY YET.
+--
+-- This file lives in supabase/proposed-migrations/, a directory the Supabase
+-- CLI does not scan (only supabase/migrations/ is executable). It was moved
+-- out of supabase/migrations/ specifically so a future, unrelated
+-- `supabase db push` can never sweep it up and apply it silently.
+--
+-- Why it's on hold: it applies globally to every game_sessions row by
+-- (puzzle_id, identity), because there is no entry_context / official-
+-- attempt column yet to scope it more narrowly. Beta/playtest puzzles (and
+-- eventually Mini/Mega/Custom) are expected to want UNLIMITED replays with
+-- no "one official attempt" restriction — a global constraint like this one
+-- would incorrectly block that once those puzzle types exist.
+--
+-- Before this can move back into supabase/migrations/ and actually be
+-- applied, it needs one of:
+--   - an entry_context/mode column (or equivalent) so the index can be
+--     scoped to only the puzzle types this rule is meant for, or
+--   - confirmation that Beta/Mini/Mega/Custom puzzles will never share this
+--     table/identity model in a way this constraint would affect.
+-- Until then, the only protection against duplicate official Daily results
+-- is the application-level guard in commitOfficialResult() (useGame.ts),
+-- which is sufficient on its own — this file was always a defense-in-depth
+-- safety net for a non-atomic race window, never the primary protection.
+-- ============================================================================
+--
 -- Prevent duplicate OFFICIAL game_sessions rows for the same puzzle+identity.
 --
 -- Audit finding: replaying the Daily puzzle (most commonly by clearing
