@@ -1,18 +1,28 @@
 import type { ReactNode } from "react";
 import { useAccountOnboarding } from "@/hooks/useAccountOnboarding";
 import { OnboardingModal } from "./OnboardingModal";
+import { SavingUnavailableNotice } from "./SavingUnavailableNotice";
 
 /**
- * Wraps the whole app so no route can start a game before onboarding has
- * resolved.
+ * Wraps the app and decides what a failure is allowed to take away.
  *
- * This is a courtesy, not the enforcement: create_game_session refuses a
- * pending account outright, so a client that skipped this would simply find
- * that nothing saves. The gate exists so that failure is a clear screen
- * instead of a board that silently loses every move.
+ * The distinction this file exists to enforce:
  *
- * Anonymous players are never gated — guest play must work with no account
- * and no decision to make.
+ *   PUZZLE CONTENT missing  -> blocking error with Retry (handled where the
+ *                              puzzle is loaded — there is nothing to play)
+ *   SAVING unavailable      -> keep playing, show a small notice (the puzzle
+ *                              is fine; only recording is not)
+ *
+ * So a failure to mint a credential, an unreachable RPC, or the cutover
+ * window before the migration lands all leave the game playable. The player
+ * is told plainly that it may not count, and nothing is ever recorded as
+ * saved when it was not — no writes succeed, so no aggregate, history,
+ * streak or Daily Stats entry moves.
+ *
+ * The one genuinely blocking case here is the one-time import decision: the
+ * database refuses to create sessions for an account that still owes it, so
+ * letting the board render would produce exactly the silently-losing board
+ * this design avoids everywhere else.
  */
 export function OnboardingGate({ children }: { children: ReactNode }) {
   const { state, recheck, addMyProgress, startFresh } = useAccountOnboarding();
@@ -21,25 +31,6 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
         <div className="h-8 w-8 rounded-full border-2 border-muted-foreground/30 border-t-foreground animate-spin" />
-      </div>
-    );
-  }
-
-  if (state.phase === "unavailable") {
-    return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center bg-background">
-        <h1 className="text-xl font-bold">Just a moment</h1>
-        <p className="text-sm text-muted-foreground max-w-xs">
-          We're finishing a quick update. This page will pick it up
-          automatically — or tap below to try now.
-        </p>
-        <button
-          onClick={() => void recheck()}
-          className="px-5 py-2.5 rounded-full text-sm font-semibold transition-colors hover:opacity-90 active:scale-95"
-          style={{ background: "hsl(var(--foreground))", color: "hsl(var(--background))" }}
-        >
-          Try again
-        </button>
       </div>
     );
   }
@@ -58,5 +49,12 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {state.phase === "saving_unavailable" && (
+        <SavingUnavailableNotice onRetry={recheck} />
+      )}
+    </>
+  );
 }

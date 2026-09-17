@@ -27,15 +27,21 @@ import {
  * a coherent experience rather than a silent failure.
  */
 export type OnboardingPhase =
-  /** Still asking the server. Nothing should be playable yet. */
+  /** Still asking the server. Brief, and shows a spinner. */
   | { phase: "checking" }
-  /** Resolved (or anonymous): play normally. */
+  /** Resolved (or anonymous): play normally, saving works. */
   | { phase: "ready" }
   /**
-   * The new RPCs are not reachable — during the cutover window this means
-   * the migration has not landed yet. Show maintenance, keep retrying.
+   * Secure recording is not available: the credential could not be minted,
+   * the RPCs are not reachable, or this browser cannot keep an identity.
+   *
+   * This is NOT a blocking state. The puzzle itself is fine, so the player
+   * keeps playing locally and gets a small notice that this game may not
+   * count. Only missing PUZZLE CONTENT blocks — there is nothing to play
+   * then. Replacing a working puzzle with a maintenance page because a
+   * background write failed takes away the thing that still works.
    */
-  | { phase: "unavailable" }
+  | { phase: "saving_unavailable" }
   /** A real decision is outstanding. */
   | {
       phase: "decision";
@@ -74,36 +80,53 @@ export function useAccountOnboarding() {
     running.current = true;
     try {
       // Every client needs an identity, signed in or not, so this doubles as
-      // the probe for whether the new schema is live at all.
+      // the probe for whether secure recording is available at all.
+      //
+      // All three failures mean the same thing to the player, so they get the
+      // same honest answer rather than three behaviours:
+      //   * PGRST202 — the migration has not landed yet (cutover window)
+      //   * a network/database error — transient
+      //   * a null identity — this browser cannot keep one (private mode,
+      //     blocked storage), so it can never hold a credential
+      //
+      // In every case no durable write can succeed, so saying "ready" would
+      // hand the player a board that silently loses their game.
       let identity: { deviceId: string; deviceToken: string } | null = null;
       try {
         identity = await ensureDeviceIdentity();
-      } catch (err) {
-        if (isMissingFunction(err as { code?: string; message?: string })) {
-          setState({ phase: "unavailable" });
-          return;
-        }
-        // Storage blocked, or a transient failure. Play can continue
-        // anonymously; the server will simply refuse durable writes.
+      } catch {
         identity = null;
+      }
+
+      if (!identity) {
+        setState({ phase: "saving_unavailable" });
+        return;
       }
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setState({ phase: "ready" });
+        // An anonymous player with a credential already in hand still needs
+        // to know whether the server is actually reachable — otherwise the
+        // first thing they'd learn is a finished game that never saved. One
+        // cheap call, which doubles as the probe for the cutover window.
+        const { error: probeError } = await supabase.rpc("count_own_anonymous_sessions", {
+          _device_id: identity.deviceId,
+          _device_token: identity.deviceToken,
+        });
+        setState({ phase: probeError ? "saving_unavailable" : "ready" });
         return;
       }
 
       const { data, error } = await supabase.rpc("resolve_onboarding", {
-        _device_id: identity?.deviceId ?? getDeviceId(),
-        _device_token: identity?.deviceToken ?? getDeviceToken(),
+        _device_id: identity.deviceId,
+        _device_token: identity.deviceToken,
       });
 
       if (error) {
-        // Missing function (migration not landed yet) and a transient failure
-        // get the same treatment: never guess, never let gameplay start, keep
-        // retrying. The server would refuse the writes anyway.
-        setState({ phase: "unavailable" });
+        // Same reasoning: we cannot tell whether this account owes a decision,
+        // so we must not start account-owned gameplay — but the puzzle is
+        // still perfectly playable, so let them play unsaved.
+        setState({ phase: "saving_unavailable" });
         return;
       }
 
@@ -138,11 +161,11 @@ export function useAccountOnboarding() {
           setState({ phase: "ready" });
           return;
         default:
-          setState({ phase: "unavailable" });
+          setState({ phase: "saving_unavailable" });
           return;
       }
     } catch {
-      setState({ phase: "unavailable" });
+      setState({ phase: "saving_unavailable" });
     } finally {
       running.current = false;
     }
@@ -161,14 +184,16 @@ export function useAccountOnboarding() {
       void check();
     });
 
-    // The maintenance case self-heals: the cutover migration lands while the
-    // tab is open, and the next focus picks it up without a manual reload.
-    const onFocus = () => void check();
-    window.addEventListener("focus", onFocus);
+    // Saving restores itself without a reload: the migration lands, or the
+    // connection comes back, and the next focus or online event picks it up.
+    const recheck = () => void check();
+    window.addEventListener("focus", recheck);
+    window.addEventListener("online", recheck);
 
     return () => {
       subscription.unsubscribe();
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("focus", recheck);
+      window.removeEventListener("online", recheck);
     };
   }, [check]);
 

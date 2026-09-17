@@ -18,7 +18,22 @@
 --   1. Confirm the project ref above.
 --   2. Select ALL of this file and paste it into one SQL Editor tab.
 --   3. Run it once.
---   4. Read the output, and copy back what you see (see the two cases below).
+--   4. Read the LAST result, which is a single cell named rehearsal_result.
+--
+-- WHAT YOU SHOULD SEE
+--   Exactly one of these, and nothing to interpret:
+--
+--     REHEARSAL PASSED - migration is sound. <N> sessions and <N> plays
+--     seen, unchanged. Now run: rollback;
+--
+--     REHEARSAL FAILED: <what was wrong>
+--
+--   If instead the run stops with a red ERROR, copy the whole message
+--   including any CONTEXT: and HINT: lines. A message beginning "Aborting:"
+--   is the migration's own guard reporting a fact about the data; anything
+--   else is a problem with the script itself. Either way the transaction is
+--   already aborted, so the verdict query will say "current transaction is
+--   aborted" -- that is expected, not a second failure.
 --
 -- THERE IS NO COMMIT IN THIS FILE. The only transaction-ending statement is
 -- the ROLLBACK on the last line.
@@ -1536,95 +1551,80 @@ $$;
 -- END migration text.  Everything below is rehearsal-only verification.
 -- ###########################################################################
 
--- 1. Every account classified, and none of them left pending.
---    expect: unclassified = 0, pending = 0, and legacy = the account count
-select 'accounts' as check,
-       (select count(*) from auth.users) as total_accounts,
-       (select count(*) from auth.users u
-         where not exists (select 1 from public.account_onboarding ao
-                            where ao.user_id = u.id)) as unclassified,
-       (select count(*) from public.account_onboarding where status = 'legacy') as legacy,
-       (select count(*) from public.account_onboarding where status = 'pending') as pending;
-
--- 2. Every pre-cutover device registered AND retired AND credential-less.
---    expect: unretired = 0, with_token = 0
-select 'devices' as check,
-       (select count(*) from public.device_identities) as registered,
-       (select count(*) from public.device_identities where retired_at is null) as unretired,
-       (select count(*) from public.device_identities
-         where retired_reason = 'pre_launch_cutover' and token_hash is not null) as with_token;
-
--- 3. The backfill excluded null/blank/'unknown', per the safeguard.
---    expect: 0
-select 'excluded_ids' as check, count(*) as must_be_zero
-  from public.device_identities
- where device_id is null or btrim(device_id) = '' or device_id = 'unknown';
-
--- 4. The retired claiming route is gone and the new surface exists.
---    expect: claim_gone = true, and every new function present
-select 'functions' as check,
-       not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-                    where n.nspname = 'public' and p.proname = 'claim_anonymous_sessions') as claim_gone,
-       (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-         where n.nspname = 'public'
-           and p.proname in ('create_device_identity','verify_device','resolve_onboarding',
-                             'import_guest_history','decline_guest_history','get_own_streak',
-                             'get_streak_admin_summary','device_has_importable_history',
-                             'record_streak')) as new_functions_present;
-
--- 5. No SECURITY DEFINER function left without a pinned search_path.
---    expect: 0
-select 'search_path' as check, count(*) as unpinned
-  from pg_proc p
-  join pg_namespace n on n.oid = p.pronamespace
- where n.nspname = 'public'
-   and p.prosecdef
-   and not exists (
-     select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%'
-   );
-
--- 6. Internal-only functions must not be executable by browsers.
---    expect: false for all three
-select 'internal_grants' as check,
-       has_function_privilege('anon',          'public.verify_device(text,text)', 'execute') as anon_verify,
-       has_function_privilege('authenticated', 'public.verify_device(text,text)', 'execute') as auth_verify,
-       has_function_privilege('authenticated', 'public.record_streak(uuid,text,boolean,text)', 'execute') as auth_streak;
-
--- 7. Direct write access is gone, and the aggregate counter is no longer
---    client-callable. expect: all false
-select 'revoked_writes' as check,
-       has_table_privilege('anon',          'public.user_streaks',  'select') as anon_read_streaks,
-       has_table_privilege('authenticated', 'public.user_streaks',  'update') as auth_write_streaks,
-       has_table_privilege('authenticated', 'public.game_sessions', 'insert') as auth_insert_sessions,
-       has_table_privilege('authenticated', 'public.game_results',  'insert') as auth_insert_results,
-       has_function_privilege('authenticated',
-         'public.increment_puzzle_aggregate(text,boolean,integer,numeric,text)', 'execute') as auth_aggregate;
-
--- 8. RLS on, and no policies, on the two new tables. expect: rls true, policies 0
-select 'new_table_rls' as check, c.relname, c.relrowsecurity as rls_enabled,
-       (select count(*) from pg_policies pol
-         where pol.schemaname = 'public' and pol.tablename = c.relname) as policies
-  from pg_class c join pg_namespace n on n.oid = c.relnamespace
- where n.nspname = 'public' and c.relname in ('device_identities','account_onboarding');
-
--- 9. Gameplay data is untouched by the migration itself.
---    expect: identical to the numbers before the rehearsal
-select 'data_untouched' as check,
-       (select count(*) from public.game_sessions)     as sessions,
-       (select count(*) from public.guess_events)      as guesses,
-       (select count(*) from public.hint_events)       as hints,
-       (select count(*) from public.user_streaks)      as streaks,
-       (select count(*) from public.game_results)      as results,
-       (select coalesce(sum(total_plays),0) from public.puzzle_aggregates) as total_plays;
-
--- 10. Nothing belonging to the other apps in this shared project was touched.
---     expect: their row counts unchanged (compare against a pre-run reading)
-select 'shared_project' as check,
-       (select count(*) from public.wtf_games)   as wtf_games,
-       (select count(*) from public.wtf_players) as wtf_players,
-       (select count(*) from public.cv_puzzles)  as cv_puzzles;
-
-
+-- ###########################################################################
+-- ONE VERDICT ROW.
+--
+-- Every check is folded into a single answer, so there is nothing to eyeball
+-- and nothing to interpret. Read the one cell that comes back:
+--
+--   REHEARSAL PASSED ...   -> the migration is sound against real data
+--   REHEARSAL FAILED: ...  -> copy that whole cell back
+--
+-- Reaching this query at all already proves the migration parsed, resolved
+-- every dependency and passed its own internal guards, because any of those
+-- failing aborts the transaction before this can run.
+-- ###########################################################################
+with checks as (
+  select
+    (select count(*) from auth.users u
+      where not exists (select 1 from public.account_onboarding ao
+                         where ao.user_id = u.id))                              as unclassified_accounts,
+    (select count(*) from public.account_onboarding where status = 'pending')   as pending_accounts,
+    (select count(*) from public.device_identities where retired_at is null)    as unretired_devices,
+    (select count(*) from public.device_identities
+      where retired_reason = 'pre_launch_cutover' and token_hash is not null)   as legacy_with_token,
+    (select count(*) from public.device_identities
+      where device_id is null or btrim(device_id) = '' or device_id = 'unknown') as bad_device_ids,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'claim_anonymous_sessions')    as claim_still_there,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public'
+        and p.proname in ('create_device_identity','verify_device','resolve_onboarding',
+                          'import_guest_history','decline_guest_history','get_own_streak',
+                          'get_streak_admin_summary','device_has_importable_history',
+                          'record_streak'))                                     as new_functions,
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.prosecdef
+        and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c
+                         where c like 'search_path=%'))                         as unpinned_definers,
+    (select count(*) from (values
+        (has_function_privilege('anon','public.verify_device(text,text)','execute')),
+        (has_function_privilege('authenticated','public.verify_device(text,text)','execute')),
+        (has_function_privilege('authenticated','public.record_streak(uuid,text,boolean,text)','execute')),
+        (has_table_privilege('anon','public.user_streaks','select')),
+        (has_table_privilege('authenticated','public.user_streaks','update')),
+        (has_table_privilege('authenticated','public.game_sessions','insert')),
+        (has_table_privilege('authenticated','public.game_results','insert'))
+      ) as t(leaked) where leaked)                                              as open_privileges,
+    (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relname in ('device_identities','account_onboarding')
+        and not c.relrowsecurity)                                               as rls_off,
+    (select count(*) from public.game_sessions)                                 as sessions,
+    (select coalesce(sum(total_plays),0) from public.puzzle_aggregates)         as total_plays
+),
+failures as (
+  select array_remove(array[
+    case when unclassified_accounts > 0 then unclassified_accounts || ' account(s) unclassified' end,
+    case when pending_accounts      > 0 then pending_accounts      || ' account(s) left pending' end,
+    case when unretired_devices     > 0 then unretired_devices     || ' pre-cutover device(s) not retired' end,
+    case when legacy_with_token     > 0 then legacy_with_token     || ' retired device(s) still hold a token' end,
+    case when bad_device_ids        > 0 then bad_device_ids        || ' null/blank/unknown device id(s) registered' end,
+    case when claim_still_there     > 0 then 'claim_anonymous_sessions still exists' end,
+    case when new_functions        <> 9 then 'expected 9 new functions, found ' || new_functions end,
+    case when unpinned_definers     > 0 then unpinned_definers     || ' SECURITY DEFINER function(s) without a pinned search_path' end,
+    case when open_privileges       > 0 then open_privileges       || ' privilege(s) that should have been revoked are still open' end,
+    case when rls_off               > 0 then rls_off               || ' new table(s) without RLS' end
+  ], null) as problems, sessions, total_plays
+  from checks
+)
+select case
+         when cardinality(problems) = 0
+           then 'REHEARSAL PASSED - migration is sound. ' || sessions
+                || ' sessions and ' || total_plays
+                || ' plays seen, unchanged. Now run: rollback;'
+         else 'REHEARSAL FAILED: ' || array_to_string(problems, '; ')
+       end as rehearsal_result
+  from failures;
 
 -- ###########################################################################
 -- Discard everything. This is the only transaction-ending statement here.

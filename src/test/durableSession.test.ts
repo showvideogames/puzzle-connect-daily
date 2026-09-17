@@ -18,7 +18,14 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (t: string) => db.from(t),
     rpc: (n: string, a: Record<string, unknown>) => db.rpc(n, a),
-    auth: { getUser: () => db.auth.getUser() },
+    auth: {
+      getUser: () => db.auth.getUser(),
+      // useAccountOnboarding subscribes to auth changes; the tests drive
+      // sign-in through db.signIn() directly, so this only needs to exist.
+      onAuthStateChange: () => ({
+        data: { subscription: { unsubscribe: () => {} } },
+      }),
+    },
   },
 }));
 
@@ -162,6 +169,11 @@ beforeEach(async () => {
   db.tables.account_onboarding = [];
   db.tables.puzzle_aggregates = [];
 
+  // Clear any injected faults BEFORE minting, or a fault left behind by the
+  // previous test breaks this one's setup instead of its own assertions.
+  db.failAggregateWrites = 0;
+  db.rpcUnavailable = false;
+
   const identity = await mintDeviceIdentity();
 
   localStorage.clear();
@@ -174,6 +186,7 @@ beforeEach(async () => {
   ];
   db.signIn(null);
   db.failAggregateWrites = 0;
+  db.rpcUnavailable = false;
   // The identity mint is setup, not gameplay — keep it out of the write- and
   // rpc-volume assertions.
   db.writeLog = [];
@@ -2625,6 +2638,175 @@ describe("play counting", () => {
     await guess(archiveView, ["y1", "y2", "y3", "y4"]);
     expect(db.tables.user_streaks).toHaveLength(before);
     expect(db.tables.user_streaks[0].current_streak).toBe(1);
+  });
+});
+
+// ── Availability: playing when saving is down ──────────────────────────────
+//
+// The product rule: a failure to SAVE must not take away a puzzle that
+// loaded fine. Only missing puzzle CONTENT blocks, because then there is
+// nothing to play. What must never happen is a game presented as saved when
+// nothing was recorded.
+describe("saving unavailable", () => {
+  const plays = () =>
+    (db.tables.puzzle_aggregates.find((a) => a.puzzle_id === PUZZLE_ID)?.total_plays as number) ?? 0;
+
+  it("the puzzle stays fully playable in memory and records nothing", async () => {
+    db.rpcUnavailable = true;
+
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    // Playable and winnable, entirely client-side.
+    expect(view.result.current.state.isComplete).toBe(true);
+    expect(view.result.current.state.isWon).toBe(true);
+    expect(view.result.current.state.solvedGroups).toHaveLength(4);
+
+    // And nothing anywhere was recorded — not a session, not an event, not a
+    // play, not a result, not a streak.
+    expect(sessions()).toHaveLength(0);
+    expect(guesses()).toHaveLength(0);
+    expect(hints()).toHaveLength(0);
+    expect(plays()).toBe(0);
+    expect(db.tables.game_results).toHaveLength(0);
+    expect(db.tables.user_streaks).toHaveLength(0);
+  });
+
+  it("the result and share grid still work locally", async () => {
+    db.rpcUnavailable = true;
+
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    // The result and the share grid are built from the local guess history,
+    // which is persisted client-side — so a dead database costs the player
+    // neither their result screen nor their shareable grid.
+    const saved = JSON.parse(localStorage.getItem(progressKey(PUZZLE_ID)) ?? "{}");
+    expect(saved.isComplete).toBe(true);
+    expect(saved.isWon).toBe(true);
+    expect(saved.guessHistory.length).toBeGreaterThan(0);
+    expect(view.result.current.state.guessHistory.length).toBeGreaterThan(0);
+  });
+
+  it("stats never count an unsaved game", async () => {
+    db.rpcUnavailable = true;
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    // Saving comes back afterwards; the game that was not recorded must not
+    // retroactively appear.
+    db.rpcUnavailable = false;
+    const stats = await loadStatsFromSupabase();
+    expect(stats.gamesPlayed).toBe(0);
+    expect(stats.gamesWon).toBe(0);
+    expect(stats.currentStreak).toBe(0);
+    expect(plays()).toBe(0);
+  });
+
+  it("a game that started unsaved stays unsaved, even if saving returns mid-game", async () => {
+    // No half-recorded sessions: a record holding only the second half of a
+    // game would read as a complete one.
+    db.rpcUnavailable = true;
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "g1"]); // a miss, session creation fails
+    expect(sessions()).toHaveLength(0);
+
+    db.rpcUnavailable = false;
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+
+    // Still nothing for THIS game.
+    expect(sessions()).toHaveLength(0);
+    expect(guesses()).toHaveLength(0);
+    expect(plays()).toBe(0);
+  });
+
+  it("saving is restored for the next game", async () => {
+    db.rpcUnavailable = true;
+    const first = mount();
+    await guess(first, ["y1", "y2", "y3", "g1"]);
+    expect(sessions()).toHaveLength(0);
+    first.unmount();
+
+    // A fresh game after saving came back records normally.
+    db.rpcUnavailable = false;
+    localStorage.removeItem(progressKey(PUZZLE_ID));
+    const second = mount();
+    await guess(second, ["y1", "y2", "y3", "y4"]);
+
+    expect(sessions()).toHaveLength(1);
+    expect(sessions()[0].status).toBe("in_progress");
+    expect(guesses()).toHaveLength(1);
+  });
+
+  it("PGRST202 during the deployment window is not treated as an outage of the game", async () => {
+    // The real shape of that window: a pre-cutover browser holding an old
+    // device id with no token, against a database where the new functions do
+    // not exist yet. The gate must report saving_unavailable — which renders
+    // the board plus a notice — not replace the site with a maintenance page.
+    localStorage.removeItem("rc-device-token");
+    db.rpcUnavailable = true;
+
+    const { useAccountOnboarding } = await import("@/hooks/useAccountOnboarding");
+    const gate = renderHook(() => useAccountOnboarding());
+    await settle();
+
+    expect(gate.result.current.state.phase).toBe("saving_unavailable");
+    // It tried to replace the unusable legacy credential, and got PGRST202.
+    expect(db.rpcLog).toContain("create_device_identity");
+  });
+
+  it("a browser that cannot keep a credential is told saving is unavailable", async () => {
+    // Storage blocked: no identity can ever be held, so no durable write can
+    // succeed. Honest notice, still playable — not a silent broken board.
+    localStorage.removeItem("rc-device-id");
+    localStorage.removeItem("rc-device-token");
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => {
+      throw new Error("storage blocked");
+    };
+    try {
+      const { useAccountOnboarding } = await import("@/hooks/useAccountOnboarding");
+      const gate = renderHook(() => useAccountOnboarding());
+      await settle();
+      expect(gate.result.current.state.phase).toBe("saving_unavailable");
+    } finally {
+      Storage.prototype.setItem = setItem;
+    }
+  });
+
+  it("recovers to normal saving once the RPCs are reachable again", async () => {
+    db.rpcUnavailable = true;
+    const { useAccountOnboarding } = await import("@/hooks/useAccountOnboarding");
+    const gate = renderHook(() => useAccountOnboarding());
+    await settle();
+    expect(gate.result.current.state.phase).toBe("saving_unavailable");
+
+    db.rpcUnavailable = false;
+    await act(async () => {
+      await gate.result.current.recheck();
+    });
+    expect(gate.result.current.state.phase).toBe("ready");
+  });
+
+  it("never falls back to a direct table write when the RPCs are down", async () => {
+    db.rpcUnavailable = true;
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+
+    // The old insecure routes are gone and must never be used as a fallback:
+    // no direct writes to any gameplay table were even attempted.
+    const directWrites = db.writeLog.filter((w) => w.op !== "rpc");
+    expect(directWrites).toHaveLength(0);
   });
 });
 

@@ -110,6 +110,14 @@ export class FakeSupabase {
    */
   failAggregateWrites = 0;
 
+  /**
+   * Makes EVERY rpc answer as though the function is not in the schema cache
+   * (PostgREST's PGRST202), which is what the whole app sees during the
+   * frontend-first deployment window, and what an unreachable database looks
+   * like. Used to prove the puzzle stays playable and nothing is recorded.
+   */
+  rpcUnavailable = false;
+
   signIn(userId: string | null, opts?: { admin?: boolean }) {
     this.authUser = userId ? { id: userId } : null;
     this.isAdmin = !!opts?.admin;
@@ -156,6 +164,15 @@ export class FakeSupabase {
 
   rpc = async (name: string, args: Record<string, unknown> = {}) => {
     this.rpcLog.push(name);
+    if (this.rpcUnavailable) {
+      return {
+        data: null,
+        error: {
+          code: "PGRST202",
+          message: `Could not find the function public.${name} in the schema cache`,
+        },
+      };
+    }
     // Only MUTATING functions count as writes. has_official_result and
     // friends are reads that merely happen to be delivered as functions,
     // and counting them here would make the write-volume assertions — and
