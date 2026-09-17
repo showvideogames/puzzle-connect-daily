@@ -376,6 +376,36 @@ describe("F. hint then refresh", () => {
     await settle();
     expect(hints()).toHaveLength(1);
   });
+
+  it("still reports the hint as revealed to the board after the reload", async () => {
+    // Regression: the page-level smallHintUsed/fullHintUsed props reset to
+    // false on remount, so a board gated on the RAW props hid the hint the
+    // player had already spent — while the session went on counting it as
+    // spent. useGame must hand the board the restore-aware flags instead.
+    const first = mount(puzzle, { fullHintUsed: false });
+    await act(async () => first.rerender({ o: { fullHintUsed: true } }));
+    await settle();
+    expect(first.result.current.effectiveFullHintUsed).toBe(true);
+    first.unmount();
+
+    const second = mount(puzzle, { fullHintUsed: false });
+    await settle();
+    expect(second.result.current.effectiveFullHintUsed).toBe(true);
+  });
+
+  it("still reports a small hint as revealed to the board after the reload", async () => {
+    const first = mount(puzzle, { smallHintUsed: false });
+    await act(async () => first.rerender({ o: { smallHintUsed: true } }));
+    await settle();
+    expect(first.result.current.effectiveSmallHintUsed).toBe(true);
+    first.unmount();
+
+    const second = mount(puzzle, { smallHintUsed: false });
+    await settle();
+    expect(second.result.current.effectiveSmallHintUsed).toBe(true);
+    // An untouched hint stays untouched — the restore must not blanket-set both.
+    expect(second.result.current.effectiveFullHintUsed).toBe(false);
+  });
 });
 
 // ── G. CLOSE / RESUME EQUIVALENT ───────────────────────────────────────────

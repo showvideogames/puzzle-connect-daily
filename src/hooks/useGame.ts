@@ -1115,6 +1115,15 @@ export function useGame(
     setTileColor,
     clearAllColors,
     hasAnyColor,
+    /**
+     * The same restore-aware hint flags every recording path above already
+     * uses — exposed so the BOARD renders off them too. The page-level
+     * smallHintUsed/fullHintUsed props reset to false on every remount, so a
+     * board gated on the raw props drops the revealed hint content after a
+     * refresh while the session still (correctly) counts the hint as spent.
+     */
+    effectiveSmallHintUsed,
+    effectiveFullHintUsed,
     markRainbowFound,
     handleDragStart,
     handleDragOver,

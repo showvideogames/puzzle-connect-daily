@@ -268,6 +268,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     setTileColor,
     clearAllColors,
     hasAnyColor,
+    effectiveSmallHintUsed,
+    effectiveFullHintUsed,
     markRainbowFound,
     handleDragStart,
     handleDragOver,
@@ -694,8 +696,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   }, [bonusRainbowCorrect]);
 
   useEffect(() => {
-    if (fullHintUsed) setHintVisible(true);
-  }, [fullHintUsed]);
+    if (effectiveFullHintUsed) setHintVisible(true);
+  }, [effectiveFullHintUsed]);
 
   const handleSpotResult = useCallback((correct: boolean, words: string[]) => {
     // Captured HERE — the moment SpotTheRainbowModal's Submit actually fired
@@ -1344,7 +1346,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       )}
 
       {/* Hint pill */}
-      {fullHintUsed && (
+      {effectiveFullHintUsed && (
         <div className="mt-4 flex justify-center">
           {hintVisible ? (
             <div className="flex items-center gap-3 flex-wrap justify-center animate-fade-up">
@@ -1373,7 +1375,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       )}
 
       {/* Small Hint tile row */}
-      {smallHintUsed && (
+      {effectiveSmallHintUsed && (
         <div className="mt-4 flex flex-wrap justify-center gap-2 animate-fade-up">
           {[...puzzle.groups]
             .sort((a, b) => a.difficulty - b.difficulty)
