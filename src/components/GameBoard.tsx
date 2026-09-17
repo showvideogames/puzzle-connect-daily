@@ -1051,31 +1051,34 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           >
             <MousePointer2 className="w-5 h-5" />
           </button>
-          {/* Same fixed hex per color in light and dark mode — see
-              WordTile.tsx's COLOR_STYLES/COLOR_CIRCLES for the matching
-              painted-tile fill and per-tile picker, which intentionally use
-              the identical four hex values as these toolbar swatches. */}
+          {/* bg-group-N: the exact same CSS custom property the SOLVED
+              category bars use (SolvedGroup.tsx), not a separately
+              hardcoded hex — see WordTile.tsx's COLOR_STYLES/COLOR_CIRCLES
+              for the matching painted-tile fill and per-tile picker, which
+              read the identical classes. Since --group-1..4 has no .dark
+              override (index.css), this is automatically the same color in
+              both themes with no dark: variant needed here. */}
           <button
             onClick={() => setPaletteMode("yellow")}
-            className={`w-10 h-10 rounded-lg bg-[#E0B64A] hover:scale-110 transition-all
+            className={`w-10 h-10 rounded-lg bg-group-1 hover:scale-110 transition-all
               ${paletteMode === "yellow" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
             aria-label="Yellow paint"
           />
           <button
             onClick={() => setPaletteMode("green")}
-            className={`w-10 h-10 rounded-lg bg-[#52C58E] hover:scale-110 transition-all
+            className={`w-10 h-10 rounded-lg bg-group-2 hover:scale-110 transition-all
               ${paletteMode === "green" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
             aria-label="Green paint"
           />
           <button
             onClick={() => setPaletteMode("blue")}
-            className={`w-10 h-10 rounded-lg bg-[#6CB7EA] hover:scale-110 transition-all
+            className={`w-10 h-10 rounded-lg bg-group-3 hover:scale-110 transition-all
               ${paletteMode === "blue" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
             aria-label="Blue paint"
           />
           <button
             onClick={() => setPaletteMode("red")}
-            className={`w-10 h-10 rounded-lg bg-[#E08188] hover:scale-110 transition-all
+            className={`w-10 h-10 rounded-lg bg-group-4 hover:scale-110 transition-all
               ${paletteMode === "red" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
             aria-label="Red paint"
           />

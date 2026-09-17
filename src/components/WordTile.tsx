@@ -3,23 +3,36 @@ import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoj
 
 const DOUBLE_TAP_DELAY_MS = 250;
 
-// One fixed hex per color, used identically in light and dark mode — the
-// Color Palette / player-painted tile feature is meant to show and apply the
-// same colors regardless of theme, so there is deliberately no `dark:`
-// variant here (previously dark mode had its own separately-approved
-// "Option A" palette, distinct from light).
-const COLOR_STYLES: Record<string, { bg: string; ring: string }> = {
-  yellow: { bg: "bg-[#E0B64A]/35", ring: "ring-[#E0B64A]" },
-  green:  { bg: "bg-[#52C58E]/35", ring: "ring-[#52C58E]" },
-  blue:   { bg: "bg-[#6CB7EA]/35", ring: "ring-[#6CB7EA]" },
-  red:    { bg: "bg-[#E08188]/35", ring: "ring-[#E08188]" },
+// Reuses the exact same CSS custom properties as the SOLVED category bars
+// (SolvedGroup.tsx's bg-group-N/text-group-N-fg, driven by index.css's
+// --group-1..4 / --group-N-fg) instead of a separate hardcoded hex set.
+//
+// This used to be its own fixed hex per color at 35% opacity
+// (bg-[#F6DA6A]/35, etc). That opacity was the actual bug the fixed hex
+// alone didn't catch: at 35% alpha, most of what a player sees is the TILE'S
+// OWN background showing through, not the paint color — so the same
+// "yellow" rendered as a pale cream wash over light mode's near-white tile
+// and a muddy olive-brown over dark mode's near-black tile. Painting a tile
+// looked like two different colors depending on theme, and neither looked
+// like the solved category's solid, saturated fill.
+//
+// Using bg-group-N directly (full opacity, same var SolvedGroup reads) means
+// a hand-painted tile is now pixel-identical to what that group looks like
+// once solved — and since --group-1..4 deliberately has no .dark override
+// (see index.css), that identity holds in both themes automatically, with
+// nothing here needing its own dark: variant.
+const COLOR_STYLES: Record<string, { bg: string; text: string }> = {
+  yellow: { bg: "bg-group-1", text: "text-group-1-fg" },
+  green:  { bg: "bg-group-2", text: "text-group-2-fg" },
+  blue:   { bg: "bg-group-3", text: "text-group-3-fg" },
+  red:    { bg: "bg-group-4", text: "text-group-4-fg" },
 };
 
 const COLOR_CIRCLES: { key: string; circle: string }[] = [
-  { key: "yellow", circle: "bg-[#E0B64A]" },
-  { key: "green",  circle: "bg-[#52C58E]" },
-  { key: "blue",   circle: "bg-[#6CB7EA]" },
-  { key: "red",    circle: "bg-[#E08188]" },
+  { key: "yellow", circle: "bg-group-1" },
+  { key: "green",  circle: "bg-group-2" },
+  { key: "blue",   circle: "bg-group-3" },
+  { key: "red",    circle: "bg-group-4" },
 ];
 
 // Count visible characters/emojis using Intl.Segmenter
@@ -370,7 +383,13 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
           // avoids.
           : `rainbow-tile-static text-ink shadow-md border ${isSelected ? "border-foreground" : "border-tile-border"}`
       : colorStyle
-        ? `${colorStyle.bg} hover:shadow-sm active:scale-95 border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
+        // text-group-N-fg (added alongside the bg fix above): the previous
+        // 35%-opacity fill left this unset, relying on whatever ambient
+        // text color happened to inherit — harmless for emoji tiles (an
+        // <img>, not text) but not a real word/letters, which need the same
+        // guaranteed-readable dark pairing SolvedGroup.tsx uses on the same
+        // background.
+        ? `${colorStyle.bg} ${colorStyle.text} hover:shadow-sm active:scale-95 border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
         : isSelected
           ? "bg-tile-selected text-tile-selected-fg border border-tile-selected"
           : "cloud-tile";
