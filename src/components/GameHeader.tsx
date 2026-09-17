@@ -24,6 +24,13 @@ interface GameHeaderProps {
   // without the wider homepage board layout. Pair with SettingsModal's
   // showMenuLinks so those items are still reachable from Settings.
   simplifiedIcons?: boolean;
+  // Widens the header to the same max-w-[840px] the "minimal" variant uses
+  // — WIDTH only, independent of icon set. Deliberately separate from
+  // `variant`: ArchivePuzzle wants the wider, board-matching header but
+  // NOT `variant="minimal"`'s own Calendar/Archive icon, which would
+  // duplicate the page's own "← Archive" nav button just below. Pair with
+  // simplifiedIcons there to widen without adding that icon.
+  wideHeader?: boolean;
 }
 
 export function GameHeader({
@@ -36,9 +43,11 @@ export function GameHeader({
   onSignOut,
   variant = "default",
   simplifiedIcons = false,
+  wideHeader = false,
 }: GameHeaderProps) {
   const isMinimal = variant === "minimal";
   const hideExtraIcons = isMinimal || simplifiedIcons;
+  const isWide = isMinimal || wideHeader;
   // The 3-icon case (Daily's "minimal" header and ArchivePuzzle's/Archive's
   // simplifiedIcons) has plenty of room even at 320px, so those icons get a
   // bigger, constant (non-responsive) touch target — a real 34-38px circular
@@ -54,7 +63,7 @@ export function GameHeader({
     ? "w-5 h-5 text-slate"
     : "w-4 h-4 sm:w-5 sm:h-5 text-slate";
   return (
-    <header className={`flex items-center w-full mx-auto py-3 gap-1 sm:gap-2 ${isMinimal ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-1.5 sm:px-2"}`}>
+    <header className={`flex items-center w-full mx-auto py-3 gap-1 sm:gap-2 ${isWide ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-1.5 sm:px-2"}`}>
       <Link to="/" className="active:scale-95 transition-transform shrink-0" aria-label="Home">
         {isJuly4() ? (
           // Holiday override applies to both sizes — there's no stacked
@@ -71,8 +80,8 @@ export function GameHeader({
               // tightest case (the default variant's full 6-icon header at
               // 320px, see hideExtraIcons above) so the header never
               // horizontally overflows there. The 28px→40px ceiling
-              // bump only matters well past mobile: every variant's header hits
-              // its own max-width (840px minimal / 512px default) long before
+              // bump only matters well past mobile: every header hits its own
+              // max-width (840px when isWide, 512px otherwise) long before
               // 40px-tall renders, so this just stops the logo from staying
               // capped at a comparatively tiny 28px on desktop, where there was
               // hundreds of pixels of unused gap before the icons.

@@ -158,8 +158,13 @@ export default function ArchivePuzzle() {
         user={user ?? null}
         onSignOut={() => supabase.auth.signOut()}
         simplifiedIcons
+        // Matches the board's own wideBoard width below (840px) instead of
+        // the narrower 512px default — simplifiedIcons alone only controls
+        // which icons show, not how wide the header is; wideHeader is the
+        // separate, width-only flag (see GameHeader.tsx's prop doc).
+        wideHeader
       />
-      <div className="w-full max-w-lg border-b border-border mb-3" />
+      <div className="w-full max-w-[840px] border-b border-border mb-3" />
 
       {showSillyGoose && (
         <div className="w-full max-w-lg px-2 mb-2 animate-fade-up">
@@ -176,7 +181,14 @@ export default function ArchivePuzzle() {
         </div>
       )}
 
-      <div className="w-full max-w-lg px-4 mb-2">
+      {/* max-w-[840px]: matches the board's own wideBoard width below, so
+          the Archive/Today buttons sit at the same left/right edges the
+          category bars do, instead of a narrower 512px row floating inset
+          from them. The buttons themselves stay their fixed compact-pill
+          size (w-[68px]/[88px] below) — it's the row, not the buttons, that
+          stretches; the title's minmax(0,1fr) middle column absorbs all of
+          the extra width. */}
+      <div className="w-full max-w-[840px] px-4 mb-2">
         {/* Top row: nav buttons + puzzle title share one row, using a
             fixed-width | flexible-center | fixed-width grid so the two
             buttons are pixel-identical regardless of label length and the
@@ -249,8 +261,11 @@ export default function ArchivePuzzle() {
           isArchive
           // Matches the Daily homepage's desktop board width/tile geometry
           // (see GameBoard's wideBoard prop doc) — the Archive-specific
-          // header above (Back to Archive / title / date / Today) keeps its
-          // own independent max-w-lg width regardless.
+          // header above (Back to Archive / title / date / Today) now
+          // matches this same 840px width too (wideHeader on GameHeader,
+          // and this page's own max-w-[840px] wrappers), so the whole page
+          // reads as one consistent width instead of a narrower header
+          // sitting above a wider board.
           wideBoard
           smallHintUsed={smallHintUsed}
           fullHintUsed={fullHintUsed}
