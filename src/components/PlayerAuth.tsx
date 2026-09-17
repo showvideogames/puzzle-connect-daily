@@ -50,10 +50,34 @@ type AuthView = "signin" | "signup" | "forgot" | "confirm";
 
 export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, hideTrigger = false }: PlayerAuthProps) {
   const [showAuth, setShowAuth] = useState(false);
-  useEffect(() => {
-    if (forceOpen) setShowAuth(true);
-  }, [forceOpen]);
   const [showDropdown, setShowDropdown] = useState(false);
+  // forceOpen opens whichever UI actually applies right now: the sign-in
+  // modal when signed out, the account dropdown when signed in. This is
+  // what lets an external trigger — e.g. a full clickable row elsewhere in
+  // the app, not just this component's own icon button — open the correct
+  // one without having to know or duplicate which auth state the user is
+  // currently in. Every existing forceOpen caller only ever passes it while
+  // signed out (LandingScreen's own "Sign In" button is itself hidden once
+  // signed in), so this is a superset of the previous behavior, not a
+  // change to it.
+  useEffect(() => {
+    if (!forceOpen) return;
+    if (user) setShowDropdown(true);
+    else setShowAuth(true);
+  }, [forceOpen, user]);
+  // Mirrors handleModalClose's onForceClose?.() call below, but for the
+  // dropdown: there are several places that close it (outside click, Sign
+  // Out, a successful password change), and catching the true->false
+  // transition here once covers all of them — including any added later —
+  // rather than needing every one of those call sites to individually
+  // remember to notify the external controller. Without this, a second
+  // forceOpen=true edge would never re-fire the effect above, since
+  // forceOpen's own value would not have changed in between.
+  const wasDropdownOpenRef = useRef(false);
+  useEffect(() => {
+    if (wasDropdownOpenRef.current && !showDropdown) onForceClose?.();
+    wasDropdownOpenRef.current = showDropdown;
+  }, [showDropdown, onForceClose]);
   const [view, setView] = useState<AuthView>("signin");
   const [resetSent, setResetSent] = useState(false);
   const [email, setEmail] = useState("");

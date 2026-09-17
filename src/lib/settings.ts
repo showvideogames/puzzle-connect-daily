@@ -19,7 +19,7 @@ const defaults: GameSettings = {
   arrangeTiles: false,
   colorCodeTiles: false,
   colorPaletteMode: false,
-  guessHistory: false,
+  guessHistory: true,
 };
 
 export function loadSettings(): GameSettings {

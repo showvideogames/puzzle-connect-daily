@@ -1,3 +1,4 @@
+import { useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Switch } from "@/components/ui/switch";
 import { GameSettings } from "@/lib/settings";
@@ -23,11 +24,22 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback, showMenuLinks = false, onHowToPlayClick, user = null, onSignOut }: SettingsModalProps) {
+  // Drives PlayerAuth's forceOpen below, so the "Sign In"/"Account" TEXT
+  // (not just PlayerAuth's own icon button) opens the sign-in modal or
+  // account dropdown — matching How to Play/Puzzle Archive above it, which
+  // are both clickable across their full row. forceOpen already knows how
+  // to open the right one for either auth state (see PlayerAuth.tsx).
+  const [authOpen, setAuthOpen] = useState(false);
   const items = [
     {
       label: "Dark Mode",
       description: "Switch to a darker color scheme",
       key: "darkMode" as const,
+    },
+    {
+      label: "Guess History",
+      description: "See your previous incorrect guesses below the board.",
+      key: "guessHistory" as const,
     },
     {
       label: "Rainbow Animation",
@@ -135,10 +147,32 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                       Puzzle Archive
                     </Link>
                     <div className="flex items-center gap-3 px-2 py-1.5">
-                      <PlayerAuth user={user} onSignOut={onSignOut ?? (() => {})} />
-                      <span className="text-sm font-medium text-foreground">
+                      {/* PlayerAuth's own icon button keeps working exactly
+                          as before (unchanged click target, unchanged
+                          dropdown positioning) — forceOpen only adds a
+                          SECOND way in, for the text button below, rather
+                          than replacing or nesting inside it. */}
+                      <PlayerAuth
+                        user={user}
+                        onSignOut={onSignOut ?? (() => {})}
+                        forceOpen={authOpen}
+                        onForceClose={() => setAuthOpen(false)}
+                      />
+                      {/* A real, separate <button> — not text nested inside
+                          PlayerAuth's own <button> above, which would be
+                          invalid HTML. Previously only the icon opened
+                          anything; this was the actual reported gap ("Sign
+                          In" text does nothing when clicked), unlike How to
+                          Play/Puzzle Archive above, which are clickable
+                          across their whole row. */}
+                      <button
+                        type="button"
+                        onClick={() => setAuthOpen(true)}
+                        className="text-sm font-medium text-foreground text-left
+                          hover:opacity-75 transition-opacity active:scale-95"
+                      >
                         {user ? "Account" : "Sign In"}
-                      </span>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -200,20 +234,6 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                     <Switch
                       checked={settings.colorPaletteMode}
                       onCheckedChange={handleColorPaletteToggle}
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-3 cursor-pointer">
-                    <div>
-                      <p className="text-sm font-medium">Guess History</p>
-                      <p className="text-xs text-muted-foreground">
-                        See your previous incorrect guesses below the board.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={settings.guessHistory}
-                      onCheckedChange={(checked) =>
-                        onSettingsChange({ ...settings, guessHistory: checked })
-                      }
                     />
                   </label>
                 </div>
