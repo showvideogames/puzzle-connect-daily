@@ -16,7 +16,7 @@ export default function Terms() {
       <main className="w-full max-w-[700px] px-4 space-y-6 text-sm leading-relaxed">
         <header>
           <h1 className="text-2xl font-bold tracking-tight">Terms of Service</h1>
-          <p className="text-xs text-muted-foreground mt-1">Last updated: May 20, 2026</p>
+          <p className="text-xs text-muted-foreground mt-1">Last updated: September 17, 2026</p>
         </header>
 
         <section className="space-y-2">
@@ -26,7 +26,7 @@ export default function Terms() {
 
         <section className="space-y-2">
           <h2 className="text-base font-semibold">2. Description of service</h2>
-          <p>Rainbow Categories is a free daily word puzzle game offered through this website.</p>
+          <p>Rainbow Categories is a free daily word puzzle game operated by Sam West Games, based in Utah, United States, and offered through this website.</p>
         </section>
 
         <section className="space-y-2">
@@ -79,7 +79,7 @@ export default function Terms() {
 
         <section className="space-y-2">
           <h2 className="text-base font-semibold">11. Governing law</h2>
-          <p>These terms are governed by the laws of the United States.</p>
+          <p>These terms are governed by the laws of the State of Utah, without regard to its conflict-of-law principles, except to the extent those laws are preempted by or conflict with U.S. federal law, and subject to any consumer protections under your local law that cannot be waived by agreement.</p>
         </section>
 
         <section className="space-y-2">
