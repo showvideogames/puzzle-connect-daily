@@ -26,7 +26,104 @@ type Filter =
 const UNIQUE_KEYS: Record<string, string[]> = {
   guess_events: ["game_session_id", "guess_number"],
   hint_events: ["game_session_id", "hint_type"],
+  // puzzle_versions (puzzle_id, version_number) -- what makes "Version 2"
+  // mean one specific snapshot even when two admin saves race.
+  puzzle_versions: ["puzzle_id", "version_number"],
 };
+
+/**
+ * validate_puzzle_content(), mirrored.
+ *
+ * Every rule here is restated from the SQL rather than assumed, because the
+ * versioning decision depends on canonical equality: if this canonicalised
+ * differently from the database, a metadata-only save would look like a
+ * gameplay change (or worse, the reverse) in tests only.
+ *
+ * Throws on invalid content, exactly as the SQL raises.
+ */
+export function canonicalizePuzzleContent(raw: unknown): FakeRow {
+  const content = (raw ?? {}) as Record<string, unknown>;
+  const blankToNull = (v: unknown): string | null => {
+    const t = typeof v === "string" ? v.trim() : "";
+    return t === "" ? null : t;
+  };
+
+  const groups = content.groups;
+  if (!Array.isArray(groups) || groups.length !== 4) {
+    throw new Error("puzzle content must contain exactly 4 groups");
+  }
+
+  const all: string[] = [];
+  const outGroups = groups.map((g, index) => {
+    const group = (g ?? {}) as Record<string, unknown>;
+    const category = typeof group.category === "string" ? group.category.trim() : "";
+    if (category === "") throw new Error(`group ${index + 1} needs a category name`);
+    const difficulty = Number(group.difficulty);
+    if (!Number.isInteger(difficulty) || difficulty < 1 || difficulty > 4) {
+      throw new Error(`group ${index + 1} needs a difficulty between 1 and 4`);
+    }
+    const words = group.words;
+    if (!Array.isArray(words) || words.length !== 4) {
+      throw new Error(`group ${index + 1} needs exactly 4 words`);
+    }
+    for (const w of words) {
+      if (typeof w !== "string" || w.trim() === "") {
+        throw new Error(`group ${index + 1} contains an empty word`);
+      }
+      all.push(w);
+    }
+    return {
+      category,
+      words: [...(words as string[])],
+      difficulty,
+      hint_word: blankToNull(group.hint_word),
+      // Positional, exactly as the SQL assigns it.
+      sort_order: index,
+    };
+  });
+
+  if (new Set(all).size !== 16) throw new Error("a puzzle needs 16 unique words");
+
+  const herringRaw = content.rainbow_herring;
+  let herring: string[] | null = null;
+  if (herringRaw !== null && herringRaw !== undefined) {
+    if (!Array.isArray(herringRaw) || herringRaw.length !== 4) {
+      throw new Error("rainbow_herring must have exactly 4 words");
+    }
+    for (const w of herringRaw) {
+      if (!all.includes(w as string)) {
+        throw new Error(`rainbow_herring word "${w}" is not one of this puzzle's 16 words`);
+      }
+    }
+    herring = [...(herringRaw as string[])];
+  }
+
+  const orderRaw = content.word_order;
+  let order: string[] | null = null;
+  if (orderRaw !== null && orderRaw !== undefined) {
+    if (!Array.isArray(orderRaw) || orderRaw.length !== 16) {
+      throw new Error("word_order must list all 16 words");
+    }
+    for (const w of orderRaw) {
+      if (!all.includes(w as string)) {
+        throw new Error(`word_order word "${w}" is not one of this puzzle's 16 words`);
+      }
+    }
+    order = [...(orderRaw as string[])];
+  }
+
+  // Fixed key order, so JSON.stringify of two canonical forms is the same
+  // exact-equality test jsonb comparison gives the real function.
+  return {
+    groups: outGroups,
+    word_order: order,
+    rainbow_herring: herring,
+    rainbow_category_name: blankToNull(content.rainbow_category_name),
+    rainbow_hint_word: blankToNull(content.rainbow_hint_word),
+    theme: blankToNull(content.theme),
+    is_emoji_puzzle: content.is_emoji_puzzle === true,
+  };
+}
 
 /**
  * Column defaults, mirroring the migrated schema.
@@ -43,6 +140,10 @@ const UNIQUE_KEYS: Record<string, string[]> = {
 const COLUMN_DEFAULTS: Record<string, FakeRow> = {
   game_sessions: {
     status: "in_progress",
+    // Nullable with no default: "not pinned" is a real, truthful state for a
+    // legacy session, and is never backfilled with a version nobody knows
+    // was played.
+    puzzle_version_id: null,
     is_official: false,
     bonus_rainbow_attempted: false,
     found_rainbow: false,
@@ -60,6 +161,10 @@ export class FakeSupabase {
     game_results: [],
     user_streaks: [],
     puzzles: [],
+    /** The live read path the game still loads a board from. */
+    puzzle_groups: [],
+    /** Immutable content snapshots; one of them is a puzzle's current version. */
+    puzzle_versions: [],
     /** Private per-device credentials (device_id, token_hash, retired_at). */
     device_identities: [],
     /** The one-time onboarding decision, one row per account. */
@@ -118,6 +223,11 @@ export class FakeSupabase {
    */
   rpcUnavailable = false;
 
+  /** Who is signed in right now — lets a test restore the caller it replaced. */
+  currentUserId(): string | null {
+    return this.authUser?.id ?? null;
+  }
+
   signIn(userId: string | null, opts?: { admin?: boolean }) {
     this.authUser = userId ? { id: userId } : null;
     this.isAdmin = !!opts?.admin;
@@ -136,6 +246,16 @@ export class FakeSupabase {
    * admin          -> everything
    */
   _visibleForRead(table: string, rows: FakeRow[]): FakeRow[] {
+    // puzzle_versions is PUZZLE content, not player data: the same audience
+    // as puzzle_groups may read the versions of a PUBLISHED puzzle, which is
+    // exactly what a resuming player needs. Drafts stay admin-only.
+    if (table === "puzzle_versions") {
+      if (this.isAdmin) return rows;
+      const published = new Set(
+        this.tables.puzzles.filter((p) => p.is_published === true).map((p) => p.id)
+      );
+      return rows.filter((r) => published.has(r.puzzle_id));
+    }
     if (!FakeSupabase.RLS_READ_PROTECTED.includes(table)) return rows;
     // These three are reachable ONLY through SECURITY DEFINER functions now;
     // no role has a SELECT policy on them, not even an admin.
@@ -361,6 +481,153 @@ export class FakeSupabase {
           error: null,
         };
       }
+      // ── The single, atomic admin write path ──
+      //
+      // Mirrors admin_save_puzzle(): one transaction that rewrites the live
+      // puzzle_groups AND writes the immutable snapshot, so the current
+      // puzzle can never be observed holding half-old and half-new groups.
+      case "admin_save_puzzle": {
+        // Authorization is checked INSIDE the function in the real thing
+        // too, precisely so it does not depend on the Admin UI hiding a
+        // button from anyone.
+        if (uid === null || !this.isAdmin) {
+          return {
+            data: null,
+            error: { code: "42501", message: "admin role required to save puzzles" },
+          };
+        }
+
+        let canonical: FakeRow;
+        try {
+          canonical = canonicalizePuzzleContent(args._content);
+        } catch (err) {
+          return {
+            data: null,
+            error: { code: "22023", message: (err as Error).message },
+          };
+        }
+
+        const metadata = (args._metadata ?? {}) as Record<string, unknown>;
+        if (!metadata.date) {
+          return { data: null, error: { code: "22023", message: "a puzzle needs a date" } };
+        }
+
+        const contentColumns = {
+          word_order: canonical.word_order,
+          rainbow_herring: canonical.rainbow_herring,
+          rainbow_category_name: canonical.rainbow_category_name,
+          rainbow_hint_word: canonical.rainbow_hint_word,
+          theme: canonical.theme,
+          is_emoji_puzzle: canonical.is_emoji_puzzle,
+        };
+        const metadataColumns = {
+          date: metadata.date,
+          title: metadata.title ?? null,
+          is_published: metadata.is_published === true,
+          emoji_puzzle_icon: metadata.emoji_puzzle_icon ?? null,
+          is_free_puzzle: metadata.is_free_puzzle === true,
+          free_puzzle_order: metadata.free_puzzle_order ?? null,
+        };
+
+        let pid = (args._puzzle_id as string | null) ?? null;
+        let puzzleRow: FakeRow;
+        if (pid === null) {
+          pid = this._newId();
+          puzzleRow = {
+            id: pid,
+            created_by: uid,
+            current_version_id: null,
+            ...metadataColumns,
+            ...contentColumns,
+          };
+          this.tables.puzzles.push(puzzleRow);
+        } else {
+          const existing = this.tables.puzzles.find((p) => p.id === pid);
+          if (!existing) {
+            return { data: null, error: { code: "P0002", message: `puzzle ${pid} does not exist` } };
+          }
+          puzzleRow = existing;
+          Object.assign(puzzleRow, metadataColumns, contentColumns);
+        }
+        this._log("puzzles", "update");
+
+        const currentVersion = this.tables.puzzle_versions.find(
+          (v) => v.id === puzzleRow.current_version_id
+        );
+
+        // THE versioning decision, and the only one: canonical content
+        // equality. A metadata-only edit and a re-save of untouched content
+        // both land here unchanged and create nothing.
+        let versionId = (currentVersion?.id as string | undefined) ?? null;
+        let createdVersion = false;
+        if (
+          !currentVersion ||
+          JSON.stringify(currentVersion.content) !== JSON.stringify(canonical)
+        ) {
+          const next =
+            Math.max(
+              0,
+              ...this.tables.puzzle_versions
+                .filter((v) => v.puzzle_id === pid)
+                .map((v) => (v.version_number as number) ?? 0)
+            ) + 1;
+          // The (puzzle_id, version_number) unique index, which is what
+          // stops a concurrent save or a retry from minting a second row
+          // that also calls itself Version N.
+          if (
+            this.tables.puzzle_versions.some(
+              (v) => v.puzzle_id === pid && v.version_number === next
+            )
+          ) {
+            return {
+              data: null,
+              error: { code: "23505", message: "duplicate key value violates unique constraint" },
+            };
+          }
+          versionId = this._newId();
+          this.tables.puzzle_versions.push({
+            id: versionId,
+            puzzle_id: pid,
+            version_number: next,
+            content: canonical,
+            created_by: uid,
+            created_at: new Date().toISOString(),
+          });
+          puzzleRow.current_version_id = versionId;
+          createdVersion = true;
+          this._log("puzzle_versions", "insert");
+        }
+
+        // The live read path, rewritten in the SAME transaction. Still a
+        // delete-and-reinsert, but now atomic: no reader can see the gap
+        // that used to leave an edited puzzle briefly wordless.
+        this.tables.puzzle_groups = this.tables.puzzle_groups.filter(
+          (g) => g.puzzle_id !== pid
+        );
+        for (const g of canonical.groups as FakeRow[]) {
+          this.tables.puzzle_groups.push({
+            id: this._newId(),
+            puzzle_id: pid,
+            category: g.category,
+            words: g.words,
+            difficulty: g.difficulty,
+            sort_order: g.sort_order,
+            hint_word: g.hint_word,
+          });
+        }
+        this._log("puzzle_groups", "upsert");
+
+        const versionRow = this.tables.puzzle_versions.find((v) => v.id === versionId);
+        return {
+          data: {
+            puzzle_id: pid,
+            version_id: versionId,
+            version_number: (versionRow?.version_number as number) ?? null,
+            created_version: createdVersion,
+          },
+          error: null,
+        };
+      }
       case "create_game_session": {
         // Every gameplay write now comes from a proven device.
         if (!deviceProven) return { data: null, error: null };
@@ -374,9 +641,29 @@ export class FakeSupabase {
             return { data: null, error: null };
           }
         }
+        // The version pin, supplied by the client because only the client
+        // knows which board it actually rendered — the point of the whole
+        // race this feature handles. Supplying it is not being trusted with
+        // it: a snapshot belonging to a DIFFERENT puzzle is refused outright
+        // rather than quietly stored or dropped to null. It is deliberately
+        // NOT required to be the current version.
+        const versionId = (args._puzzle_version_id as string | null) ?? null;
+        if (versionId !== null) {
+          const version = this.tables.puzzle_versions.find((v) => v.id === versionId);
+          if (!version || String(version.puzzle_id) !== String(args._puzzle_id)) {
+            return {
+              data: null,
+              error: {
+                code: "23503",
+                message: `puzzle version ${versionId} does not belong to puzzle ${String(args._puzzle_id)}`,
+              },
+            };
+          }
+        }
         const row = this._withDefaults("game_sessions", {
           id: this._newId(),
           puzzle_id: args._puzzle_id,
+          puzzle_version_id: versionId,
           // user_id comes from auth inside the function; the caller has no say.
           user_id: uid,
           device_id: args._device_id,
@@ -755,6 +1042,19 @@ export class FakeSupabase {
    */
   _writeDenied(table: string, op: string): string | null {
     if (op === "select") return null;
+    // puzzle_versions has NO insert, update or delete policy for any role,
+    // admins included, plus a trigger that refuses every UPDATE. The only
+    // producer of a version anywhere is admin_save_puzzle().
+    if (table === "puzzle_versions") {
+      return `puzzle_versions is immutable and has no ${op} policy: use admin_save_puzzle`;
+    }
+    // "Admins can manage puzzles"/"...puzzle groups" are the only write
+    // policies on these two, so a non-admin client cannot promote a version
+    // by writing puzzles.current_version_id directly either.
+    if (table === "puzzles" || table === "puzzle_groups") {
+      if (!this.isAdmin) return `admin role required to ${op} ${table}`;
+      return null;
+    }
     // The cutover migration removed the last direct write route into
     // gameplay, including the legacy game_sessions INSERT policy that cached
     // bundles used and that bypassed the onboarding gate.
@@ -773,6 +1073,25 @@ export class FakeSupabase {
   }
   _uniqueKey(table: string) {
     return UNIQUE_KEYS[table];
+  }
+
+  /**
+   * puzzles_check_current_version(), mirrored.
+   *
+   * A puzzle may only point at a snapshot that BELONGS TO IT. Without this,
+   * an admin (or a bug) could promote puzzle B's content as puzzle A's
+   * current version, and every new player of A would be handed a board from
+   * a different puzzle. Enforced in the database by a trigger, so it holds
+   * for direct writes as well as for admin_save_puzzle.
+   */
+  _currentVersionDenied(puzzleId: unknown, versionId: unknown): string | null {
+    if (versionId === null || versionId === undefined) return null;
+    const version = this.tables.puzzle_versions.find((v) => v.id === versionId);
+    if (!version) return `current_version_id ${String(versionId)} does not exist`;
+    if (version.puzzle_id !== puzzleId) {
+      return `current_version_id ${String(versionId)} belongs to puzzle ${String(version.puzzle_id)}, not ${String(puzzleId)}`;
+    }
+    return null;
   }
   /**
    * The session-capability check from migration section 7a, mirrored exactly.
@@ -1026,6 +1345,12 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: unknown }> {
 
     if (p.op === "update") {
       const targets = rows.filter((r) => this.db._match(r, this.filters));
+      if (this.table === "puzzles" && "current_version_id" in p.patch) {
+        for (const t of targets) {
+          const denied = this.db._currentVersionDenied(t.id, p.patch.current_version_id);
+          if (denied) return { data: null, error: { code: "23503", message: denied } };
+        }
+      }
       for (const t of targets) Object.assign(t, p.patch);
       this.db._log(this.table, "update");
       return this.shape(targets);

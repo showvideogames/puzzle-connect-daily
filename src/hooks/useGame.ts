@@ -15,6 +15,7 @@ import {
   saveProgress,
   type SavedProgress,
 } from "@/lib/gameProgress";
+import { pinnedContentFrom } from "@/lib/puzzleVersion";
 
 // Re-exported so existing importers (Index.tsx, Archive.tsx) keep working —
 // the implementations moved to lib/gameProgress.ts so that both this hook and
@@ -304,7 +305,26 @@ export function useGame(
   // when one exists, and otherwise created lazily on the first meaningful
   // gameplay action. Nothing below runs on mount: merely opening a puzzle
   // must leave no gameplay session behind.
-  const { sessionIdRef, recordGuess, recordHint } = useGameSession(puzzle.id, entryContext);
+  const { sessionIdRef, recordGuess, recordHint } = useGameSession(
+    puzzle.id,
+    entryContext,
+    puzzle.versionId ?? null
+  );
+
+  /**
+   * The content of the board being played, frozen for the progress blob.
+   *
+   * `puzzle` here is already the RESOLVED version — the page hands this hook
+   * either the current version or, for a resumed game, the earlier one that
+   * was pinned (see lib/puzzleVersion.ts). So snapshotting it is always
+   * truthful about what this attempt is actually being played against, and
+   * re-writing the same snapshot on a resumed mount is a no-op rather than a
+   * re-pin.
+   *
+   * null when the database carries no version id at all, which leaves the
+   * blob exactly as it was before this feature existed.
+   */
+  const puzzleSnapshot = useMemo(() => pinnedContentFrom(puzzle), [puzzle]);
 
   /**
    * Game state at the moment a durable event happened.
@@ -468,6 +488,7 @@ export function useGame(
         fullHintUsed: effectiveFullHintUsed,
         activeTimeSeconds: activeSecondsRef.current,
         gameSessionId: sessionIdRef.current,
+        puzzleSnapshot,
       });
     }
   }, [state, shuffledWords, rainbowWords, tileColors, puzzle.id, effectiveSmallHintUsed, effectiveFullHintUsed]);
@@ -501,6 +522,7 @@ export function useGame(
       fullHintUsed: effectiveFullHintUsed,
       activeTimeSeconds: activeSecondsRef.current,
         gameSessionId: sessionIdRef.current,
+        puzzleSnapshot,
       ...(existing?.finalSolvedGroups ? { finalSolvedGroups: existing.finalSolvedGroups } : {}),
     });
   }, [tileColors]);
@@ -565,11 +587,16 @@ export function useGame(
     const isOfficial = await finalizeGameSession({
       ...statsParams,
       sessionId: sessionIdRef.current,
+      // Only consulted by the fallback that has to create the session at
+      // completion time (a legacy progress blob, or a creation that failed).
+      // An existing session keeps the version it was pinned to at its first
+      // meaningful action and is never re-stamped here.
+      puzzleVersionId: puzzle.versionId ?? null,
       entryContext,
       skipStreak: isArchive,
     });
     isOfficialAttemptRef.current = isOfficial;
-  }, [isArchive, sessionIdRef, entryContext]);
+  }, [isArchive, sessionIdRef, entryContext, puzzle.versionId]);
 
   const setTileColor = useCallback((word: string, color: string | null) => {
     setTileColors((prev) => ({ ...prev, [word]: color }));
@@ -958,6 +985,7 @@ export function useGame(
             fullHintUsed: effectiveFullHintUsed,
             activeTimeSeconds: activeSecondsRef.current,
         gameSessionId: sessionIdRef.current,
+        puzzleSnapshot,
           });
         }
       } else {
@@ -1047,6 +1075,7 @@ export function useGame(
                   fullHintUsed: effectiveFullHintUsed,
                   activeTimeSeconds: activeSecondsRef.current,
         gameSessionId: sessionIdRef.current,
+        puzzleSnapshot,
                 });
               }
             }, 800 + i * 1500);

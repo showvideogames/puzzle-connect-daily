@@ -23,7 +23,21 @@ import {
  * first meaningful gameplay action, which is what keeps a player who opens a
  * puzzle, looks at it and leaves from creating any gameplay session at all.
  */
-export function useGameSession(puzzleId: string, entryContext: EntryContext) {
+export function useGameSession(
+  puzzleId: string,
+  entryContext: EntryContext,
+  /**
+   * The puzzle version the board being played was built from, or null when
+   * nothing is pinned.
+   *
+   * Passed through unchanged to session creation so the session records the
+   * content its player is ACTUALLY looking at. If an admin publishes a newer
+   * version between this player opening the board and taking their first
+   * action, this is still the older id — which is exactly right, because the
+   * older board is what their first guess will be judged against.
+   */
+  puzzleVersionId: string | null = null
+) {
   /**
    * The durable session id for this attempt.
    *
@@ -71,7 +85,12 @@ export function useGameSession(puzzleId: string, entryContext: EntryContext) {
       if (creatingRef.current) return creatingRef.current;
 
       const pending = (async () => {
-        const id = await createGameSession({ puzzleId, entryContext, snapshot });
+        const id = await createGameSession({
+          puzzleId,
+          puzzleVersionId,
+          entryContext,
+          snapshot,
+        });
         if (id) persistSessionId(id);
         else unavailableRef.current = true;
         return id;
@@ -84,7 +103,7 @@ export function useGameSession(puzzleId: string, entryContext: EntryContext) {
         creatingRef.current = null;
       }
     },
-    [puzzleId, entryContext, persistSessionId]
+    [puzzleId, puzzleVersionId, entryContext, persistSessionId]
   );
 
   /**

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { COMPLETED_STATUSES } from "@/lib/gameStats";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +29,69 @@ const parseWords = (value: string) =>
     .split(",")
     .map(normalizeWord)
     .filter(Boolean);
+
+/**
+ * The gameplay content of a puzzle, in the exact shape admin_save_puzzle
+ * expects — and in a fixed key order, so JSON.stringify of two of these is a
+ * usable "is this the same puzzle?" comparison.
+ *
+ * WHAT COUNTS AS GAMEPLAY. Everything here can decide whether a submitted
+ * group is correct, or what the board and its answers look like while being
+ * played: the 16 words, which category each belongs to, the category names,
+ * the difficulty/colour order, the per-group hint words, the Rainbow answer
+ * and its name and hint, the theme (which drives the bonus category's
+ * colours and its default name) and the emoji flag (which changes how every
+ * tile renders). Changing any of them creates a new version.
+ *
+ * WHAT DOES NOT. Date, title, published state, the Archive card's emoji
+ * icon, and free-puzzle placement are metadata: they travel in a separate
+ * argument and never create a version, because correcting a title has never
+ * been able to strand a player mid-game.
+ *
+ * This mirrors validate_puzzle_content() in the versioning migration. The
+ * database is authoritative — it re-validates and re-canonicalises whatever
+ * arrives — so a drift here shows up as a slightly wrong hint in the editor,
+ * never as a wrong version being written.
+ */
+interface PuzzleContentPayload {
+  groups: { category: string; words: string[]; difficulty: number; hint_word: string | null; sort_order: number }[];
+  word_order: string[] | null;
+  rainbow_herring: string[] | null;
+  rainbow_category_name: string | null;
+  rainbow_hint_word: string | null;
+  theme: string | null;
+  is_emoji_puzzle: boolean;
+}
+
+function buildContentPayload(input: {
+  groups: { category: string; words: string[]; difficulty: number; hintWord: string | null }[];
+  wordOrder: string[] | null;
+  rainbowHerring: string[] | null;
+  rainbowCategoryName: string | null;
+  rainbowHintWord: string | null;
+  theme: string | null;
+  isEmojiPuzzle: boolean;
+}): PuzzleContentPayload {
+  const blankToNull = (v: string | null | undefined) => {
+    const t = (v ?? "").trim();
+    return t === "" ? null : t;
+  };
+  return {
+    groups: input.groups.map((g, index) => ({
+      category: g.category.trim(),
+      words: g.words,
+      difficulty: g.difficulty,
+      hint_word: blankToNull(g.hintWord),
+      sort_order: index,
+    })),
+    word_order: input.wordOrder && input.wordOrder.length === 16 ? input.wordOrder : null,
+    rainbow_herring: input.rainbowHerring && input.rainbowHerring.length === 4 ? input.rainbowHerring : null,
+    rainbow_category_name: blankToNull(input.rainbowCategoryName),
+    rainbow_hint_word: blankToNull(input.rainbowHintWord),
+    theme: blankToNull(input.theme),
+    is_emoji_puzzle: input.isEmojiPuzzle,
+  };
+}
 
 // ─── Mini Calendar ──────────────────────────────────────────────────────────
 
@@ -235,6 +299,28 @@ export default function Admin() {
   // Existing puzzles list
   const [puzzles, setPuzzles] = useState<any[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  /**
+   * The version number currently live for each puzzle, so the editor can say
+   * which version the next save would create.
+   *
+   * Kept out of the puzzles row deliberately: the version number is derived
+   * from puzzle_versions, and denormalising it onto puzzles would create a
+   * second copy that could drift from the immutable table it describes.
+   * This is one extra small query on the Admin screen only, and nothing on
+   * the player-facing load path changed at all.
+   */
+  const [currentVersionNumbers, setCurrentVersionNumbers] = useState<Record<string, number>>({});
+  /**
+   * The gameplay content of the puzzle being edited, exactly as it was
+   * loaded. Compared against the live form to tell the admin, before they
+   * save, whether this edit will create a new version.
+   *
+   * Advisory only. The database makes the real decision (canonical jsonb
+   * equality inside admin_save_puzzle) and reports what it actually did, so
+   * a mismatch here can never cause a wrong version to be written — at worst
+   * the hint is pessimistic and the toast afterwards corrects it.
+   */
+  const [loadedContent, setLoadedContent] = useState<string | null>(null);
   const [expandedStatsId, setExpandedStatsId] = useState<string | null>(null);
   const [puzzleStats, setPuzzleStats] = useState<Record<string, any>>({});
   const [puzzleRatings, setPuzzleRatings] = useState<Record<string, RatingSummary>>({});
@@ -297,6 +383,64 @@ export default function Admin() {
     editingId,
   };
 
+  /**
+   * A one-line, always-visible answer to "will saving this create a new
+   * version?" — so an admin is never surprised by what a save did.
+   *
+   * Advisory. admin_save_puzzle makes the real decision by comparing
+   * canonical content in the database, and its result drives the toast
+   * afterwards, so a disagreement here shows up as a hint that was slightly
+   * pessimistic — never as a version written that should not have been.
+   *
+   * Nothing is shown while creating a brand-new puzzle: "this will be
+   * Version 1" is not information an admin needs.
+   */
+  const versionHint = useMemo(() => {
+    if (!editingId || loadedContent === null) return null;
+    const current = currentVersionNumbers[editingId];
+    const next = JSON.stringify(
+      buildContentPayload({
+        groups: groups.map((g) => ({
+          category: g.category,
+          words: parseWords(g.words),
+          difficulty: g.difficulty,
+          hintWord: g.hintWord,
+        })),
+        wordOrder,
+        rainbowHerring:
+          rainbowWordOrder.length === 4
+            ? rainbowWordOrder
+            : rainbowHerring.every(Boolean)
+              ? (rainbowHerring as string[])
+              : null,
+        rainbowCategoryName,
+        rainbowHintWord,
+        theme,
+        isEmojiPuzzle,
+      })
+    );
+    if (next === loadedContent) {
+      return current
+        ? `No gameplay changes — saving keeps this on Version ${current}. Anyone playing it is unaffected.`
+        : "No gameplay changes — saving will not create a new version.";
+    }
+    return current
+      ? `Gameplay changed — saving creates Version ${current + 1}. Anyone already playing Version ${current} keeps that board and can finish it.`
+      : "Gameplay changed — saving creates a new version. Anyone already playing keeps the board they started.";
+  }, [
+    editingId,
+    loadedContent,
+    currentVersionNumbers,
+    groups,
+    wordOrder,
+    rainbowWordOrder,
+    rainbowHerring,
+    rainbowCategoryName,
+    rainbowHintWord,
+    theme,
+    isEmojiPuzzle,
+  ]);
+
   const { draftRestored, setDraftRestored, saveDraft, clearDraft, getCurrentDraft, handleBlurSave } = useDraftPersistence({
     enabled: isAdmin,
     editingId,
@@ -333,6 +477,34 @@ export default function Admin() {
     }
 
     setPuzzles(data || []);
+
+    // Which version each puzzle is currently on, so the editor can name the
+    // version the next save would create. Deliberately selects only the two
+    // tiny key columns — never `content`, which would pull every snapshot of
+    // every puzzle into the browser for a label.
+    const { data: versionRows, error: versionError } = await supabase
+      .from("puzzle_versions")
+      .select("id, version_number");
+
+    if (versionError) {
+      // Non-fatal by design: this only powers an informational label, and
+      // the puzzle list itself is already loaded. A database that has not
+      // had the versioning migration applied lands here and the editor
+      // simply shows no version hint.
+      console.warn("Load puzzle versions failed:", versionError);
+      setCurrentVersionNumbers({});
+      return;
+    }
+
+    const numberById = new Map(
+      ((versionRows ?? []) as { id: string; version_number: number }[]).map((v) => [v.id, v.version_number])
+    );
+    const byPuzzle: Record<string, number> = {};
+    for (const p of data || []) {
+      const n = p.current_version_id ? numberById.get(p.current_version_id) : undefined;
+      if (n !== undefined) byPuzzle[p.id] = n;
+    }
+    setCurrentVersionNumbers(byPuzzle);
   }
 
   async function loadGlobalStats() {
@@ -508,69 +680,69 @@ export default function Admin() {
 
     setSaving(true);
     try {
-      let puzzleId = editingId;
       // Use rainbowWordOrder if it has been customized, otherwise fall back to rainbowHerring
       const rainbowArr = rainbowWordOrder.length === 4 ? rainbowWordOrder : (rainbowHerring.every(Boolean) ? (rainbowHerring as string[]) : null);
 
-      if (editingId) {
-        const { error } = await supabase
-          .from("puzzles")
-          .update({
-            date: puzzleDate,
-            title: puzzleTitle || null,
-            is_published: isPublished,
-            word_order: wordOrder.length === 16 ? wordOrder : null,
-            rainbow_herring: rainbowArr,
-            rainbow_category_name: rainbowCategoryName.trim() || null,
-            rainbow_hint_word: rainbowHintWord.trim() || null,
-            theme: theme || null,
-            is_emoji_puzzle: isEmojiPuzzle,
-            emoji_puzzle_icon: isEmojiPuzzle ? (emojiPuzzleIcon.trim() || null) : null,
-            is_free_puzzle: isFreePuzzle,
-            free_puzzle_order: isFreePuzzle ? freePuzzleOrder : null,
-          })
-          .eq("id", editingId);
-        if (error) throw error;
+      // ── One call, one transaction ──
+      // This used to be three separate round trips: UPDATE the puzzle, DELETE
+      // every puzzle_groups row, then INSERT the new ones. Between the delete
+      // and the insert the puzzle existed with NO WORDS AT ALL, and if the
+      // insert failed it stayed that way — so a save that went wrong could
+      // leave a live puzzle unplayable.
+      //
+      // admin_save_puzzle does all of it atomically, and in the same
+      // transaction writes the immutable version snapshot, so the current
+      // puzzle can never hold half-old and half-new groups.
+      //
+      // It also owns the versioning decision: a new version is created only
+      // when the canonical gameplay content actually changed, so a
+      // metadata-only edit and a re-save of untouched content create none.
+      // The result says what really happened, which is what the toast
+      // reports — the editor never guesses.
+      const { data, error } = await supabase.rpc("admin_save_puzzle", {
+        _puzzle_id: editingId,
+        _metadata: {
+          date: puzzleDate,
+          title: puzzleTitle || null,
+          is_published: isPublished,
+          emoji_puzzle_icon: isEmojiPuzzle ? (emojiPuzzleIcon.trim() || null) : null,
+          is_free_puzzle: isFreePuzzle,
+          free_puzzle_order: isFreePuzzle ? freePuzzleOrder : null,
+        },
+        _content: buildContentPayload({
+          groups: groups.map((g) => ({
+            category: g.category,
+            words: parseWords(g.words),
+            difficulty: g.difficulty,
+            hintWord: g.hintWord,
+          })),
+          wordOrder,
+          rainbowHerring: rainbowArr,
+          rainbowCategoryName,
+          rainbowHintWord,
+          theme,
+          isEmojiPuzzle,
+          // Cast because the generated Json type describes arbitrary JSON,
+          // while this is a specific well-known object shape. The database
+          // re-validates it anyway — validate_puzzle_content is the real
+          // contract, not this type.
+        }) as unknown as Json,
+      });
+      if (error) throw error;
 
-        const { error: delError } = await supabase.from("puzzle_groups").delete().eq("puzzle_id", editingId);
-        if (delError) throw delError;
+      const result = (data ?? {}) as {
+        version_number?: number;
+        created_version?: boolean;
+      };
+      if (result.created_version) {
+        toast.success(
+          `${editingId ? "Puzzle updated" : "Puzzle created"} — saved as Version ${result.version_number ?? "?"}.`
+        );
       } else {
-        const { data, error } = await supabase
-          .from("puzzles")
-          .insert({
-            date: puzzleDate,
-            title: puzzleTitle || null,
-            is_published: isPublished,
-            created_by: user!.id,
-            word_order: wordOrder.length === 16 ? wordOrder : null,
-            rainbow_herring: rainbowArr,
-            rainbow_category_name: rainbowCategoryName.trim() || null,
-            rainbow_hint_word: rainbowHintWord.trim() || null,
-            theme: theme || null,
-            is_emoji_puzzle: isEmojiPuzzle,
-            emoji_puzzle_icon: isEmojiPuzzle ? (emojiPuzzleIcon.trim() || null) : null,
-            is_free_puzzle: isFreePuzzle,
-            free_puzzle_order: isFreePuzzle ? freePuzzleOrder : null,
-          })
-          .select("id")
-          .single();
-        if (error) throw error;
-        puzzleId = data.id;
+        toast.success(
+          `Puzzle updated — no gameplay changes, still Version ${result.version_number ?? "?"}.`
+        );
       }
-
-      const { error: groupError } = await supabase.from("puzzle_groups").insert(
-        normalizedGroups.map((group) => ({
-          puzzle_id: puzzleId!,
-          category: group.category,
-          words: group.words,
-          difficulty: group.difficulty,
-          sort_order: group.sort_order,
-          hint_word: group.hint_word,
-        }))
-      );
-      if (groupError) throw groupError;
-
-      toast.success(editingId ? "Puzzle updated!" : "Puzzle created!");
       clearDraft();
       setDraftRestored(false);
       resetForm();
@@ -608,6 +780,7 @@ export default function Admin() {
     setEmojiPuzzleIcon("");
     setIsFreePuzzle(false);
     setFreePuzzleOrder(null);
+    setLoadedContent(null);
   }
 
   function handleClearDraft() {
@@ -646,6 +819,26 @@ export default function Admin() {
     setEmojiPuzzleIcon(p.emoji_puzzle_icon ?? "");
     setIsFreePuzzle(p.is_free_puzzle ?? false);
     setFreePuzzleOrder(p.free_puzzle_order ?? null);
+    // The baseline the version hint compares against: this puzzle's gameplay
+    // content exactly as it is stored right now.
+    setLoadedContent(
+      JSON.stringify(
+        buildContentPayload({
+          groups: sorted.map((g: any) => ({
+            category: g.category,
+            words: g.words as string[],
+            difficulty: g.difficulty as number,
+            hintWord: g.hint_word ?? null,
+          })),
+          wordOrder: p.word_order ?? null,
+          rainbowHerring: p.rainbow_herring ?? null,
+          rainbowCategoryName: p.rainbow_category_name ?? null,
+          rainbowHintWord: p.rainbow_hint_word ?? null,
+          theme: p.theme ?? null,
+          isEmojiPuzzle: p.is_emoji_puzzle ?? false,
+        })
+      )
+    );
     setDraftRestored(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1082,6 +1275,15 @@ export default function Admin() {
               </div>
             )}
           </div>
+
+          {/* Version hint.
+              Informational, and intentionally low-key: versioning PROTECTS
+              players who are mid-game (their board keeps working on the
+              version they started), so editing an old puzzle is a normal,
+              safe thing to do and must not be dressed up as dangerous. */}
+          {versionHint && (
+            <p className="text-xs text-muted-foreground -mt-2">{versionHint}</p>
+          )}
 
           <div className="flex gap-3">
             <Button onClick={handleSave} disabled={saving}>

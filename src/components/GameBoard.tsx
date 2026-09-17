@@ -23,6 +23,7 @@ import type { EntryContext } from "@/lib/entryContext";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { trackEvent } from "@/lib/analytics";
 import { resolveTheme } from "@/lib/themes";
+import { loadPlayedDifficulties } from "@/lib/puzzleVersion";
 
 function extractTrailingEmojis(str: string): string {
   try {
@@ -789,6 +790,40 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     return items;
   }, [puzzle, theme]);
 
+  /**
+   * The colour of each group AS THIS PLAYER PLAYED IT.
+   *
+   * The share grid and the Guess History grid are records of what somebody
+   * did, so they are drawn from the version that was on the board at the
+   * time — not from whatever is canonical now. Both map a guess's stored
+   * group indices to a difficulty colour, so an admin who later reorders a
+   * puzzle's difficulties would otherwise silently recolour a finished
+   * player's saved result into a game they never played.
+   *
+   * This affects the COLOUR of a square and nothing else. The stored guesses
+   * keep their real words, order and outcomes; the share_grid saved on the
+   * session at completion is never regenerated at all; and the SOLUTION
+   * shown above the grid still comes from the current version, per the rule
+   * that a completed player revisiting the Archive sees the newest
+   * corrected answers.
+   *
+   * null for a game with no pinned snapshot (a legacy blob, or a database
+   * without the versioning migration), which falls back to the live puzzle
+   * exactly as before.
+   */
+  const playedDifficulties = useMemo(
+    () => loadPlayedDifficulties(puzzle.id),
+    [puzzle.id]
+  );
+  // 0 when neither source knows this index — not a valid difficulty, so the
+  // lookups below fall through to their existing "unknown" rendering rather
+  // than inventing a colour.
+  const playedDifficultyAt = useCallback(
+    (groupIndex: number): number =>
+      playedDifficulties?.[groupIndex] ?? puzzle.groups[groupIndex]?.difficulty ?? 0,
+    [playedDifficulties, puzzle]
+  );
+
   const generateShareLines = useCallback((): string[] => {
     const lines: string[] = [];
     for (const attempt of state.guessHistory) {
@@ -805,7 +840,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       } else {
         const row = attempt.groupIndices
           .map((gi) => {
-            const diff = puzzle.groups[gi]?.difficulty;
+            const diff = playedDifficultyAt(gi);
             return DIFFICULTY_SQUARE[diff] || "⬜";
           })
           .join("");
@@ -813,7 +848,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       }
     }
     return lines;
-  }, [state.guessHistory, puzzle, theme]);
+  }, [state.guessHistory, playedDifficultyAt, theme]);
 
   // Same source of truth as generateShareLines above (state.guessHistory) —
   // guessHistory is already the real chronological event log (guesses AND
@@ -839,12 +874,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       return {
         type: "guess",
         cells: attempt.groupIndices.map((gi): ResultCellKind => {
-          const diff = puzzle.groups[gi]?.difficulty;
+          const diff = playedDifficultyAt(gi);
           return DIFFICULTY_RESULT_KIND[diff] ?? "yellow";
         }),
       };
     });
-  }, [state.guessHistory, puzzle]);
+  }, [state.guessHistory, playedDifficultyAt]);
 
   const generateShareText = useCallback(() => {
     const header = puzzle.title
