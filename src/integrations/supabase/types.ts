@@ -286,7 +286,15 @@ export type Database = {
           user_id?: string | null
           won?: boolean | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "game_sessions_puzzle_version_id_fkey"
+            columns: ["puzzle_version_id"]
+            isOneToOne: false
+            referencedRelation: "puzzle_versions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       guess_events: {
         Row: {
@@ -519,8 +527,8 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
-          date: string
           current_version_id: string | null
+          date: string
           emoji_puzzle_icon: string | null
           free_puzzle_order: number | null
           id: string
@@ -538,8 +546,8 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
-          date: string
           current_version_id?: string | null
+          date: string
           emoji_puzzle_icon?: string | null
           free_puzzle_order?: number | null
           id?: string
@@ -557,8 +565,8 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
-          date?: string
           current_version_id?: string | null
+          date?: string
           emoji_puzzle_icon?: string | null
           free_puzzle_order?: number | null
           id?: string
@@ -834,11 +842,7 @@ export type Database = {
     }
     Functions: {
       admin_save_puzzle: {
-        Args: { _content: Json; _metadata: Json; _puzzle_id: string | null }
-        Returns: Json
-      }
-      validate_puzzle_content: {
-        Args: { _content: Json }
+        Args: { _content: Json; _metadata: Json; _puzzle_id: string }
         Returns: Json
       }
       count_own_anonymous_sessions: {
@@ -860,7 +864,7 @@ export type Database = {
           _entry_context: string
           _mistakes?: number
           _puzzle_id: string
-          _puzzle_version_id?: string | null
+          _puzzle_version_id?: string
         }
         Returns: string
       }
@@ -1026,6 +1030,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      validate_puzzle_content: { Args: { _content: Json }; Returns: Json }
       verify_device: {
         Args: { _device_id: string; _device_token: string }
         Returns: boolean
