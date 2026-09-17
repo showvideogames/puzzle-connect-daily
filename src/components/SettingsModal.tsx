@@ -148,15 +148,21 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                     </Link>
                     <div className="flex items-center gap-3 px-2 py-1.5">
                       {/* PlayerAuth's own icon button keeps working exactly
-                          as before (unchanged click target, unchanged
-                          dropdown positioning) — forceOpen only adds a
-                          SECOND way in, for the text button below, rather
-                          than replacing or nesting inside it. */}
+                          as before (unchanged click target) — forceOpen only
+                          adds a SECOND way in, for the text button below,
+                          rather than replacing or nesting inside it.
+                          dropdownAlign="left": this icon sits near the LEFT
+                          of the row (icon-then-label), unlike PlayerAuth's
+                          usual header placement at the far right of the
+                          screen — the default right-anchored dropdown grew
+                          leftward off the edge of this narrower, centered
+                          modal panel instead of staying inside it. */}
                       <PlayerAuth
                         user={user}
                         onSignOut={onSignOut ?? (() => {})}
                         forceOpen={authOpen}
                         onForceClose={() => setAuthOpen(false)}
+                        dropdownAlign="left"
                       />
                       {/* A real, separate <button> — not text nested inside
                           PlayerAuth's own <button> above, which would be

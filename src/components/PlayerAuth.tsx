@@ -13,6 +13,21 @@ interface PlayerAuthProps {
   forceOpen?: boolean;
   onForceClose?: () => void;
   hideTrigger?: boolean;
+  /**
+   * Which edge the signed-in account dropdown hangs from, i.e. which
+   * DIRECTION it opens. Default "right" is tuned for this component's
+   * original context — the site header, where the icon sits at the far
+   * right of the screen, so anchoring the dropdown's right edge to the
+   * icon and letting it grow leftward keeps it on-screen.
+   *
+   * That same anchor breaks in a context where the icon sits near the LEFT
+   * of its container instead (e.g. SettingsModal's Menu row, icon-then-
+   * label): "grow leftward from a point near the left edge" pushes most of
+   * a ~200px-wide dropdown off the visible panel. "left" flips it to anchor
+   * the LEFT edge and grow rightward, which is what a left-positioned
+   * trigger needs.
+   */
+  dropdownAlign?: "left" | "right";
 }
 
 function GoogleIcon() {
@@ -48,7 +63,7 @@ function PersonIcon({ filled, className }: { filled: boolean; className?: string
 
 type AuthView = "signin" | "signup" | "forgot" | "confirm";
 
-export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, hideTrigger = false }: PlayerAuthProps) {
+export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, hideTrigger = false, dropdownAlign = "right" }: PlayerAuthProps) {
   const [showAuth, setShowAuth] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   // forceOpen opens whichever UI actually applies right now: the sign-in
@@ -151,7 +166,7 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
 
         {showDropdown && (
           <div
-            className="absolute right-0 top-full mt-1 rounded-xl shadow-xl overflow-hidden"
+            className={`absolute ${dropdownAlign === "left" ? "left-0" : "right-0"} top-full mt-1 rounded-xl shadow-xl overflow-hidden`}
             style={{
               background: "hsl(var(--card))",
               border: "1px solid hsl(var(--border))",
