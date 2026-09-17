@@ -342,9 +342,7 @@ export default function Admin() {
         { count: totalSessions },
         { count: wonSessions },
         { count: rainbowSessions },
-        { count: registeredUsers },
-        { data: currentStreakData },
-        { data: longestStreakData },
+        { data: streakSummary },
       ] = await Promise.all([
         // COMPLETED sessions only, so these admin totals keep meaning
         // "games finished" rather than silently becoming "games opened"
@@ -352,18 +350,30 @@ export default function Admin() {
         supabase.from("game_sessions").select("*", { count: "exact", head: true }).in("status", COMPLETED_STATUSES as unknown as string[]),
         supabase.from("game_sessions").select("*", { count: "exact", head: true }).in("status", COMPLETED_STATUSES as unknown as string[]).eq("won", true),
         supabase.from("game_sessions").select("*", { count: "exact", head: true }).in("status", COMPLETED_STATUSES as unknown as string[]).eq("found_rainbow", true),
-        supabase.from("user_streaks").select("*", { count: "exact", head: true }).not("user_id", "is", null),
-        supabase.from("user_streaks").select("current_streak").order("current_streak", { ascending: false }).limit(1),
-        supabase.from("user_streaks").select("longest_streak").order("longest_streak", { ascending: false }).limit(1),
+        // user_streaks is no longer directly readable: it was world-readable
+        // and world-writable, so all client access moved behind RPCs. This
+        // one is admin-gated and returns three integers, never a row.
+        //
+        // These numbers are now CORRECT. The direct reads they replace were
+        // silently filtered by the old SELECT policy to the admin's own row
+        // plus anonymous rows, so "registered users with streaks" has always
+        // undercounted.
+        supabase.rpc("get_streak_admin_summary"),
       ]);
+
+      const streaks = (Array.isArray(streakSummary) ? streakSummary[0] : streakSummary) as {
+        accounts_with_streaks?: number;
+        max_current_streak?: number;
+        max_longest_streak?: number;
+      } | null;
 
       setGlobalStats({
         totalSessions: totalSessions ?? 0,
         wonSessions: wonSessions ?? 0,
         rainbowSessions: rainbowSessions ?? 0,
-        registeredUsers: registeredUsers ?? 0,
-        highestCurrentStreak: currentStreakData?.[0]?.current_streak ?? 0,
-        highestLongestStreak: longestStreakData?.[0]?.longest_streak ?? 0,
+        registeredUsers: streaks?.accounts_with_streaks ?? 0,
+        highestCurrentStreak: streaks?.max_current_streak ?? 0,
+        highestLongestStreak: streaks?.max_longest_streak ?? 0,
       });
     } catch (err) {
       console.error("Global stats error:", err);

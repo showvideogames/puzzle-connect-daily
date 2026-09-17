@@ -505,23 +505,11 @@ export function useGame(
     });
   }, [tileColors]);
 
-  const saveResultToDb = useCallback(async (won: boolean, mistakes: number) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { error } = await supabase.from("game_results").upsert({
-        user_id: user.id,
-        puzzle_id: puzzle.id,
-        won,
-        mistakes,
-      }, { onConflict: "user_id,puzzle_id" });
-      if (error) throw error;
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      console.error("saveResultToDb error:", err);
-      trackEvent("save_stats_failed", { reason });
-    }
-  }, [puzzle.id]);
+  // game_results is no longer written from here. It is written by
+  // finalize_game_session, under exactly the same condition as before —
+  // official completion by a signed-in player — so the Daily Stats modal it
+  // feeds keeps its current meaning, while clients lose direct write access
+  // to the table.
 
   // Whether THIS mount's completed playthrough owns the permanent official
   // result for this puzzle+identity (see commitOfficialResult below) — null
@@ -581,10 +569,7 @@ export function useGame(
       skipStreak: isArchive,
     });
     isOfficialAttemptRef.current = isOfficial;
-    // game_results is a separate per-account table; only the official
-    // completion writes it, and only when signed in.
-    if (isOfficial) saveResultToDb(won, mistakes);
-  }, [isArchive, saveResultToDb, sessionIdRef, entryContext]);
+  }, [isArchive, sessionIdRef, entryContext]);
 
   const setTileColor = useCallback((word: string, color: string | null) => {
     setTileColors((prev) => ({ ...prev, [word]: color }));
@@ -1069,7 +1054,7 @@ export function useGame(
         }
       }
     }, totalDelay);
-  }, [state, puzzle, saveResultToDb, rainbowWords, getWordGroupIndex, tileColors, smallHintUsed, fullHintUsed, recordGuess, submittedGuessCount, toGuessEventInputs, eventSnapshot, commitOfficialResult, effectiveSmallHintUsed, effectiveFullHintUsed, getSolveOrder]);
+  }, [state, puzzle, rainbowWords, getWordGroupIndex, tileColors, smallHintUsed, fullHintUsed, recordGuess, submittedGuessCount, toGuessEventInputs, eventSnapshot, commitOfficialResult, effectiveSmallHintUsed, effectiveFullHintUsed, getSolveOrder]);
 
   const remainingWords = useMemo(() => {
     const solvedWords = state.solvedGroups

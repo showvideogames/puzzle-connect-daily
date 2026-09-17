@@ -42,6 +42,13 @@ export function useGameSession(puzzleId: string, entryContext: EntryContext) {
    */
   const creatingRef = useRef<Promise<string | null> | null>(null);
 
+  /**
+   * Set once a session could not be created for this game, so the rest of it
+   * is not half-recorded. Scoped to this mount: a later game, or a reload,
+   * gets a fresh attempt at saving.
+   */
+  const unavailableRef = useRef(false);
+
   const persistSessionId = useCallback(
     (id: string | null) => {
       sessionIdRef.current = id;
@@ -53,11 +60,20 @@ export function useGameSession(puzzleId: string, entryContext: EntryContext) {
   const ensureSession = useCallback(
     async (snapshot: EventSnapshot): Promise<string | null> => {
       if (sessionIdRef.current) return sessionIdRef.current;
+      // Once this game has started unsaved, it stays unsaved.
+      //
+      // If saving came back mid-game we could create a session now, but it
+      // would hold only the guesses from this point on — a partial record
+      // that reads as a real one. Recovering the earlier moves safely is not
+      // something we can do honestly, so the deliberate choice is to leave
+      // THIS game unsaved and let saving resume with the next one.
+      if (unavailableRef.current) return null;
       if (creatingRef.current) return creatingRef.current;
 
       const pending = (async () => {
         const id = await createGameSession({ puzzleId, entryContext, snapshot });
         if (id) persistSessionId(id);
+        else unavailableRef.current = true;
         return id;
       })();
 

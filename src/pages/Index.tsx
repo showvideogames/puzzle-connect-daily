@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { X } from "lucide-react";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
-import { useStatsMigration } from "@/hooks/useStatsMigration";
 import { UpdateBanner } from "@/components/UpdateBanner";
-import { StatsMigrationModal } from "@/components/StatsMigrationModal";
 import { GameHeader } from "@/components/GameHeader";
 import { GameBoard } from "@/components/GameBoard";
 import { LandingScreen } from "@/components/LandingScreen";
@@ -91,15 +89,6 @@ export default function Index() {
   }, [puzzle]);
 
   const updateAvailable = useVersionCheck();
-  const {
-    showMigration,
-    guestStreak,
-    guestLongest,
-    guestGamesPlayed,
-    checkForGuestStats,
-    importStats,
-    startFresh,
-  } = useStatsMigration();
 
   const openModal = useCallback((name: ModalName) => setActiveModal(name), []);
   const closeModal = useCallback(() => setActiveModal(null), []);
@@ -121,16 +110,16 @@ export default function Index() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const newUser = session?.user ?? null;
       setUser(newUser);
-
-      // Only trigger migration check on an active sign-in, not session restore
-      if (event === "SIGNED_IN" && newUser) {
-        checkForGuestStats(newUser);
-      }
+      // The one-time import decision is owned by OnboardingGate, which asks
+      // the server on every authenticated load rather than trying to infer a
+      // signup from the auth event type.
     });
     return () => subscription.unsubscribe();
-  }, [checkForGuestStats]);
+  }, []);
 
-  useEffect(() => {
+  const loadPuzzle = useCallback(() => {
+    setError(false);
+    setLoading(true);
     const timeout = setTimeout(() => {
       setError(true);
       setLoading(false);
@@ -150,6 +139,8 @@ export default function Index() {
 
     return () => clearTimeout(timeout);
   }, []);
+
+  useEffect(() => loadPuzzle(), [loadPuzzle]);
 
   useEffect(() => {
     try {
@@ -256,10 +247,22 @@ export default function Index() {
       )}
 
       {error ? (
+        /* The one genuinely blocking failure: no puzzle content means there
+           is nothing to play. A failure to SAVE is handled very differently —
+           the game stays playable and only gets a notice. */
         <div className="flex-1 flex items-center justify-center text-center px-4">
           <div>
             <p className="text-lg font-medium">Something went wrong.</p>
-            <p className="text-sm text-muted-foreground mt-1">Couldn't load today's puzzle. Please refresh and try again.</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Couldn't load today's puzzle.
+            </p>
+            <button
+              onClick={loadPuzzle}
+              className="mt-4 px-5 py-2.5 rounded-full text-sm font-semibold transition-opacity hover:opacity-90 active:scale-95"
+              style={{ background: "hsl(var(--foreground))", color: "hsl(var(--background))" }}
+            >
+              Retry
+            </button>
           </div>
         </div>
       ) : puzzle ? (
@@ -310,14 +313,6 @@ export default function Index() {
         onSmallHint={handleSmallHint}
         onFullHint={handleFullHint}
         puzzle={puzzle}
-      />
-      <StatsMigrationModal
-        open={showMigration}
-        guestStreak={guestStreak}
-        guestLongest={guestLongest}
-        guestGamesPlayed={guestGamesPlayed}
-        onImport={importStats}
-        onStartFresh={startFresh}
       />
       <SiteFooter />
     </div>

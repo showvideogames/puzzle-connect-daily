@@ -18,7 +18,14 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (t: string) => db.from(t),
     rpc: (n: string, a: Record<string, unknown>) => db.rpc(n, a),
-    auth: { getUser: () => db.auth.getUser() },
+    auth: {
+      getUser: () => db.auth.getUser(),
+      // useAccountOnboarding subscribes to auth changes; the tests drive
+      // sign-in through db.signIn() directly, so this only needs to exist.
+      onAuthStateChange: () => ({
+        data: { subscription: { unsubscribe: () => {} } },
+      }),
+    },
   },
 }));
 
@@ -123,22 +130,67 @@ async function guess(
   await settle();
 }
 
-beforeEach(() => {
+/**
+ * Give this "browser" a verified device identity, the way the app's boot gate
+ * does: mint one through the RPC and store both halves locally.
+ *
+ * Every gameplay write now requires a proven device, so without this the
+ * fixture would be indistinguishable from a client presenting a stolen or
+ * fabricated device id — which is exactly what the database refuses.
+ */
+async function mintDeviceIdentity() {
+  const { data } = await db.rpc("create_device_identity");
+  return (Array.isArray(data) ? data[0] : data) as {
+    device_id: string;
+    device_token: string;
+  };
+}
+
+beforeEach(async () => {
   reduceMotion();
-  localStorage.clear();
-  sessionStorage.clear();
+
+  // Ordering matters here. Every await is a window in which a straggling
+  // promise from the PREVIOUS test can still run — and those write session
+  // ids into the progress blob, which is what used to make the resume tests
+  // intermittently compare a stale id. So: drain them first, mint the
+  // identity, and only then clear storage and seed it, with no await in
+  // between. Several real ticks, because one macrotask is not enough to
+  // settle a chain of awaited writes.
+  for (let i = 0; i < 5; i++) {
+    await new Promise((r) => setTimeout(r, 10));
+  }
+
   db.tables.game_sessions = [];
   db.tables.guess_events = [];
   db.tables.hint_events = [];
   db.tables.game_results = [];
   db.tables.user_streaks = [];
+  db.tables.device_identities = [];
+  db.tables.account_onboarding = [];
+  db.tables.puzzle_aggregates = [];
+
+  // Clear any injected faults BEFORE minting, or a fault left behind by the
+  // previous test breaks this one's setup instead of its own assertions.
+  db.failAggregateWrites = 0;
+  db.rpcUnavailable = false;
+
+  const identity = await mintDeviceIdentity();
+
+  localStorage.clear();
+  sessionStorage.clear();
+  localStorage.setItem("rc-device-id", identity.device_id);
+  localStorage.setItem("rc-device-token", identity.device_token);
   db.tables.puzzles = [
     { id: PUZZLE_ID, rainbow_herring: puzzle.rainbowHerring },
     { id: "puzzle-completed", rainbow_herring: puzzle.rainbowHerring },
   ];
+  db.signIn(null);
+  db.failAggregateWrites = 0;
+  db.rpcUnavailable = false;
+  // The identity mint is setup, not gameplay — keep it out of the write- and
+  // rpc-volume assertions.
   db.writeLog = [];
   db.rpcLog = [];
-  db.signIn(null);
 });
 
 // ── A. PAGE VIEW ONLY ──────────────────────────────────────────────────────
@@ -389,8 +441,9 @@ describe("I. win", () => {
     expect(s.share_grid).toEqual(expect.any(String));
     expect(s.hints_used).toBe(false);
 
-    // Aggregates and streak happen exactly once, at official completion.
-    expect(db.writeLog.filter((w) => w.table === "rpc:increment_puzzle_aggregate")).toHaveLength(1);
+    // Aggregates and streak happen exactly once, at official completion —
+    // now inside the finalize transaction rather than as a separate call.
+    expect(db.tables.puzzle_aggregates.find((a) => a.puzzle_id === PUZZLE_ID)!.total_plays).toBe(1);
     expect(db.tables.user_streaks).toHaveLength(1);
 
     // Four guesses, no duplicates from the completion-time backfill.
@@ -489,24 +542,20 @@ describe("K. daily replay", () => {
     const first = mount();
     await playToLoss(first);
     const officialId = sessions()[0].id as string;
-    const aggregatesAfterFirst = db.writeLog.filter(
-      (w) => w.table === "rpc:increment_puzzle_aggregate"
-    ).length;
+    const playsAfterFirst =
+      (db.tables.puzzle_aggregates.find((a) => a.puzzle_id === PUZZLE_ID)?.total_plays as number) ?? 0;
     const streaksAfterFirst = db.tables.user_streaks.length;
     first.unmount();
 
-    // A second session exists and reaches completion anyway.
-    const { data: replay } = await db.from("game_sessions").insert({
-      puzzle_id: PUZZLE_ID,
-      user_id: null,
-      device_id: getDeviceId(),
-      status: "in_progress",
-      is_official: false,
-      won: false,
-      mistakes: 0,
-      completed_at: null,
-    }).select("id").single();
-    const replayId = (replay as { id: string }).id;
+    // A second session exists and reaches completion anyway. Created through
+    // the RPC, because direct inserts into game_sessions are gone — that was
+    // the last route that bypassed the onboarding gate.
+    const { data: replayId } = await db.rpc("create_game_session", {
+      _puzzle_id: PUZZLE_ID,
+      _device_id: getDeviceId(),
+      _device_token: localStorage.getItem("rc-device-token"),
+      _entry_context: "daily_home",
+    });
 
     // The rule: an official result already exists, so this one is not it.
     const alreadyOfficial = await hasOfficialResult(PUZZLE_ID);
@@ -549,9 +598,9 @@ describe("K. daily replay", () => {
     expect(replayRow.completed_at).toEqual(expect.any(String));
 
     // No second aggregate bump and no second streak update.
-    expect(
-      db.writeLog.filter((w) => w.table === "rpc:increment_puzzle_aggregate")
-    ).toHaveLength(aggregatesAfterFirst);
+    expect(db.tables.puzzle_aggregates.find((a) => a.puzzle_id === PUZZLE_ID)!.total_plays).toBe(
+      playsAfterFirst
+    );
     expect(db.tables.user_streaks).toHaveLength(streaksAfterFirst);
 
     // Stats still describe the first completed official attempt only.
@@ -1141,6 +1190,7 @@ describe("live mistake count", () => {
 describe("access control", () => {
   /** Another player's completed session, seeded directly into the table. */
   function seedStrangerSession(id: string) {
+    db._seedDeviceIdentity("stranger-device-id", "stranger-token");
     db.tables.game_sessions.push({
       id,
       puzzle_id: "someone-elses-puzzle",
@@ -1212,17 +1262,46 @@ describe("access control", () => {
     seedStrangerSession("stranger-session");
     db.signIn(null);
 
-    // Someone else's device id — the bearer capability the caller lacks.
-    const { data: theirs } = await db.rpc("get_own_completed_sessions", {
+    // Someone else's device id, without their token — worth nothing now.
+    // Before the credential split, this alone was the whole capability.
+    const { data: idOnly } = await db.rpc("get_own_completed_sessions", {
       _device_id: "stranger-device-id",
     });
-    // (It answers for a device id you DO hold; that is the point of the model.)
+    expect(idOnly).toEqual([]);
+
+    // Even WITH the matching token, a device credential cannot reach an
+    // ACCOUNT-owned session. The stranger fixture belongs to an account, and
+    // possession of a device must never unlock somebody's account games.
+    const { data: accountOwned } = await db.rpc("get_own_completed_sessions", {
+      _device_id: "stranger-device-id",
+      _device_token: "stranger-token",
+    });
+    expect(accountOwned).toEqual([]);
+
+    // It does answer for that device's own ANONYMOUS history, which is the
+    // whole point of the model.
+    db.tables.game_sessions.push({
+      id: "stranger-anon-session",
+      puzzle_id: "someone-elses-puzzle",
+      user_id: null,
+      device_id: "stranger-device-id",
+      status: "won",
+      is_official: true,
+      won: true,
+      mistakes: 0,
+      completed_at: new Date().toISOString(),
+    });
+    const { data: theirs } = await db.rpc("get_own_completed_sessions", {
+      _device_id: "stranger-device-id",
+      _device_token: "stranger-token",
+    });
     expect((theirs as unknown[]).length).toBe(1);
 
     // A device id nobody owns returns nothing, and there is no query shape
     // that widens this to "everyone".
     const { data: none } = await db.rpc("get_own_completed_sessions", {
       _device_id: "00000000-0000-4000-8000-000000000000",
+      _device_token: "anything",
     });
     expect(none).toEqual([]);
   });
@@ -1353,6 +1432,7 @@ describe("access control", () => {
 describe("anonymous write access", () => {
   /** A completed anonymous session belonging to somebody else. */
   function seedStrangerSession(id = "stranger-session") {
+    db._seedDeviceIdentity("stranger-device-id", "stranger-token");
     db.tables.game_sessions.push({
       id,
       puzzle_id: "someone-elses-puzzle",
@@ -1371,6 +1451,7 @@ describe("anonymous write access", () => {
 
   /** An in-progress session belonging to somebody else. */
   function seedStrangerInProgress(id = "stranger-live") {
+    db._seedDeviceIdentity("stranger-device-id", "stranger-token");
     db.tables.game_sessions.push({
       id,
       puzzle_id: "someone-elses-puzzle",
@@ -1500,10 +1581,21 @@ describe("anonymous write access", () => {
     db.signIn(null);
     const right = "stranger-device-id";
 
+    // The id alone is no longer the capability — the token is.
     expect(
       (await db.rpc("touch_game_session", {
         _session_id: liveId,
         _device_id: right,
+        _active_time_seconds: 42,
+        _mistakes: 2,
+      })).data
+    ).toBe(false);
+
+    expect(
+      (await db.rpc("touch_game_session", {
+        _session_id: liveId,
+        _device_id: right,
+        _device_token: "stranger-token",
         _active_time_seconds: 42,
         _mistakes: 2,
       })).data
@@ -1649,40 +1741,14 @@ describe("anonymous write access", () => {
     expect(sessions().find((s) => s.id === "account-session")!.mistakes).toBe(0);
   });
 
-  it("claiming guest sessions requires an account and only moves rows to it", async () => {
-    db.tables.game_sessions.push({
-      id: "guest-1",
-      puzzle_id: PUZZLE_ID,
-      user_id: null,
-      device_id: "my-device",
-      status: "won",
-      is_official: true,
-      won: true,
-      mistakes: 0,
-      completed_at: new Date().toISOString(),
-    });
-    db.tables.game_sessions.push({
-      id: "other-account",
-      puzzle_id: PUZZLE_ID,
-      user_id: "other-user-id",
-      device_id: "my-device",
-      status: "won",
-      is_official: true,
-      won: true,
-      mistakes: 0,
-      completed_at: new Date().toISOString(),
-    });
-
-    // Anonymous: refused outright.
-    db.signIn(null);
-    expect((await db.rpc("claim_anonymous_sessions", { _device_id: "my-device" })).data).toBe(0);
-    expect(sessions().find((s) => s.id === "guest-1")!.user_id).toBeNull();
-
-    // Signed in: claims only the anonymous row, never another account's.
+  it("the retired claim_anonymous_sessions RPC no longer exists", async () => {
+    // It accepted a bare device id as authority, which — combined with the
+    // old world-readable user_streaks — let anyone harvest an id and claim a
+    // stranger's gameplay. import_guest_history replaces it behind a proven
+    // credential and a one-time gate.
     db.signIn("me-user-id");
-    expect((await db.rpc("claim_anonymous_sessions", { _device_id: "my-device" })).data).toBe(1);
-    expect(sessions().find((s) => s.id === "guest-1")!.user_id).toBe("me-user-id");
-    expect(sessions().find((s) => s.id === "other-account")!.user_id).toBe("other-user-id");
+    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "my-device" });
+    expect(data).toBeNull();
   });
 
   it("a client cannot forge attempt_type = bonus_rainbow on a normal guess", async () => {
@@ -1697,6 +1763,7 @@ describe("anonymous write access", () => {
     await db.rpc("record_guess_events", {
       _session_id: sessionId,
       _device_id: getDeviceId(),
+      _device_token: localStorage.getItem("rc-device-token"),
       _events: [
         {
           guess_number: 50,
@@ -1789,358 +1856,957 @@ describe("anonymous write access", () => {
   });
 });
 
-// ── claim_anonymous_sessions: official-result priority ─────────────────────
+// ── Device credentials ─────────────────────────────────────────────────────
 //
-// The permanent product rule is "the first completed official result for an
-// identity is permanent." Signing in and importing anonymous history must
-// never let a later anonymous result override an account's existing official
-// result -- regardless of which one is objectively "better". These cases
-// mirror the fixed claim_anonymous_sessions SQL (see
-// supabase/migrations/20260916230000_claim_preserves_existing_official_result.sql);
-// the fake's own case at src/test/fakeSupabase.ts is the model under test.
-describe("claim_anonymous_sessions: official-result priority", () => {
-  const PUZZLE_2 = "puzzle-2";
+// device_id used to be identifier AND capability at once: minting one was
+// enough to act as that device, and the old world-readable user_streaks
+// handed them out to anyone who asked. Authority now lives in a separate
+// token the server hashes and never returns twice.
+describe("device credentials", () => {
+  const OTHER_DEVICE = "someone-elses-device";
 
-  function seedSession(overrides: FakeRow & { id: string }) {
+  beforeEach(() => {
+    db._seedDeviceIdentity(OTHER_DEVICE, "their-secret-token");
     db.tables.game_sessions.push({
+      id: "their-session",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: OTHER_DEVICE,
+      status: "won",
+      is_official: true,
+      won: true,
+      mistakes: 1,
+      completed_at: new Date().toISOString(),
+    });
+    db.tables.user_streaks.push({
+      id: "their-streak",
+      user_id: null,
+      device_id: OTHER_DEVICE,
+      current_streak: 5,
+      longest_streak: 9,
+      last_played_date: "2026-09-15",
+    });
+  });
+
+  it("a missing token unlocks nothing, even with the right device id", async () => {
+    expect(
+      (await db.rpc("has_official_result", { _puzzle_id: PUZZLE_ID, _device_id: OTHER_DEVICE })).data
+    ).toBe(false);
+    expect(
+      (await db.rpc("count_own_anonymous_sessions", { _device_id: OTHER_DEVICE })).data
+    ).toBe(0);
+    expect((await db.rpc("get_own_streak", { _device_id: OTHER_DEVICE })).data).toEqual([]);
+  });
+
+  it("a wrong token unlocks nothing", async () => {
+    expect(
+      (await db.rpc("has_official_result", {
+        _puzzle_id: PUZZLE_ID,
+        _device_id: OTHER_DEVICE,
+        _device_token: "guessed-token",
+      })).data
+    ).toBe(false);
+    expect(
+      (await db.rpc("get_own_completed_sessions", {
+        _device_id: OTHER_DEVICE,
+        _device_token: "guessed-token",
+      })).data
+    ).toEqual([]);
+  });
+
+  it("the matching token does unlock that device's own data", async () => {
+    expect(
+      (await db.rpc("has_official_result", {
+        _puzzle_id: PUZZLE_ID,
+        _device_id: OTHER_DEVICE,
+        _device_token: "their-secret-token",
+      })).data
+    ).toBe(true);
+    const { data } = await db.rpc("get_own_streak", {
+      _device_id: OTHER_DEVICE,
+      _device_token: "their-secret-token",
+    });
+    expect((data as { current_streak: number }[])[0].current_streak).toBe(5);
+  });
+
+  it("this browser's own credential cannot reach another device's data", async () => {
+    const mine = getDeviceId();
+    const myToken = localStorage.getItem("rc-device-token")!;
+    expect(mine).not.toBe(OTHER_DEVICE);
+    // Right token, wrong device id — and vice versa.
+    expect(
+      (await db.rpc("has_official_result", {
+        _puzzle_id: PUZZLE_ID,
+        _device_id: OTHER_DEVICE,
+        _device_token: myToken,
+      })).data
+    ).toBe(false);
+  });
+
+  it("a retired identity can no longer read or write anything", async () => {
+    db.tables.device_identities.find((d) => d.device_id === OTHER_DEVICE)!.retired_at =
+      new Date().toISOString();
+    expect(
+      (await db.rpc("has_official_result", {
+        _puzzle_id: PUZZLE_ID,
+        _device_id: OTHER_DEVICE,
+        _device_token: "their-secret-token",
+      })).data
+    ).toBe(false);
+    expect(
+      (await db.rpc("touch_game_session", {
+        _session_id: "their-session",
+        _device_id: OTHER_DEVICE,
+        _device_token: "their-secret-token",
+        _active_time_seconds: 99,
+        _mistakes: 4,
+      })).data
+    ).toBe(false);
+    // ...but the gameplay row itself is untouched.
+    expect(sessions().find((s) => s.id === "their-session")!.mistakes).toBe(1);
+  });
+
+  it("user_streaks can no longer be enumerated or written directly", async () => {
+    // The confirmed production hole: any caller could list every guest's
+    // device_id and streak, then flip a stranger's row onto their account.
+    // Either an empty result or an outright denial counts as closed.
+    db.signIn(null);
+    const anonRead = await db.from("user_streaks").select("*");
+    expect(anonRead.data ?? []).toEqual([]);
+
+    db.signIn("me-user-id");
+    const authedRead = await db.from("user_streaks").select("*");
+    expect(authedRead.data ?? []).toEqual([]);
+
+    const hijack = await db
+      .from("user_streaks")
+      .update({ user_id: "me-user-id" })
+      .eq("id", "their-streak");
+    expect(hijack.error).toBeTruthy();
+    expect(db.tables.user_streaks.find((s) => s.id === "their-streak")!.user_id).toBeNull();
+  });
+
+  it("game_sessions can no longer be inserted directly", async () => {
+    // The legacy INSERT policy was the last route that bypassed
+    // create_game_session, and with it the onboarding gate.
+    db.signIn("me-user-id");
+    const { error } = await db.from("game_sessions").insert({
+      id: "smuggled",
+      puzzle_id: PUZZLE_ID,
+      user_id: "me-user-id",
       status: "won",
       won: true,
+      is_official: true,
       mistakes: 0,
-      completed_at: new Date().toISOString(),
-      found_rainbow: false,
-      hints_used: false,
-      ...overrides,
+    });
+    expect(error).toBeTruthy();
+    expect(sessions().find((s) => s.id === "smuggled")).toBeUndefined();
+  });
+
+  it("game_results can no longer be written directly", async () => {
+    db.signIn("me-user-id");
+    const { error } = await db.from("game_results").upsert({
+      user_id: "me-user-id",
+      puzzle_id: PUZZLE_ID,
+      won: true,
+      mistakes: 0,
+    });
+    expect(error).toBeTruthy();
+    expect(db.tables.game_results).toHaveLength(0);
+  });
+});
+
+// ── Account onboarding ─────────────────────────────────────────────────────
+describe("account onboarding", () => {
+  const GUEST_DEVICE = "guest-device";
+  const GUEST_TOKEN = "guest-token";
+
+  /** A browser holding real guest history, with a verifiable credential. */
+  function seedGuestHistory(opts: { completed?: boolean } = {}) {
+    db._seedDeviceIdentity(GUEST_DEVICE, GUEST_TOKEN);
+    db.tables.game_sessions.push({
+      id: "guest-session",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: GUEST_DEVICE,
+      status: opts.completed === false ? "in_progress" : "won",
+      is_official: opts.completed === false ? false : true,
+      won: opts.completed === false ? null : true,
+      mistakes: 1,
+      completed_at: opts.completed === false ? null : new Date().toISOString(),
+    });
+    db.tables.user_streaks.push({
+      id: "guest-streak",
+      user_id: null,
+      device_id: GUEST_DEVICE,
+      current_streak: 3,
+      longest_streak: 7,
+      last_played_date: "2026-09-15",
     });
   }
 
-  it("A. account has an official loss; anon has a perfect official win -> account loss stays official, anon win preserved but demoted", async () => {
-    seedSession({
-      id: "acct-loss",
-      puzzle_id: PUZZLE_ID,
-      user_id: "me",
-      device_id: null,
-      status: "lost",
-      won: false,
-      mistakes: 4,
-      is_official: true,
-    });
-    seedSession({
-      id: "guest-perfect-win",
-      puzzle_id: PUZZLE_ID,
-      user_id: null,
-      device_id: "guest-device",
-      status: "won",
-      won: true,
-      mistakes: 0,
-      found_rainbow: true,
-      is_official: true,
-    });
+  const resolve = () =>
+    db.rpc("resolve_onboarding", { _device_id: GUEST_DEVICE, _device_token: GUEST_TOKEN });
 
-    db.signIn("me");
-    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
-    expect(data).toBe(1);
+  it("a new account with guest history is offered the choice, and is blocked until it decides", async () => {
+    seedGuestHistory();
+    db.signIn("new-user");
+    db.tables.account_onboarding = []; // genuinely new: no row yet
 
-    const acct = sessions().find((s) => s.id === "acct-loss")!;
-    const guest = sessions().find((s) => s.id === "guest-perfect-win")!;
-    expect(acct.is_official).toBe(true);
-    expect(acct.status).toBe("lost");
-    // The claimed row is preserved in full -- only is_official and user_id change.
-    expect(guest.user_id).toBe("me");
-    expect(guest.is_official).toBe(false);
-    expect(guest.status).toBe("won");
-    expect(guest.mistakes).toBe(0);
-    expect(guest.found_rainbow).toBe(true);
+    const { data } = await resolve();
+    const row = (data as { outcome: string; games_played: number; longest_streak: number }[])[0];
+    expect(row.outcome).toBe("import_available");
+    expect(row.games_played).toBe(1);
+    expect(row.longest_streak).toBe(7);
+
+    // Gameplay is refused server-side while the decision is outstanding.
+    const created = await db.rpc("create_game_session", {
+      _puzzle_id: PUZZLE_ID,
+      _device_id: GUEST_DEVICE,
+      _device_token: GUEST_TOKEN,
+      _entry_context: "daily_home",
+    });
+    expect(created.data).toBeNull();
   });
 
-  it("B. account has an official win; anon has an official loss -> account win stays official, anon loss preserved but demoted", async () => {
-    seedSession({
-      id: "acct-win",
-      puzzle_id: PUZZLE_ID,
-      user_id: "me",
-      device_id: null,
-      status: "won",
-      won: true,
-      mistakes: 0,
-      is_official: true,
-    });
-    seedSession({
-      id: "guest-loss",
-      puzzle_id: PUZZLE_ID,
-      user_id: null,
-      device_id: "guest-device",
-      status: "lost",
-      won: false,
-      mistakes: 4,
-      is_official: true,
-    });
+  it("a new account with NO guest history auto-resolves and plays immediately", async () => {
+    db.signIn("new-user");
+    db.tables.account_onboarding = [];
 
-    db.signIn("me");
-    await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
+    const { data } = await db.rpc("resolve_onboarding", {
+      _device_id: getDeviceId(),
+      _device_token: localStorage.getItem("rc-device-token"),
+    });
+    expect((data as { outcome: string }[])[0].outcome).toBe("no_guest_history");
 
-    expect(sessions().find((s) => s.id === "acct-win")!.is_official).toBe(true);
-    const guest = sessions().find((s) => s.id === "guest-loss")!;
-    expect(guest.user_id).toBe("me");
-    expect(guest.is_official).toBe(false);
-    expect(guest.status).toBe("lost");
+    const created = await db.rpc("create_game_session", {
+      _puzzle_id: PUZZLE_ID,
+      _device_id: getDeviceId(),
+      _device_token: localStorage.getItem("rc-device-token"),
+      _entry_context: "daily_home",
+    });
+    expect(created.data).toBeTruthy();
   });
 
-  it("C. account has no result for the puzzle -> the claimed anonymous official result becomes the account's official result", async () => {
-    seedSession({
-      id: "guest-only",
-      puzzle_id: PUZZLE_ID,
-      user_id: null,
-      device_id: "guest-device",
-      is_official: true,
-    });
+  it("later logged-out play never reopens a resolved account", async () => {
+    db.signIn("new-user");
+    db.tables.account_onboarding = [];
+    await db.rpc("resolve_onboarding", { _device_id: null, _device_token: null });
 
-    db.signIn("me");
-    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
-    expect(data).toBe(1);
-
-    const row = sessions().find((s) => s.id === "guest-only")!;
-    expect(row.user_id).toBe("me");
-    expect(row.is_official).toBe(true);
+    // Guest history appears afterwards (they signed out and played).
+    seedGuestHistory();
+    const { data } = await resolve();
+    expect((data as { outcome: string }[])[0].outcome).toBe("already_resolved");
   });
 
-  it("D. account has no result; multiple completed anon sessions exist for the puzzle -> only the one already official is promoted, the rest stay non-official", async () => {
-    // Mirrors production: finalize_game_session/the legacy trigger already
-    // enforce at most one is_official=true row per (puzzle, device), so an
-    // earlier replay landed here as is_official=false. Claim must not
-    // re-derive "best" or "earliest" itself -- it only carries that decision
-    // forward.
-    seedSession({
-      id: "guest-first",
-      puzzle_id: PUZZLE_ID,
-      user_id: null,
-      device_id: "guest-device",
-      status: "lost",
-      won: false,
-      mistakes: 4,
-      is_official: true,
-      completed_at: "2026-01-01T00:00:00Z",
-    });
-    seedSession({
-      id: "guest-replay",
-      puzzle_id: PUZZLE_ID,
-      user_id: null,
-      device_id: "guest-device",
-      status: "won",
-      won: true,
-      mistakes: 0,
-      is_official: false,
-      completed_at: "2026-01-02T00:00:00Z",
-    });
+  it("an existing account is never prompted and can never import", async () => {
+    seedGuestHistory();
+    db.signIn("returning-user"); // seeded as 'legacy'
 
-    db.signIn("me");
-    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
-    expect(data).toBe(2);
+    expect((await resolve() as { data: { outcome: string }[] }).data[0].outcome).toBe("already_resolved");
 
-    expect(sessions().find((s) => s.id === "guest-first")!.is_official).toBe(true);
-    expect(sessions().find((s) => s.id === "guest-replay")!.is_official).toBe(false);
+    const { data } = await db.rpc("import_guest_history", {
+      _device_id: GUEST_DEVICE,
+      _device_token: GUEST_TOKEN,
+    });
+    expect((data as { outcome: string }[])[0].outcome).toBe("already_resolved");
+    expect(sessions().find((s) => s.id === "guest-session")!.user_id).toBeNull();
   });
 
-  it("E. account has a result; an in-progress anon session for a DIFFERENT puzzle is claimed -> account result unchanged, session stays in_progress and non-official", async () => {
-    seedSession({
-      id: "acct-result",
-      puzzle_id: PUZZLE_ID,
-      user_id: "me",
-      device_id: null,
-      is_official: true,
-    });
-    db.tables.game_sessions.push({
-      id: "guest-in-progress",
-      puzzle_id: PUZZLE_2,
-      user_id: null,
-      device_id: "guest-device",
-      status: "in_progress",
-      won: null,
-      completed_at: null,
-      is_official: false,
-      mistakes: 1,
-    });
-
-    db.signIn("me");
-    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
-    expect(data).toBe(1);
-
-    expect(sessions().find((s) => s.id === "acct-result")!.is_official).toBe(true);
-    const inProgress = sessions().find((s) => s.id === "guest-in-progress")!;
-    expect(inProgress.user_id).toBe("me");
-    expect(inProgress.status).toBe("in_progress");
-    expect(inProgress.is_official).toBe(false);
-
-    // Resuming still works: session_capability_ok now recognises the caller
-    // by account, not by the (still-present) device id.
-    expect(await db.rpc("session_capability_ok", { _session_id: "guest-in-progress", _device_id: "guest-device" })
-      .then((r) => r.data)).toBe(true);
-  });
-
-  it("F. no account result; anon session is in-progress only -> transfers and remains in_progress/non-official", async () => {
-    db.tables.game_sessions.push({
-      id: "guest-in-progress",
-      puzzle_id: PUZZLE_ID,
-      user_id: null,
-      device_id: "guest-device",
-      status: "in_progress",
-      won: null,
-      completed_at: null,
-      is_official: false,
-      mistakes: 0,
-    });
-
-    db.signIn("me");
-    await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
-
-    const row = sessions().find((s) => s.id === "guest-in-progress")!;
-    expect(row.user_id).toBe("me");
-    expect(row.status).toBe("in_progress");
-    expect(row.is_official).toBe(false);
-  });
-
-  it("G. claiming the same device twice is idempotent", async () => {
-    seedSession({
-      id: "acct-loss",
-      puzzle_id: PUZZLE_ID,
-      user_id: "me",
-      device_id: null,
-      status: "lost",
-      won: false,
-      mistakes: 4,
-      is_official: true,
-    });
-    seedSession({
-      id: "guest-win",
-      puzzle_id: PUZZLE_ID,
-      user_id: null,
-      device_id: "guest-device",
-      is_official: true,
-    });
-
-    db.signIn("me");
-    const first = await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
-    expect(first.data).toBe(1);
-    const guestAfterFirst = { ...sessions().find((s) => s.id === "guest-win")! };
-
-    const second = await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
-    expect(second.data).toBe(0);
-    expect(sessions().find((s) => s.id === "guest-win")).toEqual(guestAfterFirst);
-    expect(sessions().find((s) => s.id === "acct-loss")!.is_official).toBe(true);
-  });
-
-  it("H. the wrong device id claims nothing", async () => {
-    seedSession({ id: "guest-win", puzzle_id: PUZZLE_ID, user_id: null, device_id: "guest-device", is_official: true });
-
-    db.signIn("me");
-    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "not-the-device" });
-    expect(data).toBe(0);
-    expect(sessions().find((s) => s.id === "guest-win")!.user_id).toBeNull();
-  });
-
-  it("I. device_id 'unknown' claims nothing", async () => {
-    seedSession({ id: "guest-win", puzzle_id: PUZZLE_ID, user_id: null, device_id: "unknown", is_official: true });
-
-    db.signIn("me");
-    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "unknown" });
-    expect(data).toBe(0);
-    expect(sessions().find((s) => s.id === "guest-win")!.user_id).toBeNull();
-  });
-
-  it("J. a second account cannot claim sessions already owned by the first account", async () => {
-    seedSession({
-      id: "already-owned",
-      puzzle_id: PUZZLE_ID,
-      user_id: "user-a",
-      device_id: "shared-device",
-      is_official: true,
-    });
-
-    db.signIn("user-b");
-    const { data } = await db.rpc("claim_anonymous_sessions", { _device_id: "shared-device" });
-    expect(data).toBe(0);
-    expect(sessions().find((s) => s.id === "already-owned")!.user_id).toBe("user-a");
-  });
-
-  it("K. after claim, get_own_completed_sessions reflects exactly one official result per puzzle -- no duplicate, no replacement", async () => {
-    seedSession({
-      id: "acct-loss",
-      puzzle_id: PUZZLE_ID,
-      user_id: "me",
-      device_id: null,
-      status: "lost",
-      won: false,
-      mistakes: 4,
-      is_official: true,
-    });
-    seedSession({
-      id: "guest-win",
-      puzzle_id: PUZZLE_ID,
-      user_id: null,
-      device_id: "guest-device",
-      status: "won",
-      won: true,
-      is_official: true,
-    });
-    seedSession({
-      id: "guest-other-puzzle",
-      puzzle_id: PUZZLE_2,
-      user_id: null,
-      device_id: "guest-device",
-      status: "won",
-      won: true,
-      is_official: true,
-    });
-
-    db.signIn("me");
-    await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
-
-    const { data: own } = await db.rpc("get_own_completed_sessions", { _device_id: "guest-device" });
-    const forPuzzle1 = (own as { puzzle_id: string; won: boolean }[]).filter((r) => r.puzzle_id === PUZZLE_ID);
-    expect(forPuzzle1).toHaveLength(1);
-    // The account's original loss remains the official result, not the
-    // claimed win.
-    expect(forPuzzle1[0].won).toBe(false);
-    expect((own as { puzzle_id: string }[]).some((r) => r.puzzle_id === PUZZLE_2)).toBe(true);
-  });
-
-  it("L. guess and hint events remain attached to a claimed and demoted session", async () => {
-    seedSession({
-      id: "acct-loss",
-      puzzle_id: PUZZLE_ID,
-      user_id: "me",
-      device_id: null,
-      status: "lost",
-      won: false,
-      mistakes: 4,
-      is_official: true,
-    });
-    seedSession({
-      id: "guest-win",
-      puzzle_id: PUZZLE_ID,
-      user_id: null,
-      device_id: "guest-device",
-      is_official: true,
-    });
+  it("Add My Progress transfers the rows in place and retires the identity", async () => {
+    seedGuestHistory();
     db.tables.guess_events.push({
-      id: "g1",
-      game_session_id: "guest-win",
+      id: "guest-guess",
+      game_session_id: "guest-session",
       guess_number: 1,
       words: ["a", "b", "c", "d"],
       correct: true,
       attempt_type: "normal",
     });
-    db.tables.hint_events.push({
-      id: "h1",
-      game_session_id: "guest-win",
-      hint_type: "small",
-      revealed_at: new Date().toISOString(),
+    db.signIn("new-user");
+    db.tables.account_onboarding = [];
+    await resolve();
+
+    const before = sessions().length;
+    const { data } = await db.rpc("import_guest_history", {
+      _device_id: GUEST_DEVICE,
+      _device_token: GUEST_TOKEN,
+    });
+    expect((data as { outcome: string; sessions_claimed: number }[])[0]).toEqual({
+      outcome: "imported",
+      sessions_claimed: 1,
     });
 
-    db.signIn("me");
-    await db.rpc("claim_anonymous_sessions", { _device_id: "guest-device" });
+    // IN PLACE: same row, same id, nothing created.
+    expect(sessions()).toHaveLength(before);
+    const row = sessions().find((s) => s.id === "guest-session")!;
+    expect(row.user_id).toBe("new-user");
+    expect(row.is_official).toBe(true);
+    expect(guesses().find((g) => g.id === "guest-guess")!.game_session_id).toBe("guest-session");
 
-    expect(guesses().find((g) => g.id === "g1")!.game_session_id).toBe("guest-win");
-    expect(hints().find((h) => h.id === "h1")!.game_session_id).toBe("guest-win");
+    // The streak moved by changing owner — not summed, not reset.
+    const streak = db.tables.user_streaks.find((s) => s.id === "guest-streak")!;
+    expect(streak.user_id).toBe("new-user");
+    expect(streak.current_streak).toBe(3);
+    expect(streak.longest_streak).toBe(7);
+
+    // One-way: the source identity is retired.
+    expect(db.tables.device_identities.find((d) => d.device_id === GUEST_DEVICE)!.retired_at)
+      .toBeTruthy();
+  });
+
+  it("imported history stays visible after the source device is retired", async () => {
+    seedGuestHistory();
+    db.signIn("new-user");
+    db.tables.account_onboarding = [];
+    await resolve();
+    await db.rpc("import_guest_history", { _device_id: GUEST_DEVICE, _device_token: GUEST_TOKEN });
+
+    // The device credential is dead, but the account owns the rows now, and
+    // the account branch of every own-data read is independent of it.
+    expect(db._verifyDevice(GUEST_DEVICE, GUEST_TOKEN)).toBe(false);
+    const { data } = await db.rpc("get_own_completed_sessions", {
+      _device_id: GUEST_DEVICE,
+      _device_token: GUEST_TOKEN,
+    });
+    expect((data as { puzzle_id: string }[]).map((r) => r.puzzle_id)).toEqual([PUZZLE_ID]);
+    expect(
+      (await db.rpc("has_official_result", { _puzzle_id: PUZZLE_ID, _device_id: "x", _device_token: "y" })).data
+    ).toBe(true);
+  });
+
+  it("Start Fresh retires the identity, keeps the gameplay, and imports nothing", async () => {
+    seedGuestHistory();
+    db.signIn("new-user");
+    db.tables.account_onboarding = [];
+    await resolve();
+
+    const before = sessions().length;
+    const { data } = await db.rpc("decline_guest_history", {
+      _device_id: GUEST_DEVICE,
+      _device_token: GUEST_TOKEN,
+    });
+    expect((data as { outcome: string }[])[0].outcome).toBe("started_fresh");
+
+    // Nothing deleted, nothing transferred.
+    expect(sessions()).toHaveLength(before);
+    const row = sessions().find((s) => s.id === "guest-session")!;
+    expect(row.user_id).toBeNull();
+    expect(row.status).toBe("won");
+    expect(db.tables.user_streaks.find((s) => s.id === "guest-streak")!.user_id).toBeNull();
+
+    // ...and it is excluded from the account's own statistics.
+    const { data: own } = await db.rpc("get_own_completed_sessions", {
+      _device_id: GUEST_DEVICE,
+      _device_token: GUEST_TOKEN,
+    });
+    expect(own).toEqual([]);
+
+    // The identity is retired, so it can never be claimed later.
+    expect(db._verifyDevice(GUEST_DEVICE, GUEST_TOKEN)).toBe(false);
+  });
+
+  it("retired history cannot be claimed by a second account", async () => {
+    seedGuestHistory();
+    db.signIn("first-user");
+    db.tables.account_onboarding = [];
+    await resolve();
+    await db.rpc("decline_guest_history", { _device_id: GUEST_DEVICE, _device_token: GUEST_TOKEN });
+
+    db.signIn("second-user");
+    db.tables.account_onboarding = db.tables.account_onboarding.filter(
+      (r) => r.user_id !== "second-user"
+    );
+    const { data } = await db.rpc("import_guest_history", {
+      _device_id: GUEST_DEVICE,
+      _device_token: GUEST_TOKEN,
+    });
+    expect((data as { outcome: string }[])[0].outcome).toBe("credential_invalid");
+    expect(sessions().find((s) => s.id === "guest-session")!.user_id).toBeNull();
+  });
+
+  it("a second import attempt is rejected", async () => {
+    seedGuestHistory();
+    db.signIn("new-user");
+    db.tables.account_onboarding = [];
+    await resolve();
+    const first = await db.rpc("import_guest_history", { _device_id: GUEST_DEVICE, _device_token: GUEST_TOKEN });
+    expect((first.data as { outcome: string }[])[0].outcome).toBe("imported");
+
+    const second = await db.rpc("import_guest_history", { _device_id: GUEST_DEVICE, _device_token: GUEST_TOKEN });
+    // The credential is retired now, so it fails before the gate even matters.
+    expect((second.data as { outcome: string }[])[0].outcome).toBe("credential_invalid");
+    expect(sessions().filter((s) => s.id === "guest-session")).toHaveLength(1);
+  });
+
+  it("an invalid credential fails closed without consuming the one-time chance", async () => {
+    seedGuestHistory();
+    db.signIn("new-user");
+    db.tables.account_onboarding = [];
+
+    const bad = await db.rpc("resolve_onboarding", {
+      _device_id: GUEST_DEVICE,
+      _device_token: "not-the-token",
+    });
+    expect((bad.data as { outcome: string; status: string }[])[0]).toMatchObject({
+      outcome: "credential_invalid",
+      status: "pending",
+    });
+
+    // Still pending, so the real credential still works afterwards.
+    const good = await resolve();
+    expect((good.data as { outcome: string }[])[0].outcome).toBe("import_available");
+  });
+
+  it("an in-progress guest session transfers and stays in progress", async () => {
+    seedGuestHistory({ completed: false });
+    db.signIn("new-user");
+    db.tables.account_onboarding = [];
+    await resolve();
+    await db.rpc("import_guest_history", { _device_id: GUEST_DEVICE, _device_token: GUEST_TOKEN });
+
+    const row = sessions().find((s) => s.id === "guest-session")!;
+    expect(row.user_id).toBe("new-user");
+    expect(row.status).toBe("in_progress");
+    expect(row.is_official).toBe(false);
+  });
+
+  it("an existing official account result outranks the imported one", async () => {
+    seedGuestHistory();
+    db.tables.game_sessions.push({
+      id: "account-loss",
+      puzzle_id: PUZZLE_ID,
+      user_id: "new-user",
+      device_id: null,
+      status: "lost",
+      is_official: true,
+      won: false,
+      mistakes: 4,
+      completed_at: new Date().toISOString(),
+    });
+    db.signIn("new-user");
+    db.tables.account_onboarding = [];
+    await resolve();
+    await db.rpc("import_guest_history", { _device_id: GUEST_DEVICE, _device_token: GUEST_TOKEN });
+
+    expect(sessions().find((s) => s.id === "account-loss")!.is_official).toBe(true);
+    const imported = sessions().find((s) => s.id === "guest-session")!;
+    expect(imported.user_id).toBe("new-user");
+    expect(imported.is_official).toBe(false);
+    expect(imported.status).toBe("won"); // preserved in full, just not official
+  });
+
+  it("a freshly minted identity is inert: it reaches no data and counts nothing", async () => {
+    // create_device_identity is anon-callable and unthrottled, so minting is
+    // cheap. What matters is that a minted identity with no gameplay behind
+    // it is worth nothing: it cannot read anyone's data and cannot move any
+    // counter. (Table growth is tracked separately.)
+    db.signIn(null);
+    const { data } = await db.rpc("create_device_identity");
+    const fresh = (Array.isArray(data) ? data[0] : data) as {
+      device_id: string;
+      device_token: string;
+    };
+    const creds = { _device_id: fresh.device_id, _device_token: fresh.device_token };
+
+    // Seed a stranger's completed game so there is something to fail to reach.
+    seedGuestHistory();
+    const playsBefore = db.tables.puzzle_aggregates.length;
+
+    expect((await db.rpc("get_own_completed_sessions", creds)).data).toEqual([]);
+    expect((await db.rpc("get_own_streak", creds)).data).toEqual([]);
+    expect((await db.rpc("count_own_anonymous_sessions", creds)).data).toBe(0);
+    expect(
+      (await db.rpc("has_official_result", { _puzzle_id: PUZZLE_ID, ...creds })).data
+    ).toBe(false);
+
+    // It cannot touch a session it does not own...
+    expect(
+      (await db.rpc("touch_game_session", {
+        _session_id: "guest-session",
+        ...creds,
+        _active_time_seconds: 999,
+        _mistakes: 4,
+      })).data
+    ).toBe(false);
+
+    // ...and it has moved no counter.
+    expect(db.tables.puzzle_aggregates).toHaveLength(playsBefore);
+    expect(db.tables.game_results).toHaveLength(0);
+  });
+
+  it("a later logout starts a separate guest identity", async () => {
+    const { resetDeviceIdentity, ensureDeviceIdentity } = await import("@/lib/gameStats");
+    const first = getDeviceId();
+    resetDeviceIdentity();
+    const second = await ensureDeviceIdentity();
+    expect(second!.deviceId).not.toBe(first);
+    // The old identity's rows are not touched, transferred or deleted.
+    expect(db.tables.device_identities.some((d) => d.device_id === first)).toBe(true);
+  });
+});
+
+// ── Counting invariants ────────────────────────────────────────────────────
+//
+// "100 stays 100." Ownership changes are not plays, and declining to attach
+// history to an account does not un-play it.
+describe("play counting", () => {
+  const plays = (puzzleId = PUZZLE_ID) =>
+    (db.tables.puzzle_aggregates.find((a) => a.puzzle_id === puzzleId)?.total_plays as number) ?? 0;
+
+  it("an official completion counts exactly one play, and a retry counts none", async () => {
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+    expect(plays()).toBe(1);
+
+    // A retried completion finds the session already finished and must not
+    // re-count it. This is the failure the old separate aggregate call had.
+    const sessionId = sessions()[0].id as string;
+    await db.rpc("finalize_game_session", {
+      _session_id: sessionId,
+      _device_id: getDeviceId(),
+      _device_token: localStorage.getItem("rc-device-token"),
+      _won: true,
+      _mistakes: 0,
+      _active_time_seconds: 10,
+      _found_rainbow: false,
+      _rainbow_solve_index: null,
+      _solve_order: [],
+      _hints_used: false,
+      _share_grid: "",
+    });
+    expect(plays()).toBe(1);
+  });
+
+  it("importing guest history adds no play, and Start Fresh removes none", async () => {
+    db._seedDeviceIdentity("guest-device", "guest-token");
+    db.tables.game_sessions.push({
+      id: "guest-session",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "guest-device",
+      status: "won",
+      is_official: true,
+      won: true,
+      mistakes: 0,
+      completed_at: new Date().toISOString(),
+    });
+    // That play was already counted when it completed.
+    db.tables.puzzle_aggregates.push({
+      puzzle_id: PUZZLE_ID,
+      total_plays: 100,
+      total_wins: 60,
+      avg_mistakes: 1,
+      avg_time_seconds: 100,
+    });
+
+    db.signIn("new-user");
+    db.tables.account_onboarding = [];
+    await db.rpc("resolve_onboarding", { _device_id: "guest-device", _device_token: "guest-token" });
+    await db.rpc("import_guest_history", { _device_id: "guest-device", _device_token: "guest-token" });
+    expect(plays()).toBe(100);
+
+    // And declining on a different account does not decrement it either.
+    db.signIn("other-user");
+    db.tables.account_onboarding = db.tables.account_onboarding.filter((r) => r.user_id !== "other-user");
+    await db.rpc("decline_guest_history", { _device_id: null, _device_token: null });
+    expect(plays()).toBe(100);
+    expect(sessions().find((s) => s.id === "guest-session")).toBeTruthy();
+  });
+
+  it("two genuinely separate sessions remain two plays, even after one is demoted", async () => {
+    db._seedDeviceIdentity("guest-device", "guest-token");
+    // Both were official for their own identity when they completed, so both
+    // counted once. The import demotes one for PERSONAL stats only.
+    db.tables.game_sessions.push({
+      id: "account-win",
+      puzzle_id: PUZZLE_ID,
+      user_id: "new-user",
+      device_id: null,
+      status: "won",
+      is_official: true,
+      won: true,
+      mistakes: 0,
+      completed_at: new Date().toISOString(),
+    });
+    db.tables.game_sessions.push({
+      id: "guest-win",
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: "guest-device",
+      status: "won",
+      is_official: true,
+      won: true,
+      mistakes: 2,
+      completed_at: new Date().toISOString(),
+    });
+    db.tables.puzzle_aggregates.push({
+      puzzle_id: PUZZLE_ID,
+      total_plays: 2,
+      total_wins: 2,
+      avg_mistakes: 1,
+      avg_time_seconds: 100,
+    });
+
+    db.signIn("new-user");
+    db.tables.account_onboarding = [];
+    await db.rpc("resolve_onboarding", { _device_id: "guest-device", _device_token: "guest-token" });
+    await db.rpc("import_guest_history", { _device_id: "guest-device", _device_token: "guest-token" });
+
+    expect(plays()).toBe(2);
     expect(sessions().find((s) => s.id === "guest-win")!.is_official).toBe(false);
+    // One official personal result, two real historical plays.
+    const { data: own } = await db.rpc("get_own_completed_sessions", {});
+    expect(own).toHaveLength(1);
+  });
+
+  it("a failed required effect rolls the whole completion back", async () => {
+    // Every attempt fails, so the completion never lands. The point is what
+    // must NOT happen: a session marked finished with no play counted, which
+    // no retry could ever repair because the session is no longer in_progress.
+    db.failAggregateWrites = 99;
+
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    const row = sessions()[0];
+    expect(row.status).toBe("in_progress");
+    expect(row.completed_at).toBeNull();
+    expect(row.won).toBeNull();
+    expect(row.is_official).toBe(false);
+    expect(plays()).toBe(0);
+    expect(db.tables.game_results).toHaveLength(0);
+    expect(db.tables.user_streaks).toHaveLength(0);
+
+    // The completed game and the statistics agree: neither happened.
+    expect(sessions()).toHaveLength(1);
+  });
+
+  it("a retry after a failed required effect succeeds exactly once", async () => {
+    // Two failures, then success — inside the client's own retry budget.
+    db.failAggregateWrites = 2;
+    db.signIn("me-user-id");
+
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+    // The retries back off (150ms, then 300ms), which outlasts settle()'s
+    // zero-delay flush.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 900));
+    });
+
+    const row = sessions()[0];
+    expect(row.status).toBe("won");
+    expect(row.is_official).toBe(true);
+    // Counted once despite three finalize attempts.
+    expect(plays()).toBe(1);
+    expect(db.tables.game_results).toHaveLength(1);
+    expect(db.tables.user_streaks).toHaveLength(1);
+    expect(sessions()).toHaveLength(1);
+  });
+
+  it("a later finalize repairs a session left in progress by a failed attempt", async () => {
+    // The durable path: the first completion failed outright, the session is
+    // still in_progress, and a subsequent finalize (a later mount, a manual
+    // retry) completes it — still exactly one play.
+    db.failAggregateWrites = 99;
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+    expect(sessions()[0].status).toBe("in_progress");
+    expect(plays()).toBe(0);
+
+    db.failAggregateWrites = 0;
+    const sessionId = sessions()[0].id as string;
+    const first = await db.rpc("finalize_game_session", {
+      _session_id: sessionId,
+      _device_id: getDeviceId(),
+      _device_token: localStorage.getItem("rc-device-token"),
+      _won: true,
+      _mistakes: 0,
+      _active_time_seconds: 10,
+      _found_rainbow: false,
+      _rainbow_solve_index: null,
+      _solve_order: ["orange"],
+      _hints_used: false,
+      _share_grid: "",
+    });
+    expect(first.data).toBe(true);
+    expect(sessions()[0].status).toBe("won");
+    expect(plays()).toBe(1);
+
+    // And a second repair attempt is inert — no double count.
+    const second = await db.rpc("finalize_game_session", {
+      _session_id: sessionId,
+      _device_id: getDeviceId(),
+      _device_token: localStorage.getItem("rc-device-token"),
+      _won: true,
+      _mistakes: 0,
+      _active_time_seconds: 10,
+      _found_rainbow: false,
+      _rainbow_solve_index: null,
+      _solve_order: ["orange"],
+      _hints_used: false,
+      _share_grid: "",
+    });
+    expect(second.data).toBeNull();
+    expect(plays()).toBe(1);
+  });
+
+  it("a completed official session and its required statistics never disagree", async () => {
+    // The invariant, asserted directly over whatever state the run produced.
+    db.signIn("me-user-id");
+    db.failAggregateWrites = 1; // one transient failure along the way
+
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    for (const s of sessions()) {
+      const isCompletedOfficial =
+        (s.status === "won" || s.status === "lost") && s.is_official === true;
+      if (!isCompletedOfficial) continue;
+      // A play was counted for it...
+      expect(plays(s.puzzle_id as string)).toBeGreaterThan(0);
+      // ...and a signed-in official result has its game_results row.
+      if (s.user_id != null) {
+        expect(
+          db.tables.game_results.some(
+            (r) => r.user_id === s.user_id && r.puzzle_id === s.puzzle_id
+          )
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("game_results is written server-side for a signed-in official win only", async () => {
+    db.signIn("me-user-id");
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    expect(db.tables.game_results).toHaveLength(1);
+    expect(db.tables.game_results[0]).toMatchObject({
+      user_id: "me-user-id",
+      puzzle_id: PUZZLE_ID,
+      won: true,
+    });
+  });
+
+  it("anonymous play writes no game_results row, as it never has", async () => {
+    db.signIn(null);
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    expect(db.tables.game_results).toHaveLength(0);
+    expect(plays()).toBe(1);
+  });
+
+  it("a streak advances on the player's local date, and archive games skip it", async () => {
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    const today = new Date().toLocaleDateString("en-CA");
+    const streak = db.tables.user_streaks[0];
+    expect(streak.current_streak).toBe(1);
+    expect(streak.last_played_date).toBe(today);
+
+    // An archive completion must not touch it.
+    const before = db.tables.user_streaks.length;
+    const archiveView = mount(puzzle, { isArchive: true });
+    await guess(archiveView, ["y1", "y2", "y3", "y4"]);
+    expect(db.tables.user_streaks).toHaveLength(before);
+    expect(db.tables.user_streaks[0].current_streak).toBe(1);
+  });
+});
+
+// ── Availability: playing when saving is down ──────────────────────────────
+//
+// The product rule: a failure to SAVE must not take away a puzzle that
+// loaded fine. Only missing puzzle CONTENT blocks, because then there is
+// nothing to play. What must never happen is a game presented as saved when
+// nothing was recorded.
+describe("saving unavailable", () => {
+  const plays = () =>
+    (db.tables.puzzle_aggregates.find((a) => a.puzzle_id === PUZZLE_ID)?.total_plays as number) ?? 0;
+
+  it("the puzzle stays fully playable in memory and records nothing", async () => {
+    db.rpcUnavailable = true;
+
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    // Playable and winnable, entirely client-side.
+    expect(view.result.current.state.isComplete).toBe(true);
+    expect(view.result.current.state.isWon).toBe(true);
+    expect(view.result.current.state.solvedGroups).toHaveLength(4);
+
+    // And nothing anywhere was recorded — not a session, not an event, not a
+    // play, not a result, not a streak.
+    expect(sessions()).toHaveLength(0);
+    expect(guesses()).toHaveLength(0);
+    expect(hints()).toHaveLength(0);
+    expect(plays()).toBe(0);
+    expect(db.tables.game_results).toHaveLength(0);
+    expect(db.tables.user_streaks).toHaveLength(0);
+  });
+
+  it("the result and share grid still work locally", async () => {
+    db.rpcUnavailable = true;
+
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    // The result and the share grid are built from the local guess history,
+    // which is persisted client-side — so a dead database costs the player
+    // neither their result screen nor their shareable grid.
+    const saved = JSON.parse(localStorage.getItem(progressKey(PUZZLE_ID)) ?? "{}");
+    expect(saved.isComplete).toBe(true);
+    expect(saved.isWon).toBe(true);
+    expect(saved.guessHistory.length).toBeGreaterThan(0);
+    expect(view.result.current.state.guessHistory.length).toBeGreaterThan(0);
+  });
+
+  it("stats never count an unsaved game", async () => {
+    db.rpcUnavailable = true;
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    // Saving comes back afterwards; the game that was not recorded must not
+    // retroactively appear.
+    db.rpcUnavailable = false;
+    const stats = await loadStatsFromSupabase();
+    expect(stats.gamesPlayed).toBe(0);
+    expect(stats.gamesWon).toBe(0);
+    expect(stats.currentStreak).toBe(0);
+    expect(plays()).toBe(0);
+  });
+
+  it("a game that started unsaved stays unsaved, even if saving returns mid-game", async () => {
+    // No half-recorded sessions: a record holding only the second half of a
+    // game would read as a complete one.
+    db.rpcUnavailable = true;
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "g1"]); // a miss, session creation fails
+    expect(sessions()).toHaveLength(0);
+
+    db.rpcUnavailable = false;
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+
+    // Still nothing for THIS game.
+    expect(sessions()).toHaveLength(0);
+    expect(guesses()).toHaveLength(0);
+    expect(plays()).toBe(0);
+  });
+
+  it("saving is restored for the next game", async () => {
+    db.rpcUnavailable = true;
+    const first = mount();
+    await guess(first, ["y1", "y2", "y3", "g1"]);
+    expect(sessions()).toHaveLength(0);
+    first.unmount();
+
+    // A fresh game after saving came back records normally.
+    db.rpcUnavailable = false;
+    localStorage.removeItem(progressKey(PUZZLE_ID));
+    const second = mount();
+    await guess(second, ["y1", "y2", "y3", "y4"]);
+
+    expect(sessions()).toHaveLength(1);
+    expect(sessions()[0].status).toBe("in_progress");
+    expect(guesses()).toHaveLength(1);
+  });
+
+  it("PGRST202 during the deployment window is not treated as an outage of the game", async () => {
+    // The real shape of that window: a pre-cutover browser holding an old
+    // device id with no token, against a database where the new functions do
+    // not exist yet. The gate must report saving_unavailable — which renders
+    // the board plus a notice — not replace the site with a maintenance page.
+    localStorage.removeItem("rc-device-token");
+    db.rpcUnavailable = true;
+
+    const { useAccountOnboarding } = await import("@/hooks/useAccountOnboarding");
+    const gate = renderHook(() => useAccountOnboarding());
+    await settle();
+
+    expect(gate.result.current.state.phase).toBe("saving_unavailable");
+    // It tried to replace the unusable legacy credential, and got PGRST202.
+    expect(db.rpcLog).toContain("create_device_identity");
+  });
+
+  it("a browser that cannot keep a credential is told saving is unavailable", async () => {
+    // Storage blocked: no identity can ever be held, so no durable write can
+    // succeed. Honest notice, still playable — not a silent broken board.
+    localStorage.removeItem("rc-device-id");
+    localStorage.removeItem("rc-device-token");
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => {
+      throw new Error("storage blocked");
+    };
+    try {
+      const { useAccountOnboarding } = await import("@/hooks/useAccountOnboarding");
+      const gate = renderHook(() => useAccountOnboarding());
+      await settle();
+      expect(gate.result.current.state.phase).toBe("saving_unavailable");
+    } finally {
+      Storage.prototype.setItem = setItem;
+    }
+  });
+
+  it("recovers to normal saving once the RPCs are reachable again", async () => {
+    db.rpcUnavailable = true;
+    const { useAccountOnboarding } = await import("@/hooks/useAccountOnboarding");
+    const gate = renderHook(() => useAccountOnboarding());
+    await settle();
+    expect(gate.result.current.state.phase).toBe("saving_unavailable");
+
+    db.rpcUnavailable = false;
+    await act(async () => {
+      await gate.result.current.recheck();
+    });
+    expect(gate.result.current.state.phase).toBe("ready");
+  });
+
+  it("never falls back to a direct table write when the RPCs are down", async () => {
+    db.rpcUnavailable = true;
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+
+    // The old insecure routes are gone and must never be used as a fallback:
+    // no direct writes to any gameplay table were even attempted.
+    const directWrites = db.writeLog.filter((w) => w.op !== "rpc");
+    expect(directWrites).toHaveLength(0);
   });
 });
 
