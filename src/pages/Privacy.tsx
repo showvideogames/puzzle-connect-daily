@@ -88,7 +88,7 @@ export default function Privacy() {
           <h2 className="text-base font-semibold">Your choices and deletion requests</h2>
           <p>You can email <a href="mailto:samwestgames@gmail.com" className="underline hover:text-foreground">samwestgames@gmail.com</a> to request access to, correction of, or deletion of personal data we can reasonably identify and verify as yours. We'll respond within a reasonable timeframe.</p>
           <p>Guest gameplay has no email address attached to it by default, so to locate and delete it we may need information tied to the specific browser or device it was played on. Clearing your browser's storage on your end does not, by itself, submit a deletion request to us. As with any deletion, de-identified or aggregate statistics that can no longer be linked back to you may remain.</p>
-          <p>California residents have rights under the California Consumer Privacy Act (CCPA) and California Privacy Rights Act (CPRA), including the right to know what personal information we collect and the right to delete it. We honor applicable state-law privacy rights for the personal information we hold. We do not sell personal information.</p>
+          <p>Depending on where you live and whether an applicable privacy law covers Rainbow Categories, you may have additional rights concerning your personal information. We honor privacy rights required by applicable law. Regardless of whether a particular state privacy law applies to us, you may contact us with a request concerning personal data we can reasonably identify and verify as yours. We do not sell personal information.</p>
         </section>
 
         <section className="space-y-2">

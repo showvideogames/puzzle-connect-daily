@@ -53,13 +53,13 @@ export default function Terms() {
 
         <section className="space-y-2">
           <h2 className="text-base font-semibold">6. Intellectual property</h2>
-          <p>All puzzles, code, branding, and content on Rainbow Categories are the property of Rainbow Categories or its licensors. You may not reproduce or redistribute them without permission.</p>
-          <p>By submitting feedback, puzzle ideas, or other content through the service, you grant Rainbow Categories a non-exclusive, worldwide, royalty-free license to use, modify, and incorporate that content into the service.</p>
+          <p>The service, including its puzzles, branding, and original content and code, is owned by Sam West Games or its licensors. You may not reproduce or redistribute it without permission.</p>
+          <p>By submitting feedback, puzzle ideas, or other content through the service, you grant Sam West Games a non-exclusive, worldwide, royalty-free license to use, modify, and incorporate that content into the service.</p>
         </section>
 
         <section className="space-y-2">
           <h2 className="text-base font-semibold">7. User content</h2>
-          <p>Feedback and puzzle ideas you submit may be used by Rainbow Categories to improve or expand the game, with no obligation to credit or compensate you.</p>
+          <p>Feedback and puzzle ideas you submit may be used by Sam West Games to improve or expand the game, with no obligation to credit or compensate you.</p>
         </section>
 
         <section className="space-y-2">
