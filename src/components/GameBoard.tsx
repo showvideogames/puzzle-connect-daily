@@ -24,6 +24,7 @@ import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoj
 import { trackEvent } from "@/lib/analytics";
 import { resolveTheme } from "@/lib/themes";
 import { loadPlayedDifficulties } from "@/lib/puzzleVersion";
+import { puzzleFullLabel } from "@/lib/puzzles";
 
 function extractTrailingEmojis(str: string): string {
   try {
@@ -882,9 +883,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   }, [state.guessHistory, playedDifficultyAt]);
 
   const generateShareText = useCallback(() => {
-    const header = puzzle.title
-      ? `Puzzle ${puzzle.title}`
-      : "Rainbow Categories";
+    // puzzleFullLabel prepends "Puzzle " here (unlike ArchivePuzzle's own
+    // on-page <h1>, which shows the title bare — see that page's heroLabel
+    // comment): this text stands completely alone once it's pasted
+    // somewhere else, with none of the page's own "puzzle" framing around
+    // it, so a bare "#50" would read as meaningless on its own.
+    const header = puzzleFullLabel(puzzle.title) ?? "Rainbow Categories";
     return `${header}\n${generateShareLines().join("\n")}\nrainbowcategories.com`;
   }, [puzzle, generateShareLines]);
 

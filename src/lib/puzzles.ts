@@ -1,6 +1,25 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Puzzle } from "./types";
 
+/**
+ * The puzzle's display identifier WITH "Puzzle" spelled out in front — for
+ * a context with no other framing to lean on, like the share-text header
+ * copied to the clipboard.
+ *
+ * Admins already include their own numbering convention IN the title text
+ * itself (Admin.tsx's title field is plain free text, "e.g. Monday
+ * Mashup" — and in practice every numbered puzzle is titled "#50", "#102",
+ * "Emoji #5", etc., "#" included). So this never tries to detect or
+ * reformat a bare number; it only ever prepends the word "Puzzle" to
+ * whatever the admin typed, verbatim — "#50" becomes "Puzzle #50", "Monday
+ * Mashup" becomes "Puzzle Monday Mashup". Null when there is no title at
+ * all, so the caller's own generic fallback applies instead.
+ */
+export function puzzleFullLabel(title: string | null | undefined): string | null {
+  const trimmed = title?.trim();
+  return trimmed ? `Puzzle ${trimmed}` : null;
+}
+
 // Fetch today's published puzzle from the database
 export async function getTodaysPuzzle(): Promise<Puzzle | null> {
   const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time

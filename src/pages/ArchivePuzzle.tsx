@@ -125,20 +125,24 @@ export default function ArchivePuzzle() {
     navigate(archiveReturnPath ?? "/archive");
   };
 
-  // Puzzle identifier for the center of the top row — a free-text title
-  // (e.g. "Monday Mashup" — see Admin.tsx) keeps its existing
-  // "Puzzle {title}" phrasing; a purely numeric title (e.g. "101") gets a
-  // "#" so it reads as a number. With no title at all, the date is the only
-  // identifier available, so it takes this slot instead (and isn't
-  // repeated again below it).
+  // Puzzle identifier for the center of the top row — shown exactly as the
+  // admin typed it (e.g. "#50", "Emoji #5", "Monday Mashup" — see
+  // Admin.tsx's free-text title field), with no "Puzzle" word prepended.
+  // Admins already bake their own numbering convention into the title
+  // itself ("#50", not bare "50"), and this page's own layout already
+  // establishes the "puzzle" framing on its own (the "← Archive" and
+  // "Today →" buttons either side of it, the puzzle-themed page itself),
+  // so spelling "Puzzle" out again here would be redundant. The share-text
+  // header (GameBoard's puzzleFullLabel) is a different context with none
+  // of that surrounding framing — that one DOES prepend "Puzzle " in full,
+  // since it has to stand alone once pasted somewhere else. With no title
+  // at all, the date is the only identifier available, so it takes this
+  // slot instead (and isn't repeated again below it).
   const trimmedTitle = puzzle?.title?.trim();
-  const isNumericTitle = !!trimmedTitle && /^\d+$/.test(trimmedTitle);
   const puzzleDateStr = puzzle
     ? new Date(puzzle.date + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
     : "";
-  const heroLabel = trimmedTitle
-    ? isNumericTitle ? `Puzzle #${trimmedTitle}` : `Puzzle ${trimmedTitle}`
-    : puzzleDateStr;
+  const heroLabel = trimmedTitle || puzzleDateStr;
 
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
