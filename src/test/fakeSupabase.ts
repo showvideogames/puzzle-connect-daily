@@ -100,6 +100,16 @@ export class FakeSupabase {
   /** True when the caller is an admin, which unlocks the admin SELECT policies. */
   isAdmin = false;
 
+  /**
+   * Fault injection for the required completion effects.
+   *
+   * Set to N to make the next N aggregate writes inside finalize_game_session
+   * throw. Models a database-side failure so the tests can prove what the
+   * real function now guarantees: the whole completion rolls back, rather
+   * than leaving a finished session with no play counted.
+   */
+  failAggregateWrites = 0;
+
   signIn(userId: string | null, opts?: { admin?: boolean }) {
     this.authUser = userId ? { id: userId } : null;
     this.isAdmin = !!opts?.admin;
@@ -441,6 +451,22 @@ export class FakeSupabase {
                 row.device_id !== "unknown" &&
                 o.device_id === row.device_id))
         );
+        // Everything from here to the end of this case happens in ONE
+        // transaction in the real function, so the fake snapshots what it is
+        // about to touch and restores it if a required effect fails.
+        const txn = {
+          session: { ...row },
+          aggregates: this.tables.puzzle_aggregates.map((r) => ({ ...r })),
+          results: this.tables.game_results.map((r) => ({ ...r })),
+          streaks: this.tables.user_streaks.map((r) => ({ ...r })),
+        };
+        const rollback = () => {
+          Object.assign(row, txn.session);
+          this.tables.puzzle_aggregates = txn.aggregates;
+          this.tables.game_results = txn.results;
+          this.tables.user_streaks = txn.streaks;
+        };
+
         const completedAt = new Date().toISOString();
         Object.assign(row, {
           status: won ? "won" : "lost",
@@ -461,10 +487,9 @@ export class FakeSupabase {
 
         if (!isOfficial) return { data: false, error: null };
 
-        // The three side effects that used to be separate client calls now
-        // happen here, behind the same one-shot in_progress -> won/lost
-        // transition. That is what makes a completion retry unable to count
-        // the play twice.
+        // The three REQUIRED effects that used to be separate client calls.
+        // None is optional: if one fails the completion rolls back with it,
+        // so a finished session can never be missing its statistics.
         const mistakes = (args._mistakes as number) ?? 0;
         const seconds = (args._active_time_seconds as number) ?? 0;
         const firstSolve = Array.isArray(args._solve_order)
@@ -474,6 +499,14 @@ export class FakeSupabase {
         // 1. Site-wide aggregates. +1 per OFFICIAL completion — the same
         //    definition as before, never re-incremented and never decremented
         //    by import, decline or retirement.
+        if (this.failAggregateWrites > 0) {
+          this.failAggregateWrites -= 1;
+          rollback();
+          return {
+            data: null,
+            error: { code: "XX000", message: "simulated aggregate write failure" },
+          };
+        }
         const agg = this.tables.puzzle_aggregates.find((a) => a.puzzle_id === row.puzzle_id);
         if (agg) {
           const total = ((agg.total_plays as number) ?? 0) + 1;
@@ -496,7 +529,13 @@ export class FakeSupabase {
         // 2. game_results: unchanged meaning — one row per (account, puzzle),
         //    only on an official completion by a signed-in player. Anonymous
         //    play has never written it.
-        if (row.user_id != null) {
+        //
+        //    Skipped when the puzzle no longer exists, mirroring the SQL
+        //    precondition: game_results has an FK to puzzles, and the Admin
+        //    screen can delete a puzzle. Without that check a mandatory write
+        //    would let a deleted puzzle block a real completion.
+        const puzzleExists = this.tables.puzzles.some((p) => p.id === row.puzzle_id);
+        if (row.user_id != null && puzzleExists) {
           const existingResult = this.tables.game_results.find(
             (r) => r.user_id === row.user_id && r.puzzle_id === row.puzzle_id
           );

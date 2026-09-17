@@ -1010,74 +1010,99 @@ begin
     return false;
   end if;
 
-  -- ---- side effect 1: site-wide aggregates -----------------------------
+  -- =====================================================================
+  -- REQUIRED COMPLETION EFFECTS
+  --
+  -- None of the three below is wrapped in an exception handler, and that is
+  -- deliberate. They run in THIS transaction, so if any of them fails the
+  -- session's completion rolls back with it and the row stays in_progress.
+  --
+  -- That is the whole point. The old arrangement made these separate client
+  -- calls AFTER finalization, so a failure left a permanently completed
+  -- session with no play counted -- and no way to repair it, because a retry
+  -- finds the session already finished and stops. Swallowing the error here
+  -- would rebuild exactly that hole inside the new function.
+  --
+  -- Rolling back is safe to retry precisely because the whole thing is
+  -- guarded by the in_progress -> won/lost transition: a rolled-back attempt
+  -- leaves the session retryable, and an attempt that actually committed
+  -- makes every later attempt a no-op. So the play is counted exactly once,
+  -- never zero times and never twice.
+  -- =====================================================================
+
+  -- ---- required effect 1: site-wide aggregates --------------------------
   -- Same +1-per-official-completion definition and the same running-average
   -- arithmetic as the standalone function this replaces. The advisory lock is
   -- new: that function was a read-then-write with no serialization, so two
   -- simultaneous completions of the same puzzle could both read the same
   -- total and write the same value, losing a play.
-  begin
-    perform pg_advisory_xact_lock(hashtextextended('puzzle_aggregate:' || _puzzle_id, 0));
+  perform pg_advisory_xact_lock(hashtextextended('puzzle_aggregate:' || _puzzle_id, 0));
 
-    select pa.total_plays, pa.total_wins, pa.avg_mistakes, pa.avg_time_seconds
-      into _t, _w, _am, _at
-      from public.puzzle_aggregates pa
-     where pa.puzzle_id = _puzzle_id;
+  select pa.total_plays, pa.total_wins, pa.avg_mistakes, pa.avg_time_seconds
+    into _t, _w, _am, _at
+    from public.puzzle_aggregates pa
+   where pa.puzzle_id = _puzzle_id;
 
-    if found then
-      _t := _t + 1;
-      _w := _w + (case when _won then 1 else 0 end);
-      _am := ((coalesce(_am, 0) * (_t - 1)) + coalesce(_mistakes, 0)) / _t;
-      _at := ((coalesce(_at, 0) * (_t - 1)) + coalesce(_active_time_seconds, 0)) / _t;
+  if found then
+    _t := _t + 1;
+    _w := _w + (case when _won then 1 else 0 end);
+    _am := ((coalesce(_am, 0) * (_t - 1)) + coalesce(_mistakes, 0)) / _t;
+    _at := ((coalesce(_at, 0) * (_t - 1)) + coalesce(_active_time_seconds, 0)) / _t;
 
-      update public.puzzle_aggregates
-         set total_plays = _t,
-             total_wins = _w,
-             avg_mistakes = _am,
-             avg_time_seconds = _at,
-             most_common_first_solve = coalesce(_first_solve, most_common_first_solve),
-             updated_at = now()
-       where puzzle_id = _puzzle_id;
-    else
-      insert into public.puzzle_aggregates (
-        puzzle_id, total_plays, total_wins, avg_mistakes, avg_time_seconds,
-        most_common_first_solve, updated_at
-      ) values (
-        _puzzle_id, 1, (case when _won then 1 else 0 end),
-        coalesce(_mistakes, 0), coalesce(_active_time_seconds, 0),
-        _first_solve, now()
-      );
-    end if;
-  exception when others then
-    null;
-  end;
+    update public.puzzle_aggregates
+       set total_plays = _t,
+           total_wins = _w,
+           avg_mistakes = _am,
+           avg_time_seconds = _at,
+           most_common_first_solve = coalesce(_first_solve, most_common_first_solve),
+           updated_at = now()
+     where puzzle_id = _puzzle_id;
+  else
+    insert into public.puzzle_aggregates (
+      puzzle_id, total_plays, total_wins, avg_mistakes, avg_time_seconds,
+      most_common_first_solve, updated_at
+    ) values (
+      _puzzle_id, 1, (case when _won then 1 else 0 end),
+      coalesce(_mistakes, 0), coalesce(_active_time_seconds, 0),
+      _first_solve, now()
+    );
+  end if;
 
-  -- ---- side effect 2: game_results -------------------------------------
+  -- ---- required effect 2: game_results ----------------------------------
   -- Unchanged meaning: one row per (account, puzzle), written only on an
   -- OFFICIAL completion by a SIGNED-IN player. Anonymous play has never
   -- written this table, which is why get_puzzle_stats() -- and the Daily
   -- Stats modal it feeds -- reports signed-in players only. That is
   -- deliberately preserved here; changing it is a separate product decision.
-  if _user_id is not null then
-    begin
-      insert into public.game_results (user_id, puzzle_id, won, mistakes)
-      values (_user_id, _puzzle_id::uuid, _won, coalesce(_mistakes, 0))
-      on conflict (user_id, puzzle_id) do update
-        set won = excluded.won,
-            mistakes = excluded.mistakes;
-    exception when others then
-      null;
-    end;
+  --
+  -- The two PRECONDITIONS are what make this safe to make mandatory, and
+  -- they are checks rather than a swallowed exception, so anything they do
+  -- not cover still rolls the transaction back:
+  --
+  --   * game_sessions.puzzle_id is TEXT while game_results.puzzle_id is
+  --     UUID, so a non-UUID puzzle id would fail the cast.
+  --   * game_results.puzzle_id has an FK to puzzles(id) ON DELETE CASCADE,
+  --     and the Admin screen can delete a puzzle. A result row for a deleted
+  --     puzzle is one the FK would have removed anyway.
+  --
+  -- Without these, a player finishing a game whose puzzle had been deleted
+  -- could never complete it -- an analytics row blocking real gameplay,
+  -- which is a worse failure than the one this section fixes.
+  if _user_id is not null
+     and _puzzle_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+     and exists (select 1 from public.puzzles p where p.id = _puzzle_id::uuid)
+  then
+    insert into public.game_results (user_id, puzzle_id, won, mistakes)
+    values (_user_id, _puzzle_id::uuid, _won, coalesce(_mistakes, 0))
+    on conflict (user_id, puzzle_id) do update
+      set won = excluded.won,
+          mistakes = excluded.mistakes;
   end if;
 
-  -- ---- side effect 3: streak -------------------------------------------
+  -- ---- required effect 3: streak ----------------------------------------
   -- Archive games still do not touch streaks.
   if not coalesce(_skip_streak, false) then
-    begin
-      perform public.record_streak(_user_id, _session_device, _won, _local_date);
-    exception when others then
-      null;
-    end;
+    perform public.record_streak(_user_id, _session_device, _won, _local_date);
   end if;
 
   return true;

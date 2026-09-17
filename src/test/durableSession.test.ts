@@ -144,9 +144,14 @@ beforeEach(async () => {
 
   // Ordering matters here. Every await is a window in which a straggling
   // promise from the PREVIOUS test can still run — and those write session
-  // ids into the progress blob. So: let them land, mint the identity, and
-  // only then clear storage and seed it, with no await in between.
-  await new Promise((r) => setTimeout(r, 0));
+  // ids into the progress blob, which is what used to make the resume tests
+  // intermittently compare a stale id. So: drain them first, mint the
+  // identity, and only then clear storage and seed it, with no await in
+  // between. Several real ticks, because one macrotask is not enough to
+  // settle a chain of awaited writes.
+  for (let i = 0; i < 5; i++) {
+    await new Promise((r) => setTimeout(r, 10));
+  }
 
   db.tables.game_sessions = [];
   db.tables.guess_events = [];
@@ -168,6 +173,7 @@ beforeEach(async () => {
     { id: "puzzle-completed", rainbow_herring: puzzle.rainbowHerring },
   ];
   db.signIn(null);
+  db.failAggregateWrites = 0;
   // The identity mint is setup, not gameplay — keep it out of the write- and
   // rpc-volume assertions.
   db.writeLog = [];
@@ -2277,6 +2283,45 @@ describe("account onboarding", () => {
     expect(imported.status).toBe("won"); // preserved in full, just not official
   });
 
+  it("a freshly minted identity is inert: it reaches no data and counts nothing", async () => {
+    // create_device_identity is anon-callable and unthrottled, so minting is
+    // cheap. What matters is that a minted identity with no gameplay behind
+    // it is worth nothing: it cannot read anyone's data and cannot move any
+    // counter. (Table growth is tracked separately.)
+    db.signIn(null);
+    const { data } = await db.rpc("create_device_identity");
+    const fresh = (Array.isArray(data) ? data[0] : data) as {
+      device_id: string;
+      device_token: string;
+    };
+    const creds = { _device_id: fresh.device_id, _device_token: fresh.device_token };
+
+    // Seed a stranger's completed game so there is something to fail to reach.
+    seedGuestHistory();
+    const playsBefore = db.tables.puzzle_aggregates.length;
+
+    expect((await db.rpc("get_own_completed_sessions", creds)).data).toEqual([]);
+    expect((await db.rpc("get_own_streak", creds)).data).toEqual([]);
+    expect((await db.rpc("count_own_anonymous_sessions", creds)).data).toBe(0);
+    expect(
+      (await db.rpc("has_official_result", { _puzzle_id: PUZZLE_ID, ...creds })).data
+    ).toBe(false);
+
+    // It cannot touch a session it does not own...
+    expect(
+      (await db.rpc("touch_game_session", {
+        _session_id: "guest-session",
+        ...creds,
+        _active_time_seconds: 999,
+        _mistakes: 4,
+      })).data
+    ).toBe(false);
+
+    // ...and it has moved no counter.
+    expect(db.tables.puzzle_aggregates).toHaveLength(playsBefore);
+    expect(db.tables.game_results).toHaveLength(0);
+  });
+
   it("a later logout starts a separate guest identity", async () => {
     const { resetDeviceIdentity, ensureDeviceIdentity } = await import("@/lib/gameStats");
     const first = getDeviceId();
@@ -2403,6 +2448,135 @@ describe("play counting", () => {
     // One official personal result, two real historical plays.
     const { data: own } = await db.rpc("get_own_completed_sessions", {});
     expect(own).toHaveLength(1);
+  });
+
+  it("a failed required effect rolls the whole completion back", async () => {
+    // Every attempt fails, so the completion never lands. The point is what
+    // must NOT happen: a session marked finished with no play counted, which
+    // no retry could ever repair because the session is no longer in_progress.
+    db.failAggregateWrites = 99;
+
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    const row = sessions()[0];
+    expect(row.status).toBe("in_progress");
+    expect(row.completed_at).toBeNull();
+    expect(row.won).toBeNull();
+    expect(row.is_official).toBe(false);
+    expect(plays()).toBe(0);
+    expect(db.tables.game_results).toHaveLength(0);
+    expect(db.tables.user_streaks).toHaveLength(0);
+
+    // The completed game and the statistics agree: neither happened.
+    expect(sessions()).toHaveLength(1);
+  });
+
+  it("a retry after a failed required effect succeeds exactly once", async () => {
+    // Two failures, then success — inside the client's own retry budget.
+    db.failAggregateWrites = 2;
+    db.signIn("me-user-id");
+
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+    // The retries back off (150ms, then 300ms), which outlasts settle()'s
+    // zero-delay flush.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 900));
+    });
+
+    const row = sessions()[0];
+    expect(row.status).toBe("won");
+    expect(row.is_official).toBe(true);
+    // Counted once despite three finalize attempts.
+    expect(plays()).toBe(1);
+    expect(db.tables.game_results).toHaveLength(1);
+    expect(db.tables.user_streaks).toHaveLength(1);
+    expect(sessions()).toHaveLength(1);
+  });
+
+  it("a later finalize repairs a session left in progress by a failed attempt", async () => {
+    // The durable path: the first completion failed outright, the session is
+    // still in_progress, and a subsequent finalize (a later mount, a manual
+    // retry) completes it — still exactly one play.
+    db.failAggregateWrites = 99;
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+    expect(sessions()[0].status).toBe("in_progress");
+    expect(plays()).toBe(0);
+
+    db.failAggregateWrites = 0;
+    const sessionId = sessions()[0].id as string;
+    const first = await db.rpc("finalize_game_session", {
+      _session_id: sessionId,
+      _device_id: getDeviceId(),
+      _device_token: localStorage.getItem("rc-device-token"),
+      _won: true,
+      _mistakes: 0,
+      _active_time_seconds: 10,
+      _found_rainbow: false,
+      _rainbow_solve_index: null,
+      _solve_order: ["orange"],
+      _hints_used: false,
+      _share_grid: "",
+    });
+    expect(first.data).toBe(true);
+    expect(sessions()[0].status).toBe("won");
+    expect(plays()).toBe(1);
+
+    // And a second repair attempt is inert — no double count.
+    const second = await db.rpc("finalize_game_session", {
+      _session_id: sessionId,
+      _device_id: getDeviceId(),
+      _device_token: localStorage.getItem("rc-device-token"),
+      _won: true,
+      _mistakes: 0,
+      _active_time_seconds: 10,
+      _found_rainbow: false,
+      _rainbow_solve_index: null,
+      _solve_order: ["orange"],
+      _hints_used: false,
+      _share_grid: "",
+    });
+    expect(second.data).toBeNull();
+    expect(plays()).toBe(1);
+  });
+
+  it("a completed official session and its required statistics never disagree", async () => {
+    // The invariant, asserted directly over whatever state the run produced.
+    db.signIn("me-user-id");
+    db.failAggregateWrites = 1; // one transient failure along the way
+
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+
+    for (const s of sessions()) {
+      const isCompletedOfficial =
+        (s.status === "won" || s.status === "lost") && s.is_official === true;
+      if (!isCompletedOfficial) continue;
+      // A play was counted for it...
+      expect(plays(s.puzzle_id as string)).toBeGreaterThan(0);
+      // ...and a signed-in official result has its game_results row.
+      if (s.user_id != null) {
+        expect(
+          db.tables.game_results.some(
+            (r) => r.user_id === s.user_id && r.puzzle_id === s.puzzle_id
+          )
+        ).toBe(true);
+      }
+    }
   });
 
   it("game_results is written server-side for a signed-in official win only", async () => {

@@ -14,6 +14,15 @@ const DEVICE_ID_KEY = "rc-device-id";
 const DEVICE_TOKEN_KEY = "rc-device-token";
 
 /**
+ * How many times to retry a finalize that failed with an ERROR.
+ *
+ * Safe only because finalize_game_session is atomic and guarded by the
+ * in_progress -> won/lost transition: a failed attempt changed nothing, and a
+ * successful one cannot be repeated.
+ */
+const FINALIZE_ATTEMPTS = 3;
+
+/**
  * The guest identity for this browser: a public id plus a PRIVATE token.
  *
  * Splitting these is the whole point. The id is written onto every gameplay
@@ -379,13 +388,23 @@ export async function finalizeGameSession(
 
     // One trusted transaction. The aggregate increment, the game_results row
     // and the streak update all happen inside this call now, behind the same
-    // one-shot in_progress -> won/lost transition — so a retry cannot count
-    // the play twice and a crash cannot lose it halfway.
+    // one-shot in_progress -> won/lost transition. If any of them fails, the
+    // completion itself rolls back and the session stays in_progress, so the
+    // player's finished game and their statistics can never disagree.
+    //
+    // That is what makes retrying safe, and worth doing: a rolled-back
+    // attempt left the session retryable, and an attempt that did commit
+    // makes every later one a no-op. Exactly one play gets counted — never
+    // none because a write failed, never two because we tried again.
+    //
+    // Only a transport/database ERROR is retried. A null or false RESULT is
+    // a definite answer from the server (already finished, or not official),
+    // and repeating the call would not change it.
     //
     // _local_date carries the PLAYER'S calendar date, because streaks have
     // always been measured in local time and computing them from the server's
     // clock would move every boundary to UTC.
-    const { data: isOfficial, error } = await supabase.rpc("finalize_game_session", {
+    const finalizeArgs = {
       _session_id: sessionId,
       _device_id: deviceId,
       _device_token: deviceToken,
@@ -399,10 +418,27 @@ export async function finalizeGameSession(
       _share_grid: shareGrid,
       _skip_streak: skipStreak,
       _local_date: new Date().toLocaleDateString("en-CA"),
-    });
+    };
 
-    if (error) {
-      console.error("Failed to finalize game session:", error);
+    let isOfficial: boolean | null = null;
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < FINALIZE_ATTEMPTS; attempt++) {
+      const { data, error } = await supabase.rpc("finalize_game_session", finalizeArgs);
+      if (!error) {
+        isOfficial = data as boolean | null;
+        lastError = null;
+        break;
+      }
+      lastError = error;
+      if (attempt < FINALIZE_ATTEMPTS - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 150 * 2 ** attempt));
+      }
+    }
+
+    if (lastError) {
+      // The session is still in_progress, and the completed game is still in
+      // the local progress blob, so a later mount can finalize it again.
+      console.error("Failed to finalize game session:", lastError);
       return false;
     }
 
