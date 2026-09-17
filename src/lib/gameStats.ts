@@ -10,16 +10,104 @@ import {
 } from "./gameSession";
 
 // Gets or creates a stable device ID for anonymous players
+const DEVICE_ID_KEY = "rc-device-id";
+const DEVICE_TOKEN_KEY = "rc-device-token";
+
+/**
+ * The guest identity for this browser: a public id plus a PRIVATE token.
+ *
+ * Splitting these is the whole point. The id is written onto every gameplay
+ * row for provenance and travels in plain sight; the token is what actually
+ * proves the caller is this device, and it is minted server-side, returned
+ * exactly once, and stored only here. It must never be logged, rendered,
+ * put in a URL, or sent anywhere except an RPC body.
+ *
+ * Both live in localStorage only. Clearing site data loses the identity for
+ * good — creating an account is how a player makes their history durable.
+ */
+export interface DeviceIdentity {
+  deviceId: string;
+  deviceToken: string;
+}
+
+/**
+ * The stored id, or "unknown" when localStorage is unavailable (private
+ * browsing, blocked storage). "unknown" is never a usable identity: it is the
+ * one value every storage-blocked browser shares, so the database refuses it
+ * everywhere.
+ */
 export function getDeviceId(): string {
-  const key = "rc-device-id";
   try {
-    const existing = localStorage.getItem(key);
-    if (existing) return existing;
-    const newId = crypto.randomUUID();
-    localStorage.setItem(key, newId);
-    return newId;
+    return localStorage.getItem(DEVICE_ID_KEY) ?? "unknown";
   } catch {
     return "unknown";
+  }
+}
+
+export function getDeviceToken(): string | null {
+  try {
+    return localStorage.getItem(DEVICE_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** The pair, or null when this browser has no usable identity yet. */
+export function getDeviceIdentity(): DeviceIdentity | null {
+  const deviceId = getDeviceId();
+  const deviceToken = getDeviceToken();
+  if (!deviceToken || deviceId === "unknown") return null;
+  return { deviceId, deviceToken };
+}
+
+/**
+ * Mint a brand-new identity, discarding whatever was stored before.
+ *
+ * Used on sign-out (so post-logout play is a genuinely separate guest, not a
+ * continuation of the account holder's browser) and to replace a pre-cutover
+ * id that has no token and can never be verified again.
+ */
+export async function createDeviceIdentity(): Promise<DeviceIdentity | null> {
+  const { data, error } = await supabase.rpc("create_device_identity");
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  const deviceId = (row as { device_id?: string } | null)?.device_id;
+  const deviceToken = (row as { device_token?: string } | null)?.device_token;
+  if (!deviceId || !deviceToken) return null;
+  try {
+    localStorage.setItem(DEVICE_ID_KEY, deviceId);
+    localStorage.setItem(DEVICE_TOKEN_KEY, deviceToken);
+  } catch {
+    // Storage blocked: this identity cannot survive the page, and without a
+    // token nothing will accept it. The player stays effectively "unknown",
+    // exactly as they did before.
+    return null;
+  }
+  return { deviceId, deviceToken };
+}
+
+/**
+ * The identity for this browser, creating one if needed.
+ *
+ * A stored id with no token is a pre-cutover ("legacy") browser: that id was
+ * retired by the migration and can never be verified, so it is replaced
+ * rather than retried. The old gameplay rows it refers to are left exactly
+ * where they are — never claimed, never deleted, still counted in site-wide
+ * analytics.
+ */
+export async function ensureDeviceIdentity(): Promise<DeviceIdentity | null> {
+  const existing = getDeviceIdentity();
+  if (existing) return existing;
+  return createDeviceIdentity();
+}
+
+/** Discard this browser's identity so the next play starts a new guest. */
+export function resetDeviceIdentity(): void {
+  try {
+    localStorage.removeItem(DEVICE_ID_KEY);
+    localStorage.removeItem(DEVICE_TOKEN_KEY);
+  } catch {
+    // nothing stored, nothing to clear
   }
 }
 
@@ -97,7 +185,7 @@ export async function recordBonusRainbowAttempt(params: {
   groupsSolved: number;
 }): Promise<void> {
   try {
-    const { deviceId } = await getIdentity();
+    const { deviceId, deviceToken } = await getIdentity();
     // One function call does both writes: the bonus guess event and the
     // session summary. It is the ONLY producer of
     // attempt_type = 'bonus_rainbow' in the system, and record_guess_events
@@ -111,6 +199,7 @@ export async function recordBonusRainbowAttempt(params: {
     const { error } = await supabase.rpc("record_bonus_rainbow", {
       _session_id: params.sessionId,
       _device_id: deviceId,
+      _device_token: deviceToken,
       _guess_number: params.guessNumber,
       _words: params.words,
       _correct: params.correct,
@@ -140,7 +229,7 @@ export async function recordBonusRainbowAttempt(params: {
  */
 export async function hasOfficialResult(puzzleId: string): Promise<boolean> {
   try {
-    const { deviceId } = await getIdentity();
+    const { deviceId, deviceToken } = await getIdentity();
 
     // Answered by an RPC rather than a table read. game_sessions is no longer
     // directly readable by anonymous clients (see section 6 of the
@@ -152,6 +241,7 @@ export async function hasOfficialResult(puzzleId: string): Promise<boolean> {
     const { data, error } = await supabase.rpc("has_official_result", {
       _puzzle_id: puzzleId,
       _device_id: deviceId,
+      _device_token: deviceToken,
     });
 
     // Deploy-order insurance. This code REQUIRES the durable-session
@@ -262,7 +352,11 @@ export async function finalizeGameSession(
   } = params;
 
   try {
-    const { userId, deviceId } = await getIdentity();
+    const { deviceId, deviceToken } = await getIdentity();
+    if (!deviceToken) {
+      console.error("No verified device identity; cannot finalize");
+      return false;
+    }
 
     // A session to finalize. Normally the one this game has been writing to;
     // otherwise (a legacy local progress blob, or a creation that failed) one
@@ -283,9 +377,18 @@ export async function finalizeGameSession(
       return false;
     }
 
+    // One trusted transaction. The aggregate increment, the game_results row
+    // and the streak update all happen inside this call now, behind the same
+    // one-shot in_progress -> won/lost transition — so a retry cannot count
+    // the play twice and a crash cannot lose it halfway.
+    //
+    // _local_date carries the PLAYER'S calendar date, because streaks have
+    // always been measured in local time and computing them from the server's
+    // clock would move every boundary to UTC.
     const { data: isOfficial, error } = await supabase.rpc("finalize_game_session", {
       _session_id: sessionId,
       _device_id: deviceId,
+      _device_token: deviceToken,
       _won: won,
       _mistakes: mistakes,
       _active_time_seconds: activeTimeSeconds,
@@ -294,6 +397,8 @@ export async function finalizeGameSession(
       _solve_order: solveOrder,
       _hints_used: hintsUsed,
       _share_grid: shareGrid,
+      _skip_streak: skipStreak,
+      _local_date: new Date().toLocaleDateString("en-CA"),
     });
 
     if (error) {
@@ -307,30 +412,10 @@ export async function finalizeGameSession(
     await backfillGuessEvents(sessionId, guessHistory);
 
     // null means the session was already finished, or the capability check
-    // failed. Either way this playthrough did not become the official result,
-    // and must not run the side effects again.
-    if (isOfficial !== true) return false;
-
-    // Community aggregates count official completions only. A session merely
-    // starting must never increment them, or "total plays" would silently
-    // change meaning from "finished" to "opened". If we later want "puzzle
-    // started" or an abandonment rate, that comes from sessions/events — not
-    // from redefining this counter.
-    const firstSolve = solveOrder[0] ?? null;
-    const { error: rpcError } = await supabase.rpc("increment_puzzle_aggregate", {
-      _puzzle_id: puzzleId,
-      _won: won,
-      _mistakes: mistakes,
-      _time_seconds: activeTimeSeconds,
-      _first_solve: firstSolve,
-    });
-    if (rpcError) console.error("Failed to update puzzle aggregates:", rpcError);
-
-    if (!skipStreak) {
-      await updateStreak(userId, deviceId, won);
-    }
-
-    return true;
+    // failed; false means this playthrough completed but was not the official
+    // result. Either way it owns no side effects — and the server has already
+    // decided that, so there is nothing left for the client to run.
+    return isOfficial === true;
   } catch (err) {
     console.error("finalizeGameSession error:", err);
     return false;
@@ -360,16 +445,15 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     const { data: { user } } = await supabase.auth.getUser();
     const userId = user?.id ?? null;
 
-    const streakQuery = userId
-      ? supabase.from("user_streaks").select("current_streak, longest_streak, last_played_date, user_id").or(`user_id.eq.${userId},device_id.eq.${deviceId}`)
-      : supabase.from("user_streaks").select("current_streak, longest_streak, last_played_date, user_id").eq("device_id", deviceId);
-    const { data: streakRows } = await streakQuery;
-    // Prefer the row tied to the logged-in user; tiebreak on longest streak
-    const streak = (streakRows ?? []).slice().sort((a, b) => {
-      if (a.user_id && !b.user_id) return -1;
-      if (!a.user_id && b.user_id) return 1;
-      return (b.longest_streak ?? 0) - (a.longest_streak ?? 0);
-    })[0] ?? null;
+    // Through an RPC, not a table query: user_streaks has no policies or
+    // grants for ordinary clients any more. The function answers for the
+    // account when there is one and for the proven device otherwise, and it
+    // does the "prefer the account's own row" selection server-side.
+    const { data: streakRows } = await supabase.rpc("get_own_streak", {
+      _device_id: deviceId,
+      _device_token: getDeviceToken(),
+    });
+    const streak = (Array.isArray(streakRows) ? streakRows[0] : streakRows) ?? null;
 
     // EVERY player-facing stat below is derived from `rows`, so this single
     // filter is what keeps all of them — Played, Win %, Mistake Distribution,
@@ -392,6 +476,7 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     // there is no query shape a caller could vary to widen the result set.
     const { data: sessions } = await supabase.rpc("get_own_completed_sessions", {
       _device_id: deviceId,
+      _device_token: getDeviceToken(),
     });
 
     const rows = (sessions ?? []) as unknown as OwnCompletedSession[];
@@ -530,61 +615,5 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
   } catch (err) {
     console.error("loadStatsFromSupabase error:", err);
     return empty;
-  }
-}
-
-async function updateStreak(userId: string | null, deviceId: string, won: boolean): Promise<void> {
-  try {
-    const today = new Date().toLocaleDateString("en-CA");
-    let existing: any = null;
-    if (userId) {
-      const r1 = await supabase.from("user_streaks").select("*").eq("user_id", userId).maybeSingle();
-      existing = r1.data;
-      if (!existing) {
-        const r2 = await supabase.from("user_streaks").select("*").eq("device_id", deviceId).maybeSingle();
-        existing = r2.data;
-        // Claim orphaned anonymous row for this user
-        if (existing && !existing.user_id) {
-          await supabase.from("user_streaks").update({ user_id: userId }).eq("id", existing.id);
-          existing.user_id = userId;
-        }
-      }
-    } else {
-      const r = await supabase.from("user_streaks").select("*").eq("device_id", deviceId).maybeSingle();
-      existing = r.data;
-    }
-
-    if (!existing) {
-      await supabase.from("user_streaks").insert({
-        user_id: userId,
-        device_id: deviceId,
-        current_streak: 1,
-        longest_streak: 1,
-        last_played_date: today,
-      });
-      return;
-    }
-
-    const lastPlayed = existing.last_played_date;
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toLocaleDateString("en-CA");
-
-    if (lastPlayed === today) return;
-    const newStreak = won
-      ? (lastPlayed === yesterdayStr ? existing.current_streak + 1 : 1)
-      : 0;
-
-    const newLongest = Math.max(newStreak, existing.longest_streak);
-
-    await supabase.from("user_streaks").update({
-      current_streak: newStreak,
-      longest_streak: newLongest,
-      last_played_date: today,
-      updated_at: new Date().toISOString(),
-    }).eq("id", existing.id);
-
-  } catch (err) {
-    console.error("updateStreak error:", err);
   }
 }

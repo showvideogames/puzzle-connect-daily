@@ -60,6 +60,12 @@ export class FakeSupabase {
     game_results: [],
     user_streaks: [],
     puzzles: [],
+    /** Private per-device credentials (device_id, token_hash, retired_at). */
+    device_identities: [],
+    /** The one-time onboarding decision, one row per account. */
+    account_onboarding: [],
+    /** Site-wide play counters — the "100 stays 100" invariant lives here. */
+    puzzle_aggregates: [],
   };
 
   /** Every write, in order — lets tests assert on write VOLUME, not just state. */
@@ -80,7 +86,16 @@ export class FakeSupabase {
    * production will refuse. This is a model of the policies, not the policies
    * themselves — the SQL is verified separately, after it is applied.
    */
-  private static readonly RLS_READ_PROTECTED = ["game_sessions", "guess_events", "hint_events"];
+  private static readonly RLS_READ_PROTECTED = [
+    "game_sessions",
+    "guess_events",
+    "hint_events",
+    // user_streaks lost every direct policy in the cutover migration. It used
+    // to be world-readable, which is what let anyone enumerate device ids.
+    "user_streaks",
+    "device_identities",
+    "account_onboarding",
+  ];
 
   /** True when the caller is an admin, which unlocks the admin SELECT policies. */
   isAdmin = false;
@@ -88,6 +103,11 @@ export class FakeSupabase {
   signIn(userId: string | null, opts?: { admin?: boolean }) {
     this.authUser = userId ? { id: userId } : null;
     this.isAdmin = !!opts?.admin;
+    // Default a signed-in test user to an already-onboarded ("legacy")
+    // account, which is what every pre-cutover account is. Gameplay tests are
+    // not about onboarding and must not all trip the pending gate; the tests
+    // that DO exercise onboarding set the status explicitly.
+    if (userId) this._seedOnboarding(userId, "legacy");
   }
 
   /**
@@ -99,6 +119,9 @@ export class FakeSupabase {
    */
   _visibleForRead(table: string, rows: FakeRow[]): FakeRow[] {
     if (!FakeSupabase.RLS_READ_PROTECTED.includes(table)) return rows;
+    // These three are reachable ONLY through SECURITY DEFINER functions now;
+    // no role has a SELECT policy on them, not even an admin.
+    if (["user_streaks", "device_identities", "account_onboarding"].includes(table)) return [];
     if (this.isAdmin) return rows;
     const uid = this.authUser?.id;
     if (!uid) return [];
@@ -130,18 +153,200 @@ export class FakeSupabase {
     // create_game_session records itself as a game_sessions INSERT below,
     // since writeLog describes WHICH TABLE was written rather than how the
     // write was delivered.
-    if (name === "increment_puzzle_aggregate") {
-      this.writeLog.push({ table: `rpc:${name}`, op: "rpc" });
-    }
     const uid = this.authUser?.id ?? null;
     const deviceId = args._device_id as string | undefined;
+    const deviceToken = args._device_token as string | undefined;
+    const deviceProven = this._verifyDevice(deviceId, deviceToken);
+    // Ownership for own-data reads. The ACCOUNT branch is deliberately
+    // independent of the device check: history imported into an account must
+    // stay visible after its source device is retired.
     const ownsRow = (r: FakeRow) =>
       (uid !== null && r.user_id === uid) ||
-      (!!deviceId && deviceId !== "unknown" && r.device_id === deviceId);
+      (deviceProven && r.user_id == null && r.device_id === deviceId);
     const completed = (r: FakeRow) => r.status === "won" || r.status === "lost";
 
     switch (name) {
+      case "create_device_identity": {
+        const newId = `device-${this._newId()}`;
+        const token = `token-${this._newId()}`;
+        this._seedDeviceIdentity(newId, token);
+        return { data: [{ device_id: newId, device_token: token }], error: null };
+      }
+      case "resolve_onboarding": {
+        if (uid === null) {
+          return { data: [{ outcome: "unauthenticated", status: null, games_played: 0, current_streak: 0, longest_streak: 0 }], error: null };
+        }
+        let row = this.tables.account_onboarding.find((r) => r.user_id === uid);
+        if (!row) {
+          // No row means the account did not exist at cutover, so it is new.
+          this._seedOnboarding(uid, "pending");
+          row = this.tables.account_onboarding.find((r) => r.user_id === uid)!;
+        }
+        const resolved = (outcome: string, extra: Record<string, unknown> = {}) => ({
+          data: [{ outcome, status: row!.status, games_played: 0, current_streak: 0, longest_streak: 0, ...extra }],
+          error: null,
+        });
+        if (row.status !== "pending") return resolved("already_resolved");
+
+        if (!deviceId || !deviceToken || deviceId === "unknown") {
+          row.status = "no_guest_history";
+          row.decided_at = new Date().toISOString();
+          return resolved("no_guest_history");
+        }
+        if (!deviceProven) {
+          // Fails closed: the one-time opportunity is NOT consumed, and the
+          // answer says nothing about whether that history exists.
+          return resolved("credential_invalid");
+        }
+
+        const hasHistory =
+          this.tables.game_sessions.some(
+            (r) =>
+              r.device_id === deviceId &&
+              r.user_id == null &&
+              (completed(r) ||
+                this.tables.guess_events.some((g) => g.game_session_id === r.id) ||
+                this.tables.hint_events.some((h) => h.game_session_id === r.id) ||
+                ((r.mistakes as number) ?? 0) > 0)
+          ) ||
+          this.tables.user_streaks.some(
+            (s) =>
+              s.device_id === deviceId &&
+              s.user_id == null &&
+              (((s.current_streak as number) ?? 0) > 0 ||
+                ((s.longest_streak as number) ?? 0) > 0 ||
+                s.last_played_date != null)
+          );
+
+        if (!hasHistory) {
+          row.status = "no_guest_history";
+          row.decided_at = new Date().toISOString();
+          return resolved("no_guest_history");
+        }
+
+        const games = this.tables.game_sessions.filter(
+          (r) => r.device_id === deviceId && r.user_id == null && completed(r)
+        ).length;
+        const streak = this.tables.user_streaks
+          .filter((s) => s.device_id === deviceId && s.user_id == null)
+          .sort((a, b) => ((b.longest_streak as number) ?? 0) - ((a.longest_streak as number) ?? 0))[0];
+        return resolved("import_available", {
+          games_played: games,
+          current_streak: (streak?.current_streak as number) ?? 0,
+          longest_streak: (streak?.longest_streak as number) ?? 0,
+        });
+      }
+      case "import_guest_history": {
+        if (uid === null) return { data: [{ outcome: "unauthenticated", sessions_claimed: 0 }], error: null };
+        if (!deviceProven) return { data: [{ outcome: "credential_invalid", sessions_claimed: 0 }], error: null };
+
+        const onboarding = this.tables.account_onboarding.find((r) => r.user_id === uid);
+        // The one-time compare-and-swap. Anything other than pending — an
+        // existing account, a second tab that already decided, a replay of
+        // this call — is a no-op, not an error.
+        if (!onboarding || onboarding.status !== "pending") {
+          return { data: [{ outcome: "already_resolved", sessions_claimed: 0 }], error: null };
+        }
+        onboarding.status = "imported";
+        onboarding.decided_at = new Date().toISOString();
+        onboarding.source_device_id = deviceId;
+
+        // Ownership transfer IN PLACE: same rows, same ids, nothing created.
+        const preClaim = this.tables.game_sessions.map((r) => ({ ...r }));
+        const accountHasOfficial = (puzzleId: unknown) =>
+          preClaim.some(
+            (o) => o.puzzle_id === puzzleId && o.user_id === uid && completed(o) && o.is_official === true
+          );
+        let claimed = 0;
+        for (const r of this.tables.game_sessions) {
+          if (r.user_id == null && r.device_id === deviceId) {
+            if (r.is_official === true && accountHasOfficial(r.puzzle_id)) r.is_official = false;
+            r.user_id = uid;
+            claimed++;
+          }
+        }
+
+        // The streak record changes owner; it is never summed or reset.
+        if (!this.tables.user_streaks.some((s) => s.user_id === uid)) {
+          const best = this.tables.user_streaks
+            .filter((s) => s.device_id === deviceId && s.user_id == null)
+            .sort((a, b) => ((b.longest_streak as number) ?? 0) - ((a.longest_streak as number) ?? 0))[0];
+          if (best) best.user_id = uid;
+        }
+
+        const identity = this.tables.device_identities.find((d) => d.device_id === deviceId);
+        if (identity) {
+          identity.retired_at = new Date().toISOString();
+          identity.retired_reason = "imported";
+        }
+
+        this._log("game_sessions", "update");
+        return { data: [{ outcome: "imported", sessions_claimed: claimed }], error: null };
+      }
+      case "decline_guest_history": {
+        if (uid === null) return { data: [{ outcome: "unauthenticated" }], error: null };
+        const onboarding = this.tables.account_onboarding.find((r) => r.user_id === uid);
+        if (!onboarding || onboarding.status !== "pending") {
+          return { data: [{ outcome: "already_resolved" }], error: null };
+        }
+        onboarding.status = "started_fresh";
+        onboarding.decided_at = new Date().toISOString();
+        onboarding.source_device_id = deviceProven ? deviceId : null;
+        // Declining imports nothing and deletes nothing: the gameplay rows
+        // stay exactly where they are, still counted site-wide.
+        if (deviceProven) {
+          const identity = this.tables.device_identities.find((d) => d.device_id === deviceId);
+          if (identity) {
+            identity.retired_at = new Date().toISOString();
+            identity.retired_reason = "started_fresh";
+          }
+        }
+        return { data: [{ outcome: "started_fresh" }], error: null };
+      }
+      case "get_own_streak": {
+        const pick = (rows: FakeRow[]) =>
+          rows.sort((a, b) => ((b.longest_streak as number) ?? 0) - ((a.longest_streak as number) ?? 0))[0];
+        const row =
+          uid !== null
+            ? pick(this.tables.user_streaks.filter((s) => s.user_id === uid))
+            : deviceProven
+              ? pick(this.tables.user_streaks.filter((s) => s.device_id === deviceId && s.user_id == null))
+              : undefined;
+        if (!row) return { data: [], error: null };
+        return {
+          data: [{
+            current_streak: (row.current_streak as number) ?? 0,
+            longest_streak: (row.longest_streak as number) ?? 0,
+            last_played_date: row.last_played_date ?? null,
+          }],
+          error: null,
+        };
+      }
+      case "get_streak_admin_summary": {
+        if (!this.isAdmin) return { data: [], error: null };
+        const rows = this.tables.user_streaks;
+        return {
+          data: [{
+            accounts_with_streaks: rows.filter((r) => r.user_id != null).length,
+            max_current_streak: Math.max(0, ...rows.map((r) => (r.current_streak as number) ?? 0)),
+            max_longest_streak: Math.max(0, ...rows.map((r) => (r.longest_streak as number) ?? 0)),
+          }],
+          error: null,
+        };
+      }
       case "create_game_session": {
+        // Every gameplay write now comes from a proven device.
+        if (!deviceProven) return { data: null, error: null };
+        // The onboarding gate, server-side. A signed-in account whose
+        // decision has not resolved cannot create a session, and therefore
+        // cannot accumulate account-owned gameplay, stats or streak. Fails
+        // CLOSED when no row exists at all.
+        if (uid !== null) {
+          const onboarding = this.tables.account_onboarding.find((r) => r.user_id === uid);
+          if (!onboarding || onboarding.status === "pending") {
+            return { data: null, error: null };
+          }
+        }
         const row = this._withDefaults("game_sessions", {
           id: this._newId(),
           puzzle_id: args._puzzle_id,
@@ -188,21 +393,17 @@ export class FakeSupabase {
         return { data: rows, error: null };
       }
       case "count_own_anonymous_sessions": {
+        if (!deviceProven) return { data: 0, error: null };
         const n = this.tables.game_sessions.filter(
-          (r) =>
-            r.user_id === null &&
-            completed(r) &&
-            !!deviceId &&
-            deviceId !== "unknown" &&
-            r.device_id === deviceId
+          (r) => r.user_id === null && completed(r) && r.device_id === deviceId
         ).length;
         return { data: n, error: null };
       }
       case "session_capability_ok": {
-        return { data: this._capabilityOk(args._session_id as string, deviceId), error: null };
+        return { data: this._capabilityOk(args._session_id as string, deviceId, deviceToken), error: null };
       }
       case "touch_game_session": {
-        if (!this._capabilityOk(args._session_id as string, deviceId)) {
+        if (!this._capabilityOk(args._session_id as string, deviceId, deviceToken)) {
           return { data: false, error: null };
         }
         const row = this.tables.game_sessions.find(
@@ -216,7 +417,7 @@ export class FakeSupabase {
         return { data: true, error: null };
       }
       case "finalize_game_session": {
-        if (!this._capabilityOk(args._session_id as string, deviceId)) {
+        if (!this._capabilityOk(args._session_id as string, deviceId, deviceToken)) {
           return { data: null, error: null };
         }
         const row = this.tables.game_sessions.find(
@@ -257,10 +458,77 @@ export class FakeSupabase {
           share_grid: args._share_grid ?? row.share_grid,
         });
         this._log("game_sessions", "update");
-        return { data: isOfficial, error: null };
+
+        if (!isOfficial) return { data: false, error: null };
+
+        // The three side effects that used to be separate client calls now
+        // happen here, behind the same one-shot in_progress -> won/lost
+        // transition. That is what makes a completion retry unable to count
+        // the play twice.
+        const mistakes = (args._mistakes as number) ?? 0;
+        const seconds = (args._active_time_seconds as number) ?? 0;
+        const firstSolve = Array.isArray(args._solve_order)
+          ? ((args._solve_order as unknown[])[0] as string | undefined) ?? null
+          : null;
+
+        // 1. Site-wide aggregates. +1 per OFFICIAL completion — the same
+        //    definition as before, never re-incremented and never decremented
+        //    by import, decline or retirement.
+        const agg = this.tables.puzzle_aggregates.find((a) => a.puzzle_id === row.puzzle_id);
+        if (agg) {
+          const total = ((agg.total_plays as number) ?? 0) + 1;
+          agg.avg_mistakes = ((((agg.avg_mistakes as number) ?? 0) * (total - 1)) + mistakes) / total;
+          agg.avg_time_seconds = ((((agg.avg_time_seconds as number) ?? 0) * (total - 1)) + seconds) / total;
+          agg.total_plays = total;
+          agg.total_wins = ((agg.total_wins as number) ?? 0) + (won ? 1 : 0);
+          agg.most_common_first_solve = firstSolve ?? agg.most_common_first_solve;
+        } else {
+          this.tables.puzzle_aggregates.push({
+            puzzle_id: row.puzzle_id,
+            total_plays: 1,
+            total_wins: won ? 1 : 0,
+            avg_mistakes: mistakes,
+            avg_time_seconds: seconds,
+            most_common_first_solve: firstSolve,
+          });
+        }
+
+        // 2. game_results: unchanged meaning — one row per (account, puzzle),
+        //    only on an official completion by a signed-in player. Anonymous
+        //    play has never written it.
+        if (row.user_id != null) {
+          const existingResult = this.tables.game_results.find(
+            (r) => r.user_id === row.user_id && r.puzzle_id === row.puzzle_id
+          );
+          if (existingResult) {
+            existingResult.won = won;
+            existingResult.mistakes = mistakes;
+          } else {
+            this.tables.game_results.push({
+              id: this._newId(),
+              user_id: row.user_id,
+              puzzle_id: row.puzzle_id,
+              won,
+              mistakes,
+              completed_at: completedAt,
+            });
+          }
+        }
+
+        // 3. Streak, on the player's own local date. Archive games skip it.
+        if (!args._skip_streak) {
+          this._recordStreak(
+            (row.user_id as string | null) ?? null,
+            (row.device_id as string | null) ?? null,
+            won,
+            (args._local_date as string | undefined) ?? null
+          );
+        }
+
+        return { data: true, error: null };
       }
       case "record_guess_events": {
-        if (!this._capabilityOk(args._session_id as string, deviceId)) {
+        if (!this._capabilityOk(args._session_id as string, deviceId, deviceToken)) {
           return { data: null, error: null };
         }
         const events = (args._events as Record<string, unknown>[]) ?? [];
@@ -284,7 +552,7 @@ export class FakeSupabase {
         return { data: inserted, error: null };
       }
       case "record_hint_event": {
-        if (!this._capabilityOk(args._session_id as string, deviceId)) {
+        if (!this._capabilityOk(args._session_id as string, deviceId, deviceToken)) {
           return { data: false, error: null };
         }
         const clash = this.tables.hint_events.some(
@@ -308,7 +576,7 @@ export class FakeSupabase {
         return { data: true, error: null };
       }
       case "record_bonus_rainbow": {
-        if (!this._capabilityOk(args._session_id as string, deviceId)) {
+        if (!this._capabilityOk(args._session_id as string, deviceId, deviceToken)) {
           return { data: false, error: null };
         }
         const row = this.tables.game_sessions.find(
@@ -350,37 +618,9 @@ export class FakeSupabase {
         this._log("game_sessions", "update");
         return { data: true, error: null };
       }
-      case "claim_anonymous_sessions": {
-        if (uid === null) return { data: 0, error: null };
-        if (!deviceId || deviceId === "unknown") return { data: 0, error: null };
-        // Mirrors the fixed SQL: every device-owned row's official/account
-        // check reads the table as it stood BEFORE this call (a single SQL
-        // UPDATE statement sees one pre-statement snapshot), so this loop
-        // must decide every row's fate from a snapshot taken up front rather
-        // than against `this.tables.game_sessions` as it mutates.
-        const preClaimRows = this.tables.game_sessions.map((r) => ({ ...r }));
-        const hasExistingAccountOfficial = (puzzleId: unknown) =>
-          preClaimRows.some(
-            (o) =>
-              o.puzzle_id === puzzleId &&
-              o.user_id === uid &&
-              completed(o) &&
-              o.is_official === true
-          );
-        let claimed = 0;
-        for (const r of this.tables.game_sessions) {
-          if (r.user_id === null && r.device_id === deviceId) {
-            if (r.is_official === true && hasExistingAccountOfficial(r.puzzle_id)) {
-              r.is_official = false;
-            }
-            r.user_id = uid;
-            claimed++;
-          }
-        }
-        this._log("game_sessions", "update");
-        return { data: claimed, error: null };
-      }
       default:
+        // Includes claim_anonymous_sessions, which the cutover migration
+        // dropped: an unknown function is not a silent success.
         return { data: null, error: null };
     }
   };
@@ -434,10 +674,18 @@ export class FakeSupabase {
    */
   _writeDenied(table: string, op: string): string | null {
     if (op === "select") return null;
-    if (table === "game_sessions" && (op === "update" || op === "upsert")) {
-      return "no update policy on game_sessions: use a scoped function";
-    }
-    if (table === "guess_events" || table === "hint_events") {
+    // The cutover migration removed the last direct write route into
+    // gameplay, including the legacy game_sessions INSERT policy that cached
+    // bundles used and that bypassed the onboarding gate.
+    if (
+      table === "game_sessions" ||
+      table === "guess_events" ||
+      table === "hint_events" ||
+      table === "user_streaks" ||
+      table === "game_results" ||
+      table === "device_identities" ||
+      table === "account_onboarding"
+    ) {
       return `no ${op} policy on ${table}: use a scoped function`;
     }
     return null;
@@ -453,12 +701,112 @@ export class FakeSupabase {
    * only by the device_id it was created with, and never by the shared
    * unknown literal.
    */
-  _capabilityOk(sessionId: string, deviceId: string | undefined): boolean {
+  _capabilityOk(
+    sessionId: string,
+    deviceId: string | undefined,
+    deviceToken: string | undefined
+  ): boolean {
     const gs = this.tables.game_sessions.find((r) => r.id === sessionId);
     if (!gs) return false;
     const uid = this.authUser?.id ?? null;
     if (gs.user_id !== null && gs.user_id !== undefined) return uid !== null && gs.user_id === uid;
-    return !!deviceId && deviceId !== "unknown" && gs.device_id === deviceId;
+    return gs.device_id === deviceId && this._verifyDevice(deviceId, deviceToken);
+  }
+
+  /**
+   * verify_device(), mirrored: the device must exist, must not be retired,
+   * and the supplied token must match the stored hash. Holding a device_id
+   * alone proves nothing any more — which is the entire point of the change.
+   */
+  _verifyDevice(deviceId: string | undefined | null, token: string | undefined | null): boolean {
+    if (!deviceId || !token || deviceId === "unknown") return false;
+    const row = this.tables.device_identities.find((d) => d.device_id === deviceId);
+    if (!row) return false;
+    if (row.retired_at) return false;
+    if (!row.token_hash) return false;
+    return row.token_hash === `sha256:${token}`;
+  }
+
+  /** Register an identity directly, for fixtures that need a known token. */
+  _seedDeviceIdentity(deviceId: string, token: string, retiredAt: string | null = null) {
+    if (this.tables.device_identities.some((d) => d.device_id === deviceId)) return;
+    this.tables.device_identities.push({
+      device_id: deviceId,
+      token_hash: `sha256:${token}`,
+      created_at: new Date().toISOString(),
+      retired_at: retiredAt,
+      retired_reason: retiredAt ? "seeded" : null,
+    });
+  }
+
+  /**
+   * record_streak(), mirrored — including the pre-existing quirk that a
+   * first-ever game seeds 1/1 even on a loss. The security migration
+   * deliberately preserved the streak rule rather than quietly changing it.
+   *
+   * The date comes from the PLAYER'S clock, as it always has; computing it
+   * server-side would move every streak boundary to UTC.
+   */
+  _recordStreak(
+    userId: string | null,
+    deviceId: string | null,
+    won: boolean,
+    localDate: string | null
+  ) {
+    const today = localDate ?? new Date().toLocaleDateString("en-CA");
+    const rows = this.tables.user_streaks;
+    const row =
+      userId != null
+        ? rows.find((r) => r.user_id === userId)
+        : deviceId && deviceId !== "unknown"
+          ? rows.find((r) => r.device_id === deviceId && r.user_id == null)
+          : undefined;
+
+    if (!row) {
+      if (userId == null && (!deviceId || deviceId === "unknown")) return;
+      rows.push({
+        id: this._newId(),
+        user_id: userId,
+        device_id: deviceId,
+        current_streak: 1,
+        longest_streak: 1,
+        last_played_date: today,
+        updated_at: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (row.last_played_date === today) return;
+
+    const yesterday = new Date(`${today}T12:00:00`);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toLocaleDateString("en-CA");
+
+    const next = won
+      ? row.last_played_date === yesterdayStr
+        ? ((row.current_streak as number) ?? 0) + 1
+        : 1
+      : 0;
+    row.current_streak = next;
+    row.longest_streak = Math.max(next, (row.longest_streak as number) ?? 0);
+    row.last_played_date = today;
+    row.updated_at = new Date().toISOString();
+  }
+
+  /** Mark an account as already onboarded, so it may play. */
+  _seedOnboarding(userId: string, status = "legacy") {
+    const existing = this.tables.account_onboarding.find((r) => r.user_id === userId);
+    if (existing) {
+      existing.status = status;
+      return;
+    }
+    this.tables.account_onboarding.push({
+      user_id: userId,
+      status,
+      source_device_id: null,
+      decided_at: status === "pending" ? null : new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    });
   }
 
   /** Applies column DEFAULTs to keys the insert did not mention. */

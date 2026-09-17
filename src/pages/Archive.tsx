@@ -11,7 +11,7 @@ import { SEO } from "@/components/SEO";
 import { ChevronLeft, ChevronRight, Grid2x2 } from "lucide-react";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { playGiftOpenSound } from "@/lib/sounds";
-import { getDeviceId } from "@/lib/gameStats";
+import { getDeviceId, getDeviceToken } from "@/lib/gameStats";
 import { hasInProgressGame } from "@/hooks/useGame";
 import confetti from "canvas-confetti";
 import type { User } from "@supabase/supabase-js";
@@ -451,6 +451,7 @@ export default function Archive() {
       // every caller shares instead of being restated per query.
       const { data: sessionRows } = await supabase.rpc("get_own_completed_sessions", {
         _device_id: deviceId,
+        _device_token: getDeviceToken(),
       });
 
       const summaries = new Map<string, SessionSummary>();

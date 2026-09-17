@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { X } from "lucide-react";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
-import { useStatsMigration } from "@/hooks/useStatsMigration";
 import { UpdateBanner } from "@/components/UpdateBanner";
-import { StatsMigrationModal } from "@/components/StatsMigrationModal";
 import { GameHeader } from "@/components/GameHeader";
 import { GameBoard } from "@/components/GameBoard";
 import { LandingScreen } from "@/components/LandingScreen";
@@ -91,15 +89,6 @@ export default function Index() {
   }, [puzzle]);
 
   const updateAvailable = useVersionCheck();
-  const {
-    showMigration,
-    guestStreak,
-    guestLongest,
-    guestGamesPlayed,
-    checkForGuestStats,
-    importStats,
-    startFresh,
-  } = useStatsMigration();
 
   const openModal = useCallback((name: ModalName) => setActiveModal(name), []);
   const closeModal = useCallback(() => setActiveModal(null), []);
@@ -121,14 +110,12 @@ export default function Index() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const newUser = session?.user ?? null;
       setUser(newUser);
-
-      // Only trigger migration check on an active sign-in, not session restore
-      if (event === "SIGNED_IN" && newUser) {
-        checkForGuestStats(newUser);
-      }
+      // The one-time import decision is owned by OnboardingGate, which asks
+      // the server on every authenticated load rather than trying to infer a
+      // signup from the auth event type.
     });
     return () => subscription.unsubscribe();
-  }, [checkForGuestStats]);
+  }, []);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -310,14 +297,6 @@ export default function Index() {
         onSmallHint={handleSmallHint}
         onFullHint={handleFullHint}
         puzzle={puzzle}
-      />
-      <StatsMigrationModal
-        open={showMigration}
-        guestStreak={guestStreak}
-        guestLongest={guestLongest}
-        guestGamesPlayed={guestGamesPlayed}
-        onImport={importStats}
-        onStartFresh={startFresh}
       />
       <SiteFooter />
     </div>

@@ -25,7 +25,7 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 import type { EntryContext } from "./entryContext";
-import { getDeviceId } from "./gameStats";
+import { getDeviceId, getDeviceToken } from "./gameStats";
 
 /** Postgres: insert or update violates a foreign key constraint. */
 const FK_VIOLATION = "23503";
@@ -57,13 +57,18 @@ export function isMissingSchemaError(error: { code?: string } | null): boolean {
  * worsen that — but it is why the partial unique indexes in the migration
  * exclude 'unknown', and it is flagged for the later identity work.
  */
-export async function getIdentity(): Promise<{ userId: string | null; deviceId: string }> {
+export async function getIdentity(): Promise<{
+  userId: string | null;
+  deviceId: string;
+  deviceToken: string | null;
+}> {
   const deviceId = getDeviceId();
+  const deviceToken = getDeviceToken();
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    return { userId: user?.id ?? null, deviceId };
+    return { userId: user?.id ?? null, deviceId, deviceToken };
   } catch {
-    return { userId: null, deviceId };
+    return { userId: null, deviceId, deviceToken };
   }
 }
 
@@ -101,7 +106,7 @@ export async function createGameSession(params: {
 }): Promise<string | null> {
   const { puzzleId, entryContext, snapshot } = params;
   try {
-    const { deviceId } = await getIdentity();
+    const { deviceId, deviceToken } = await getIdentity();
 
     // Goes through the create_game_session RPC rather than a direct insert,
     // for two reasons.
@@ -120,6 +125,7 @@ export async function createGameSession(params: {
     const { data, error } = await supabase.rpc("create_game_session", {
       _puzzle_id: puzzleId,
       _device_id: deviceId,
+      _device_token: deviceToken,
       _entry_context: entryContext,
       _active_time_seconds: snapshot.activeTimeSeconds,
       _mistakes: snapshot.mistakes,
@@ -176,7 +182,7 @@ export async function touchSession(
   activity: SessionActivity
 ): Promise<void> {
   try {
-    const { deviceId } = await getIdentity();
+    const { deviceId, deviceToken } = await getIdentity();
     // Through a function, not an UPDATE: game_sessions has no update policy
     // at all any more. The function verifies this session against the device
     // capability before touching anything, and can only write these three
@@ -184,6 +190,7 @@ export async function touchSession(
     const { error } = await supabase.rpc("touch_game_session", {
       _session_id: sessionId,
       _device_id: deviceId,
+      _device_token: deviceToken,
       _active_time_seconds: activity.activeTimeSeconds,
       _mistakes: activity.mistakes,
     });
@@ -302,7 +309,7 @@ export async function recordGuessEvent(
   guess: GuessEventInput
 ): Promise<"ok" | "missing_session" | "error"> {
   try {
-    const { deviceId } = await getIdentity();
+    const { deviceId, deviceToken } = await getIdentity();
     // Through the function rather than a table insert: guess_events has no
     // insert policy any more. The function verifies the session capability
     // first, so possession of a session id alone cannot inject events into
@@ -314,6 +321,7 @@ export async function recordGuessEvent(
     const { data, error } = await supabase.rpc("record_guess_events", {
       _session_id: sessionId,
       _device_id: deviceId,
+      _device_token: deviceToken,
       _events: [toGuessPayload(guess)],
     });
 
@@ -353,7 +361,7 @@ export async function backfillGuessEvents(
 ): Promise<void> {
   if (guesses.length === 0) return;
   try {
-    const { deviceId } = await getIdentity();
+    const { deviceId, deviceToken } = await getIdentity();
     // Same function as the live path, given the whole array at once — one
     // code path, one set of rules, one idempotency key. Guesses already
     // written live collide on (game_session_id, guess_number) and are
@@ -361,6 +369,7 @@ export async function backfillGuessEvents(
     const { error } = await supabase.rpc("record_guess_events", {
       _session_id: sessionId,
       _device_id: deviceId,
+      _device_token: deviceToken,
       _events: guesses.map(toGuessPayload),
     });
     if (error) console.error("backfillGuessEvents failed:", error);
@@ -405,7 +414,7 @@ export async function recordHintEvent(
   hint: HintEventInput
 ): Promise<"ok" | "missing_session" | "error"> {
   try {
-    const { deviceId } = await getIdentity();
+    const { deviceId, deviceToken } = await getIdentity();
     // Through the function: hint_events has no insert policy any more, and
     // the session capability is checked before anything is written.
     // Idempotency on (game_session_id, hint_type) moved into the function's
@@ -413,6 +422,7 @@ export async function recordHintEvent(
     const { data, error } = await supabase.rpc("record_hint_event", {
       _session_id: sessionId,
       _device_id: deviceId,
+      _device_token: deviceToken,
       _hint_type: hint.hintType,
       _revealed_at: hint.revealedAt,
       _active_time_seconds: hint.snapshot.activeTimeSeconds,

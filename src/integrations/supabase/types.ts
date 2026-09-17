@@ -492,20 +492,65 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      claim_anonymous_sessions: {
-        Args: { _device_id: string }
-        Returns: number
+      create_device_identity: {
+        Args: never
+        Returns: {
+          device_id: string
+          device_token: string
+        }[]
+      }
+      resolve_onboarding: {
+        Args: { _device_id?: string | null; _device_token?: string | null }
+        Returns: {
+          outcome: string
+          status: string | null
+          games_played: number
+          current_streak: number
+          longest_streak: number
+        }[]
+      }
+      import_guest_history: {
+        Args: { _device_id: string; _device_token: string }
+        Returns: {
+          outcome: string
+          sessions_claimed: number
+        }[]
+      }
+      decline_guest_history: {
+        Args: { _device_id?: string | null; _device_token?: string | null }
+        Returns: {
+          outcome: string
+        }[]
+      }
+      get_own_streak: {
+        Args: { _device_id?: string | null; _device_token?: string | null }
+        Returns: {
+          current_streak: number
+          longest_streak: number
+          last_played_date: string | null
+        }[]
+      }
+      get_streak_admin_summary: {
+        Args: never
+        Returns: {
+          accounts_with_streaks: number
+          max_current_streak: number
+          max_longest_streak: number
+        }[]
       }
       finalize_game_session: {
         Args: {
           _active_time_seconds: number
           _device_id: string
+          _device_token: string | null
           _found_rainbow: boolean
           _hints_used: boolean
+          _local_date?: string | null
           _mistakes: number
           _rainbow_solve_index: number
           _session_id: string
           _share_grid: string
+          _skip_streak?: boolean
           _solve_order: Json
           _won: boolean
         }
@@ -516,6 +561,7 @@ export type Database = {
           _active_time_seconds: number
           _correct: boolean
           _device_id: string
+          _device_token: string | null
           _groups_solved: number
           _guess_number: number
           _guessed_at: string
@@ -525,13 +571,19 @@ export type Database = {
         Returns: boolean
       }
       record_guess_events: {
-        Args: { _device_id: string; _events: Json; _session_id: string }
+        Args: {
+          _device_id: string
+          _device_token: string | null
+          _events: Json
+          _session_id: string
+        }
         Returns: number
       }
       record_hint_event: {
         Args: {
           _active_time_seconds: number
           _device_id: string
+          _device_token: string | null
           _groups_solved: number
           _guess_count: number
           _hint_type: string
@@ -543,26 +595,28 @@ export type Database = {
         Returns: boolean
       }
       session_capability_ok: {
-        Args: { _device_id: string; _session_id: string }
+        Args: { _device_id: string; _device_token: string | null; _session_id: string }
         Returns: boolean
       }
       touch_game_session: {
         Args: {
           _active_time_seconds: number
           _device_id: string
+          _device_token: string | null
           _mistakes: number
           _session_id: string
         }
         Returns: boolean
       }
       count_own_anonymous_sessions: {
-        Args: { _device_id: string }
+        Args: { _device_id: string; _device_token: string | null }
         Returns: number
       }
       create_game_session: {
         Args: {
           _active_time_seconds?: number
           _device_id: string
+          _device_token: string | null
           _entry_context: string
           _mistakes?: number
           _puzzle_id: string
@@ -570,7 +624,7 @@ export type Database = {
         Returns: string
       }
       get_own_completed_sessions: {
-        Args: { _device_id: string }
+        Args: { _device_id?: string | null; _device_token?: string | null }
         Returns: {
           bonus_rainbow_attempted: boolean
           found_rainbow: boolean
@@ -585,7 +639,7 @@ export type Database = {
         }[]
       }
       has_official_result: {
-        Args: { _device_id: string; _puzzle_id: string }
+        Args: { _device_id: string; _device_token: string | null; _puzzle_id: string }
         Returns: boolean
       }
       increment_puzzle_aggregate: {

@@ -18,7 +18,7 @@ import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
 import { supabase } from "@/integrations/supabase/client";
-import { getDeviceId, recordBonusRainbowAttempt } from "@/lib/gameStats";
+import { getDeviceId, getDeviceToken, recordBonusRainbowAttempt } from "@/lib/gameStats";
 import type { EntryContext } from "@/lib/entryContext";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { trackEvent } from "@/lib/analytics";
@@ -634,13 +634,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     if (isArchive) return;
     const fetchStreakBefore = async () => {
       try {
-        const deviceId = getDeviceId();
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        const userId = authUser?.id ?? null;
-        const { data } = userId
-          ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).maybeSingle()
-          : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).maybeSingle();
-        if (data?.current_streak != null) setStreakBefore(data.current_streak);
+        // user_streaks is RPC-only now; the function resolves account vs
+        // proven-device ownership server-side.
+        const { data } = await supabase.rpc("get_own_streak", {
+          _device_id: getDeviceId(),
+          _device_token: getDeviceToken(),
+        });
+        const row = Array.isArray(data) ? data[0] : data;
+        if (row?.current_streak != null) setStreakBefore(row.current_streak);
       } catch {}
     };
     void fetchStreakBefore();

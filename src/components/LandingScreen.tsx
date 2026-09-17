@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { getDeviceId } from "@/lib/gameStats";
+import { getDeviceId, getDeviceToken } from "@/lib/gameStats";
 import { Puzzle } from "@/lib/types";
 
 interface LandingScreenProps {
@@ -20,14 +20,15 @@ export function LandingScreen({ puzzle, user, onPlay, onSignInClick }: LandingSc
     let cancelled = false;
     const fetchStreak = async () => {
       try {
-        const deviceId = getDeviceId();
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        const userId = authUser?.id ?? null;
-        const { data } = userId
-          ? await supabase.from("user_streaks").select("current_streak").eq("user_id", userId).maybeSingle()
-          : await supabase.from("user_streaks").select("current_streak").eq("device_id", deviceId).maybeSingle();
-        if (!cancelled && data?.current_streak != null) {
-          setStreak(data.current_streak);
+        // user_streaks is RPC-only now; the function answers for the account
+        // when there is one and for the proven device otherwise.
+        const { data } = await supabase.rpc("get_own_streak", {
+          _device_id: getDeviceId(),
+          _device_token: getDeviceToken(),
+        });
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!cancelled && row?.current_streak != null) {
+          setStreak(row.current_streak);
         }
       } catch {
         // ignore — streak just stays at 0
