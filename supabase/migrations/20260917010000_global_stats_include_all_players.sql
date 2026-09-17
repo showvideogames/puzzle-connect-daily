@@ -72,7 +72,23 @@
 -- so it no longer depends on an implicit default nothing else in this
 -- codebase relies on. Only aggregate counts are returned -- no player,
 -- device, account, session, or guess-level data leaves this function.
+--
+-- STRAY OVERLOAD
+-- ---------------
+-- Live verification after this file was first applied found a SECOND
+-- get_puzzle_stats, taking a text argument, that no migration in this repo
+-- ever created -- Lovable-side drift, the same way several tables in this
+-- project exist with no creating migration. With two same-named,
+-- same-arity overloads, PostgREST could not tell them apart from the wire
+-- format and returned PGRST203 for every caller, so the RPC was completely
+-- uncallable until the text overload was dropped by hand in the SQL
+-- Editor. Recorded here so this file is what actually needs to run for a
+-- clean environment to end up in the same state production is in now, and
+-- so the conflict cannot silently reappear from replaying this migration
+-- elsewhere.
 -- ===========================================================================
+
+drop function if exists public.get_puzzle_stats(text);
 
 create or replace function public.get_puzzle_stats(_puzzle_id uuid)
 returns json
