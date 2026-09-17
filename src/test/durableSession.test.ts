@@ -2641,6 +2641,153 @@ describe("play counting", () => {
   });
 });
 
+// ── Global Stats population (get_puzzle_stats) ──────────────────────────────
+//
+// The player-facing "Global Stats" button (GameBoard -> DailyStatsModal)
+// calls this RPC. It used to read game_results, which is written only for a
+// signed-in player's official completion -- so anonymous plays, which are
+// most of a daily audience, were silently invisible here. It now reads
+// game_sessions, the complete population. "My Stats" (get_own_completed_sessions,
+// covered elsewhere in this file) is untouched.
+describe("Global Stats population (get_puzzle_stats)", () => {
+  async function statsFor(puzzleId = PUZZLE_ID) {
+    const { data } = await db.rpc("get_puzzle_stats", { _puzzle_id: puzzleId });
+    return data as {
+      total_players: number;
+      wins: number;
+      losses: number;
+      guess_distribution: Record<string, number>;
+    };
+  }
+
+  /** A minimal completed row, overridable per test — mirrors the "play counting" fixtures above. */
+  function pushSession(over: FakeRow & { id: string }) {
+    db.tables.game_sessions.push({
+      puzzle_id: PUZZLE_ID,
+      user_id: null,
+      device_id: null,
+      status: "won",
+      is_official: true,
+      won: true,
+      mistakes: 0,
+      completed_at: new Date().toISOString(),
+      ...over,
+    });
+  }
+
+  it("A. includes an anonymous official win", async () => {
+    pushSession({ id: "s-a", device_id: "anon-a", status: "won", won: true, is_official: true, mistakes: 1 });
+    const s = await statsFor();
+    expect(s.total_players).toBe(1);
+    expect(s.wins).toBe(1);
+    expect(s.losses).toBe(0);
+  });
+
+  it("B. includes an anonymous official loss", async () => {
+    pushSession({ id: "s-b", device_id: "anon-b", status: "lost", won: false, is_official: true, mistakes: 4 });
+    const s = await statsFor();
+    expect(s.total_players).toBe(1);
+    expect(s.wins).toBe(0);
+    expect(s.losses).toBe(1);
+  });
+
+  it("C. includes a signed-in official win", async () => {
+    pushSession({ id: "s-c", user_id: "user-c", status: "won", won: true, is_official: true, mistakes: 2 });
+    const s = await statsFor();
+    expect(s.total_players).toBe(1);
+    expect(s.wins).toBe(1);
+  });
+
+  it("D. includes a signed-in official loss", async () => {
+    pushSession({ id: "s-d", user_id: "user-d", status: "lost", won: false, is_official: true, mistakes: 4 });
+    const s = await statsFor();
+    expect(s.total_players).toBe(1);
+    expect(s.losses).toBe(1);
+  });
+
+  it("E. excludes an in-progress session", async () => {
+    pushSession({
+      id: "s-e", device_id: "anon-e", status: "in_progress", won: null, is_official: false, completed_at: null,
+    });
+    const s = await statsFor();
+    expect(s.total_players).toBe(0);
+  });
+
+  it("F. excludes a non-official replay", async () => {
+    pushSession({ id: "s-f1", device_id: "anon-f", status: "won", won: true, is_official: true, mistakes: 0 });
+    pushSession({ id: "s-f2", device_id: "anon-f", status: "won", won: true, is_official: false, mistakes: 0 });
+    const s = await statsFor();
+    expect(s.total_players).toBe(1);
+  });
+
+  it("G. does not increase when anonymous history is imported into an account", async () => {
+    db._seedDeviceIdentity("guest-device-g", "guest-token-g");
+    pushSession({ id: "s-g", device_id: "guest-device-g", status: "won", won: true, is_official: true, mistakes: 0 });
+    expect((await statsFor()).total_players).toBe(1);
+
+    db.signIn("new-user-g");
+    db.tables.account_onboarding = [];
+    await db.rpc("resolve_onboarding", { _device_id: "guest-device-g", _device_token: "guest-token-g" });
+    await db.rpc("import_guest_history", { _device_id: "guest-device-g", _device_token: "guest-token-g" });
+
+    expect((await statsFor()).total_players).toBe(1);
+    expect(sessions().find((r) => r.id === "s-g")!.user_id).toBe("new-user-g");
+  });
+
+  it("H. does not decrease when the player chooses Start Fresh", async () => {
+    db._seedDeviceIdentity("guest-device-h", "guest-token-h");
+    pushSession({ id: "s-h", device_id: "guest-device-h", status: "won", won: true, is_official: true, mistakes: 0 });
+
+    db.signIn("other-user-h");
+    db.tables.account_onboarding = db.tables.account_onboarding.filter((r) => r.user_id !== "other-user-h");
+    await db.rpc("decline_guest_history", { _device_id: null, _device_token: null });
+
+    expect((await statsFor()).total_players).toBe(1);
+    expect(sessions().find((r) => r.id === "s-h")).toBeTruthy();
+  });
+
+  it("I. does not double-count a retried/finalized session", async () => {
+    const view = mount();
+    await guess(view, ["y1", "y2", "y3", "y4"]);
+    await guess(view, ["g1", "g2", "g3", "g4"]);
+    await guess(view, ["b1", "b2", "b3", "b4"]);
+    await guess(view, ["r1", "r2", "r3", "r4"]);
+    expect((await statsFor()).total_players).toBe(1);
+
+    // A retry finds the session already finished and must not count again —
+    // the same non-event the "play counting" aggregate tests prove above.
+    const sessionId = sessions()[0].id as string;
+    await db.rpc("finalize_game_session", {
+      _session_id: sessionId,
+      _device_id: getDeviceId(),
+      _device_token: localStorage.getItem("rc-device-token"),
+      _won: true,
+      _mistakes: 0,
+      _active_time_seconds: 10,
+      _found_rainbow: false,
+      _rainbow_solve_index: null,
+      _solve_order: [],
+      _hints_used: false,
+      _share_grid: "",
+    });
+    expect((await statsFor()).total_players).toBe(1);
+  });
+
+  it("J. still returns the existing expected Global Stats fields correctly", async () => {
+    pushSession({ id: "s-j1", device_id: "d-j1", status: "won", won: true, is_official: true, mistakes: 0 });
+    pushSession({ id: "s-j2", device_id: "d-j2", status: "won", won: true, is_official: true, mistakes: 2 });
+    pushSession({ id: "s-j3", user_id: "u-j3", status: "lost", won: false, is_official: true, mistakes: 4 });
+
+    const s = await statsFor();
+    expect(s).toEqual({
+      total_players: 3,
+      wins: 2,
+      losses: 1,
+      guess_distribution: { "0": 1, "1": 0, "2": 1, "3": 0 },
+    });
+  });
+});
+
 // ── Availability: playing when saving is down ──────────────────────────────
 //
 // The product rule: a failure to SAVE must not take away a puzzle that

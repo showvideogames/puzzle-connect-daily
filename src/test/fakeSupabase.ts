@@ -402,6 +402,31 @@ export class FakeSupabase {
         );
         return { data: found, error: null };
       }
+      // "Global Stats" — everybody who officially completed this puzzle,
+      // not "own data" like the reads around it, so deliberately NOT run
+      // through ownsRow. Mirrors get_puzzle_stats() reading game_sessions
+      // instead of the signed-in-only game_results.
+      case "get_puzzle_stats": {
+        const rows = this.tables.game_sessions.filter(
+          (r) => r.puzzle_id === args._puzzle_id && r.is_official === true && completed(r)
+        );
+        const mistakesOf = (m: number) =>
+          rows.filter((r) => r.won === true && r.mistakes === m).length;
+        return {
+          data: {
+            total_players: rows.length,
+            wins: rows.filter((r) => r.won === true).length,
+            losses: rows.filter((r) => r.won === false).length,
+            guess_distribution: {
+              "0": mistakesOf(0),
+              "1": mistakesOf(1),
+              "2": mistakesOf(2),
+              "3": mistakesOf(3),
+            },
+          },
+          error: null,
+        };
+      }
       case "get_own_completed_sessions": {
         const rows = this.tables.game_sessions
           .filter((r) => completed(r) && r.is_official === true && ownsRow(r))
