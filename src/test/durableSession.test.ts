@@ -550,12 +550,20 @@ describe("K. daily replay", () => {
     // A second session exists and reaches completion anyway. Created through
     // the RPC, because direct inserts into game_sessions are gone — that was
     // the last route that bypassed the onboarding gate.
-    const { data: replayId } = await db.rpc("create_game_session", {
+    //
+    // db.rpc()'s return type is a union of every case branch's own `data`
+    // shape (strings, numbers, row arrays, ...), since the fake models one
+    // dispatcher for every RPC name rather than an overload per name. Cast
+    // narrowly to what THIS call is known to return, matching the pattern
+    // already used elsewhere in this file (e.g. the resolve_onboarding cast
+    // a few tests down) rather than widening the dispatcher's real return
+    // type and losing that checking everywhere else.
+    const { data: replayId } = (await db.rpc("create_game_session", {
       _puzzle_id: PUZZLE_ID,
       _device_id: getDeviceId(),
       _device_token: localStorage.getItem("rc-device-token"),
       _entry_context: "daily_home",
-    });
+    })) as { data: string };
 
     // The rule: an official result already exists, so this one is not it.
     const alreadyOfficial = await hasOfficialResult(PUZZLE_ID);
