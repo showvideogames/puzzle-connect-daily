@@ -17,6 +17,7 @@ import { SEO } from "@/components/SEO";
 import { SiteFooter } from "@/components/SiteFooter";
 import { HintModal } from "@/components/HintModal";
 import { getTodaysPuzzle } from "@/lib/puzzles";
+import { resolvePlayablePuzzle } from "@/lib/puzzleVersion";
 import { Puzzle } from "@/lib/types";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
@@ -128,7 +129,12 @@ export default function Index() {
     getTodaysPuzzle()
       .then((p) => {
         clearTimeout(timeout);
-        setPuzzle(p);
+        // Resolve the version to actually play BEFORE the board is built, so
+        // a game already in progress against an earlier version resumes on
+        // that content rather than flickering through the newer one. For a
+        // new player, a completed game, or a puzzle that was never edited,
+        // this returns exactly what was loaded. See lib/puzzleVersion.ts.
+        setPuzzle(p ? resolvePlayablePuzzle(p) : null);
         setLoading(false);
       })
       .catch(() => {

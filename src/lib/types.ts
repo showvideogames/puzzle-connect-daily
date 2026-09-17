@@ -22,6 +22,22 @@ export interface Puzzle {
   freePuzzleOrder?: number | null;
   // Optional visual theme key for the bonus category (null = default rainbow).
   theme?: string | null;
+  /**
+   * The puzzle_versions snapshot this content came from — puzzles
+   * .current_version_id for a freshly loaded puzzle, or the pinned earlier
+   * version for a resumed in-progress board (see lib/puzzleVersion.ts).
+   *
+   * The puzzle IDENTITY is still `id` above, and that is what every stat,
+   * official result and aggregate keys on. This is a finer coordinate on the
+   * same puzzle, used for two things only: pinning a new session to the
+   * content its player is actually looking at, and resuming that content
+   * later.
+   *
+   * Absent/null when the database has not had the versioning migration
+   * applied, in which case nothing is pinned and the game behaves exactly as
+   * it did before this feature.
+   */
+  versionId?: string | null;
 }
 
 export interface GameStats {

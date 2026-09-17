@@ -296,6 +296,14 @@ export interface FinalizeGameSessionParams {
    * behavior.
    */
   sessionId: string | null;
+  /**
+   * The puzzle version this game was played against, used only by the rare
+   * fallback below that has to create the session at completion time. When a
+   * session already exists it was pinned at creation and is never re-stamped
+   * — an edit that lands mid-game must not move a session onto a version its
+   * player never saw.
+   */
+  puzzleVersionId?: string | null;
   entryContext: EntryContext;
   // NOTE: there is deliberately no `isOfficial` parameter. Whether a session
   // owns the permanent official result is decided by finalize_game_session
@@ -377,6 +385,12 @@ export async function finalizeGameSession(
       params.sessionId ??
       (await createGameSession({
         puzzleId,
+        // The version this completed game was actually played against, which
+        // the caller carries because it is the board it rendered. It is not
+        // re-read as "current" here: a puzzle edited during this player's
+        // game would otherwise stamp their finished session with a version
+        // they never saw.
+        puzzleVersionId: params.puzzleVersionId ?? null,
         entryContext,
         snapshot: { activeTimeSeconds, groupsSolved: solveOrder.length, mistakes },
       }));

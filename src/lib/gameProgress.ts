@@ -13,6 +13,7 @@
  * an import cycle between them.
  */
 import { GuessAttempt } from "./types";
+import type { PinnedPuzzleContent } from "./puzzleVersion";
 
 export interface SavedProgress {
   solvedGroups: number[];
@@ -56,6 +57,21 @@ export interface SavedProgress {
    *     yet.
    */
   gameSessionId?: string | null;
+  /**
+   * The exact puzzle content this attempt is being played against, captured
+   * once the game became real.
+   *
+   * This is what makes an edited puzzle safe for someone already playing it.
+   * Without it, a refresh re-fetched the NEW definition while this blob
+   * restored the OLD board, leaving words on screen that belonged to no
+   * group and correct answers that could never be submitted.
+   *
+   * Absent in the same two legitimate cases as gameSessionId above (a legacy
+   * blob, or an attempt whose first meaningful action hasn't happened yet)
+   * and on a database without the versioning migration. All three resolve
+   * identically: play the current version. See lib/puzzleVersion.ts.
+   */
+  puzzleSnapshot?: PinnedPuzzleContent | null;
 }
 
 export function progressKey(puzzleId: string) {

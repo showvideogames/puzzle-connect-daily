@@ -68,5 +68,16 @@ function mapPuzzle(data: any): Puzzle {
     isFreePuzzle: data.is_free_puzzle ?? false,
     freePuzzleOrder: data.free_puzzle_order ?? null,
     theme: data.theme ?? null,
+    // Comes along free with the existing `select("*")` — no extra query, no
+    // join, and no new RPC on the path that loads a playable board. That is
+    // deliberate: puzzles/puzzle_groups stay the live read path exactly as
+    // before, so the availability-first rule is untouched and a puzzle still
+    // loads even if everything version-related were unreachable. The
+    // immutable copy of this same content lives in puzzle_versions, written
+    // in the same transaction by admin_save_puzzle.
+    //
+    // Undefined on a database without the versioning migration, which
+    // resolves to "nothing pinned" everywhere downstream.
+    versionId: data.current_version_id ?? null,
   };
 }

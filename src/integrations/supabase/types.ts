@@ -230,6 +230,7 @@ export type Database = {
           last_activity_at: string | null
           mistakes: number
           puzzle_id: string
+          puzzle_version_id: string | null
           rainbow_solve_index: number | null
           rainbow_source: string | null
           share_grid: string | null
@@ -252,6 +253,7 @@ export type Database = {
           last_activity_at?: string | null
           mistakes: number
           puzzle_id: string
+          puzzle_version_id?: string | null
           rainbow_solve_index?: number | null
           rainbow_source?: string | null
           share_grid?: string | null
@@ -274,6 +276,7 @@ export type Database = {
           last_activity_at?: string | null
           mistakes?: number
           puzzle_id?: string
+          puzzle_version_id?: string | null
           rainbow_solve_index?: number | null
           rainbow_source?: string | null
           share_grid?: string | null
@@ -477,11 +480,47 @@ export type Database = {
         }
         Relationships: []
       }
+      puzzle_versions: {
+        Row: {
+          content: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          puzzle_id: string
+          version_number: number
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          puzzle_id: string
+          version_number: number
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          puzzle_id?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "puzzle_versions_puzzle_id_fkey"
+            columns: ["puzzle_id"]
+            isOneToOne: false
+            referencedRelation: "puzzles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       puzzles: {
         Row: {
           created_at: string
           created_by: string | null
           date: string
+          current_version_id: string | null
           emoji_puzzle_icon: string | null
           free_puzzle_order: number | null
           id: string
@@ -500,6 +539,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           date: string
+          current_version_id?: string | null
           emoji_puzzle_icon?: string | null
           free_puzzle_order?: number | null
           id?: string
@@ -518,6 +558,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           date?: string
+          current_version_id?: string | null
           emoji_puzzle_icon?: string | null
           free_puzzle_order?: number | null
           id?: string
@@ -792,6 +833,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_save_puzzle: {
+        Args: { _content: Json; _metadata: Json; _puzzle_id: string | null }
+        Returns: Json
+      }
+      validate_puzzle_content: {
+        Args: { _content: Json }
+        Returns: Json
+      }
       count_own_anonymous_sessions: {
         Args: { _device_id: string; _device_token: string }
         Returns: number
@@ -811,6 +860,7 @@ export type Database = {
           _entry_context: string
           _mistakes?: number
           _puzzle_id: string
+          _puzzle_version_id?: string | null
         }
         Returns: string
       }

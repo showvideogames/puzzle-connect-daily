@@ -12,6 +12,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SEO } from "@/components/SEO";
 import { HintModal } from "@/components/HintModal";
 import { getPuzzleById } from "@/lib/puzzles";
+import { resolvePlayablePuzzle } from "@/lib/puzzleVersion";
 import { Puzzle } from "@/lib/types";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
@@ -73,7 +74,12 @@ export default function ArchivePuzzle() {
       .then((p) => {
         clearTimeout(timeout);
         if (!p) { setError(true); setLoading(false); return; }
-        setPuzzle(p);
+        // Same resolution as the Daily route: an Archive game already in
+        // progress against an earlier version resumes on THAT content, so a
+        // mid-game edit can never leave this board with answers it is unable
+        // to submit. A completed or never-started puzzle resolves to the
+        // current version. See lib/puzzleVersion.ts.
+        setPuzzle(resolvePlayablePuzzle(p));
         setLoading(false);
       })
       .catch(() => {

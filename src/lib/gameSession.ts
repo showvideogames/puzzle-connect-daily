@@ -101,10 +101,27 @@ export interface EventSnapshot {
  */
 export async function createGameSession(params: {
   puzzleId: string;
+  /**
+   * The puzzle_versions snapshot the player's board was actually built from,
+   * or null when nothing is pinned (a database without the versioning
+   * migration).
+   *
+   * Supplied by the client on purpose, and NOT read server-side as
+   * "whatever is current now". Consider the race this exists for: the player
+   * opens Version 1, an admin publishes Version 2, and only then does the
+   * player make their first meaningful action. Their board still shows
+   * Version 1 and their next guess will be judged against Version 1, so a
+   * Version 1 session is the only truthful thing to create.
+   *
+   * Supplying it is not being trusted with it: create_game_session verifies
+   * the version belongs to THIS puzzle before storing it, so a session can
+   * never be attached to another puzzle's snapshot.
+   */
+  puzzleVersionId: string | null;
   entryContext: EntryContext;
   snapshot: EventSnapshot;
 }): Promise<string | null> {
-  const { puzzleId, entryContext, snapshot } = params;
+  const { puzzleId, puzzleVersionId, entryContext, snapshot } = params;
   try {
     const { deviceId, deviceToken } = await getIdentity();
 
@@ -129,6 +146,11 @@ export async function createGameSession(params: {
       _entry_context: entryContext,
       _active_time_seconds: snapshot.activeTimeSeconds,
       _mistakes: snapshot.mistakes,
+      // Added as a DEFAULTed argument on the one existing function rather
+      // than as a second overload — PostgREST cannot distinguish same-name
+      // same-arity overloads from the wire format, and we have already had
+      // one such conflict make an RPC completely uncallable in production.
+      _puzzle_version_id: puzzleVersionId,
     });
 
     if (error || !data) {
