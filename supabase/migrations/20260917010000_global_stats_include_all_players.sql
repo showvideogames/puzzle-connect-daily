@@ -38,10 +38,40 @@
 -- game_results itself is untouched -- Admin's own per-puzzle panel and any
 -- other reader of it are unaffected, and it is not being retired here.
 -- "My Stats" reads a different RPC (get_own_completed_sessions) and is not
--- touched. The response shape, grants, and security properties of
--- get_puzzle_stats are unchanged: same JSON keys, same aggregate-only
--- output, same SECURITY DEFINER function replaced in place by name and
--- signature, which preserves whatever grants already exist on it.
+-- touched. The response shape and security properties of get_puzzle_stats
+-- are unchanged: same argument type, same JSON keys, same aggregate-only
+-- output, same LANGUAGE sql / RETURNS json / STABLE / SECURITY DEFINER /
+-- SET search_path = public -- every one restated explicitly below rather
+-- than left to CREATE OR REPLACE defaults, precisely because this function
+-- is SECURITY DEFINER and reads a table anonymous callers cannot read
+-- directly. A safe search_path is what stops that elevated body from being
+-- tricked into resolving an object from a different, attacker-controlled
+-- schema; STABLE is unchanged so the planner still knows this is read-only
+-- within one statement.
+--
+-- ANONYMOUS ACCESS
+-- -----------------
+-- Anonymous players have no SELECT policy on game_sessions -- that is by
+-- design, from the durable-session migration. This function is what lets
+-- them see Global Stats anyway: SECURITY DEFINER runs its body as the
+-- function's owner, which owns game_sessions and so is not subject to that
+-- table's grants (a table owner is exempt from its own table's privilege
+-- checks; RLS is a separate, table-level mechanism this function does not
+-- touch either way, since access here is being narrowed by grants on the
+-- FUNCTION, the same pattern has_official_result and
+-- get_own_completed_sessions already use for the same table). The EXECUTE
+-- grant below is what actually admits anon -- SECURITY DEFINER alone does
+-- not; a role still needs permission to invoke the function at all.
+--
+-- The function was previously never named in any revoke/grant statement, so
+-- it ran on Postgres's default: EXECUTE granted to PUBLIC (every role,
+-- including ones with no reason to call it) and never revoked. That
+-- happened to keep working, but it was never verified, and it is broader
+-- than necessary. Narrowed here to the same three roles every comparable
+-- read RPC in this codebase grants, with the same revoke-then-grant shape,
+-- so it no longer depends on an implicit default nothing else in this
+-- codebase relies on. Only aggregate counts are returned -- no player,
+-- device, account, session, or guess-level data leaves this function.
 -- ===========================================================================
 
 create or replace function public.get_puzzle_stats(_puzzle_id uuid)
@@ -67,6 +97,9 @@ as $$
     and is_official
     and status in ('won', 'lost')
 $$;
+
+revoke all on function public.get_puzzle_stats(uuid) from public;
+grant execute on function public.get_puzzle_stats(uuid) to anon, authenticated, service_role;
 
 comment on function public.get_puzzle_stats(uuid) is
   'Aggregate-only per-puzzle stats for the "Global Stats" UI: every official completed session (anonymous + signed-in, wins + losses), across game_sessions. Never exposes individual rows.';
