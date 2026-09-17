@@ -86,6 +86,33 @@ export function hasInProgressGame(puzzleId: string): boolean {
   }
 }
 
+/**
+ * Did this puzzle attempt reach a point actually worth calling "in
+ * progress" — as opposed to merely having a progress ROW at all?
+ *
+ * Narrower than hasInProgressGame() above, and for a real reason: a progress
+ * blob, once written, is never deleted just because its content later goes
+ * back to empty. useGame.ts's tileColors-triggered save effect writes on
+ * EVERY color change with no "is there anything worth keeping" guard — so a
+ * player who opens a puzzle, paints one tile out of curiosity, then erases
+ * it, leaves a blob behind whose solvedGroups/mistakes/guessHistory are all
+ * still empty but which nonetheless EXISTS, and hasInProgressGame() can only
+ * answer "does a blob exist", not "does it actually say anything happened".
+ *
+ * "Meaningful" is deliberately narrow, matching exactly the two things a
+ * player can point to as real progress: a solved category, or a tile that
+ * is STILL carrying a color mark right now. A selected-but-unsubmitted word
+ * or a mistake with no solve doesn't count, because the calendar cell has no
+ * way to show either of those if the player reopens it — only a solved
+ * group or a surviving paint mark is actually visible proof of progress.
+ */
+export function hasMeaningfulProgress(puzzleId: string): boolean {
+  const saved = loadProgress(puzzleId);
+  if (!saved) return false;
+  if (saved.solvedGroups.length > 0) return true;
+  return Object.values(saved.tileColors ?? {}).some(Boolean);
+}
+
 export function saveProgress(puzzleId: string, data: SavedProgress) {
   try {
     localStorage.setItem(progressKey(puzzleId), JSON.stringify(data));
@@ -113,9 +140,12 @@ export function clearProgress(puzzleId: string) {
  * never creating one.
  *
  * Returning early when no blob exists preserves the "an untouched puzzle has
- * no progress row" invariant that Archive's "in progress" calendar status and
- * useGame's tileColors mount-guard both rely on: none of these checkpoints can
- * turn a merely-opened puzzle into one that looks started.
+ * no progress row" invariant that useGame's tileColors mount-guard relies on:
+ * none of these checkpoints can turn a merely-opened puzzle into one that
+ * looks started. (Archive's "in progress" calendar status no longer relies on
+ * this invariant alone — see hasMeaningfulProgress, which checks what a blob
+ * actually contains rather than whether one merely exists — but the
+ * mount-guard still does, so this early return still matters.)
  */
 function checkpointField<K extends keyof SavedProgress>(
   puzzleId: string,

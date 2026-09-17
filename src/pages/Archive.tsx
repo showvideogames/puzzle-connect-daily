@@ -12,7 +12,7 @@ import { ChevronLeft, ChevronRight, Grid2x2 } from "lucide-react";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { playGiftOpenSound } from "@/lib/sounds";
 import { getDeviceId, getDeviceToken } from "@/lib/gameStats";
-import { hasInProgressGame } from "@/hooks/useGame";
+import { hasMeaningfulProgress } from "@/lib/gameProgress";
 import confetti from "canvas-confetti";
 import type { User } from "@supabase/supabase-js";
 
@@ -61,6 +61,25 @@ function loadOpenedOrders(): number[] {
 }
 function saveOpenedOrders(orders: number[]) {
   try { localStorage.setItem(OPENED_KEY, JSON.stringify(orders)); }
+  catch {}
+}
+
+// Whether the Free Puzzles / Emoji Puzzles "View All" row has been expanded
+// this tab session — sessionStorage rather than localStorage on purpose: a
+// player who taps View All, opens a puzzle, and taps "Back to Archive"
+// should land back on the expanded row exactly as they left it, but a
+// genuinely new visit (or a new tab) should start collapsed again, matching
+// the calendar's default framing of "recent/featured items" rather than
+// permanently remembering an expansion from weeks ago. Read once at mount
+// via useState's lazy initializer, not re-read on every render.
+const EXPANDED_SESSION_KEY = "rc-archive-expanded";
+
+function loadExpanded(key: "free" | "emoji"): boolean {
+  try { return sessionStorage.getItem(`${EXPANDED_SESSION_KEY}-${key}`) === "1"; }
+  catch { return false; }
+}
+function saveExpanded(key: "free" | "emoji") {
+  try { sessionStorage.setItem(`${EXPANDED_SESSION_KEY}-${key}`, "1"); }
   catch {}
 }
 
@@ -383,12 +402,12 @@ export default function Archive() {
   // Free puzzles — loaded independently, no auth needed
   const [freePuzzles, setFreePuzzles] = useState<FreePuzzleItem[]>([]);
   const [openedOrders, setOpenedOrders] = useState<number[]>(() => loadOpenedOrders());
-  const [freeExpanded, setFreeExpanded] = useState(false);
+  const [freeExpanded, setFreeExpanded] = useState(() => loadExpanded("free"));
   const [totalPuzzleCount, setTotalPuzzleCount] = useState(0);
 
   // Emoji puzzles — same public, no-auth pattern as free puzzles.
   const [emojiPuzzles, setEmojiPuzzles] = useState<EmojiPuzzleItem[]>([]);
-  const [emojiExpanded, setEmojiExpanded] = useState(false);
+  const [emojiExpanded, setEmojiExpanded] = useState(() => loadExpanded("emoji"));
 
   // Calendar navigation — the viewed month lives in the URL (?month=YYYY-MM)
   // rather than local state, so it's naturally part of browser history: a
@@ -443,7 +462,7 @@ export default function Archive() {
       // still-in-progress rows and paint every half-played archive puzzle as
       // a red "failed" calendar cell. A genuinely unfinished game is still
       // shown as "in-progress", but from the local progress blob
-      // (hasInProgressGame below), which is what has always answered that.
+      // (hasMeaningfulProgress below), which is what has always answered that.
       //
       // Read through the function rather than the table because game_sessions
       // is no longer directly readable by anonymous clients, and because the
@@ -546,10 +565,18 @@ export default function Archive() {
     setSearchParams({ month: monthParam(newYear, newMonth) }, { replace: true });
   }
 
-  // "In progress" is local, device-persisted gameplay state (the same
-  // hasInProgressGame/progressKey source useGame.ts already writes to only
-  // after a real guess/hint — see the mount-guard fix in useGame.ts).
-  // Opening a puzzle and closing it again without playing never sets this.
+  // "In progress" is local, device-persisted gameplay state — but not just
+  // "a progress blob exists for this puzzle" (hasInProgressGame's broader
+  // question, still used elsewhere for resume purposes). Opening a puzzle,
+  // painting a tile out of curiosity, then erasing it again leaves a blob
+  // behind with nothing actually solved or colored any more — the tileColors
+  // save effect in useGame.ts writes on every color change with no "is there
+  // anything left to save" guard, so the blob's mere EXISTENCE outlives its
+  // content going back to empty. hasMeaningfulProgress reads what the blob
+  // actually says: a solved category, or a tile that is STILL carrying a
+  // color mark right now — the two things this calendar cell could actually
+  // show the player if they reopened it. Merely opening and closing a
+  // puzzle, or opening it and clearing every color, is "unplayed" again.
   // A recorded session (won or lost) always takes priority over that local
   // in-progress flag, since a finished game session naturally leaves it be.
   function getDayStatus(dateStr: string, isPast: boolean): DayStatus {
@@ -558,7 +585,7 @@ export default function Archive() {
     if (!isPast) return "none";
     const session = sessionsByPuzzleId.get(puzzle.id);
     if (session) return session.won ? (session.foundRainbow ? "won-rainbow" : "won") : "failed";
-    if (hasInProgressGame(puzzle.id)) return "in-progress";
+    if (hasMeaningfulProgress(puzzle.id)) return "in-progress";
     return "unplayed";
   }
 
@@ -780,7 +807,7 @@ export default function Archive() {
               emoji="🎁"
               items={freePuzzles}
               expanded={freeExpanded}
-              onExpand={() => setFreeExpanded(true)}
+              onExpand={() => { setFreeExpanded(true); saveExpanded("free"); }}
               getKey={(p) => p.id}
               renderItem={(p) => (
                 <GiftBox puzzle={p} isOpened={openedOrders.includes(p.free_puzzle_order)} onOpen={handleBoxOpen} />
@@ -795,7 +822,7 @@ export default function Archive() {
             emoji="😊"
             items={emojiPuzzles}
             expanded={emojiExpanded}
-            onExpand={() => setEmojiExpanded(true)}
+            onExpand={() => { setEmojiExpanded(true); saveExpanded("emoji"); }}
             getKey={(p) => p.id}
             renderItem={(p, i) => <EmojiPuzzleCard puzzle={p} index={i} />}
           />
