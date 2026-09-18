@@ -20,6 +20,22 @@ export function puzzleFullLabel(title: string | null | undefined): string | null
   return trimmed ? `Puzzle ${trimmed}` : null;
 }
 
+const OFFICIAL_DESIGNER_FALLBACK = "Sam West";
+
+/**
+ * Resolves the header byline's display name: trims incidental whitespace and
+ * falls back to the official designer when the stored value is blank or
+ * missing entirely (a database without this column, e.g. mid-migration).
+ * The database itself defaults and trims the same way (see
+ * admin_save_puzzle) — this is the client-side mirror of that same rule, so
+ * a puzzle loaded from a not-yet-migrated database still renders a name
+ * instead of "by ".
+ */
+export function resolveDesignerName(name: string | null | undefined): string {
+  const trimmed = name?.trim();
+  return trimmed ? trimmed : OFFICIAL_DESIGNER_FALLBACK;
+}
+
 // Fetch today's published puzzle from the database
 export async function getTodaysPuzzle(): Promise<Puzzle | null> {
   const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
@@ -77,6 +93,7 @@ function mapPuzzle(data: any): Puzzle {
     id: data.id,
     date: data.date,
     title: data.title ?? null,
+    designerName: resolveDesignerName(data.designer_name),
     groups,
     wordOrder: data.word_order || null,
     rainbowHerring: data.rainbow_herring || null,

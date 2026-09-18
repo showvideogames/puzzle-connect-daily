@@ -49,6 +49,7 @@ import { useGame } from "@/hooks/useGame";
 import { loadStatsFromSupabase } from "@/lib/gameStats";
 import { loadProgress, progressKey } from "@/lib/gameProgress";
 import { resolvePlayablePuzzle, loadPlayedDifficulties } from "@/lib/puzzleVersion";
+import { resolveDesignerName } from "@/lib/puzzles";
 
 const ADMIN_ID = "admin-user";
 
@@ -130,6 +131,7 @@ function currentPuzzle(puzzleId: string): Puzzle {
     id: puzzleId,
     date: row.date as string,
     title: (row.title as string) ?? null,
+    designerName: resolveDesignerName(row.designer_name as string | undefined),
     groups: rows.map((g) => ({
       category: g.category as string,
       words: g.words as string[],
@@ -370,6 +372,7 @@ describe("C. a metadata-only edit creates no new version", () => {
     ["published state", { is_published: false }],
     ["the Archive card emoji", { emoji_puzzle_icon: "🍎" }],
     ["free-puzzle placement", { is_free_puzzle: true, free_puzzle_order: 3 }],
+    ["designer name", { designer_name: "Jane Doe" }],
   ])("changing %s keeps the puzzle on Version 1", async (_label, patch) => {
     const { data } = await adminSave(puzzleId, V1_CONTENT, { ...METADATA, ...patch });
 
@@ -381,6 +384,29 @@ describe("C. a metadata-only edit creates no new version", () => {
   it("still applies the metadata change itself", async () => {
     await adminSave(puzzleId, V1_CONTENT, { ...METADATA, title: "Renamed" });
     expect(db.tables.puzzles.find((p) => p.id === puzzleId)!.title).toBe("Renamed");
+  });
+});
+
+// ── DESIGNER NAME ───────────────────────────────────────────────────────────
+describe("designer_name: metadata, defaulted, trimmed, never blank", () => {
+  it("a new official puzzle with no designer_name defaults to Sam West", async () => {
+    expect(db.tables.puzzles.find((p) => p.id === puzzleId)!.designer_name).toBe("Sam West");
+  });
+
+  it("saves a custom designer name and trims accidental whitespace", async () => {
+    await adminSave(puzzleId, V1_CONTENT, { ...METADATA, designer_name: "  Jane Doe  " });
+    expect(db.tables.puzzles.find((p) => p.id === puzzleId)!.designer_name).toBe("Jane Doe");
+  });
+
+  it("reverts a blank/whitespace-only designer_name to the Sam West fallback", async () => {
+    await adminSave(puzzleId, V1_CONTENT, { ...METADATA, designer_name: "Jane Doe" });
+    await adminSave(puzzleId, V1_CONTENT, { ...METADATA, designer_name: "   " });
+    expect(db.tables.puzzles.find((p) => p.id === puzzleId)!.designer_name).toBe("Sam West");
+  });
+
+  it("is available through the normal puzzle-loading path (lib/puzzles.ts shape)", async () => {
+    await adminSave(puzzleId, V1_CONTENT, { ...METADATA, designer_name: "Jane Doe" });
+    expect(currentPuzzle(puzzleId).designerName).toBe("Jane Doe");
   });
 });
 

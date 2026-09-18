@@ -275,6 +275,11 @@ export default function Admin() {
   // Puzzle form
   const [puzzleDate, setPuzzleDate] = useState("");
   const [puzzleTitle, setPuzzleTitle] = useState("");
+  // Defaults to the official fallback for a brand-new puzzle (resetForm
+  // restores this same default); editPuzzle overwrites it with the loaded
+  // puzzle's own designer_name. Metadata, not gameplay content — travels in
+  // admin_save_puzzle's _metadata argument and never creates a new version.
+  const [designerName, setDesignerName] = useState("Sam West");
   const [rainbowHerring, setRainbowHerring] = useState<(string | null)[]>([null, null, null, null]);
   const [rainbowCategoryName, setRainbowCategoryName] = useState("");
   const [rainbowHintWord, setRainbowHintWord] = useState("");
@@ -370,6 +375,7 @@ export default function Admin() {
   const draftValues: DraftData = {
     puzzleDate,
     puzzleTitle,
+    designerName,
     groups,
     isPublished,
     wordOrder,
@@ -450,6 +456,7 @@ export default function Admin() {
     applyDraft: (draft) => {
       setPuzzleDate(draft.puzzleDate);
       setPuzzleTitle(draft.puzzleTitle);
+      setDesignerName(draft.designerName ?? "Sam West");
       setGroups(draft.groups);
       setIsPublished(draft.isPublished);
       setWordOrder(draft.wordOrder);
@@ -707,6 +714,10 @@ export default function Admin() {
           date: puzzleDate,
           title: puzzleTitle || null,
           is_published: isPublished,
+          // Blank/whitespace-only reverts to the official "Sam West"
+          // fallback — admin_save_puzzle does the trim-and-default itself,
+          // this just avoids sending an untrimmed value.
+          designer_name: designerName.trim() || null,
           emoji_puzzle_icon: isEmojiPuzzle ? (emojiPuzzleIcon.trim() || null) : null,
           is_free_puzzle: isFreePuzzle,
           free_puzzle_order: isFreePuzzle ? freePuzzleOrder : null,
@@ -765,6 +776,7 @@ export default function Admin() {
     setEditingId(null);
     setPuzzleDate("");
     setPuzzleTitle("");
+    setDesignerName("Sam West");
     setGroups([
       { ...emptyGroup(), difficulty: 1 },
       { ...emptyGroup(), difficulty: 2 },
@@ -796,6 +808,7 @@ export default function Admin() {
     setEditingId(p.id);
     setPuzzleDate(p.date);
     setPuzzleTitle(p.title || "");
+    setDesignerName(p.designer_name || "Sam West");
     setIsPublished(p.is_published);
     const sorted = [...(p.puzzle_groups || [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
     setGroups(
@@ -974,6 +987,20 @@ export default function Admin() {
                 placeholder="e.g. Monday Mashup"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="pdesigner">Designer name</Label>
+            <Input
+              id="pdesigner"
+              value={designerName}
+              onChange={(e) => setDesignerName(e.target.value)}
+              onBlur={handleBlurSave}
+              placeholder="Sam West"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Shown in the puzzle header as "by {designerName.trim() || "Sam West"}". Leaving this blank saves it as "Sam West". Metadata only — never creates a new version.
+            </p>
           </div>
 
           <p className="text-xs text-muted-foreground">

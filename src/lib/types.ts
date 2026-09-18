@@ -9,6 +9,11 @@ export interface Puzzle {
   id: string;
   date: string;
   title?: string | null;
+  // Display name for the "by <designerName>" header byline. Metadata, not
+  // gameplay content — see lib/puzzles.ts's resolveDesignerName. Always a
+  // non-empty, trimmed string; falls back to the official default when the
+  // stored value is blank or the column predates this field.
+  designerName: string;
   groups: PuzzleGroup[];
   wordOrder?: string[] | null;
   rainbowHerring?: string[] | null;

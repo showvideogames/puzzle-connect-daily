@@ -48,6 +48,7 @@ const PUZZLE_ID = "puzzle-1";
 const puzzle: Puzzle = {
   id: PUZZLE_ID,
   date: "2026-09-16",
+  designerName: "Sam West",
   groups: [
     { category: "Yellow", words: ["y1", "y2", "y3", "y4"], difficulty: 1 },
     { category: "Green", words: ["g1", "g2", "g3", "g4"], difficulty: 2 },
