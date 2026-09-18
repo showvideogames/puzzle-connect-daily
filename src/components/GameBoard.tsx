@@ -442,11 +442,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       return;
     }
 
-    // Use the category's own word order (same order the solved bar's subtitle
-    // renders) so each clone lands in the slot matching its final subtitle
-    // position — the morph reads as continuous. Clone i starts at word i's
-    // measured grid rect and flies to slot i of the bar.
-    const ordered = [...words];
+    // Match the solved bar's own display order (SolvedGroup.tsx) so each
+    // clone lands in the slot matching its final subtitle position — the
+    // morph reads as continuous. Clone i starts at word i's measured grid
+    // rect and flies to slot i of the bar.
+    const ordered = puzzle.alphabetizeCompleted ?? true
+      ? [...words].sort((a, b) => a.localeCompare(b))
+      : [...words];
 
     cloneRevealedGroupsRef.current.add(groupIdx);
     clearRevealTimers();
@@ -1012,6 +1014,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               key={slot.groupIdx}
               ref={reveal?.groupIdx === slot.groupIdx ? (el) => { revealBarRef.current = el; } : undefined}
               group={puzzle.groups[slot.groupIdx]}
+              alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
               // animate-group-appear is only for bars that DIDN'T go through the
               // clone reveal (reduced-motion path, loss cascade). Clone-revealed
               // bars cross-fade in via the `reveal` prop instead.

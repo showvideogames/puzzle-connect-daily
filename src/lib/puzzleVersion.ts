@@ -64,6 +64,7 @@ import { loadProgress } from "./gameProgress";
  *   theme               drives the bonus category's colours and its default
  *                       name when rainbowCategoryName is unset
  *   isEmojiPuzzle       changes how every tile renders
+ *   alphabetizeCompleted whether the solved-category bar sorts its answers
  *
  * Metadata that is intentionally absent: title, date, emojiPuzzleIcon,
  * isFreePuzzle, freePuzzleOrder.
@@ -77,6 +78,7 @@ export interface PinnedPuzzleContent {
   rainbowHintWord: string | null;
   theme: string | null;
   isEmojiPuzzle: boolean;
+  alphabetizeCompleted: boolean;
 }
 
 /**
@@ -106,6 +108,7 @@ export function pinnedContentFrom(puzzle: Puzzle): PinnedPuzzleContent | null {
     rainbowHintWord: puzzle.rainbowHintWord ?? null,
     theme: puzzle.theme ?? null,
     isEmojiPuzzle: puzzle.isEmojiPuzzle ?? false,
+    alphabetizeCompleted: puzzle.alphabetizeCompleted ?? true,
   };
 }
 
@@ -153,6 +156,11 @@ export function applyPinnedContent(current: Puzzle, pinned: PinnedPuzzleContent)
     rainbowHintWord: pinned.rainbowHintWord,
     theme: pinned.theme,
     isEmojiPuzzle: pinned.isEmojiPuzzle,
+    // ?? true (not a bare trust-the-type read like the fields above): unlike
+    // the others, this field did not exist when earlier builds wrote
+    // localStorage snapshots, so an already-in-progress board's pinned blob
+    // can genuinely lack it.
+    alphabetizeCompleted: pinned.alphabetizeCompleted ?? true,
     versionId: pinned.versionId,
   };
 }

@@ -6,7 +6,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogOut, Save, ArrowLeft, RotateCcw, ArrowLeftRight, ChevronLeft, ChevronRight, Image as ImageIcon } from "lucide-react";
+import { LogOut, Save, ArrowLeft, RotateCcw, ChevronLeft, ChevronRight, Image as ImageIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ArchiveAccessManager } from "@/components/ArchiveAccessManager";
 import { CustomEmojiManager } from "@/components/admin/CustomEmojiManager";
@@ -14,17 +14,33 @@ import { FeedbackList } from "@/components/admin/FeedbackList";
 import { BetaPlaytestPanel } from "@/components/admin/BetaPlaytestPanel";
 import { AdminLogin, AdminNoAccess } from "@/components/admin/AdminLogin";
 import { PuzzleListItem, type RatingSummary } from "@/components/admin/PuzzleListItem";
-import { useDraftPersistence, type GroupForm, type DraftData } from "@/hooks/useDraftPersistence";
-import { THEME_OPTIONS } from "@/lib/themes";
+import { useDraftPersistence, type DraftData } from "@/hooks/useDraftPersistence";
+import { useBuilderForm, type LoadBuilderInput } from "@/hooks/useBuilderForm";
+import { CategoryEditor } from "@/components/builder/CategoryEditor";
+import { StartingBoardArranger } from "@/components/builder/StartingBoardArranger";
+import { RainbowPanel } from "@/components/builder/RainbowPanel";
+import { splitAnswerField } from "@/lib/builder/answerIdentity";
+import { normalizeWord } from "@/lib/builder/wordNormalization";
 import { toast } from "sonner";
 
 const PUZZLES_PER_PAGE = 50;
 
-const emptyGroup = (): GroupForm => ({ category: "", words: "", difficulty: 1, hintWord: "" });
-const normalizeWord = (w: string): string => {
-  const trimmed = w.trim();
-  return /^img:/i.test(trimmed) ? trimmed.toLowerCase() : trimmed.toUpperCase();
-};
+const DIFFICULTY_LABELS = ["Easiest", "Easy", "Hard", "Hardest"] as const;
+const CATEGORY_LABELS = ["Yellow", "Green", "Blue", "Red"] as const;
+const CATEGORY_PLACEHOLDERS = [
+  "Colors of the Rainbow 🌈",
+  "Parts of a Car 🚘",
+  "Last Names of Famous Singers 🎤🎶",
+  "___ House 🏠",
+];
+const ANSWERS_PLACEHOLDERS = [
+  "Blue, Green, Red, Yellow",
+  "Battery, Hood, Tire, Trunk",
+  "Houston, Mars, Mercury, Swift",
+  "Bird, Dog, Tree, White",
+];
+const HINT_PLACEHOLDERS = ["Purple", "Wheel", "Gaga", "Haunted"];
+
 const parseWords = (value: string) =>
   value
     .split(",")
@@ -62,6 +78,7 @@ interface PuzzleContentPayload {
   rainbow_hint_word: string | null;
   theme: string | null;
   is_emoji_puzzle: boolean;
+  alphabetize_completed: boolean;
 }
 
 function buildContentPayload(input: {
@@ -72,6 +89,7 @@ function buildContentPayload(input: {
   rainbowHintWord: string | null;
   theme: string | null;
   isEmojiPuzzle: boolean;
+  alphabetizeCompleted: boolean;
 }): PuzzleContentPayload {
   const blankToNull = (v: string | null | undefined) => {
     const t = (v ?? "").trim();
@@ -91,6 +109,7 @@ function buildContentPayload(input: {
     rainbow_hint_word: blankToNull(input.rainbowHintWord),
     theme: blankToNull(input.theme),
     is_emoji_puzzle: input.isEmojiPuzzle,
+    alphabetize_completed: input.alphabetizeCompleted,
   };
 }
 
@@ -270,10 +289,9 @@ function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) 
 export default function Admin() {
   const { user, loading, isAdmin, signOut } = useAuth();
 
-  // Tap-to-swap selection state
+  // Tap-to-swap selection state (category order only — board/Rainbow order
+  // is drag-based, owned by the builder hook below).
   const [selectedGroupIdx, setSelectedGroupIdx] = useState<number | null>(null);
-  const [selectedTileIdx, setSelectedTileIdx] = useState<number | null>(null);
-  const [selectedRainbowIdx, setSelectedRainbowIdx] = useState<number | null>(null);
 
   // Puzzle form
   const [puzzleDate, setPuzzleDate] = useState("");
@@ -283,20 +301,20 @@ export default function Admin() {
   // puzzle's own designer_name. Metadata, not gameplay content — travels in
   // admin_save_puzzle's _metadata argument and never creates a new version.
   const [designerName, setDesignerName] = useState("Sam West");
-  const [rainbowHerring, setRainbowHerring] = useState<(string | null)[]>([null, null, null, null]);
-  const [rainbowCategoryName, setRainbowCategoryName] = useState("");
-  const [rainbowHintWord, setRainbowHintWord] = useState("");
-  const [theme, setTheme] = useState("");
   const [isEmojiPuzzle, setIsEmojiPuzzle] = useState(false);
   const [emojiPuzzleIcon, setEmojiPuzzleIcon] = useState("");
   const [isFreePuzzle, setIsFreePuzzle] = useState(false);
   const [freePuzzleOrder, setFreePuzzleOrder] = useState<number | null>(null);
-  const [groups, setGroups] = useState<GroupForm[]>([
-    { ...emptyGroup(), difficulty: 1 },
-    { ...emptyGroup(), difficulty: 2 },
-    { ...emptyGroup(), difficulty: 3 },
-    { ...emptyGroup(), difficulty: 4 },
-  ]);
+  // Purely a display toggle for the Rainbow panel — both "styles" are the
+  // same engine capability (a puzzle either has a Rainbow selection or it
+  // doesn't), so this is never sent to admin_save_puzzle. Toggling to
+  // Classic hides the panel without clearing anything already filled in.
+  const [styleTab, setStyleTab] = useState<"classic" | "rainbow">("classic");
+
+  // Category editing, Rainbow selection and starting-board order — the
+  // reusable builder core. See hooks/useBuilderForm.ts.
+  const builder = useBuilderForm();
+
   const [isPublished, setIsPublished] = useState(false);
   // One clear status selector: Draft / Beta / Published. isPublished and
   // isBeta stay as two booleans (matching the DB's two columns and the
@@ -305,10 +323,6 @@ export default function Admin() {
   // applyStatus below — so the UI never produces the invalid combination.
   const [isBeta, setIsBeta] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [wordOrder, setWordOrder] = useState<string[]>([]);
-
-  // Rainbow word reordering
-  const [rainbowWordOrder, setRainbowWordOrder] = useState<string[]>([]);
 
   // Existing puzzles list
   const [puzzles, setPuzzles] = useState<any[]>([]);
@@ -372,34 +386,56 @@ export default function Admin() {
     if (isAdmin) void loadPuzzles();
   }, [isAdmin]);
 
-  // Update rainbow word order whenever rainbow herring changes
-  useEffect(() => {
-    if (rainbowHerring.every(Boolean)) {
-      setRainbowWordOrder(rainbowHerring.filter(Boolean) as string[]);
-    } else {
-      setRainbowWordOrder([]);
-    }
-  }, [rainbowHerring]);
-
+  // Draft persistence works in plain text (word lists, not the builder's
+  // internal stable ids) — see hooks/useDraftPersistence.ts. The builder's
+  // own load() reconstructs ids from text the same way editPuzzle does.
   const draftValues: DraftData = {
     puzzleDate,
     puzzleTitle,
     designerName,
-    groups,
+    groups: builder.groups.map((g) => ({
+      category: g.category,
+      words: g.answersRaw,
+      difficulty: g.difficulty,
+      hintWord: g.hintWord,
+    })),
     isPublished,
     isBeta,
-    wordOrder,
-    rainbowHerring,
-    rainbowCategoryName,
-    rainbowHintWord,
-    rainbowWordOrder,
-    theme,
+    wordOrder: builder.textsFor(builder.wordOrderIds),
+    rainbowHerring: builder.rainbowHerringIds.map((id) => (id ? builder.slotById.get(id)?.text ?? null : null)),
+    rainbowCategoryName: builder.rainbowCategoryName,
+    rainbowHintWord: builder.rainbowHintWord,
+    rainbowWordOrder: builder.textsFor(builder.rainbowWordOrderIds),
+    theme: builder.theme,
     isEmojiPuzzle,
     emojiPuzzleIcon,
     isFreePuzzle,
     freePuzzleOrder,
+    alphabetizeCompleted: builder.alphabetizeCompleted,
     editingId,
   };
+
+  // The single source of truth for "what gameplay content does the form
+  // currently describe?" — used both by the version hint below and by
+  // handleSave, so the two can never disagree about what is about to be
+  // saved.
+  function currentContentInput() {
+    return {
+      groups: builder.groups.map((g) => ({
+        category: g.category,
+        words: parseWords(g.answersRaw),
+        difficulty: g.difficulty,
+        hintWord: g.hintWord,
+      })),
+      wordOrder: builder.textsFor(builder.wordOrderIds),
+      rainbowHerring: builder.rainbowComplete ? builder.textsFor(builder.rainbowWordOrderIds) : null,
+      rainbowCategoryName: builder.rainbowCategoryName,
+      rainbowHintWord: builder.rainbowHintWord,
+      theme: builder.theme,
+      isEmojiPuzzle,
+      alphabetizeCompleted: builder.alphabetizeCompleted,
+    };
+  }
 
   /**
    * A one-line, always-visible answer to "will saving this create a new
@@ -416,27 +452,7 @@ export default function Admin() {
   const versionHint = useMemo(() => {
     if (!editingId || loadedContent === null) return null;
     const current = currentVersionNumbers[editingId];
-    const next = JSON.stringify(
-      buildContentPayload({
-        groups: groups.map((g) => ({
-          category: g.category,
-          words: parseWords(g.words),
-          difficulty: g.difficulty,
-          hintWord: g.hintWord,
-        })),
-        wordOrder,
-        rainbowHerring:
-          rainbowWordOrder.length === 4
-            ? rainbowWordOrder
-            : rainbowHerring.every(Boolean)
-              ? (rainbowHerring as string[])
-              : null,
-        rainbowCategoryName,
-        rainbowHintWord,
-        theme,
-        isEmojiPuzzle,
-      })
-    );
+    const next = JSON.stringify(buildContentPayload(currentContentInput()));
     if (next === loadedContent) {
       return current
         ? `No gameplay changes — saving keeps this on Version ${current}. Anyone playing it is unaffected.`
@@ -445,17 +461,19 @@ export default function Admin() {
     return current
       ? `Gameplay changed — saving creates Version ${current + 1}. Anyone already playing Version ${current} keeps that board and can finish it.`
       : "Gameplay changed — saving creates a new version. Anyone already playing keeps the board they started.";
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     editingId,
     loadedContent,
     currentVersionNumbers,
-    groups,
-    wordOrder,
-    rainbowWordOrder,
-    rainbowHerring,
-    rainbowCategoryName,
-    rainbowHintWord,
-    theme,
+    builder.groups,
+    builder.wordOrderIds,
+    builder.rainbowWordOrderIds,
+    builder.rainbowComplete,
+    builder.rainbowCategoryName,
+    builder.rainbowHintWord,
+    builder.theme,
+    builder.alphabetizeCompleted,
     isEmojiPuzzle,
   ]);
 
@@ -467,19 +485,26 @@ export default function Admin() {
       setPuzzleDate(draft.puzzleDate);
       setPuzzleTitle(draft.puzzleTitle);
       setDesignerName(draft.designerName ?? "Sam West");
-      setGroups(draft.groups);
       setIsPublished(draft.isPublished);
       setIsBeta(draft.isBeta ?? false);
-      setWordOrder(draft.wordOrder);
-      setRainbowHerring(draft.rainbowHerring);
-      setRainbowCategoryName(draft.rainbowCategoryName ?? "");
-      setRainbowHintWord(draft.rainbowHintWord ?? "");
-      setRainbowWordOrder(draft.rainbowWordOrder ?? []);
-      setTheme(draft.theme ?? "");
       setIsEmojiPuzzle(draft.isEmojiPuzzle ?? false);
       setEmojiPuzzleIcon(draft.emojiPuzzleIcon ?? "");
       setIsFreePuzzle(draft.isFreePuzzle ?? false);
       setFreePuzzleOrder(draft.freePuzzleOrder ?? null);
+      builder.load({
+        groups: draft.groups.map((g) => ({
+          category: g.category,
+          words: splitAnswerField(g.words),
+          difficulty: g.difficulty,
+          hintWord: g.hintWord,
+        })),
+        wordOrder: draft.wordOrder,
+        rainbowHerring: draft.rainbowHerring.every(Boolean) ? (draft.rainbowHerring as string[]) : null,
+        rainbowCategoryName: draft.rainbowCategoryName ?? "",
+        rainbowHintWord: draft.rainbowHintWord ?? "",
+        theme: draft.theme ?? "",
+        alphabetizeCompleted: draft.alphabetizeCompleted ?? true,
+      });
     },
   });
 
@@ -575,56 +600,14 @@ export default function Admin() {
     }
   }
 
-  function updateGroup(idx: number, field: keyof GroupForm, value: string | number) {
-    setGroups((g) => g.map((gr, i) => (i === idx ? { ...gr, [field]: value } : gr)));
-  }
-
- function swapGroups(a: number, b: number) {
-  if (a === b) return;
-  setGroups((prev) => {
-    const next = [...prev];
-    [next[a], next[b]] = [next[b], next[a]];
-    // Reassign difficulties to match position
-    return next.map((g, i) => ({ ...g, difficulty: (i + 1) as 1 | 2 | 3 | 4 }));
-  });
-    setRainbowHerring((prev) => {
-      const next = [...prev];
-      [next[a], next[b]] = [next[b], next[a]];
-      return next;
-    });
-  }
-
   function handleGroupTap(i: number) {
     if (selectedGroupIdx === null) {
       setSelectedGroupIdx(i);
     } else if (selectedGroupIdx === i) {
       setSelectedGroupIdx(null);
     } else {
-      swapGroups(selectedGroupIdx, i);
+      builder.swapGroups(selectedGroupIdx, i);
       setSelectedGroupIdx(null);
-    }
-  }
-
-  // Compute all words from groups
-  const allWords = groups.flatMap((g) => parseWords(g.words));
-  const hasAll16 = allWords.length === 16 && new Set(allWords).size === 16;
-
-  function generateWordOrder() {
-    setWordOrder([...allWords]);
-  }
-
-  function handleTileTap(vIdx: number) {
-    if (selectedTileIdx === null) {
-      setSelectedTileIdx(vIdx);
-    } else if (selectedTileIdx === vIdx) {
-      setSelectedTileIdx(null);
-    } else {
-      setWordOrder((prev) => {
-        const next = [...prev];
-        [next[selectedTileIdx], next[vIdx]] = [next[vIdx], next[selectedTileIdx]];
-        return next;
-      });
-      setSelectedTileIdx(null);
     }
   }
 
@@ -637,21 +620,6 @@ export default function Admin() {
       resetForm();
       setPuzzleDate(dateStr);
       window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }
-
-  function handleRainbowTap(vIdx: number) {
-    if (selectedRainbowIdx === null) {
-      setSelectedRainbowIdx(vIdx);
-    } else if (selectedRainbowIdx === vIdx) {
-      setSelectedRainbowIdx(null);
-    } else {
-      setRainbowWordOrder((prev) => {
-        const next = [...prev];
-        [next[selectedRainbowIdx], next[vIdx]] = [next[vIdx], next[selectedRainbowIdx]];
-        return next;
-      });
-      setSelectedRainbowIdx(null);
     }
   }
 
@@ -671,9 +639,9 @@ export default function Admin() {
       return;
     }
 
-    const normalizedGroups = groups.map((g, index) => ({
+    const normalizedGroups = builder.groups.map((g, index) => ({
       category: g.category.trim(),
-      words: parseWords(g.words),
+      words: parseWords(g.answersRaw),
       difficulty: g.difficulty,
       sort_order: index,
       hint_word: g.hintWord.trim() || null,
@@ -700,9 +668,6 @@ export default function Admin() {
 
     setSaving(true);
     try {
-      // Use rainbowWordOrder if it has been customized, otherwise fall back to rainbowHerring
-      const rainbowArr = rainbowWordOrder.length === 4 ? rainbowWordOrder : (rainbowHerring.every(Boolean) ? (rainbowHerring as string[]) : null);
-
       // ── One call, one transaction ──
       // This used to be three separate round trips: UPDATE the puzzle, DELETE
       // every puzzle_groups row, then INSERT the new ones. Between the delete
@@ -734,24 +699,11 @@ export default function Admin() {
           is_free_puzzle: isFreePuzzle,
           free_puzzle_order: isFreePuzzle ? freePuzzleOrder : null,
         },
-        _content: buildContentPayload({
-          groups: groups.map((g) => ({
-            category: g.category,
-            words: parseWords(g.words),
-            difficulty: g.difficulty,
-            hintWord: g.hintWord,
-          })),
-          wordOrder,
-          rainbowHerring: rainbowArr,
-          rainbowCategoryName,
-          rainbowHintWord,
-          theme,
-          isEmojiPuzzle,
-          // Cast because the generated Json type describes arbitrary JSON,
-          // while this is a specific well-known object shape. The database
-          // re-validates it anyway — validate_puzzle_content is the real
-          // contract, not this type.
-        }) as unknown as Json,
+        // Cast because the generated Json type describes arbitrary JSON,
+        // while this is a specific well-known object shape. The database
+        // re-validates it anyway — validate_puzzle_content is the real
+        // contract, not this type.
+        _content: buildContentPayload(currentContentInput()) as unknown as Json,
       });
       if (error) throw error;
 
@@ -802,20 +754,10 @@ export default function Admin() {
     setPuzzleDate("");
     setPuzzleTitle("");
     setDesignerName("Sam West");
-    setGroups([
-      { ...emptyGroup(), difficulty: 1 },
-      { ...emptyGroup(), difficulty: 2 },
-      { ...emptyGroup(), difficulty: 3 },
-      { ...emptyGroup(), difficulty: 4 },
-    ]);
+    builder.reset();
+    setStyleTab("classic");
     setIsPublished(false);
     setIsBeta(false);
-    setWordOrder([]);
-    setRainbowHerring([null, null, null, null]);
-    setRainbowCategoryName("");
-    setRainbowHintWord("");
-    setRainbowWordOrder([]);
-    setTheme("");
     setIsEmojiPuzzle(false);
     setEmojiPuzzleIcon("");
     setIsFreePuzzle(false);
@@ -838,25 +780,23 @@ export default function Admin() {
     setIsPublished(p.is_published);
     setIsBeta(p.is_beta ?? false);
     const sorted = [...(p.puzzle_groups || [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
-    setGroups(
-      sorted.map((g: any) => ({
-        category: g.category,
-        words: g.words.join(", "),
-        difficulty: g.difficulty as 1 | 2 | 3 | 4,
-        hintWord: g.hint_word ?? "",
-      }))
-    );
-    setWordOrder(p.word_order || []);
-    if (p.rainbow_herring && p.rainbow_herring.length === 4) {
-      setRainbowHerring(p.rainbow_herring);
-      setRainbowWordOrder(p.rainbow_herring); // Set the custom order from saved data
-    } else {
-      setRainbowHerring([null, null, null, null]);
-      setRainbowWordOrder([]);
-    }
-    setRainbowCategoryName(p.rainbow_category_name || "");
-    setRainbowHintWord(p.rainbow_hint_word || "");
-    setTheme(p.theme || "");
+    const loadedGroups = sorted.map((g: any) => ({
+      category: g.category as string,
+      words: g.words as string[],
+      difficulty: g.difficulty as 1 | 2 | 3 | 4,
+      hintWord: (g.hint_word ?? null) as string | null,
+    }));
+    const loadInput: LoadBuilderInput = {
+      groups: loadedGroups,
+      wordOrder: p.word_order ?? null,
+      rainbowHerring: p.rainbow_herring && p.rainbow_herring.length === 4 ? p.rainbow_herring : null,
+      rainbowCategoryName: p.rainbow_category_name || "",
+      rainbowHintWord: p.rainbow_hint_word || "",
+      theme: p.theme || "",
+      alphabetizeCompleted: p.alphabetize_completed ?? true,
+    };
+    builder.load(loadInput);
+    setStyleTab(loadInput.rainbowHerring ? "rainbow" : "classic");
     setIsEmojiPuzzle(p.is_emoji_puzzle ?? false);
     setEmojiPuzzleIcon(p.emoji_puzzle_icon ?? "");
     setIsFreePuzzle(p.is_free_puzzle ?? false);
@@ -866,18 +806,14 @@ export default function Admin() {
     setLoadedContent(
       JSON.stringify(
         buildContentPayload({
-          groups: sorted.map((g: any) => ({
-            category: g.category,
-            words: g.words as string[],
-            difficulty: g.difficulty as number,
-            hintWord: g.hint_word ?? null,
-          })),
+          groups: loadedGroups,
           wordOrder: p.word_order ?? null,
           rainbowHerring: p.rainbow_herring ?? null,
           rainbowCategoryName: p.rainbow_category_name ?? null,
           rainbowHintWord: p.rainbow_hint_word ?? null,
           theme: p.theme ?? null,
           isEmojiPuzzle: p.is_emoji_puzzle ?? false,
+          alphabetizeCompleted: p.alphabetize_completed ?? true,
         })
       )
     );
@@ -945,17 +881,20 @@ export default function Admin() {
   if (!user) return <AdminLogin />;
   if (!isAdmin) return <AdminNoAccess />;
 
-  const difficultyLabels = ["Easiest", "Easy", "Hard", "Hardest"];
-  const difficultyColors = [
-    "bg-[hsl(var(--group-1))]",
-    "bg-[hsl(var(--group-2))]",
-    "bg-[hsl(var(--group-3))]",
-    "bg-[hsl(var(--group-4))]",
-  ];
+  const boardTiles = builder.wordOrderIds.map((id) => {
+    const slot = builder.slotById.get(id);
+    const groupIdx = builder.groups.findIndex((g) => g.answers.some((a) => a.id === id));
+    return { id, text: slot?.text ?? "", colorIndex: ((groupIdx === -1 ? 0 : groupIdx) + 1) as 1 | 2 | 3 | 4 };
+  });
+  const rainbowDisplayTiles = builder.rainbowWordOrderIds.map((id) => {
+    const slot = builder.slotById.get(id);
+    const groupIdx = builder.groups.findIndex((g) => g.answers.some((a) => a.id === id));
+    return { id, text: slot?.text ?? "", colorIndex: ((groupIdx === -1 ? 0 : groupIdx) + 1) as 1 | 2 | 3 | 4 };
+  });
 
   return (
     <div className="min-h-screen pb-16">
-      <header className="border-b border-border px-4 py-3 flex items-center justify-between max-w-3xl mx-auto">
+      <header className="border-b border-border px-4 py-3 flex items-center justify-between max-w-5xl mx-auto">
         <div className="flex items-center gap-3">
           <Link to="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
             <ArrowLeft className="w-4 h-4" /> Game
@@ -967,7 +906,7 @@ export default function Admin() {
         </Button>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 mt-6 space-y-8">
+      <main className="max-w-5xl mx-auto px-4 mt-6 space-y-8">
         {draftRestored && (
           <div className="flex items-center justify-between rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm">
             <span className="text-muted-foreground">✏️ Draft restored from your last session.</span>
@@ -996,371 +935,282 @@ export default function Admin() {
         )}
 
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">{editingId ? "Edit Puzzle" : "Create New Puzzle"}</h2>
+          <h2 className="text-lg font-semibold">{editingId ? "Edit Puzzle" : "Create a Puzzle"}</h2>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="pdate">Date</Label>
-              <Input
-                id="pdate"
-                type="date"
-                value={puzzleDate}
-                onChange={(e) => setPuzzleDate(e.target.value)}
-                onBlur={handleBlurSave}
-              />
-            </div>
-            <div>
-              <Label htmlFor="ptitle">Title (optional)</Label>
-              <Input
-                id="ptitle"
-                value={puzzleTitle}
-                onChange={(e) => setPuzzleTitle(e.target.value)}
-                onBlur={handleBlurSave}
-                placeholder="e.g. Monday Mashup"
-              />
-            </div>
-          </div>
+          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-8 lg:items-start">
+            {/* ── Editor column ── */}
+            <div className="space-y-5 min-w-0">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="pdate">Date</Label>
+                  <Input
+                    id="pdate"
+                    type="date"
+                    value={puzzleDate}
+                    onChange={(e) => setPuzzleDate(e.target.value)}
+                    onBlur={handleBlurSave}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="ptitle">Title (optional)</Label>
+                  <Input
+                    id="ptitle"
+                    value={puzzleTitle}
+                    onChange={(e) => setPuzzleTitle(e.target.value)}
+                    onBlur={handleBlurSave}
+                    placeholder="e.g. Monday Mashup"
+                  />
+                </div>
+              </div>
 
-          <div>
-            <Label htmlFor="pdesigner">Designer name</Label>
-            <Input
-              id="pdesigner"
-              value={designerName}
-              onChange={(e) => setDesignerName(e.target.value)}
-              onBlur={handleBlurSave}
-              placeholder="Sam West"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Shown in the puzzle header as "by {designerName.trim() || "Sam West"}". Leaving this blank saves it as "Sam West". Metadata only — never creates a new version.
-            </p>
-          </div>
+              <div>
+                <Label htmlFor="pdesigner">Designer name</Label>
+                <Input
+                  id="pdesigner"
+                  value={designerName}
+                  onChange={(e) => setDesignerName(e.target.value)}
+                  onBlur={handleBlurSave}
+                  placeholder="Sam West"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Shown in the puzzle header as "by {designerName.trim() || "Sam West"}". Leaving this blank saves it as "Sam West". Metadata only — never creates a new version.
+                </p>
+              </div>
 
-          <p className="text-xs text-muted-foreground">
-            Tap the swap icon to select a group, then tap another to swap them.
-          </p>
-          <div className="space-y-3">
-            {groups.map((g, i) => {
-              const isSelected = selectedGroupIdx === i;
-              return (
-                <div
-                  key={i}
-                  className={`rounded-lg p-4 space-y-2 ${difficultyColors[i]} bg-opacity-30 transition-all duration-150
-                    ${isSelected ? "ring-2 ring-primary ring-offset-1 scale-[1.01]" : ""}
-                  `}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Group {i + 1} — {difficultyLabels[i]}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleGroupTap(i)}
-                      aria-label={`Select group ${i + 1} to swap`}
-                      className="cursor-pointer active:scale-95 p-1 -m-1 rounded hover:bg-secondary transition-colors"
+              <div className="flex flex-wrap gap-6">
+                <div>
+                  <span className="text-xs font-medium text-slate block mb-1">Size</span>
+                  <div className="inline-flex rounded-lg border border-border p-0.5 bg-secondary/50">
+                    <span className="px-3 py-1.5 rounded-md text-xs font-semibold bg-card text-foreground shadow-sm">Full 4×4</span>
+                    <span
+                      className="px-3 py-1.5 rounded-md text-xs font-semibold text-muted-foreground/50 cursor-not-allowed"
+                      title="Mini 3×3 gameplay isn't supported by the game engine yet."
                     >
-                      <ArrowLeftRight className="w-4 h-4 text-muted-foreground/70" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs">Category Name</Label>
-                      <Input
-                        value={g.category}
-                        onChange={(e) => updateGroup(i, "category", e.target.value)}
-                        onBlur={handleBlurSave}
-                        placeholder="e.g. Coffee Drinks"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">4 Words (comma-separated)</Label>
-                      <Input
-                        value={g.words}
-                        onChange={(e) => updateGroup(i, "words", e.target.value)}
-                        onBlur={handleBlurSave}
-                        placeholder="LATTE, MOCHA, ESPRESSO, CORTADO"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-xs">Hint Word (optional)</Label>
-                    <Input
-                      value={g.hintWord}
-                      onChange={(e) => updateGroup(i, "hintWord", e.target.value)}
-                      onBlur={handleBlurSave}
-                      placeholder="Extra example word shown as a Small Hint"
-                    />
+                      Mini 3×3 (soon)
+                    </span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-
-          {/* Grid Order Editor */}
-          {hasAll16 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Grid Layout Order</h3>
-                <Button variant="outline" size="sm" onClick={generateWordOrder}>
-                  {wordOrder.length === 16 ? "Reset Order" : "Customize Order"}
-                </Button>
-              </div>
-              {wordOrder.length === 16 && (
-                <>
-                  <p className="text-xs text-muted-foreground">
-                    Tap a tile to select it, then tap another to swap them.
-                  </p>
-                  <div className="grid grid-cols-4 gap-2">
-                    {wordOrder.map((word, vIdx) => {
-                      const groupIdx = groups.findIndex((g) =>
-                        g.words.split(",").map(normalizeWord).includes(word)
-                      );
-                      const diffColors = [
-                        "bg-[hsl(var(--group-1)/0.3)]",
-                        "bg-[hsl(var(--group-2)/0.3)]",
-                        "bg-[hsl(var(--group-3)/0.3)]",
-                        "bg-[hsl(var(--group-4)/0.3)]",
-                      ];
-                      const isSelected = selectedTileIdx === vIdx;
-
-                      return (
-                        <div
-                          key={word}
-                          onClick={() => handleTileTap(vIdx)}
-                          className={`rounded-lg px-2 py-3 text-xs font-semibold uppercase tracking-wide text-center
-                            transition-all duration-100 select-none cursor-pointer active:scale-95
-                            ${diffColors[groupIdx] || "bg-muted"}
-                            ${isSelected ? "ring-2 ring-primary scale-105 shadow-md" : ""}
-                          `}
-                        >
-                          {word}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Rainbow Herring Editor */}
-          {hasAll16 && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold">🌈 Rainbow Herring (optional)</h3>
-              <p className="text-xs text-muted-foreground">Pick one word from each group. If a player guesses all 4, the tiles turn rainbow and they don't lose a mistake.</p>
-              <div>
-                <Label className="text-xs">Rainbow Category Title</Label>
-                <input
-                  type="text"
-                  value={rainbowCategoryName}
-                  onChange={(e) => setRainbowCategoryName(e.target.value)}
-                  onBlur={handleBlurSave}
-                  placeholder="e.g. Synonyms for Fast ⏱️"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Rainbow Hint Word (optional)</Label>
-                <input
-                  type="text"
-                  value={rainbowHintWord}
-                  onChange={(e) => setRainbowHintWord(e.target.value)}
-                  onBlur={handleBlurSave}
-                  placeholder="Extra example word shown as a Small Hint"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Bonus Theme</Label>
-                <select
-                  value={theme}
-                  onChange={(e) => setTheme(e.target.value)}
-                  onBlur={handleBlurSave}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
-                >
-                  {THEME_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted-foreground mt-1">Swaps the bonus gradient, emoji, and copy for a holiday look. Default keeps the rainbow.</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {groups.map((g, i) => {
-                  const groupWords = g.words.split(",").map(normalizeWord).filter(Boolean);
-                  return (
-                    <div key={i}>
-                      <Label className="text-xs">{g.category || `Group ${i + 1}`}</Label>
-                      <select
-                        value={rainbowHerring[i] || ""}
-                        onChange={(e) => {
-                          setRainbowHerring((prev) => {
-                            const next = [...prev];
-                            next[i] = e.target.value || null;
-                            return next;
-                          });
-                        }}
-                        onBlur={handleBlurSave}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                <div>
+                  <span className="text-xs font-medium text-slate block mb-1">Style</span>
+                  <div className="inline-flex rounded-lg border border-border p-0.5 bg-secondary/50">
+                    {(["classic", "rainbow"] as const).map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setStyleTab(s)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-semibold capitalize transition-colors
+                          ${styleTab === s ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                       >
-                        <option value="">— none —</option>
-                        {groupWords.map((w) => (
-                          <option key={w} value={w}>{w}</option>
-                        ))}
-                      </select>
-                    </div>
-                  );
-                })}
-              </div>
-              {rainbowHerring.every(w => w) && (
-                <>
-                  <div className="flex gap-2 flex-wrap">
-                    <span className="text-xs text-muted-foreground">Selected:</span>
-                    {rainbowHerring.map((w, i) => (
-                      <span key={i} className="rainbow-tile text-white text-xs font-semibold px-2 py-0.5 rounded">{w}</span>
+                        {s}
+                      </button>
                     ))}
                   </div>
+                </div>
+              </div>
 
-                  {/* Rainbow Word Order Editor */}
-                  <div className="space-y-2 pt-2 border-t border-border/50">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-semibold">Display Order</h4>
-                      <button
-                        onClick={() => setRainbowWordOrder(rainbowHerring.filter(Boolean) as string[])}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        Reset to default
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Tap to select, then tap another to swap.
-                    </p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {rainbowWordOrder.map((word, vIdx) => {
-                        const isSelected = selectedRainbowIdx === vIdx;
-                        return (
-                          <div
-                            key={word}
-                            onClick={() => handleRainbowTap(vIdx)}
-                            className={`rainbow-tile text-white rounded-lg px-2 py-2 text-xs font-semibold uppercase tracking-wide text-center
-                              transition-all duration-100 select-none cursor-pointer active:scale-95
-                              ${isSelected ? "ring-2 ring-white scale-105 shadow-lg" : ""}
-                            `}
-                          >
-                            {word}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium mr-1">Status</span>
-            <div className="inline-flex rounded-lg border border-border p-0.5 bg-secondary/50">
-              {(["draft", "beta", "published"] as const).map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => applyStatus(status)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold capitalize transition-colors
-                    ${puzzleStatus === status ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-            {puzzleStatus === "beta" && (
-              <span className="text-xs text-muted-foreground">
-                Unlisted — playable at /beta, never on the Daily homepage or Archive.
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-6 flex-wrap">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isEmojiPuzzle}
-                onChange={(e) => {
-                  setIsEmojiPuzzle(e.target.checked);
-                  if (!editingId) {
-                    saveDraft({ ...getCurrentDraft(), isEmojiPuzzle: e.target.checked });
-                  }
-                }}
-                className="rounded border-border"
-              />
-              <span className="text-sm font-medium">Emoji Puzzle 🎨</span>
-            </label>
-            {isEmojiPuzzle && (
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium whitespace-nowrap">Emoji Puzzle Icon</label>
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
-                  type="text"
-                  value={emojiPuzzleIcon}
+                  type="checkbox"
+                  checked={builder.alphabetizeCompleted}
                   onChange={(e) => {
-                    setEmojiPuzzleIcon(e.target.value);
+                    builder.setAlphabetizeCompleted(e.target.checked);
                     if (!editingId) {
-                      saveDraft({ ...getCurrentDraft(), emojiPuzzleIcon: e.target.value });
+                      saveDraft({ ...getCurrentDraft(), alphabetizeCompleted: e.target.checked });
                     }
                   }}
-                  placeholder="🐶"
-                  className="w-20 rounded border-border px-2 py-1 text-sm"
+                  className="rounded border-border"
                 />
+                <span className="text-sm font-medium text-ink">Alphabetize answers in completed categories</span>
+              </label>
+
+              <div className="space-y-3">
+                {builder.groups.map((g, i) => (
+                  <CategoryEditor
+                    key={i}
+                    colorIndex={(i + 1) as 1 | 2 | 3 | 4}
+                    label={CATEGORY_LABELS[i]}
+                    difficultyLabel={DIFFICULTY_LABELS[i]}
+                    category={g.category}
+                    onCategoryChange={(v) => builder.updateCategoryName(i, v)}
+                    categoryPlaceholder={CATEGORY_PLACEHOLDERS[i]}
+                    answersRaw={g.answersRaw}
+                    onAnswersRawChange={(v) => builder.updateAnswersRaw(i, v)}
+                    answersLabel="4 answers, separated by commas"
+                    answersPlaceholder={ANSWERS_PLACEHOLDERS[i]}
+                    hintWord={g.hintWord}
+                    onHintWordChange={(v) => builder.updateHintWord(i, v)}
+                    hintPlaceholder={HINT_PLACEHOLDERS[i]}
+                    onFieldBlur={handleBlurSave}
+                    onSwapClick={() => handleGroupTap(i)}
+                    isSwapSelected={selectedGroupIdx === i}
+                  />
+                ))}
               </div>
-            )}
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isFreePuzzle}
-                onChange={(e) => {
-                  setIsFreePuzzle(e.target.checked);
-                  if (!e.target.checked) setFreePuzzleOrder(null);
-                  if (!editingId) {
-                    saveDraft({ ...getCurrentDraft(), isFreePuzzle: e.target.checked, freePuzzleOrder: e.target.checked ? freePuzzleOrder : null });
-                  }
-                }}
-                className="rounded border-border"
-              />
-              <span className="text-sm font-medium">Free Puzzle 🆓</span>
-            </label>
-            {isFreePuzzle && (
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium whitespace-nowrap">Order (1–10)</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={freePuzzleOrder ?? ""}
-                  onChange={(e) => {
-                    const raw = parseInt(e.target.value, 10);
-                    setFreePuzzleOrder(isNaN(raw) ? null : Math.min(10, Math.max(1, raw)));
+              {selectedGroupIdx !== null && (
+                <p className="text-xs text-muted-foreground">Tap another category's swap icon to swap it with this one.</p>
+              )}
+
+              {styleTab === "rainbow" && builder.hasAll16 && (
+                <RainbowPanel
+                  groups={builder.groups.map((g, i) => ({
+                    colorIndex: (i + 1) as 1 | 2 | 3 | 4,
+                    label: g.category || CATEGORY_LABELS[i],
+                    answers: g.answers,
+                    selectedId: builder.rainbowHerringIds[i],
+                  }))}
+                  onSelect={builder.selectRainbowAnswer}
+                  categoryName={builder.rainbowCategoryName}
+                  onCategoryNameChange={builder.setRainbowCategoryName}
+                  hintWord={builder.rainbowHintWord}
+                  onHintWordChange={builder.setRainbowHintWord}
+                  theme={builder.theme}
+                  onThemeChange={builder.setTheme}
+                  displayOrderTiles={rainbowDisplayTiles}
+                  onReorderDisplay={builder.setRainbowWordOrderIds}
+                  onFieldBlur={handleBlurSave}
+                />
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                Using a custom emoji?{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEmojiManager(true);
+                    requestAnimationFrame(() =>
+                      document.getElementById("custom-emoji-manager")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                    );
                   }}
-                  onBlur={handleBlurSave}
-                  placeholder="1"
-                  className="w-16 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                />
+                  className="underline hover:text-foreground transition-colors"
+                >
+                  View available emoji codes ↗
+                </button>
+                <br />
+                Enter a code such as <code className="text-[11px]">:caveman:</code> in an answer field.
+              </p>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium mr-1">Status</span>
+                <div className="inline-flex rounded-lg border border-border p-0.5 bg-secondary/50">
+                  {(["draft", "beta", "published"] as const).map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => applyStatus(status)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold capitalize transition-colors
+                        ${puzzleStatus === status ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+                {puzzleStatus === "beta" && (
+                  <span className="text-xs text-muted-foreground">
+                    Unlisted — playable at /beta, never on the Daily homepage or Archive.
+                  </span>
+                )}
               </div>
-            )}
-          </div>
 
-          {/* Version hint.
-              Informational, and intentionally low-key: versioning PROTECTS
-              players who are mid-game (their board keeps working on the
-              version they started), so editing an old puzzle is a normal,
-              safe thing to do and must not be dressed up as dangerous. */}
-          {versionHint && (
-            <p className="text-xs text-muted-foreground -mt-2">{versionHint}</p>
-          )}
+              <div className="flex items-center gap-6 flex-wrap">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isEmojiPuzzle}
+                    onChange={(e) => {
+                      setIsEmojiPuzzle(e.target.checked);
+                      if (!editingId) {
+                        saveDraft({ ...getCurrentDraft(), isEmojiPuzzle: e.target.checked });
+                      }
+                    }}
+                    className="rounded border-border"
+                  />
+                  <span className="text-sm font-medium">Emoji Puzzle 🎨</span>
+                </label>
+                {isEmojiPuzzle && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium whitespace-nowrap">Emoji Puzzle Icon</label>
+                    <input
+                      type="text"
+                      value={emojiPuzzleIcon}
+                      onChange={(e) => {
+                        setEmojiPuzzleIcon(e.target.value);
+                        if (!editingId) {
+                          saveDraft({ ...getCurrentDraft(), emojiPuzzleIcon: e.target.value });
+                        }
+                      }}
+                      placeholder="🐶"
+                      className="w-20 rounded border-border px-2 py-1 text-sm"
+                    />
+                  </div>
+                )}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isFreePuzzle}
+                    onChange={(e) => {
+                      setIsFreePuzzle(e.target.checked);
+                      if (!e.target.checked) setFreePuzzleOrder(null);
+                      if (!editingId) {
+                        saveDraft({ ...getCurrentDraft(), isFreePuzzle: e.target.checked, freePuzzleOrder: e.target.checked ? freePuzzleOrder : null });
+                      }
+                    }}
+                    className="rounded border-border"
+                  />
+                  <span className="text-sm font-medium">Free Puzzle 🆓</span>
+                </label>
+                {isFreePuzzle && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium whitespace-nowrap">Order (1–10)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={freePuzzleOrder ?? ""}
+                      onChange={(e) => {
+                        const raw = parseInt(e.target.value, 10);
+                        setFreePuzzleOrder(isNaN(raw) ? null : Math.min(10, Math.max(1, raw)));
+                      }}
+                      onBlur={handleBlurSave}
+                      placeholder="1"
+                      className="w-16 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                )}
+              </div>
 
-          <div className="flex gap-3">
-            <Button onClick={handleSave} disabled={saving}>
-              <Save className="w-4 h-4 mr-1" /> {saving ? "Saving…" : editingId ? "Update Puzzle" : "Create Puzzle"}
-            </Button>
-            {editingId && (
-              <Button variant="outline" onClick={resetForm}>Cancel Edit</Button>
-            )}
+              {/* Version hint.
+                  Informational, and intentionally low-key: versioning PROTECTS
+                  players who are mid-game (their board keeps working on the
+                  version they started), so editing an old puzzle is a normal,
+                  safe thing to do and must not be dressed up as dangerous. */}
+              {versionHint && (
+                <p className="text-xs text-muted-foreground -mt-2">{versionHint}</p>
+              )}
+
+              <div className="flex gap-3">
+                <Button onClick={handleSave} disabled={saving}>
+                  <Save className="w-4 h-4 mr-1" /> {saving ? "Saving…" : editingId ? "Update Puzzle" : "Create Puzzle"}
+                </Button>
+                {editingId && (
+                  <Button variant="outline" onClick={resetForm}>Cancel Edit</Button>
+                )}
+              </div>
+            </div>
+
+            {/* ── Starting-board column ── */}
+            <div className="mt-6 lg:mt-0 lg:sticky lg:top-4">
+              {builder.hasAll16 ? (
+                <StartingBoardArranger
+                  tiles={boardTiles}
+                  onReorder={builder.setWordOrderIds}
+                  onRandomize={builder.randomizeWordOrder}
+                />
+              ) : (
+                <div className="rounded-xl border border-dashed border-tile-border p-4 text-xs text-muted-foreground">
+                  Fill in all 4 categories with 4 answers each to preview and arrange the starting board.
+                </div>
+              )}
+            </div>
           </div>
         </section>
 

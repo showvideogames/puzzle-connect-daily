@@ -26,6 +26,7 @@ export interface DraftData {
   emojiPuzzleIcon: string;
   isFreePuzzle: boolean;
   freePuzzleOrder: number | null;
+  alphabetizeCompleted: boolean;
   editingId: string | null;
 }
 

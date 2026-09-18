@@ -131,6 +131,10 @@ function mapPuzzle(data: any): Puzzle {
     isFreePuzzle: data.is_free_puzzle ?? false,
     freePuzzleOrder: data.free_puzzle_order ?? null,
     theme: data.theme ?? null,
+    // Missing on a database without this migration applied, or on a puzzle
+    // saved before it existed — both read as true, matching the column's
+    // own default and validate_puzzle_content's canonicalisation.
+    alphabetizeCompleted: data.alphabetize_completed ?? true,
     // Comes along free with the existing `select("*")` — no extra query, no
     // join, and no new RPC on the path that loads a playable board. That is
     // deliberate: puzzles/puzzle_groups stay the live read path exactly as
