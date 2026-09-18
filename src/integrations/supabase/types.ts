@@ -1179,15 +1179,15 @@ export type Database = {
       }
       submit_beta_feedback: {
         Args: {
-          _additional_comments?: string
-          _confusing_or_incorrect?: string
+          _additional_comments: string
+          _confusing_or_incorrect: string
           _difficulty_rating: number
           _fun_rating: number
-          _playtest_id?: string
+          _playtest_id: string
           _puzzle_id: string
           _puzzle_version_id: string
-          _rainbow_fairness_rating?: number
-          _tester_name?: string
+          _rainbow_fairness_rating: number
+          _tester_name: string
           _would_play_again: boolean
         }
         Returns: string

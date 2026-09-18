@@ -643,7 +643,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const prevGotRainbow = useRef(state.gotRainbow);
 
   useEffect(() => {
-    if (isArchive) return;
+    // Beta mode never calls record_streak (see useGame's commitOfficialResult),
+    // so a beta win can never actually be "day N" of the real streak — showing
+    // this banner here would read the player's genuine current_streak and
+    // display it as if THIS win had just extended it, directly contradicting
+    // the "won't affect your official stats or streak" banner on the page.
+    if (isArchive || betaMode) return;
     const fetchStreakBefore = async () => {
       try {
         // user_streaks is RPC-only now; the function resolves account vs
@@ -657,7 +662,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       } catch {}
     };
     void fetchStreakBefore();
-  }, [isArchive]);
+  }, [isArchive, betaMode]);
 
   // Streak celebration is part of the victory moment, so it waits for the same
   // reveal gate. Gating on `lastRevealedGroup !== null` keeps it to LIVE wins:
@@ -665,10 +670,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // lastRevealedGroup, so it won't re-show the streak — and this stays correct
   // even if the completed state hydrates asynchronously.
   useEffect(() => {
-    if (victoryRevealReady && state.isWon && lastRevealedGroup !== null && !isArchive) {
+    if (victoryRevealReady && state.isWon && lastRevealedGroup !== null && !isArchive && !betaMode) {
       setShowStreak(true);
     }
-  }, [victoryRevealReady, state.isWon, lastRevealedGroup, isArchive]);
+  }, [victoryRevealReady, state.isWon, lastRevealedGroup, isArchive, betaMode]);
 
   useEffect(() => {
     if (state.isComplete && !prevIsComplete.current) {
