@@ -27,6 +27,12 @@ export interface Puzzle {
   freePuzzleOrder?: number | null;
   // Optional visual theme key for the bonus category (null = default rainbow).
   theme?: string | null;
+  // Whether the solved-category bar (SolvedGroup.tsx) shows a category's
+  // answers alphabetically once solved, or in the creator's authored
+  // comma-separated order. Gameplay content — versioned like any other
+  // field, see admin_save_puzzle. Always resolved to a real boolean by
+  // mapPuzzle (missing/legacy = true), never left undefined here.
+  alphabetizeCompleted: boolean;
   /**
    * The puzzle_versions snapshot this content came from — puzzles
    * .current_version_id for a freshly loaded puzzle, or the pinned earlier

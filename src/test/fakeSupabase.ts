@@ -122,6 +122,9 @@ export function canonicalizePuzzleContent(raw: unknown): FakeRow {
     rainbow_hint_word: blankToNull(content.rainbow_hint_word),
     theme: blankToNull(content.theme),
     is_emoji_puzzle: content.is_emoji_puzzle === true,
+    // Mirrors coalesce((_content ->> 'alphabetize_completed')::boolean, true)
+    // in validate_puzzle_content: missing/non-boolean input defaults true.
+    alphabetize_completed: content.alphabetize_completed !== false,
   };
 }
 
@@ -530,6 +533,7 @@ export class FakeSupabase {
           rainbow_hint_word: canonical.rainbow_hint_word,
           theme: canonical.theme,
           is_emoji_puzzle: canonical.is_emoji_puzzle,
+          alphabetize_completed: canonical.alphabetize_completed,
         };
         // Mirrors admin_save_puzzle's `coalesce(nullif(btrim(...), ''), 'Sam
         // West')`: trimmed, and never blank -- clearing the field in the

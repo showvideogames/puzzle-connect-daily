@@ -652,6 +652,7 @@ export type Database = {
       }
       puzzles: {
         Row: {
+          alphabetize_completed: boolean
           created_at: string
           created_by: string | null
           current_version_id: string | null
@@ -673,6 +674,7 @@ export type Database = {
           word_order: string[] | null
         }
         Insert: {
+          alphabetize_completed?: boolean
           created_at?: string
           created_by?: string | null
           current_version_id?: string | null
@@ -694,6 +696,7 @@ export type Database = {
           word_order?: string[] | null
         }
         Update: {
+          alphabetize_completed?: boolean
           created_at?: string
           created_by?: string | null
           current_version_id?: string | null

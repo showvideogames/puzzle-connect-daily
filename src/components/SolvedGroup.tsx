@@ -11,6 +11,10 @@ const groupColors: Record<number, { bg: string; text: string }> = {
 
 interface SolvedGroupProps {
   group: PuzzleGroup;
+  // Sorts the displayed answers alphabetically when true (default); shows
+  // them in the group's own stored/authored order when false. Puzzle-level
+  // setting — see Puzzle.alphabetizeCompleted.
+  alphabetizeCompleted?: boolean;
   animate?: boolean;
   // Reveal-phase override used by GameBoard's clone animation (two beats):
   //  - "hidden": laid out but transparent, so its rect is measurable as the
@@ -27,11 +31,14 @@ interface SolvedGroupProps {
 // forwardRef so GameBoard can measure this bar's real DOM rect (the clones'
 // fly target) via getBoundingClientRect.
 export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function SolvedGroup(
-  { group, animate, reveal },
+  { group, alphabetizeCompleted = true, animate, reveal },
   ref
 ) {
   const colors = groupColors[group.difficulty] || groupColors[1];
   const revealing = reveal !== undefined;
+  const displayWords = alphabetizeCompleted
+    ? [...group.words].sort((a, b) => a.localeCompare(b))
+    : group.words;
   return (
     <div
       ref={ref}
@@ -55,7 +62,7 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
       {/* Answers stay clearly secondary: smaller, lighter weight, and a
           touch more breathing room below the title (~4px via mt-1). */}
       <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-1 opacity-80 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
-        {group.words.map((w, i) => (
+        {displayWords.map((w, i) => (
           <span key={`${w}-${i}`} className="inline-flex items-center gap-x-1">
             {/* Middot separator between answers (not before the first one) —
                 its own flex item so the surrounding gap gives it even
