@@ -67,6 +67,33 @@ export async function getPuzzleById(id: string): Promise<Puzzle | null> {
   return mapPuzzle(data);
 }
 
+// Beta playtesting — /beta and /beta/:puzzleId. Mirrors getTodaysPuzzle/
+// getPuzzleById exactly, filtered on is_beta instead of is_published. Never
+// overlaps with the published read paths above: the mutual-exclusion CHECK
+// constraint on puzzles guarantees no row is ever both.
+export async function getBetaPuzzles(): Promise<Puzzle[]> {
+  const { data, error } = await supabase
+    .from("puzzles")
+    .select("*, puzzle_groups(*)")
+    .eq("is_beta", true)
+    .order("date", { ascending: false });
+
+  if (error || !data) return [];
+  return data.map(mapPuzzle);
+}
+
+export async function getBetaPuzzleById(id: string): Promise<Puzzle | null> {
+  const { data, error } = await supabase
+    .from("puzzles")
+    .select("*, puzzle_groups(*)")
+    .eq("id", id)
+    .eq("is_beta", true)
+    .single();
+
+  if (error || !data) return null;
+  return mapPuzzle(data);
+}
+
 export async function getPuzzleByDate(date: string): Promise<Puzzle | null> {
   const { data, error } = await supabase
     .from("puzzles")

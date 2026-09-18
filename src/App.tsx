@@ -7,6 +7,8 @@ import Index from "./pages/Index.tsx";
 import Admin from "./pages/Admin.tsx";
 import Archive from "./pages/Archive.tsx";
 import ArchivePuzzle from "./pages/ArchivePuzzle.tsx";
+import BetaLibrary from "./pages/BetaLibrary.tsx";
+import BetaPuzzle from "./pages/BetaPuzzle.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import Privacy from "./pages/Privacy.tsx";
 import Terms from "./pages/Terms.tsx";
@@ -33,6 +35,11 @@ const App = () => (
               separate FreePuzzle component anymore. New navigation (Archive's
               Free Puzzles cards) links straight to /archive/:puzzleId. */}
           <Route path="/free/:puzzleId" element={<ArchivePuzzle />} />
+          {/* Unlisted playtesting area — never linked from normal nav, kept
+              out of search indexes via SEO's noIndex (see BetaLibrary/
+              BetaPuzzle). No login, no admin gate: unlisted, not secret. */}
+          <Route path="/beta" element={<BetaLibrary />} />
+          <Route path="/beta/:puzzleId" element={<BetaPuzzle />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />

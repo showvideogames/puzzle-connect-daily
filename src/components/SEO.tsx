@@ -8,9 +8,11 @@ interface SEOProps {
   description: string;
   path?: string;            // e.g. "/archive" — joined with SITE for canonical/og:url
   image?: string;           // absolute or site-rooted URL; defaults to og-image
+  /** Unlisted pages (e.g. /beta) — kept out of search indexes without being blocked or hidden from anyone with the link. */
+  noIndex?: boolean;
 }
 
-export function SEO({ title, description, path = "/", image = DEFAULT_IMAGE }: SEOProps) {
+export function SEO({ title, description, path = "/", image = DEFAULT_IMAGE, noIndex = false }: SEOProps) {
   const url = path.startsWith("http") ? path : `${SITE}${path}`;
   const absoluteImage = image.startsWith("http") ? image : `${SITE}${image}`;
 
@@ -19,6 +21,7 @@ export function SEO({ title, description, path = "/", image = DEFAULT_IMAGE }: S
       <title>{title}</title>
       <meta name="description" content={description} />
       <link rel="canonical" href={url} />
+      {noIndex && <meta name="robots" content="noindex, nofollow" />}
 
       <meta property="og:type" content="website" />
       <meta property="og:url" content={url} />

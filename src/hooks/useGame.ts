@@ -4,6 +4,7 @@ import { vibrateSuccess, vibrateError, vibrateCelebration } from "@/lib/haptics"
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
 import { finalizeGameSession, hasOfficialResult } from "@/lib/gameStats";
+import { finalizeBetaPlaytest } from "@/lib/betaPlaytest";
 import { playRainbowSound } from "@/lib/sounds";
 import { trackEvent } from "@/lib/analytics";
 import type { EntryContext } from "@/lib/entryContext";
@@ -92,13 +93,35 @@ export function useGame(
     // session, at creation — see lib/entryContext.ts. Defaults to the Daily
     // home route because that is the only caller that does not pass one.
     entryContext = "daily_home",
+    // "official" (default): unchanged behavior — durable game_sessions,
+    // official stats, streaks. "beta": the one explicit playtest-mode signal
+    // (see GameBoard's betaMode prop) that reroutes every persistence path
+    // below to the separate beta_playtests system and skips official-only
+    // checks entirely, instead of scattering `if (isBetaPuzzle)` checks
+    // through this file.
+    mode = "official",
   }: {
     isArchive?: boolean;
     smallHintUsed?: boolean;
     fullHintUsed?: boolean;
     entryContext?: EntryContext;
+    mode?: "official" | "beta";
   } = {}
 ) {
+  /**
+   * The localStorage progress key for this attempt.
+   *
+   * Beta play uses a DIFFERENT namespace than the puzzle's own id
+   * (`beta:<id>`, never colliding with `progressKey(id)`) because a Beta
+   * puzzle keeps its id when promoted to Published (see the Admin status
+   * workflow) — without this, a tester's beta progress blob would collide
+   * with that same puzzle's real official progress blob the moment it goes
+   * live. The pin mechanism inside the blob (puzzleSnapshot.versionId) still
+   * does the per-version resume work exactly as it does for official/Archive
+   * play; only the storage KEY differs.
+   */
+  const storageId = mode === "beta" ? `beta:${puzzle.id}` : puzzle.id;
+
   const MAX_MISTAKES = 4;
   // Shared "checking guess" suspense: every submitted guess (correct OR
   // incorrect) first plays a staggered per-tile bounce, then holds a beat,
@@ -119,8 +142,8 @@ export function useGame(
   );
 
   const saved = useMemo(() => {
-    return loadProgress(puzzle.id);
-  }, [puzzle.id]);
+    return loadProgress(storageId);
+  }, [storageId]);
 
   // Authoritative "was a hint ever revealed this session" state. The
   // smallHintUsed/fullHintUsed PROPS above are owned by the page (Index.tsx/
@@ -197,6 +220,10 @@ export function useGame(
   // existence here would lock a player out of the game they are in the middle
   // of playing the moment they refreshed.
   useEffect(() => {
+    // A Beta puzzle structurally can never have an official result (beta
+    // play never writes game_sessions) — nothing to check, and no lock to
+    // apply.
+    if (mode === "beta") return;
     if (saved) return;
     let cancelled = false;
     hasOfficialResult(puzzle.id).then((played) => {
@@ -205,7 +232,7 @@ export function useGame(
       }
     });
     return () => { cancelled = true; };
-  }, [puzzle.id, saved]);
+  }, [puzzle.id, saved, mode]);
 
   const [shaking, setShaking] = useState(false);
   const [lastRevealedGroup, setLastRevealedGroup] = useState<number | null>(null);
@@ -272,7 +299,7 @@ export function useGame(
       // to precede a refresh/close, and visibilitychange fires reliably for
       // that even when beforeunload/unload do not.
       if (document.hidden) {
-        checkpointActiveTime(puzzle.id, activeSecondsRef.current);
+        checkpointActiveTime(storageId, activeSecondsRef.current);
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -283,7 +310,7 @@ export function useGame(
         ticksSinceCheckpoint += 1;
         if (ticksSinceCheckpoint >= CHECKPOINT_INTERVAL_SECONDS) {
           ticksSinceCheckpoint = 0;
-          checkpointActiveTime(puzzle.id, activeSecondsRef.current);
+          checkpointActiveTime(storageId, activeSecondsRef.current);
         }
       }
     }, 1000);
@@ -296,9 +323,9 @@ export function useGame(
       // away) that never fires visibilitychange, and so a live completion
       // (isComplete just flipped true, tearing this effect down) leaves the
       // exact final total behind too.
-      checkpointActiveTime(puzzle.id, activeSecondsRef.current);
+      checkpointActiveTime(storageId, activeSecondsRef.current);
     };
-  }, [state.isComplete, puzzle.id]);
+  }, [state.isComplete, storageId]);
 
   // --- Durable session + live gameplay events ---
   // The session this attempt writes to. Resumed from the local progress blob
@@ -308,7 +335,8 @@ export function useGame(
   const { sessionIdRef, recordGuess, recordHint } = useGameSession(
     puzzle.id,
     entryContext,
-    puzzle.versionId ?? null
+    puzzle.versionId ?? null,
+    { mode, storageKey: storageId }
   );
 
   /**
@@ -473,7 +501,7 @@ export function useGame(
 
   useEffect(() => {
     if (state.solvedGroups.length > 0 || state.mistakes > 0 || state.guessHistory.length > 0) {
-      saveProgress(puzzle.id, {
+      saveProgress(storageId, {
         solvedGroups: state.solvedGroups,
         mistakes: state.mistakes,
         guessHistory: state.guessHistory,
@@ -491,7 +519,7 @@ export function useGame(
         puzzleSnapshot,
       });
     }
-  }, [state, shuffledWords, rainbowWords, tileColors, puzzle.id, effectiveSmallHintUsed, effectiveFullHintUsed]);
+  }, [state, shuffledWords, rainbowWords, tileColors, storageId, effectiveSmallHintUsed, effectiveFullHintUsed]);
 
   // Skip the very first run (mount) — otherwise merely opening a puzzle
   // would immediately persist a progress row (tileColors' own useState
@@ -506,8 +534,8 @@ export function useGame(
       tileColorsMountedRef.current = true;
       return;
     }
-    const existing = loadProgress(puzzle.id);
-    saveProgress(puzzle.id, {
+    const existing = loadProgress(storageId);
+    saveProgress(storageId, {
       solvedGroups: state.solvedGroups,
       mistakes: state.mistakes,
       guessHistory: state.guessHistory,
@@ -579,6 +607,26 @@ export function useGame(
       "skipStreak" | "sessionId" | "entryContext"
     >
   ) => {
+    if (mode === "beta") {
+      // A completely separate write path — see lib/betaPlaytest.ts. Never
+      // touches finalize_game_session, so nothing here can ever create an
+      // official Played, streak, or aggregate for a Beta puzzle.
+      await finalizeBetaPlaytest({
+        puzzleId: puzzle.id,
+        puzzleVersionId: puzzle.versionId ?? null,
+        playtestId: sessionIdRef.current,
+        won,
+        mistakes,
+        hintsUsed: statsParams.hintsUsed ?? false,
+      });
+      // Never "official" — used by GameBoard only to decide whether a
+      // replay's bonus Rainbow find is safe to persist, and beta bonus
+      // writes are skipped outright regardless (see GameBoard's betaMode
+      // guard on canPersist).
+      isOfficialAttemptRef.current = false;
+      return;
+    }
+
     // The database decides whether this completion is the official one, and
     // says so in its return value. The client no longer asserts it: a rule
     // enforced by whatever the client sends is not enforced, and computing it
@@ -596,7 +644,7 @@ export function useGame(
       skipStreak: isArchive,
     });
     isOfficialAttemptRef.current = isOfficial;
-  }, [isArchive, sessionIdRef, entryContext, puzzle.versionId]);
+  }, [isArchive, sessionIdRef, entryContext, puzzle.versionId, puzzle.id, mode]);
 
   const setTileColor = useCallback((word: string, color: string | null) => {
     setTileColors((prev) => ({ ...prev, [word]: color }));
@@ -969,7 +1017,7 @@ export function useGame(
           void commitOfficialResult(true, state.mistakes, winStatsParams);
 
           const allGroupIndices = puzzle.groups.map((_, i) => i);
-          saveProgress(puzzle.id, {
+          saveProgress(storageId, {
             solvedGroups: newSolved,
             finalSolvedGroups: allGroupIndices,
             mistakes: state.mistakes,
@@ -1059,7 +1107,7 @@ export function useGame(
               setState((s) => ({ ...s, solvedGroups: [...s.solvedGroups, groupIdx] }));
 
               if (i === unsolvedIndices.length - 1) {
-                saveProgress(puzzle.id, {
+                saveProgress(storageId, {
                   solvedGroups: finalSolvedGroups,
                   finalSolvedGroups,
                   mistakes: newMistakes,

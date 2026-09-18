@@ -171,6 +171,10 @@ export class FakeSupabase {
     account_onboarding: [],
     /** Site-wide play counters — the "100 stays 100" invariant lives here. */
     puzzle_aggregates: [],
+    /** Beta-only playtest summaries — never game_sessions. See 20260918020000. */
+    beta_playtests: [],
+    /** Beta-only feedback forms. */
+    beta_feedback: [],
   };
 
   /** Every write, in order — lets tests assert on write VOLUME, not just state. */
@@ -200,6 +204,13 @@ export class FakeSupabase {
     "user_streaks",
     "device_identities",
     "account_onboarding",
+    // Admin-only direct SELECT (see the 20260918020000 migration's RLS
+    // policies) — no policy at all for anon/authenticated non-admin, which
+    // the generic fallback below happens to model correctly: neither table
+    // has a game_session_id to match against ownSessionIds, so a non-admin
+    // caller always gets [] regardless of identity.
+    "beta_playtests",
+    "beta_feedback",
   ];
 
   /** True when the caller is an admin, which unlocks the admin SELECT policies. */
@@ -529,11 +540,20 @@ export class FakeSupabase {
           date: metadata.date,
           title: metadata.title ?? null,
           is_published: metadata.is_published === true,
+          is_beta: metadata.is_beta === true,
           designer_name: rawDesignerName || "Sam West",
           emoji_puzzle_icon: metadata.emoji_puzzle_icon ?? null,
           is_free_puzzle: metadata.is_free_puzzle === true,
           free_puzzle_order: metadata.free_puzzle_order ?? null,
         };
+
+        // Mirrors the puzzles_not_beta_and_published CHECK constraint.
+        if (metadataColumns.is_published && metadataColumns.is_beta) {
+          return {
+            data: null,
+            error: { code: "23514", message: "new row for relation \"puzzles\" violates check constraint \"puzzles_not_beta_and_published\"" },
+          };
+        }
 
         let pid = (args._puzzle_id as string | null) ?? null;
         let puzzleRow: FakeRow;
@@ -743,6 +763,108 @@ export class FakeSupabase {
           (r) => r.user_id === null && completed(r) && r.device_id === deviceId
         ).length;
         return { data: n, error: null };
+      }
+      // ── Beta playtesting RPCs (20260918020000) ──
+      // Deliberately separate from every official gameplay case above: none
+      // of these touch game_sessions/guess_events/hint_events/game_results/
+      // user_streaks/puzzle_aggregates, which is the whole point being
+      // proven by the "no official writes" test cases.
+      case "start_beta_playtest": {
+        if (!deviceProven) return { data: null, error: null };
+        const puzzle = this.tables.puzzles.find((p) => p.id === args._puzzle_id);
+        if (!puzzle || puzzle.is_beta !== true) return { data: null, error: null };
+        const version = this.tables.puzzle_versions.find(
+          (v) => v.id === args._puzzle_version_id && v.puzzle_id === args._puzzle_id
+        );
+        if (!version) return { data: null, error: null };
+        const row = {
+          id: this._newId(),
+          puzzle_id: args._puzzle_id,
+          puzzle_version_id: args._puzzle_version_id,
+          device_id: args._device_id,
+          status: "in_progress",
+          won: null,
+          mistakes: 0,
+          hints_used: false,
+          is_reset: false,
+          started_at: new Date().toISOString(),
+          completed_at: null,
+          updated_at: new Date().toISOString(),
+        };
+        this.tables.beta_playtests.push(row);
+        this._log("beta_playtests", "insert");
+        return { data: row.id, error: null };
+      }
+      case "complete_beta_playtest": {
+        if (!deviceProven) return { data: false, error: null };
+        const row = this.tables.beta_playtests.find(
+          (r) =>
+            r.id === args._playtest_id &&
+            r.device_id === args._device_id &&
+            r.status === "in_progress"
+        );
+        if (!row) return { data: false, error: null };
+        Object.assign(row, {
+          status: "completed",
+          won: args._won,
+          mistakes: args._mistakes ?? row.mistakes,
+          hints_used: args._hints_used ?? row.hints_used,
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+        this._log("beta_playtests", "update");
+        return { data: true, error: null };
+      }
+      case "reset_beta_playtest": {
+        if (!deviceProven) return { data: false, error: null };
+        const candidates = this.tables.beta_playtests
+          .filter((r) => r.puzzle_id === args._puzzle_id && r.device_id === args._device_id)
+          .sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)));
+        const row = candidates[0];
+        if (!row) return { data: false, error: null };
+        row.is_reset = true;
+        if (row.status === "in_progress") row.status = "abandoned";
+        row.completed_at = row.completed_at ?? new Date().toISOString();
+        row.updated_at = new Date().toISOString();
+        this._log("beta_playtests", "update");
+        return { data: true, error: null };
+      }
+      case "submit_beta_feedback": {
+        const puzzle = this.tables.puzzles.find((p) => p.id === args._puzzle_id);
+        if (!puzzle || puzzle.is_beta !== true) return { data: null, error: null };
+        const version = this.tables.puzzle_versions.find(
+          (v) => v.id === args._puzzle_version_id && v.puzzle_id === args._puzzle_id
+        );
+        if (!version) return { data: null, error: null };
+        const funRating = args._fun_rating as number;
+        const difficultyRating = args._difficulty_rating as number;
+        if (!Number.isInteger(funRating) || funRating < 1 || funRating > 5) {
+          return { data: null, error: { code: "22023", message: "fun rating must be between 1 and 5" } };
+        }
+        if (!Number.isInteger(difficultyRating) || difficultyRating < 1 || difficultyRating > 5) {
+          return { data: null, error: { code: "22023", message: "difficulty rating must be between 1 and 5" } };
+        }
+        let playtestId = (args._playtest_id as string | null) ?? null;
+        if (playtestId && !this.tables.beta_playtests.some((r) => r.id === playtestId && r.puzzle_id === args._puzzle_id)) {
+          playtestId = null;
+        }
+        const row = {
+          id: this._newId(),
+          puzzle_id: args._puzzle_id,
+          puzzle_version_id: args._puzzle_version_id,
+          playtest_id: playtestId,
+          tester_name: (args._tester_name as string | null) ?? null,
+          fun_rating: funRating,
+          difficulty_rating: difficultyRating,
+          rainbow_fairness_rating: (args._rainbow_fairness_rating as number | null) ?? null,
+          confusing_or_incorrect: (args._confusing_or_incorrect as string | null) ?? null,
+          additional_comments: (args._additional_comments as string | null) ?? null,
+          would_play_again: args._would_play_again === true,
+          created_at: new Date().toISOString(),
+        };
+        this.tables.beta_feedback.push(row);
+        this._log("beta_feedback", "insert");
+        return { data: row.id, error: null };
       }
       case "session_capability_ok": {
         return { data: this._capabilityOk(args._session_id as string, deviceId, deviceToken), error: null };

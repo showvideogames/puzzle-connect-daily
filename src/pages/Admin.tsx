@@ -11,6 +11,7 @@ import { Link } from "react-router-dom";
 import { ArchiveAccessManager } from "@/components/ArchiveAccessManager";
 import { CustomEmojiManager } from "@/components/admin/CustomEmojiManager";
 import { FeedbackList } from "@/components/admin/FeedbackList";
+import { BetaPlaytestPanel } from "@/components/admin/BetaPlaytestPanel";
 import { AdminLogin, AdminNoAccess } from "@/components/admin/AdminLogin";
 import { PuzzleListItem, type RatingSummary } from "@/components/admin/PuzzleListItem";
 import { useDraftPersistence, type GroupForm, type DraftData } from "@/hooks/useDraftPersistence";
@@ -108,11 +109,11 @@ function MiniCalendar({ puzzles, onDateClick }: MiniCalendarProps) {
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
 
-  // Build lookup: date string → "published" | "draft"
+  // Build lookup: date string → "published" | "beta" | "draft"
   const statusByDate = useMemo(() => {
-    const map: Record<string, "published" | "draft"> = {};
+    const map: Record<string, "published" | "beta" | "draft"> = {};
     for (const p of puzzles) {
-      map[p.date] = p.is_published ? "published" : "draft";
+      map[p.date] = p.is_published ? "published" : p.is_beta ? "beta" : "draft";
     }
     return map;
   }, [puzzles]);
@@ -173,6 +174,8 @@ function MiniCalendar({ puzzles, onDateClick }: MiniCalendarProps) {
                 fontWeight: 500,
                 background: status === "published"
                   ? "hsl(142 71% 45% / 0.2)"
+                  : status === "beta"
+                  ? "hsl(262 83% 58% / 0.2)"
                   : status === "draft"
                   ? "hsl(45 93% 47% / 0.25)"
                   : "transparent",
@@ -295,6 +298,12 @@ export default function Admin() {
     { ...emptyGroup(), difficulty: 4 },
   ]);
   const [isPublished, setIsPublished] = useState(false);
+  // One clear status selector: Draft / Beta / Published. isPublished and
+  // isBeta stay as two booleans (matching the DB's two columns and the
+  // mutual-exclusion CHECK constraint) rather than a single status field,
+  // but every place that sets one now sets both together — see
+  // applyStatus below — so the UI never produces the invalid combination.
+  const [isBeta, setIsBeta] = useState(false);
   const [saving, setSaving] = useState(false);
   const [wordOrder, setWordOrder] = useState<string[]>([]);
 
@@ -378,6 +387,7 @@ export default function Admin() {
     designerName,
     groups,
     isPublished,
+    isBeta,
     wordOrder,
     rainbowHerring,
     rainbowCategoryName,
@@ -459,6 +469,7 @@ export default function Admin() {
       setDesignerName(draft.designerName ?? "Sam West");
       setGroups(draft.groups);
       setIsPublished(draft.isPublished);
+      setIsBeta(draft.isBeta ?? false);
       setWordOrder(draft.wordOrder);
       setRainbowHerring(draft.rainbowHerring);
       setRainbowCategoryName(draft.rainbowCategoryName ?? "");
@@ -714,6 +725,7 @@ export default function Admin() {
           date: puzzleDate,
           title: puzzleTitle || null,
           is_published: isPublished,
+          is_beta: isBeta,
           // Blank/whitespace-only reverts to the official "Sam West"
           // fallback — admin_save_puzzle does the trim-and-default itself,
           // this just avoids sending an untrimmed value.
@@ -772,6 +784,19 @@ export default function Admin() {
     }
   }
 
+  /** Sets isPublished/isBeta together so the UI can never produce the one combination the DB rejects. */
+  type PuzzleStatus = "draft" | "beta" | "published";
+  function applyStatus(status: PuzzleStatus) {
+    const nextPublished = status === "published";
+    const nextBeta = status === "beta";
+    setIsPublished(nextPublished);
+    setIsBeta(nextBeta);
+    if (!editingId) {
+      saveDraft({ ...getCurrentDraft(), isPublished: nextPublished, isBeta: nextBeta });
+    }
+  }
+  const puzzleStatus: PuzzleStatus = isBeta ? "beta" : isPublished ? "published" : "draft";
+
   function resetForm() {
     setEditingId(null);
     setPuzzleDate("");
@@ -784,6 +809,7 @@ export default function Admin() {
       { ...emptyGroup(), difficulty: 4 },
     ]);
     setIsPublished(false);
+    setIsBeta(false);
     setWordOrder([]);
     setRainbowHerring([null, null, null, null]);
     setRainbowCategoryName("");
@@ -810,6 +836,7 @@ export default function Admin() {
     setPuzzleTitle(p.title || "");
     setDesignerName(p.designer_name || "Sam West");
     setIsPublished(p.is_published);
+    setIsBeta(p.is_beta ?? false);
     const sorted = [...(p.puzzle_groups || [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
     setGroups(
       sorted.map((g: any) => ({
@@ -866,7 +893,12 @@ export default function Admin() {
   }
 
   async function togglePublish(id: string, current: boolean) {
-    await supabase.from("puzzles").update({ is_published: !current }).eq("id", id);
+    // Always clears is_beta alongside is_published: this is the ONLY quick
+    // action on the list row (no 3-way selector there — see the editor form
+    // for that), and Beta -> Published is a valid transition through it, so
+    // it must never try to set both flags true at once and trip the
+    // puzzles_not_beta_and_published check constraint.
+    await supabase.from("puzzles").update({ is_published: !current, is_beta: false }).eq("id", id);
     loadPuzzles();
   }
 
@@ -1224,21 +1256,29 @@ export default function Admin() {
             </div>
           )}
 
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium mr-1">Status</span>
+            <div className="inline-flex rounded-lg border border-border p-0.5 bg-secondary/50">
+              {(["draft", "beta", "published"] as const).map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => applyStatus(status)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold capitalize transition-colors
+                    ${puzzleStatus === status ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+            {puzzleStatus === "beta" && (
+              <span className="text-xs text-muted-foreground">
+                Unlisted — playable at /beta, never on the Daily homepage or Archive.
+              </span>
+            )}
+          </div>
+
           <div className="flex items-center gap-6 flex-wrap">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isPublished}
-                onChange={(e) => {
-                  setIsPublished(e.target.checked);
-                  if (!editingId) {
-                    saveDraft({ ...getCurrentDraft(), isPublished: e.target.checked });
-                  }
-                }}
-                className="rounded border-border"
-              />
-              <span className="text-sm font-medium">Publish immediately</span>
-            </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -1350,6 +1390,8 @@ export default function Admin() {
         </section>
 
         <FeedbackList />
+
+        <BetaPlaytestPanel puzzles={puzzles} />
 
         {/* Global Stats */}
         <section className="space-y-4">
