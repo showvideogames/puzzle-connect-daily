@@ -153,8 +153,13 @@ comment on function public.validate_puzzle_content(jsonb) is
 
 -- ===========================================================================
 -- admin_save_puzzle -- write alphabetize_completed alongside the other
--- content columns, on both insert and update. Same function as
--- 20260917120000, re-created with this one additional column.
+-- content columns, on both insert and update.
+--
+-- Based on the LATEST production definition (20260918020000_beta_playtesting
+-- .sql's version, which added is_beta on top of 20260918010000's
+-- designer_name), not the older 20260917120000 base — re-created here with
+-- only alphabetize_completed added, so Draft/Beta/Published handling and the
+-- designer_name default/trim behavior are carried forward unchanged.
 -- ===========================================================================
 create or replace function public.admin_save_puzzle(
   _puzzle_id uuid,
@@ -168,14 +173,15 @@ security definer
 set search_path = public
 as $$
 declare
-  _uid       uuid := auth.uid();
-  _canonical jsonb;
-  _current   jsonb;
-  _next      integer;
-  _vid       uuid;
-  _created   boolean := false;
-  _pid       uuid := _puzzle_id;
-  _date      date;
+  _uid           uuid := auth.uid();
+  _canonical     jsonb;
+  _current       jsonb;
+  _next          integer;
+  _vid           uuid;
+  _created       boolean := false;
+  _pid           uuid := _puzzle_id;
+  _date          date;
+  _designer_name text;
 begin
   if _uid is null or not public.has_role(_uid, 'admin') then
     raise exception 'admin role required to save puzzles' using errcode = 'insufficient_privilege';
@@ -188,9 +194,11 @@ begin
     raise exception 'a puzzle needs a date' using errcode = 'invalid_parameter_value';
   end if;
 
+  _designer_name := coalesce(nullif(btrim(coalesce(_metadata ->> 'designer_name', '')), ''), 'Sam West');
+
   if _pid is null then
     insert into public.puzzles (
-      date, title, is_published, created_by,
+      date, title, is_published, is_beta, created_by, designer_name,
       word_order, rainbow_herring, rainbow_category_name, rainbow_hint_word,
       theme, is_emoji_puzzle, emoji_puzzle_icon, is_free_puzzle, free_puzzle_order,
       alphabetize_completed
@@ -198,7 +206,9 @@ begin
       _date,
       nullif(btrim(coalesce(_metadata ->> 'title', '')), ''),
       coalesce((_metadata ->> 'is_published')::boolean, false),
+      coalesce((_metadata ->> 'is_beta')::boolean, false),
       _uid,
+      _designer_name,
       case when _canonical -> 'word_order' = 'null'::jsonb then null
            else array(select jsonb_array_elements_text(_canonical -> 'word_order')) end,
       case when _canonical -> 'rainbow_herring' = 'null'::jsonb then null
@@ -223,6 +233,8 @@ begin
        set date                  = _date,
            title                 = nullif(btrim(coalesce(_metadata ->> 'title', '')), ''),
            is_published          = coalesce((_metadata ->> 'is_published')::boolean, false),
+           is_beta               = coalesce((_metadata ->> 'is_beta')::boolean, false),
+           designer_name         = _designer_name,
            word_order            = case when _canonical -> 'word_order' = 'null'::jsonb then null
                                         else array(select jsonb_array_elements_text(_canonical -> 'word_order')) end,
            rainbow_herring       = case when _canonical -> 'rainbow_herring' = 'null'::jsonb then null
@@ -287,7 +299,7 @@ revoke all on function public.admin_save_puzzle(uuid, jsonb, jsonb) from public;
 grant execute on function public.admin_save_puzzle(uuid, jsonb, jsonb) to authenticated, service_role;
 
 comment on function public.admin_save_puzzle(uuid, jsonb, jsonb) is
-  'Atomically creates or updates a puzzle. Creates and promotes a new immutable version only when canonical gameplay content actually changed; metadata-only and no-op saves create none. Admin role required, checked inside the function.';
+  'Atomically creates or updates a puzzle, including its Draft/Beta/Published status. Creates and promotes a new immutable version only when canonical gameplay content actually changed; metadata-only saves (status, designer_name) and no-op saves create none. Admin role required, checked inside the function.';
 
 
 -- ===========================================================================
