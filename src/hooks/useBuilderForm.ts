@@ -99,9 +99,16 @@ function buildStateFromLoad(input: LoadBuilderInput): BuilderState {
     }
   }
 
-  const wordOrderIds = (input.wordOrder ?? [])
+  let wordOrderIds = (input.wordOrder ?? [])
     .map((w) => idByNormalizedText.get(normalizeWord(w)))
     .filter((id): id is string => !!id);
+  // A saved order should name all 16 words exactly once. Anything short of
+  // that — a legacy puzzle saved before word_order existed, or a corrupt/
+  // partial list — falls back to a fresh random arrangement of this
+  // puzzle's real pool ids rather than loading a half-empty board.
+  if (wordOrderIds.length !== 16 || new Set(wordOrderIds).size !== 16) {
+    wordOrderIds = shuffle(groups.flatMap((g) => g.answers.map((a) => a.id)));
+  }
 
   // Rainbow: previously assumed rainbow_herring[i] always belongs to
   // groups[i]. That assumption breaks the moment a custom Rainbow display
@@ -134,27 +141,39 @@ function buildStateFromLoad(input: LoadBuilderInput): BuilderState {
 }
 
 function blankState(): BuilderState {
+  const groups = defaultGroups();
   return {
-    groups: defaultGroups(),
+    groups,
     rainbowHerringIds: [null, null, null, null],
     rainbowWordOrderIds: [],
     rainbowCategoryName: "",
     rainbowHintWord: "",
     theme: "",
     alphabetizeCompleted: true,
-    wordOrderIds: [],
+    // All 16 board positions already exist the instant a blank form is
+    // created (emptyGroup gives each of the 4 categories 4 real, stable
+    // ids up front, even blank) — so the random opening arrangement is
+    // generated right here, immediately, rather than waiting for anything
+    // to be typed. See the (removed) completeness-gated effect this
+    // replaces, and DraggableTileGrid for how a still-blank id renders.
+    wordOrderIds: shuffle(groups.flatMap((g) => g.answers.map((a) => a.id))),
   };
 }
 
 export function useBuilderForm() {
-  const [groups, setGroups] = useState<BuilderGroupForm[]>(defaultGroups);
-  const [rainbowHerringIds, setRainbowHerringIds] = useState<(string | null)[]>([null, null, null, null]);
-  const [rainbowWordOrderIds, setRainbowWordOrderIds] = useState<string[]>([]);
-  const [rainbowCategoryName, setRainbowCategoryName] = useState("");
-  const [rainbowHintWord, setRainbowHintWord] = useState("");
-  const [theme, setTheme] = useState("");
-  const [alphabetizeCompleted, setAlphabetizeCompleted] = useState(true);
-  const [wordOrderIds, setWordOrderIds] = useState<string[]>([]);
+  // Computed once, lazily, and shared across every field's initial value —
+  // groups and wordOrderIds MUST come from the same blankState() call (not
+  // two independent ones), or wordOrderIds would reference ids that don't
+  // match the groups actually created for this mount.
+  const [initial] = useState(blankState);
+  const [groups, setGroups] = useState<BuilderGroupForm[]>(initial.groups);
+  const [rainbowHerringIds, setRainbowHerringIds] = useState<(string | null)[]>(initial.rainbowHerringIds);
+  const [rainbowWordOrderIds, setRainbowWordOrderIds] = useState<string[]>(initial.rainbowWordOrderIds);
+  const [rainbowCategoryName, setRainbowCategoryName] = useState(initial.rainbowCategoryName);
+  const [rainbowHintWord, setRainbowHintWord] = useState(initial.rainbowHintWord);
+  const [theme, setTheme] = useState(initial.theme);
+  const [alphabetizeCompleted, setAlphabetizeCompleted] = useState(initial.alphabetizeCompleted);
+  const [wordOrderIds, setWordOrderIds] = useState<string[]>(initial.wordOrderIds);
 
   const load = useCallback((input: LoadBuilderInput) => {
     const s = buildStateFromLoad(input);
@@ -250,34 +269,16 @@ export function useBuilderForm() {
     return map;
   }, [allSlots]);
 
-  // A stable key that changes only when the SET of populated slot ids
-  // changes — not on ordinary text edits, which keep the same ids. Drives
-  // the "randomize once, then stay stable" effects below.
-  const idsKey = useMemo(
-    () => [...nonBlankSlots.map((s) => s.id)].sort().join("|"),
-    [nonBlankSlots]
-  );
-
-  // Initial randomization: generate once when the full 16-answer set first
-  // becomes available, then hold stable through rerenders and ordinary
-  // edits (idsKey does not change for those). Reconciles rather than
-  // replaces when the id set genuinely changes (an answer was added or
-  // removed), keeping every still-present id's position.
-  useEffect(() => {
-    if (!hasAll16) return;
-    setWordOrderIds((prev) => {
-      const currentIds = nonBlankSlots.map((s) => s.id);
-      const currentSet = new Set(currentIds);
-      const alreadyValid =
-        prev.length === 16 && prev.every((id) => currentSet.has(id));
-      if (alreadyValid) return prev;
-      if (prev.length === 0) return shuffle(currentIds);
-      const kept = prev.filter((id) => currentSet.has(id));
-      const missing = currentIds.filter((id) => !kept.includes(id));
-      return [...kept, ...missing];
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idsKey, hasAll16]);
+  // wordOrderIds needs NO effect to (re)generate it. blankState()/load()
+  // already set it, eagerly, to a permutation of every id this puzzle's 4
+  // categories will ever use — including still-blank ones (each category's
+  // 4 pool ids are created up front by emptyGroup/buildStateFromLoad and
+  // never disappear; a deleted-without-replacement answer merely leaves its
+  // id in g.tombstones, still part of the same 16, resolving to a blank
+  // tile via slotById until something inherits it — see reconcileCategory).
+  // The only things that ever change wordOrderIds after that are a manual
+  // drag reorder, Randomize, or loading a different puzzle — never an
+  // ordinary edit.
 
   // Rainbow selections: drop a selection only once its id is gone for good
   // — not in the group's current answers AND not held as a tombstone. A
@@ -322,8 +323,11 @@ export function useBuilderForm() {
   }, [rainbowHerringIds.join("|"), rainbowComplete]);
 
   const randomizeWordOrder = useCallback(() => {
-    setWordOrderIds((prev) => shuffle(prev.length ? prev : nonBlankSlots.map((s) => s.id)));
-  }, [nonBlankSlots]);
+    // wordOrderIds already covers all 16 ids from the moment this form
+    // existed (see blankState/buildStateFromLoad) — reshuffling it in place
+    // is always correct, populated or not.
+    setWordOrderIds((prev) => shuffle(prev));
+  }, []);
 
   /** Resolves an ordered id list to display/save text via slotById. */
   const textsFor = useCallback(
