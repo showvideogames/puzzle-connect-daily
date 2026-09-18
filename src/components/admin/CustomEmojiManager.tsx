@@ -1,20 +1,41 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Copy, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { customEmojiUrl, customEmojiReference } from "@/lib/customEmoji";
+import { customEmojiUrl, customEmojiReference, emojiVersionToken } from "@/lib/customEmoji";
+import {
+  optimizeEmojiImage,
+  ImageOptimizeError,
+  MAX_EMOJI_DIMENSION,
+  TARGET_EMOJI_BYTES,
+} from "@/lib/imageOptimize";
 
 const BUCKET = "custom-emoji";
 const NAME_REGEX = /^[a-z0-9_-]+$/;
 
 interface StoredFile {
   name: string;
+  /**
+   * Storage's updated_at for this object — the basis for its stable version
+   * token. Held in state so the token is fixed between explicit reloads
+   * rather than recomputed on every render.
+   */
+  version: string | null;
 }
 
-export function CustomEmojiManager() {
+/**
+ * Memoised so the Admin page's own state — every keystroke in the puzzle
+ * editor — cannot re-render the emoji grid. This takes no props, so with
+ * memo() a parent render is a no-op here.
+ *
+ * Memoisation is the second line of defence, not the fix: the URLs handed to
+ * <img> are now stable on their own (see emojiVersionToken), so even a forced
+ * re-render re-requests nothing.
+ */
+export const CustomEmojiManager = memo(function CustomEmojiManager() {
   const [files, setFiles] = useState<StoredFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -31,7 +52,16 @@ export function CustomEmojiManager() {
       toast.error(`Failed to load emoji list: ${error.message}`);
       setFiles([]);
     } else {
-      setFiles((data ?? []).filter((f) => f.name.toLowerCase().endsWith(".png")));
+      setFiles(
+        (data ?? [])
+          .filter((f) => f.name.toLowerCase().endsWith(".png"))
+          .map((f) => ({
+            name: f.name,
+            // updated_at is the object's own mtime; a replaced image gets a
+            // new one, an untouched image keeps the same one forever.
+            version: (f as { updated_at?: string | null }).updated_at ?? null,
+          })),
+      );
     }
     setLoading(false);
   }, []);
@@ -104,9 +134,26 @@ export function CustomEmojiManager() {
     }
 
     setUploading(true);
+
+    // Downscale BEFORE uploading. If this throws, the upload does not happen
+    // at all — falling back to the original is how ~1 MB board tiles got in
+    // here in the first place.
+    let optimized;
+    try {
+      optimized = await optimizeEmojiImage(selectedFile);
+    } catch (e) {
+      setUploading(false);
+      toast.error(
+        e instanceof ImageOptimizeError
+          ? e.message
+          : "Could not process that image. Try a different PNG.",
+      );
+      return;
+    }
+
     const { error } = await supabase.storage.from(BUCKET).upload(
       `${cleanName}.png`,
-      selectedFile,
+      optimized.blob,
       { upsert: true, contentType: "image/png" },
     );
     setUploading(false);
@@ -115,7 +162,18 @@ export function CustomEmojiManager() {
       toast.error(`Upload failed: ${error.message}`);
       return;
     }
-    toast.success(`Uploaded ${cleanName}.png — reference as img:${cleanName}`);
+    const savedKb = Math.max(0, optimized.originalBytes - optimized.bytes) / 1024;
+    toast.success(
+      `Uploaded ${cleanName}.png (${optimized.width}×${optimized.height}, ` +
+        `${(optimized.bytes / 1024).toFixed(0)} KB` +
+        `${savedKb >= 1 ? `, saved ${savedKb.toFixed(0)} KB` : ""}) — reference as img:${cleanName}`,
+    );
+    if (optimized.bytes > TARGET_EMOJI_BYTES) {
+      toast.warning(
+        `That one is ${(optimized.bytes / 1024).toFixed(0)} KB — above the ` +
+          `${TARGET_EMOJI_BYTES / 1024} KB target. Simpler artwork would load faster.`,
+      );
+    }
     setSelectedFile(null);
     setNameInput("");
     // Reset the file input
@@ -130,6 +188,8 @@ export function CustomEmojiManager() {
       <p className="text-sm text-muted-foreground">
         Upload PNGs to use as image tiles. Reference them in puzzles with{" "}
         <code className="text-xs bg-secondary px-1 py-0.5 rounded">img:name</code>.
+        Uploads are automatically resized to fit {MAX_EMOJI_DIMENSION}×{MAX_EMOJI_DIMENSION},
+        keeping transparency — pick whatever source file you have and it will be shrunk for you.
       </p>
 
       {/* Upload form */}
@@ -170,7 +230,8 @@ export function CustomEmojiManager() {
             return (
               <div key={f.name} className="border border-border rounded-lg p-3 bg-card flex flex-col items-center gap-2">
                 <img
-                  src={customEmojiUrl(name, true)}
+                  src={customEmojiUrl(name, emojiVersionToken(f.version))}
+                  loading="lazy"
                   alt={name}
                   className="h-16 w-16 object-contain"
                   draggable={false}
@@ -204,4 +265,4 @@ export function CustomEmojiManager() {
       )}
     </section>
   );
-}
+});
