@@ -11,6 +11,7 @@ import {
   type GuessEventInput,
   type HintEventInput,
 } from "@/lib/gameSession";
+import { startBetaPlaytest } from "@/lib/betaPlaytest";
 
 /**
  * Owns the durable server session for one puzzle attempt: when it is created,
@@ -23,6 +24,24 @@ import {
  * first meaningful gameplay action, which is what keeps a player who opens a
  * puzzle, looks at it and leaves from creating any gameplay session at all.
  */
+export interface UseGameSessionOptions {
+  /**
+   * "official" (default) writes to the real durable-session system exactly
+   * as before. "beta" writes to the separate, lightweight beta_playtests
+   * table instead (see lib/betaPlaytest.ts) — no per-guess/hint event log,
+   * no touch heartbeat, and never a row in game_sessions.
+   */
+  mode?: "official" | "beta";
+  /**
+   * The localStorage progress key to resume/persist the session id under.
+   * Defaults to puzzleId. Beta play uses a DIFFERENT key (see useGame's
+   * storageId) so a puzzle's progress can never collide with its own
+   * official progress blob after it is promoted to Published and keeps the
+   * same puzzle id.
+   */
+  storageKey?: string;
+}
+
 export function useGameSession(
   puzzleId: string,
   entryContext: EntryContext,
@@ -36,17 +55,21 @@ export function useGameSession(
    * action, this is still the older id — which is exactly right, because the
    * older board is what their first guess will be judged against.
    */
-  puzzleVersionId: string | null = null
+  puzzleVersionId: string | null = null,
+  options: UseGameSessionOptions = {}
 ) {
+  const { mode = "official", storageKey = puzzleId } = options;
+
   /**
-   * The durable session id for this attempt.
+   * The durable session id for this attempt (an official game_sessions.id,
+   * or in beta mode a beta_playtests.id).
    *
    * Seeded synchronously from the saved progress blob so that a refresh, an
    * SPA navigation away and back, or a browser close and reopen all resume
    * the SAME server session and merely append new events to it. A fresh mount
    * therefore never creates a second session for a game already underway.
    */
-  const sessionIdRef = useRef<string | null>(loadProgress(puzzleId)?.gameSessionId ?? null);
+  const sessionIdRef = useRef<string | null>(loadProgress(storageKey)?.gameSessionId ?? null);
 
   /**
    * In-flight creation, so that two meaningful actions landing at nearly the
@@ -66,9 +89,9 @@ export function useGameSession(
   const persistSessionId = useCallback(
     (id: string | null) => {
       sessionIdRef.current = id;
-      checkpointGameSessionId(puzzleId, id);
+      checkpointGameSessionId(storageKey, id);
     },
-    [puzzleId]
+    [storageKey]
   );
 
   const ensureSession = useCallback(
@@ -85,12 +108,15 @@ export function useGameSession(
       if (creatingRef.current) return creatingRef.current;
 
       const pending = (async () => {
-        const id = await createGameSession({
-          puzzleId,
-          puzzleVersionId,
-          entryContext,
-          snapshot,
-        });
+        const id =
+          mode === "beta"
+            ? await startBetaPlaytest(puzzleId, puzzleVersionId)
+            : await createGameSession({
+                puzzleId,
+                puzzleVersionId,
+                entryContext,
+                snapshot,
+              });
         if (id) persistSessionId(id);
         else unavailableRef.current = true;
         return id;
@@ -103,7 +129,7 @@ export function useGameSession(
         creatingRef.current = null;
       }
     },
-    [puzzleId, puzzleVersionId, entryContext, persistSessionId]
+    [puzzleId, puzzleVersionId, entryContext, persistSessionId, mode]
   );
 
   /**
@@ -151,6 +177,14 @@ export function useGameSession(
    */
   const recordGuess = useCallback(
     async (guess: GuessEventInput, activity: SessionActivity) => {
+      // Beta mode has no per-guess event log and no heartbeat — this is
+      // purely the "first meaningful action starts the playtest" trigger.
+      // See lib/betaPlaytest.ts for what IS recorded (the summary, at
+      // completion).
+      if (mode === "beta") {
+        await ensureSession(guess.snapshot);
+        return;
+      }
       const sessionId = await withSession(guess.snapshot, (id) => recordGuessEvent(id, guess));
       // `activity`, not `guess.snapshot`: the event records the state the
       // guess was made AGAINST, while the session must carry the state that
@@ -158,7 +192,7 @@ export function useGameSession(
       // behind the real count after every wrong guess.
       if (sessionId) await touchSession(sessionId, activity);
     },
-    [withSession]
+    [withSession, mode, ensureSession]
   );
 
   /**
@@ -169,12 +203,16 @@ export function useGameSession(
    */
   const recordHint = useCallback(
     async (hint: HintEventInput) => {
+      if (mode === "beta") {
+        await ensureSession(hint.snapshot);
+        return;
+      }
       const sessionId = await withSession(hint.snapshot, (id) => recordHintEvent(id, hint));
       // A hint reveal changes neither the mistake count nor the solved count,
       // so the state it was revealed against IS the state that now holds.
       if (sessionId) await touchSession(sessionId, hint.snapshot);
     },
-    [withSession]
+    [withSession, mode, ensureSession]
   );
 
   return { sessionIdRef, ensureSession, recordGuess, recordHint };

@@ -179,8 +179,8 @@ export function applyPinnedContent(current: Puzzle, pinned: PinnedPuzzleContent)
  * the product rule is that a finished player revisiting the Archive sees the
  * newest corrected solution.
  */
-export function resolvePlayablePuzzle(current: Puzzle): Puzzle {
-  const saved = loadProgress(current.id);
+export function resolvePlayablePuzzle(current: Puzzle, storageKey: string = current.id): Puzzle {
+  const saved = loadProgress(storageKey);
   if (!saved) return current;
   // Finished games show today's answers, not the ones they were played
   // against. See loadPlayedDifficulties for the one thing that still does.

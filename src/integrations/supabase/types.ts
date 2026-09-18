@@ -84,6 +84,133 @@ export type Database = {
         }
         Relationships: []
       }
+      beta_feedback: {
+        Row: {
+          additional_comments: string | null
+          confusing_or_incorrect: string | null
+          created_at: string
+          difficulty_rating: number
+          fun_rating: number
+          id: string
+          playtest_id: string | null
+          puzzle_id: string
+          puzzle_version_id: string
+          rainbow_fairness_rating: number | null
+          tester_name: string | null
+          would_play_again: boolean
+        }
+        Insert: {
+          additional_comments?: string | null
+          confusing_or_incorrect?: string | null
+          created_at?: string
+          difficulty_rating: number
+          fun_rating: number
+          id?: string
+          playtest_id?: string | null
+          puzzle_id: string
+          puzzle_version_id: string
+          rainbow_fairness_rating?: number | null
+          tester_name?: string | null
+          would_play_again: boolean
+        }
+        Update: {
+          additional_comments?: string | null
+          confusing_or_incorrect?: string | null
+          created_at?: string
+          difficulty_rating?: number
+          fun_rating?: number
+          id?: string
+          playtest_id?: string | null
+          puzzle_id?: string
+          puzzle_version_id?: string
+          rainbow_fairness_rating?: number | null
+          tester_name?: string | null
+          would_play_again?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "beta_feedback_playtest_id_fkey"
+            columns: ["playtest_id"]
+            isOneToOne: false
+            referencedRelation: "beta_playtests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "beta_feedback_puzzle_id_fkey"
+            columns: ["puzzle_id"]
+            isOneToOne: false
+            referencedRelation: "puzzles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "beta_feedback_puzzle_version_id_fkey"
+            columns: ["puzzle_version_id"]
+            isOneToOne: false
+            referencedRelation: "puzzle_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      beta_playtests: {
+        Row: {
+          completed_at: string | null
+          device_id: string
+          hints_used: boolean
+          id: string
+          is_reset: boolean
+          mistakes: number
+          puzzle_id: string
+          puzzle_version_id: string
+          started_at: string
+          status: string
+          updated_at: string
+          won: boolean | null
+        }
+        Insert: {
+          completed_at?: string | null
+          device_id: string
+          hints_used?: boolean
+          id?: string
+          is_reset?: boolean
+          mistakes?: number
+          puzzle_id: string
+          puzzle_version_id: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          won?: boolean | null
+        }
+        Update: {
+          completed_at?: string | null
+          device_id?: string
+          hints_used?: boolean
+          id?: string
+          is_reset?: boolean
+          mistakes?: number
+          puzzle_id?: string
+          puzzle_version_id?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          won?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "beta_playtests_puzzle_id_fkey"
+            columns: ["puzzle_id"]
+            isOneToOne: false
+            referencedRelation: "puzzles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "beta_playtests_puzzle_version_id_fkey"
+            columns: ["puzzle_version_id"]
+            isOneToOne: false
+            referencedRelation: "puzzle_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cv_puzzles: {
         Row: {
           author: string | null
@@ -533,6 +660,7 @@ export type Database = {
           emoji_puzzle_icon: string | null
           free_puzzle_order: number | null
           id: string
+          is_beta: boolean
           is_emoji_puzzle: boolean | null
           is_free_puzzle: boolean | null
           is_published: boolean
@@ -553,6 +681,7 @@ export type Database = {
           emoji_puzzle_icon?: string | null
           free_puzzle_order?: number | null
           id?: string
+          is_beta?: boolean
           is_emoji_puzzle?: boolean | null
           is_free_puzzle?: boolean | null
           is_published?: boolean
@@ -573,6 +702,7 @@ export type Database = {
           emoji_puzzle_icon?: string | null
           free_puzzle_order?: number | null
           id?: string
+          is_beta?: boolean
           is_emoji_puzzle?: boolean | null
           is_free_puzzle?: boolean | null
           is_published?: boolean
@@ -848,6 +978,17 @@ export type Database = {
         Args: { _content: Json; _metadata: Json; _puzzle_id: string }
         Returns: Json
       }
+      complete_beta_playtest: {
+        Args: {
+          _device_id: string
+          _device_token: string
+          _hints_used: boolean
+          _mistakes: number
+          _playtest_id: string
+          _won: boolean
+        }
+        Returns: boolean
+      }
       count_own_anonymous_sessions: {
         Args: { _device_id: string; _device_token: string }
         Returns: number
@@ -1009,6 +1150,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      reset_beta_playtest: {
+        Args: { _device_id: string; _device_token: string; _puzzle_id: string }
+        Returns: boolean
+      }
       resolve_onboarding: {
         Args: { _device_id?: string; _device_token?: string }
         Returns: {
@@ -1022,6 +1167,30 @@ export type Database = {
       session_capability_ok: {
         Args: { _device_id: string; _device_token: string; _session_id: string }
         Returns: boolean
+      }
+      start_beta_playtest: {
+        Args: {
+          _device_id: string
+          _device_token: string
+          _puzzle_id: string
+          _puzzle_version_id: string
+        }
+        Returns: string
+      }
+      submit_beta_feedback: {
+        Args: {
+          _additional_comments: string
+          _confusing_or_incorrect: string
+          _difficulty_rating: number
+          _fun_rating: number
+          _playtest_id: string
+          _puzzle_id: string
+          _puzzle_version_id: string
+          _rainbow_fairness_rating: number
+          _tester_name: string
+          _would_play_again: boolean
+        }
+        Returns: string
       }
       touch_game_session: {
         Args: {

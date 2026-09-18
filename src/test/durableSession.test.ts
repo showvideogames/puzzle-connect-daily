@@ -181,9 +181,14 @@ beforeEach(async () => {
   sessionStorage.clear();
   localStorage.setItem("rc-device-id", identity.device_id);
   localStorage.setItem("rc-device-token", identity.device_token);
+  // is_published: true — required as of 20260918030000, under which
+  // create_game_session refuses to create an official session for a puzzle
+  // that isn't currently Published. Every fixture puzzle in this suite is
+  // meant to represent live, official Daily/Archive play.
   db.tables.puzzles = [
-    { id: PUZZLE_ID, rainbow_herring: puzzle.rainbowHerring },
-    { id: "puzzle-completed", rainbow_herring: puzzle.rainbowHerring },
+    { id: PUZZLE_ID, rainbow_herring: puzzle.rainbowHerring, is_published: true },
+    { id: "puzzle-completed", rainbow_herring: puzzle.rainbowHerring, is_published: true },
+    { id: "puzzle-plain", rainbow_herring: null, is_published: true },
   ];
   db.signIn(null);
   db.failAggregateWrites = 0;

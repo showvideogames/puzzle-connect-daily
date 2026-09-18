@@ -230,9 +230,17 @@ interface GameBoardProps {
   // any attribute of the puzzle itself. Defaults to the Daily home route,
   // which is the only call site that does not pass one.
   entryContext?: EntryContext;
+  /**
+   * The one explicit playtest-mode signal (see useGame's `mode` option doc).
+   * Reroutes gameplay persistence to the beta-only tracking system and turns
+   * off every official-only side effect this board would otherwise trigger:
+   * the Rainbow bonus's durable write, Global Stats, and puzzle ratings.
+   * Defaults to false so every existing call site is unaffected.
+   */
+  betaMode?: boolean;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", wideBoard = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, showModeBadge = true, entryContext = "daily_home" }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", wideBoard = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, showModeBadge = true, entryContext = "daily_home", betaMode = false }: GameBoardProps) {
   const isDailyHomepage = variant === "dailyHomepage";
   // Drives the board's own desktop width/tile-gap classes below — true for
   // the daily homepage itself, or any other context that explicitly opted
@@ -281,7 +289,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     sessionIdRef,
     activeSecondsRef,
     nextGuessNumber,
-  } = useGame(puzzle, { isArchive, smallHintUsed, fullHintUsed, entryContext });
+  } = useGame(puzzle, { isArchive, smallHintUsed, fullHintUsed, entryContext, mode: betaMode ? "beta" : "official" });
 
   // Preload custom emoji images so they don't pop in after the board renders
   const imagesToPreload = useMemo(() => {
@@ -635,7 +643,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const prevGotRainbow = useRef(state.gotRainbow);
 
   useEffect(() => {
-    if (isArchive) return;
+    // Beta mode never calls record_streak (see useGame's commitOfficialResult),
+    // so a beta win can never actually be "day N" of the real streak — showing
+    // this banner here would read the player's genuine current_streak and
+    // display it as if THIS win had just extended it, directly contradicting
+    // the "won't affect your official stats or streak" banner on the page.
+    if (isArchive || betaMode) return;
     const fetchStreakBefore = async () => {
       try {
         // user_streaks is RPC-only now; the function resolves account vs
@@ -649,7 +662,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       } catch {}
     };
     void fetchStreakBefore();
-  }, [isArchive]);
+  }, [isArchive, betaMode]);
 
   // Streak celebration is part of the victory moment, so it waits for the same
   // reveal gate. Gating on `lastRevealedGroup !== null` keeps it to LIVE wins:
@@ -657,10 +670,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // lastRevealedGroup, so it won't re-show the streak — and this stays correct
   // even if the completed state hydrates asynchronously.
   useEffect(() => {
-    if (victoryRevealReady && state.isWon && lastRevealedGroup !== null && !isArchive) {
+    if (victoryRevealReady && state.isWon && lastRevealedGroup !== null && !isArchive && !betaMode) {
       setShowStreak(true);
     }
-  }, [victoryRevealReady, state.isWon, lastRevealedGroup, isArchive]);
+  }, [victoryRevealReady, state.isWon, lastRevealedGroup, isArchive, betaMode]);
 
   useEffect(() => {
     if (state.isComplete && !prevIsComplete.current) {
@@ -730,7 +743,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       // truthful to attach the bonus to and it is skipped rather than guessed
       // at.
       const sessionId = sessionIdRef.current;
-      const canPersist = !!sessionId && !isDuplicateAttempt;
+      // Beta mode never writes here: recordBonusRainbowAttempt targets
+      // game_sessions/guess_events, and sessionIdRef in beta mode holds a
+      // beta_playtests id, not a game_sessions id. The bonus find itself is
+      // still fully playable (markRainbowFound below is unconditional) — only
+      // the official durable write is skipped.
+      const canPersist = !!sessionId && !isDuplicateAttempt && !betaMode;
 
       // The active timer has already stopped at formal completion, so this is
       // the final solve time — the bonus round cannot inflate it.
@@ -776,7 +794,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
       setTimeout(() => setBonusRainbowCorrect(correct), correct ? 600 : 0);
     }, 400);
-  }, [puzzle.rainbowHerring, markRainbowFound, isOfficialAttemptRef, sessionIdRef, activeSecondsRef, nextGuessNumber, state.solvedGroups.length]);
+  }, [puzzle.rainbowHerring, markRainbowFound, isOfficialAttemptRef, sessionIdRef, activeSecondsRef, nextGuessNumber, state.solvedGroups.length, betaMode]);
 
   const hintItems = useCallback((): { color?: string; squareEmoji?: string; emoji: string }[] => {
     const sorted = [...puzzle.groups].sort((a, b) => a.difficulty - b.difficulty);
@@ -1532,21 +1550,28 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
                   {copied ? "Copied!" : "Share Score"}
                 </button>
-                <button
-                  onClick={() => setShowGlobalStats(true)}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border text-sm font-semibold
-                    hover:bg-secondary transition-all duration-150 active:scale-95 shadow-md"
-                >
-                  <TrendingUp className="w-4 h-4" /> Global Stats
-                </button>
+                {/* Global Stats reads real official completions for this
+                    puzzle id — meaningless (and potentially confusing) for a
+                    puzzle that structurally can never have any while it's in
+                    Beta. */}
+                {!betaMode && (
+                  <button
+                    onClick={() => setShowGlobalStats(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border text-sm font-semibold
+                      hover:bg-secondary transition-all duration-150 active:scale-95 shadow-md"
+                  >
+                    <TrendingUp className="w-4 h-4" /> Global Stats
+                  </button>
+                )}
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Rating */}
-      {showEndState && <PuzzleRating puzzleId={puzzle.id} user={user} />}
+      {/* Rating — tied to the real puzzle id and account, neither of which
+          make sense for an unlisted playtest. */}
+      {showEndState && !betaMode && <PuzzleRating puzzleId={puzzle.id} user={user} />}
 
       <DailyStatsModal
         puzzleId={puzzle.id}

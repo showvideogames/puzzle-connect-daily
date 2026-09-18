@@ -15,6 +15,7 @@ export interface DraftData {
   designerName: string;
   groups: GroupForm[];
   isPublished: boolean;
+  isBeta: boolean;
   wordOrder: string[];
   rainbowHerring: (string | null)[];
   rainbowCategoryName: string;

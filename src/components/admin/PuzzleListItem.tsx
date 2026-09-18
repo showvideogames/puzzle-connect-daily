@@ -19,6 +19,7 @@ export interface AdminPuzzle {
   date: string;
   title: string | null;
   is_published: boolean;
+  is_beta?: boolean;
   puzzle_groups?: AdminPuzzleGroup[];
   word_order?: string[] | null;
   rainbow_herring?: (string | null)[] | null;
@@ -68,8 +69,12 @@ export function PuzzleListItem({
         <div>
           <span className="font-medium">{formatDateDisplay(p.date)}</span>
           {p.title && <span className="text-muted-foreground ml-2">— {p.title}</span>}
-          <span className={`ml-3 text-xs font-medium px-2 py-0.5 rounded-full ${p.is_published ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
-            {p.is_published ? "Published" : "Draft"}
+          <span className={`ml-3 text-xs font-medium px-2 py-0.5 rounded-full ${
+            p.is_published ? "bg-green-100 text-green-700"
+            : p.is_beta ? "bg-purple-100 text-purple-700"
+            : "bg-muted text-muted-foreground"
+          }`}>
+            {p.is_published ? "Published" : p.is_beta ? "Beta" : "Draft"}
           </span>
         </div>
         <div className="flex items-center gap-1">
