@@ -657,6 +657,15 @@ export class FakeSupabase {
       case "create_game_session": {
         // Every gameplay write now comes from a proven device.
         if (!deviceProven) return { data: null, error: null };
+        // Mirrors 20260918030000: the ONLY insert path into game_sessions
+        // for anon/authenticated, so this is what actually keeps a Draft or
+        // Beta puzzle (is_published = false either way) from ever getting an
+        // official session — independent of which RPC the frontend happens
+        // to call.
+        const targetPuzzle = this.tables.puzzles.find((p) => p.id === args._puzzle_id);
+        if (!targetPuzzle || targetPuzzle.is_published !== true) {
+          return { data: null, error: null };
+        }
         // The onboarding gate, server-side. A signed-in account whose
         // decision has not resolved cannot create a session, and therefore
         // cannot accumulate account-owned gameplay, stats or streak. Fails
@@ -1200,7 +1209,14 @@ export class FakeSupabase {
       table === "user_streaks" ||
       table === "game_results" ||
       table === "device_identities" ||
-      table === "account_onboarding"
+      table === "account_onboarding" ||
+      // beta_playtests/beta_feedback (20260918020000): no insert/update/
+      // delete policy for any role, admins included — writes go only
+      // through start_beta_playtest/complete_beta_playtest/
+      // reset_beta_playtest/submit_beta_feedback. Direct SELECT is admin-only
+      // and handled separately by _visibleForRead.
+      table === "beta_playtests" ||
+      table === "beta_feedback"
     ) {
       return `no ${op} policy on ${table}: use a scoped function`;
     }

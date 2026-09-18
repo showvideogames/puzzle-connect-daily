@@ -513,3 +513,232 @@ describe("J. official Published gameplay still works exactly as before", () => {
     expect(playtests()).toHaveLength(0);
   });
 });
+
+// ── K. Structural isolation is enforced by the DATABASE, not the frontend ──
+//
+// These call create_game_session directly, the way any client that knew (or
+// enumerated) a puzzle id could — never through useGame/useGameSession, and
+// never relying on the app only ever asking for the RPC it "should". This is
+// what 20260918030000 actually fixed: create_game_session previously had no
+// puzzle-status check at all and was, as of 20260917000000, the ONLY insert
+// path into game_sessions for anon/authenticated.
+describe("K. create_game_session refuses a puzzle that is not currently Published", () => {
+  async function tryCreateOfficialSession(puzzleId: string, puzzleVersionId: string | null) {
+    const identity = await mintDeviceIdentity();
+    localStorage.setItem("rc-device-id", identity.device_id);
+    localStorage.setItem("rc-device-token", identity.device_token);
+    return db.rpc("create_game_session", {
+      _puzzle_id: puzzleId,
+      _device_id: identity.device_id,
+      _device_token: identity.device_token,
+      _entry_context: "daily_home",
+      _active_time_seconds: 0,
+      _mistakes: 0,
+      _puzzle_version_id: puzzleVersionId,
+    });
+  }
+
+  it("refuses a Draft puzzle (creates no game_sessions row)", async () => {
+    const { data } = await adminSave(null, V1_CONTENT, {
+      date: "2026-10-14",
+      is_published: false,
+      is_beta: false,
+    });
+    const puzzleId = data!.puzzle_id as string;
+    const puzzle = currentPuzzle(puzzleId);
+
+    const { data: sessionId, error } = await tryCreateOfficialSession(puzzleId, puzzle.versionId);
+
+    expect(error).toBeNull();
+    expect(sessionId).toBeNull();
+    expect(db.tables.game_sessions.filter((s) => s.puzzle_id === puzzleId)).toHaveLength(0);
+  });
+
+  it("refuses a Beta puzzle (creates no game_sessions row) even called directly, bypassing the frontend entirely", async () => {
+    const { data } = await adminSave(null, V1_CONTENT, {
+      date: "2026-10-15",
+      is_published: false,
+      is_beta: true,
+    });
+    const puzzleId = data!.puzzle_id as string;
+    const puzzle = currentPuzzle(puzzleId);
+
+    const { data: sessionId, error } = await tryCreateOfficialSession(puzzleId, puzzle.versionId);
+
+    expect(error).toBeNull();
+    expect(sessionId).toBeNull();
+    expect(db.tables.game_sessions.filter((s) => s.puzzle_id === puzzleId)).toHaveLength(0);
+  });
+
+  it("still succeeds for a Published puzzle", async () => {
+    const { data } = await adminSave(null, V1_CONTENT, {
+      date: "2026-10-16",
+      is_published: true,
+      is_beta: false,
+    });
+    const puzzleId = data!.puzzle_id as string;
+    const puzzle = currentPuzzle(puzzleId);
+
+    const { data: sessionId, error } = await tryCreateOfficialSession(puzzleId, puzzle.versionId);
+
+    expect(error).toBeNull();
+    expect(sessionId).not.toBeNull();
+    expect(db.tables.game_sessions.filter((s) => s.puzzle_id === puzzleId)).toHaveLength(1);
+  });
+
+  it("does not strand an already-valid official session when an admin later changes the puzzle's status", async () => {
+    const { data } = await adminSave(null, V1_CONTENT, {
+      date: "2026-10-17",
+      is_published: true,
+      is_beta: false,
+    });
+    const puzzleId = data!.puzzle_id as string;
+    const puzzle = currentPuzzle(puzzleId);
+
+    const { data: sessionId } = await tryCreateOfficialSession(puzzleId, puzzle.versionId);
+    expect(sessionId).not.toBeNull();
+
+    // The admin un-publishes it (a real workflow: pulling a puzzle back to
+    // Draft, or — if it were ever a valid transition — Beta) AFTER this
+    // player already has a live session.
+    await adminSave(puzzleId, V1_CONTENT, { date: "2026-10-17", is_published: false, is_beta: false });
+    expect(db.tables.puzzles.find((p) => p.id === puzzleId)!.is_published).toBe(false);
+
+    // touch_game_session and finalize_game_session authorize purely by
+    // session_capability_ok (ownership of the EXISTING row) — never by
+    // re-checking the puzzle's current status — so this player's game is
+    // completely unaffected by the status change. Same device/localStorage
+    // identity tryCreateOfficialSession minted and stored above.
+    const touchResult = await db.rpc("touch_game_session", {
+      _session_id: sessionId,
+      _device_id: localStorage.getItem("rc-device-id"),
+      _device_token: localStorage.getItem("rc-device-token"),
+      _active_time_seconds: 10,
+      _mistakes: 1,
+    });
+    expect(touchResult.data).toBe(true);
+
+    const finalizeResult = await db.rpc("finalize_game_session", {
+      _session_id: sessionId,
+      _device_id: localStorage.getItem("rc-device-id"),
+      _device_token: localStorage.getItem("rc-device-token"),
+      _won: true,
+      _mistakes: 1,
+      _active_time_seconds: 10,
+      _found_rainbow: false,
+      _rainbow_solve_index: null,
+      _solve_order: ["orange", "green", "blue", "red"],
+      _hints_used: false,
+      _share_grid: "",
+      _skip_streak: false,
+      _local_date: "2026-10-17",
+    });
+    expect(finalizeResult.data).toBe(true);
+
+    const session = db.tables.game_sessions.find((s) => s.id === sessionId)!;
+    expect(session.status).toBe("won");
+    expect(session.is_official).toBe(true);
+  });
+});
+
+// ── Beta table access requires the device credential, never direct table access ──
+describe("device credential + direct-table-access guards on beta tables", () => {
+  it("start_beta_playtest refuses an unproven device", async () => {
+    const { data } = await adminSave(null, V1_CONTENT, {
+      date: "2026-10-18",
+      is_published: false,
+      is_beta: true,
+    });
+    const puzzleId = data!.puzzle_id as string;
+    const puzzle = currentPuzzle(puzzleId);
+
+    const { data: playtestId, error } = await db.rpc("start_beta_playtest", {
+      _puzzle_id: puzzleId,
+      _puzzle_version_id: puzzle.versionId,
+      _device_id: "someone-elses-device",
+      _device_token: "wrong-token",
+    });
+    expect(error).toBeNull();
+    expect(playtestId).toBeNull();
+    expect(playtests()).toHaveLength(0);
+  });
+
+  it("reset_beta_playtest and complete_beta_playtest refuse an unproven device", async () => {
+    const { data } = await adminSave(null, V1_CONTENT, {
+      date: "2026-10-19",
+      is_published: false,
+      is_beta: true,
+    });
+    const puzzle = currentPuzzle(data!.puzzle_id as string);
+    const view = mount(puzzle, { mode: "beta" });
+    await guess(view, puzzle.groups.map((g) => g.words[1]));
+    const run = playtests().find((r) => r.puzzle_id === puzzle.id)!;
+
+    const reset = await db.rpc("reset_beta_playtest", {
+      _puzzle_id: puzzle.id,
+      _device_id: "someone-elses-device",
+      _device_token: "wrong-token",
+    });
+    expect(reset.data).toBe(false);
+    expect(playtests().find((r) => r.id === run.id)!.is_reset).toBe(false);
+
+    const complete = await db.rpc("complete_beta_playtest", {
+      _playtest_id: run.id,
+      _device_id: "someone-elses-device",
+      _device_token: "wrong-token",
+      _won: true,
+      _mistakes: 0,
+      _hints_used: false,
+    });
+    expect(complete.data).toBe(false);
+    expect(playtests().find((r) => r.id === run.id)!.status).toBe("in_progress");
+  });
+
+  it("an anonymous (non-admin) caller cannot read, write or delete beta_playtests/beta_feedback directly", async () => {
+    const { data } = await adminSave(null, V1_CONTENT, {
+      date: "2026-10-20",
+      is_published: false,
+      is_beta: true,
+    });
+    const puzzleId = data!.puzzle_id as string;
+    const puzzle = currentPuzzle(puzzleId);
+    const view = mount(puzzle, { mode: "beta" });
+    await winGame(view, puzzle);
+    expect(playtests()).toHaveLength(1);
+
+    db.signIn(null); // anonymous, no admin flag
+
+    const selectResult = await db.from("beta_playtests").select("*");
+    expect(selectResult.data).toEqual([]);
+
+    const insertResult = await db.from("beta_playtests").insert({
+      puzzle_id: puzzleId,
+      puzzle_version_id: puzzle.versionId,
+      device_id: "forged-device",
+    });
+    expect(insertResult.error).toBeTruthy();
+
+    const updateResult = await db.from("beta_playtests").update({ won: true }).eq("puzzle_id", puzzleId);
+    expect(updateResult.error).toBeTruthy();
+
+    const feedbackSelect = await db.from("beta_feedback").select("*");
+    expect(feedbackSelect.data).toEqual([]);
+  });
+
+  it("an admin CAN read beta_playtests/beta_feedback directly (the intended path for the Admin panel)", async () => {
+    const { data } = await adminSave(null, V1_CONTENT, {
+      date: "2026-10-21",
+      is_published: false,
+      is_beta: true,
+    });
+    const puzzleId = data!.puzzle_id as string;
+    const puzzle = currentPuzzle(puzzleId);
+    const view = mount(puzzle, { mode: "beta" });
+    await winGame(view, puzzle);
+
+    db.signIn(ADMIN_ID, { admin: true });
+    const result = await db.from("beta_playtests").select("*");
+    expect(result.data).toHaveLength(1);
+    db.signIn(null);
+  });
+});
