@@ -6,7 +6,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogOut, Save, ArrowLeft, RotateCcw, ArrowLeftRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { LogOut, Save, ArrowLeft, RotateCcw, ArrowLeftRight, ChevronLeft, ChevronRight, Image as ImageIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ArchiveAccessManager } from "@/components/ArchiveAccessManager";
 import { CustomEmojiManager } from "@/components/admin/CustomEmojiManager";
@@ -335,6 +335,8 @@ export default function Admin() {
     highestLongestStreak: number;
   } | null>(null);
   const [globalStatsLoading, setGlobalStatsLoading] = useState(false);
+  /** Closed by default: the emoji library is only fetched once this opens. */
+  const [showEmojiManager, setShowEmojiManager] = useState(false);
 
   // Calendar visibility
   const [calendarOpen, setCalendarOpen] = useState(true);
@@ -1297,7 +1299,28 @@ export default function Admin() {
 
         <ArchiveAccessManager />
 
-        <CustomEmojiManager />
+        {/*
+          Mounted only on demand. Previously this rendered on every Admin
+          page load and pulled the entire emoji bucket (38 files, ~33 MB)
+          whether or not anyone intended to manage emoji. Gating the mount is
+          what makes ordinary puzzle editing cost nothing here.
+        */}
+        <section className="space-y-4">
+          <Button
+            variant="outline"
+            onClick={() => setShowEmojiManager((v) => !v)}
+            aria-expanded={showEmojiManager}
+            aria-controls="custom-emoji-manager"
+          >
+            <ImageIcon className="w-4 h-4 mr-1" />
+            {showEmojiManager ? "Hide Custom Emoji" : "Manage Custom Emoji"}
+          </Button>
+          {showEmojiManager && (
+            <div id="custom-emoji-manager">
+              <CustomEmojiManager />
+            </div>
+          )}
+        </section>
 
         <FeedbackList />
 
