@@ -234,16 +234,6 @@ export default function Index() {
         onSignOut={handleSignOut}
         variant="minimal"
       />
-      {/* Designer byline — Daily's own metadata display. Deliberately just
-          this one line: unlike ArchivePuzzle, Daily has never shown a
-          puzzle title/date row (today's puzzle needs no identifying label),
-          so this adds the required attribution without introducing the
-          title/date/nav elements this page intentionally omits. */}
-      {puzzle && (
-        <p className="text-center text-xs sm:text-sm font-medium text-slate mt-0.5 mb-1.5">
-          by {puzzle.designerName}
-        </p>
-      )}
       <div className="w-full max-w-[840px] border-b border-divider mb-2" />
 
       {/* Silly goose toast — shown when hint tapped after puzzle complete */}
@@ -292,6 +282,9 @@ export default function Index() {
           onHintClick={handleHeaderHintClick}
           onComplete={() => setIsPuzzleComplete(true)}
           variant="dailyHomepage"
+          // Removed per feedback: the Rainbow/4-Groups badge read as
+          // needless clutter floating over the Daily homepage board.
+          showModeBadge={false}
         />
       ) : (
         <div className="flex-1 flex items-center justify-center text-center px-4">
