@@ -12,6 +12,7 @@ export interface GroupForm {
 export interface DraftData {
   puzzleDate: string;
   puzzleTitle: string;
+  designerName: string;
   groups: GroupForm[];
   isPublished: boolean;
   wordOrder: string[];

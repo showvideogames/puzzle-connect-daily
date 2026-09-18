@@ -4,6 +4,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { GameBoard } from "@/components/GameBoard";
 import { GameHeader } from "@/components/GameHeader";
+import { PuzzleModeBadge } from "@/components/PuzzleModeBadge";
 import { TutorialModal } from "@/components/TutorialModal";
 import { StatsModal } from "@/components/StatsModal";
 import { SettingsModal } from "@/components/SettingsModal";
@@ -233,14 +234,28 @@ export default function ArchivePuzzle() {
           </button>
         </div>
 
-        {/* Date sits on its own line beneath the row — only shown when the
-            row above already shows an actual title, not the date itself
-            (the no-title fallback puts the date in the hero slot instead,
-            so it's never rendered twice). */}
-        {trimmedTitle && (
-          <p className="text-center text-sm sm:text-base font-medium text-slate mt-1.5 sm:mt-2">
-            {puzzleDateStr}
-          </p>
+        {/* Metadata row: designer byline, then date, then the puzzle-mode
+            badge — replaces the badge GameBoard used to float on its own
+            right-aligned row above the instructions (see showModeBadge={false}
+            below) so all three read as one connected line under the title,
+            matching the target mock-up. The date segment is only shown when
+            the row above already shows an actual title, not the date itself
+            (the no-title fallback puts the date in the hero slot instead, so
+            it's never rendered twice) — preserving the page's existing rule.
+            Each segment (its separator included) is one flex item, so a wrap
+            on a very narrow screen or a long designer name moves a whole
+            "| segment" to the next line rather than stranding a bare
+            separator. */}
+        {puzzle && (
+          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mt-1.5 sm:mt-2 text-center text-sm sm:text-base font-medium text-slate">
+            <span className="whitespace-nowrap">by {puzzle.designerName}</span>
+            {trimmedTitle && (
+              <span className="whitespace-nowrap border-l border-border pl-2">{puzzleDateStr}</span>
+            )}
+            <span className="border-l border-border pl-2 inline-flex items-center">
+              <PuzzleModeBadge isRainbow={!!puzzle.rainbowHerring} />
+            </span>
+          </div>
         )}
       </div>
 
@@ -271,6 +286,10 @@ export default function ArchivePuzzle() {
           // reads as one consistent width instead of a narrower header
           // sitting above a wider board.
           wideBoard
+          // The Rainbow/4-Groups badge now lives in the metadata row above
+          // (next to the designer byline and date) instead of floating on
+          // its own right-aligned row over the instructions.
+          showModeBadge={false}
           smallHintUsed={smallHintUsed}
           fullHintUsed={fullHintUsed}
           onHintClick={handleHeaderHintClick}

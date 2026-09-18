@@ -520,10 +520,16 @@ export class FakeSupabase {
           theme: canonical.theme,
           is_emoji_puzzle: canonical.is_emoji_puzzle,
         };
+        // Mirrors admin_save_puzzle's `coalesce(nullif(btrim(...), ''), 'Sam
+        // West')`: trimmed, and never blank -- clearing the field in the
+        // Admin form reverts to the official default rather than saving an
+        // empty name.
+        const rawDesignerName = typeof metadata.designer_name === "string" ? metadata.designer_name.trim() : "";
         const metadataColumns = {
           date: metadata.date,
           title: metadata.title ?? null,
           is_published: metadata.is_published === true,
+          designer_name: rawDesignerName || "Sam West",
           emoji_puzzle_icon: metadata.emoji_puzzle_icon ?? null,
           is_free_puzzle: metadata.is_free_puzzle === true,
           free_puzzle_order: metadata.free_puzzle_order ?? null,

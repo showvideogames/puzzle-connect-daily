@@ -529,6 +529,7 @@ export type Database = {
           created_by: string | null
           current_version_id: string | null
           date: string
+          designer_name: string
           emoji_puzzle_icon: string | null
           free_puzzle_order: number | null
           id: string
@@ -548,6 +549,7 @@ export type Database = {
           created_by?: string | null
           current_version_id?: string | null
           date: string
+          designer_name?: string
           emoji_puzzle_icon?: string | null
           free_puzzle_order?: number | null
           id?: string
@@ -567,6 +569,7 @@ export type Database = {
           created_by?: string | null
           current_version_id?: string | null
           date?: string
+          designer_name?: string
           emoji_puzzle_icon?: string | null
           free_puzzle_order?: number | null
           id?: string
