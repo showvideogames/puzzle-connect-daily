@@ -91,31 +91,39 @@ export function DraggableTileGrid({ tiles, onReorder, columns = 4, emptyLabel }:
       className="grid gap-2"
       style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
     >
-      {tiles.map((tile) => (
-        <div
-          key={tile.id}
-          data-tile-id={tile.id}
-          draggable
-          onDragStart={() => setDraggedId(tile.id)}
-          onDragOver={(e) => {
-            e.preventDefault();
-            reorderTo(tile.id);
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDraggedId(null);
-          }}
-          onDragEnd={() => setDraggedId(null)}
-          onTouchStart={() => setDraggedId(tile.id)}
-          className={`${COLOR_CLASSES[tile.colorIndex]} select-none cursor-grab active:cursor-grabbing
-            rounded-lg px-2 py-3 text-center font-tile font-[800] text-xs uppercase tracking-wide
-            transition-transform duration-100
-            ${draggedId === tile.id ? "opacity-60 scale-95" : ""}`}
-          style={{ touchAction: "none" }}
-        >
-          {tile.text}
-        </div>
-      ))}
+      {tiles.map((tile) => {
+        // A blank tile is a real, positioned board slot with nothing typed
+        // into it yet (or an answer deleted with nothing to replace it) —
+        // shown as an empty placeholder rather than colored/filled, so the
+        // preview reads as "16 open positions" rather than looking broken.
+        const isBlank = tile.text.trim() === "";
+        return (
+          <div
+            key={tile.id}
+            data-tile-id={tile.id}
+            draggable
+            onDragStart={() => setDraggedId(tile.id)}
+            onDragOver={(e) => {
+              e.preventDefault();
+              reorderTo(tile.id);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDraggedId(null);
+            }}
+            onDragEnd={() => setDraggedId(null)}
+            onTouchStart={() => setDraggedId(tile.id)}
+            className={`${isBlank ? "border-2 border-dashed border-tile-border bg-transparent" : COLOR_CLASSES[tile.colorIndex]}
+              select-none cursor-grab active:cursor-grabbing
+              rounded-lg px-2 py-3 min-h-[44px] flex items-center justify-center text-center font-tile font-[800] text-xs uppercase tracking-wide
+              transition-transform duration-100
+              ${draggedId === tile.id ? "opacity-60 scale-95" : ""}`}
+            style={{ touchAction: "none" }}
+          >
+            {isBlank ? "" : tile.text}
+          </div>
+        );
+      })}
     </div>
   );
 }

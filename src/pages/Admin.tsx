@@ -1199,17 +1199,17 @@ export default function Admin() {
 
             {/* ── Starting-board column ── */}
             <div className="mt-6 lg:mt-0 lg:sticky lg:top-4">
-              {builder.hasAll16 ? (
-                <StartingBoardArranger
-                  tiles={boardTiles}
-                  onReorder={builder.setWordOrderIds}
-                  onRandomize={builder.randomizeWordOrder}
-                />
-              ) : (
-                <div className="rounded-xl border border-dashed border-tile-border p-4 text-xs text-muted-foreground">
-                  Fill in all 4 categories with 4 answers each to preview and arrange the starting board.
-                </div>
-              )}
+              {/* Always shown, even for a brand-new blank puzzle — the 16
+                  board positions and their random opening arrangement exist
+                  from the moment the form does (see blankState() in
+                  useBuilderForm), so the preview fills in incrementally as
+                  answers are typed rather than staying hidden until the
+                  puzzle is complete. */}
+              <StartingBoardArranger
+                tiles={boardTiles}
+                onReorder={builder.setWordOrderIds}
+                onRandomize={builder.randomizeWordOrder}
+              />
             </div>
           </div>
         </section>
