@@ -1,0 +1,55 @@
+-- ===========================================================================
+-- Revoke the anonymous role's unused write privileges on public.puzzles
+--
+-- WHAT WAS FOUND
+--
+-- public.puzzles was created in 20260322052030 and no migration since has
+-- issued a GRANT or REVOKE against it, so it still carries Supabase's default
+-- table privileges: SELECT, INSERT, UPDATE and DELETE for anon and
+-- authenticated. Verified against production by probing each verb as anon and
+-- comparing the failure mode with a table that genuinely has no write grant
+-- (public.game_results):
+--
+--   puzzles      UPDATE as anon -> 204, zero rows changed   (privilege held,
+--                                                            RLS matched none)
+--   puzzles      DELETE as anon -> 204, zero rows changed   (same)
+--   puzzles      INSERT as anon -> 42501 "new row violates row-level security
+--                                  policy for table puzzles" (privilege held,
+--                                  RLS refused the row)
+--   game_results UPDATE as anon -> 42501 "permission denied for table
+--                                  game_results"            (no privilege)
+--
+-- Nothing was ever at risk: the "Admins can manage puzzles" policy
+-- (has_role(auth.uid(), 'admin')) is FOR ALL, and auth.uid() is null for anon,
+-- so every anonymous write matched zero rows. This is defence in depth, not a
+-- breach fix -- it removes a layer that should never have been the only thing
+-- standing between an anonymous caller and this table, exactly as
+-- 20260917120000 already did for public.puzzle_versions.
+--
+-- WHY ONLY anon
+--
+-- authenticated keeps UPDATE and DELETE because the Admin editor genuinely
+-- uses them: Admin.tsx togglePublish() issues a direct
+-- update({ is_published }) and deletePuzzle() a direct delete(), both as the
+-- signed-in admin and both gated by the same "Admins can manage puzzles"
+-- policy. Revoking those would break the publish toggle and the delete button.
+--
+-- authenticated also still holds an INSERT privilege it does not need --
+-- admin_save_puzzle() is SECURITY DEFINER and performs its own INSERT with the
+-- owner's rights, so no browser ever inserts a puzzle directly. That is left
+-- alone here deliberately: it is a separate decision on a separate role, and
+-- this migration is scoped to the anonymous role only.
+--
+-- WHAT IS NOT TOUCHED
+--
+--   * SELECT for anon -- required by the "Anyone can read published puzzles"
+--     policy and by every gameplay read path (lib/puzzles.ts, Archive.tsx,
+--     lib/gameStats.ts), all of which are .select() only.
+--   * Every RLS policy on public.puzzles.
+--   * admin_save_puzzle() and its grants.
+--   * Puzzle data, puzzle_groups, and every other table's privileges.
+--
+-- This changes no application behaviour, so it needs no frontend deploy.
+-- ===========================================================================
+
+revoke insert, update, delete on table public.puzzles from anon;

@@ -1051,6 +1051,13 @@ export class FakeSupabase {
     // "Admins can manage puzzles"/"...puzzle groups" are the only write
     // policies on these two, so a non-admin client cannot promote a version
     // by writing puzzles.current_version_id directly either.
+    //
+    // For puzzles this is now belt AND braces: 20260918003000 also revokes
+    // insert/update/delete on public.puzzles from anon, so an anonymous
+    // caller is stopped by the table grant before RLS is consulted at all.
+    // authenticated keeps update/delete, which the Admin editor's publish
+    // toggle and delete button use directly, and the policy below is what
+    // narrows those to admins.
     if (table === "puzzles" || table === "puzzle_groups") {
       if (!this.isAdmin) return `admin role required to ${op} ${table}`;
       return null;

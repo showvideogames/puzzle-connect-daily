@@ -899,6 +899,73 @@ describe("M+N+O. version integrity", () => {
   });
 });
 
+// ── R. DIRECT PUZZLE WRITE ACCESS ──────────────────────────────────────────
+//
+// Guards the rule that 20260918003000_revoke_anon_puzzle_writes.sql enforces
+// at the table-privilege level: reading published puzzles is public, writing
+// them is admin-only and goes through admin_save_puzzle.
+//
+// These assert the APPLICATION-level rule against the modelled policies. The
+// Postgres GRANT itself is a second, independent layer underneath and is not
+// something this fake can observe — it is verified by probing the live
+// database, not here. What these do protect is the thing a revoke could
+// plausibly break (anonymous SELECT) and the thing it must keep refusing.
+describe("R. direct write access to puzzles", () => {
+  it("an anonymous visitor can still read published puzzles", async () => {
+    db.signIn(null);
+    const { data, error } = await db
+      .from("puzzles")
+      .select("*")
+      .eq("id", puzzleId);
+
+    expect(error).toBeNull();
+    expect(data).toHaveLength(1);
+  });
+
+  it("an anonymous visitor cannot update a puzzle", async () => {
+    db.signIn(null);
+    const before = db.tables.puzzles.find((p) => p.id === puzzleId)!.title;
+
+    const { error } = await db
+      .from("puzzles")
+      .update({ title: "anon-write" })
+      .eq("id", puzzleId);
+
+    expect(error).toBeTruthy();
+    expect((error as { code: string }).code).toBe("42501");
+    expect(db.tables.puzzles.find((p) => p.id === puzzleId)!.title).toBe(before);
+  });
+
+  it("a signed-in non-admin cannot update a puzzle either", async () => {
+    // The existing rule, unchanged: "Admins can manage puzzles" is the only
+    // write policy, so merely holding an account grants nothing here.
+    db.signIn("ordinary-player");
+    const before = db.tables.puzzles.find((p) => p.id === puzzleId)!.title;
+
+    const { error } = await db
+      .from("puzzles")
+      .update({ title: "member-write" })
+      .eq("id", puzzleId);
+
+    expect(error).toBeTruthy();
+    expect((error as { code: string }).code).toBe("42501");
+    expect(db.tables.puzzles.find((p) => p.id === puzzleId)!.title).toBe(before);
+
+    db.signIn(null);
+  });
+
+  it("an admin can still save through admin_save_puzzle", async () => {
+    // The authorized route must stay open: the RPC is SECURITY DEFINER and
+    // does its own write, so revoking a caller's table privilege cannot
+    // reach it.
+    const { data, error } = await adminSave(puzzleId, V2_CONTENT);
+
+    expect(error).toBeNull();
+    expect(data).toBeTruthy();
+    expect(versions().filter((v) => v.puzzle_id === puzzleId).length).toBeGreaterThan(1);
+  });
+});
+
 // ── P. LEGACY SESSIONS ─────────────────────────────────────────────────────
 describe("P. existing legacy sessions", () => {
   it("remain visible and counted with no version reference at all", async () => {
