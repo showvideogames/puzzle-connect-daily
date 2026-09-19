@@ -124,10 +124,33 @@ export function reconcileCategory(
     result[newIdx] = { id: tomb ? tomb.id : generateSlotId(), text: newTexts[newIdx] };
   }
 
-  // Blank entries (an empty comma slot mid-edit) never match, pair or
-  // consume a tombstone — they just need a placeholder id for React keys.
+  // Blank entries (an empty comma slot mid-edit, e.g. typed one character
+  // at a time so "Blue, " momentarily splits into ["Blue", ""]) recycle a
+  // tombstone first, exactly like priority 4 above, rather than always
+  // minting a brand-new id.
+  //
+  // THE BUG THIS FIXES: a real user typing a category character-by-character
+  // passes through this path on every comma — "H" -> ["H"] tombstones the
+  // category's other 3 original pool ids (see priority 3), then each
+  // subsequent comma used to hand its blank placeholder a FRESH id instead
+  // of reclaiming one of those 3. Once real text lands in that placeholder
+  // (via priority 2, on the next keystroke), it inherits that fresh id —
+  // which was never part of the puzzle's fixed 16-id board layout
+  // (wordOrderIds, set once at blankState()/buildStateFromLoad() and never
+  // auto-resynced). The answer existed but had no board position to render
+  // in, so only the very first word of a freshly-typed category ever
+  // appeared on the Starting Board.
+  //
+  // Recycling this category's own tombstones here instead means the 4 ids
+  // typing eventually settles on are — for an ordinary fill-in-4-answers
+  // sequence — exactly the 4 original pool ids blankState() already put on
+  // the board, so every answer appears in its predetermined position as
+  // soon as it's typed, with no board resync needed.
   newTexts.forEach((text, i) => {
-    if (result[i] === null) result[i] = { id: generateSlotId(), text };
+    if (result[i] === null) {
+      const tomb = tombstones.shift();
+      result[i] = { id: tomb ? tomb.id : generateSlotId(), text };
+    }
   });
 
   return { answers: result as AnswerSlot[], tombstones };

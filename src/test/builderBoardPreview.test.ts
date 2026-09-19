@@ -60,6 +60,86 @@ describe("partial preview", () => {
   });
 });
 
+describe("real character-by-character typing (the /create production bug)", () => {
+  /**
+   * Simulates a real user typing `finalText` into a category one keystroke
+   * at a time — updateAnswersRaw fires once per character, exactly as
+   * CategoryEditor's onChange does, not once with the finished string (every
+   * OTHER test in this file sets the full string in a single call, which
+   * never exercised this path and is why this bug shipped).
+   */
+  function typeIncrementally(
+    result: { current: ReturnType<typeof useBuilderForm> },
+    groupIdx: number,
+    finalText: string
+  ) {
+    for (let i = 1; i <= finalText.length; i++) {
+      act(() => result.current.updateAnswersRaw(groupIdx, finalText.slice(0, i)));
+    }
+  }
+
+  function filledTexts(result: { current: ReturnType<typeof useBuilderForm> }): string[] {
+    return result.current.wordOrderIds
+      .map((id) => result.current.slotById.get(id)?.text ?? "")
+      .filter((t) => t !== "");
+  }
+
+  it("shows all 4 comma-separated answers in their predetermined board positions once fully typed", () => {
+    const { result } = renderHook(() => useBuilderForm());
+    const originalGroup0Ids = result.current.groups[0].answers.map((a) => a.id).sort();
+
+    typeIncrementally(result, 0, "Here, Comes, The, Sun");
+
+    const g0 = result.current.groups[0];
+    expect(g0.answers.map((a) => a.text)).toEqual(["Here", "Comes", "The", "Sun"]);
+    // Every typed answer landed on one of this category's ORIGINAL 4 pool
+    // ids — not an orphaned id minted mid-typing that was never part of
+    // wordOrderIds (the actual production bug: only the first word, which
+    // always keeps the very first pool id, ever appeared on the board).
+    expect(g0.answers.map((a) => a.id).sort()).toEqual(originalGroup0Ids);
+    expect(filledTexts(result).sort()).toEqual(["Comes", "Here", "Sun", "The"]);
+  });
+
+  it("progressively fills 1, then 2, then 3, then 4 tiles as each answer is completed", () => {
+    const { result } = renderHook(() => useBuilderForm());
+    const finalText = "Here, Comes, The, Sun";
+    const checkpoints: Record<string, number> = {
+      Here: 1,
+      "Here, Comes": 2,
+      "Here, Comes, The": 3,
+      "Here, Comes, The, Sun": 4,
+    };
+
+    for (let i = 1; i <= finalText.length; i++) {
+      const prefix = finalText.slice(0, i);
+      act(() => result.current.updateAnswersRaw(0, prefix));
+      if (prefix in checkpoints) {
+        expect(filledTexts(result)).toHaveLength(checkpoints[prefix]);
+      }
+    }
+  });
+
+  it("multiple categories populate simultaneously, each keeping its own 4 predetermined positions", () => {
+    const { result } = renderHook(() => useBuilderForm());
+    const group0Ids = result.current.groups[0].answers.map((a) => a.id).sort();
+    const group1Ids = result.current.groups[1].answers.map((a) => a.id).sort();
+
+    typeIncrementally(result, 0, "Here, Comes, The, Sun");
+    typeIncrementally(result, 1, "Carry, On, Wayward, Son");
+
+    expect(result.current.groups[0].answers.map((a) => a.id).sort()).toEqual(group0Ids);
+    expect(result.current.groups[1].answers.map((a) => a.id).sort()).toEqual(group1Ids);
+
+    expect(filledTexts(result).sort()).toEqual(
+      ["Carry", "Comes", "Here", "On", "Son", "Sun", "The", "Wayward"].sort()
+    );
+    // The remaining two categories' 8 slots are still blank.
+    expect(
+      result.current.wordOrderIds.map((id) => result.current.slotById.get(id)?.text ?? "").filter((t) => t === "")
+    ).toHaveLength(8);
+  });
+});
+
 describe("editing in place", () => {
   it("updates the same tile's text without moving it", () => {
     const { result } = renderHook(() => useBuilderForm());
