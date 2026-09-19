@@ -1149,6 +1149,20 @@ export type Database = {
         }
         Returns: string
       }
+      custom_creator_new_slug: { Args: { _name: string }; Returns: string }
+      custom_ensure_creator_profile: {
+        Args: { _name: string; _uid: string }
+        Returns: undefined
+      }
+      custom_puzzle_new_short_code: { Args: never; Returns: string }
+      custom_puzzle_public_json: {
+        Args: { _p: Database["public"]["Tables"]["custom_puzzles"]["Row"] }
+        Returns: Json
+      }
+      custom_random_string: {
+        Args: { _alphabet: string; _len: number }
+        Returns: string
+      }
       decline_guest_history: {
         Args: { _device_id?: string; _device_token?: string }
         Returns: {
@@ -1316,6 +1330,10 @@ export type Database = {
         Args: { _device_id: string; _device_token: string; _session_id: string }
         Returns: boolean
       }
+      set_custom_puzzle_favorite: {
+        Args: { _favorite: boolean; _share_id: string }
+        Returns: Json
+      }
       start_beta_playtest: {
         Args: {
           _device_id: string
@@ -1324,10 +1342,6 @@ export type Database = {
           _puzzle_version_id: string
         }
         Returns: string
-      }
-      set_custom_puzzle_favorite: {
-        Args: { _favorite: boolean; _share_id: string }
-        Returns: Json
       }
       submit_beta_feedback: {
         Args: {
