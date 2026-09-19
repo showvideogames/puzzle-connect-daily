@@ -47,6 +47,8 @@ export interface CreateCustomPuzzleInput {
 export interface CreateCustomPuzzleResult {
   puzzleId: string;
   shareId: string;
+  /** The short /p/:shortCode code; null only against a database that predates it. */
+  shortCode: string | null;
 }
 
 function contentPayload(content: CustomPuzzleContentInput) {
@@ -74,19 +76,28 @@ export async function createCustomPuzzle(input: CreateCustomPuzzleInput): Promis
     _content: contentPayload(input.content),
   });
   if (error) throw error;
-  const row = (data ?? {}) as { puzzle_id?: string; share_id?: string };
+  const row = (data ?? {}) as { puzzle_id?: string; share_id?: string; short_code?: string };
   if (!row.puzzle_id || !row.share_id) throw new Error("Puzzle was not created.");
-  return { puzzleId: row.puzzle_id, shareId: row.share_id };
+  return { puzzleId: row.puzzle_id, shareId: row.share_id, shortCode: row.short_code ?? null };
 }
 
 export interface CustomPlayablePuzzle {
   puzzle: Puzzle;
   visibility: CustomPuzzleVisibility;
+  /** Present only when a signed-in creator made it; anonymous puzzles are never linked. */
+  creatorSlug: string | null;
+  favoriteCount: number;
+  /** Whether the CURRENT signed-in account has favorited it (false for guests). */
+  favoritedByMe: boolean;
 }
 
 interface CustomPuzzleRow {
   id: string;
   share_id: string;
+  short_code?: string | null;
+  creator_slug?: string | null;
+  favorite_count?: number;
+  favorited_by_me?: boolean;
   title: string;
   creator_name: string;
   visibility: CustomPuzzleVisibility;
@@ -130,15 +141,166 @@ function mapRowToPuzzle(row: CustomPuzzleRow): Puzzle {
     theme: null,
     alphabetizeCompleted: row.content.alphabetize_completed ?? true,
     versionId: null,
+    shortCode: row.short_code ?? null,
   };
 }
 
+function toPlayable(data: unknown): CustomPlayablePuzzle | null {
+  const row = data as CustomPuzzleRow | null;
+  if (!row || !row.id) return null;
+  return {
+    puzzle: mapRowToPuzzle(row),
+    visibility: row.visibility,
+    creatorSlug: row.creator_slug ?? null,
+    favoriteCount: row.favorite_count ?? 0,
+    favoritedByMe: row.favorited_by_me ?? false,
+  };
+}
+
+/** Long, permanent /custom/:shareId links. */
 export async function getCustomPuzzleByShareId(shareId: string): Promise<CustomPlayablePuzzle | null> {
   const { data, error } = await supabase.rpc("get_custom_puzzle", { _share_id: shareId });
+  if (error) return null;
+  return toPlayable(data);
+}
+
+/** Short /p/:shortCode links. Same puzzle, same identity (puzzle.id is still the long share id). */
+export async function getCustomPuzzleByShortCode(shortCode: string): Promise<CustomPlayablePuzzle | null> {
+  const { data, error } = await supabase.rpc("get_custom_puzzle_by_short_code", { _short_code: shortCode });
+  if (error) return null;
+  return toPlayable(data);
+}
+
+/** The path a puzzle is shared at: the short link when it has one, else the permanent long link. */
+export function customPuzzlePath(puzzle: { shortCode?: string | null; id: string }): string {
+  return puzzle.shortCode ? `/p/${puzzle.shortCode}` : `/custom/${puzzle.id}`;
+}
+
+// ── Favorites ──────────────────────────────────────────────────────────────
+
+export interface FavoriteState {
+  favorited: boolean;
+  favoriteCount: number;
+}
+
+/**
+ * Sets (not toggles) the signed-in account's favorite, so a double click or a
+ * retry can never flip the state. Returns null for a guest/failed call — the
+ * caller falls back to a device-local favorite.
+ */
+export async function setCustomPuzzleFavorite(shareId: string, favorite: boolean): Promise<FavoriteState | null> {
+  const { data, error } = await supabase.rpc("set_custom_puzzle_favorite", { _share_id: shareId, _favorite: favorite });
   if (error || !data) return null;
-  const row = data as unknown as CustomPuzzleRow;
-  if (!row.id) return null;
-  return { puzzle: mapRowToPuzzle(row), visibility: row.visibility };
+  const row = data as { favorited?: boolean; favorite_count?: number };
+  return { favorited: !!row.favorited, favoriteCount: row.favorite_count ?? 0 };
+}
+
+const LOCAL_FAVORITE_PREFIX = "custom-favorite:";
+
+/** Guest favorites live only in this browser, namespaced per puzzle, and never count publicly. */
+export function isLocalFavorite(shareId: string): boolean {
+  try {
+    return localStorage.getItem(LOCAL_FAVORITE_PREFIX + shareId) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setLocalFavorite(shareId: string, favorite: boolean): void {
+  try {
+    if (favorite) localStorage.setItem(LOCAL_FAVORITE_PREFIX + shareId, "1");
+    else localStorage.removeItem(LOCAL_FAVORITE_PREFIX + shareId);
+  } catch {
+    // storage blocked: the favorite simply does not persist
+  }
+}
+
+export interface FavoritePuzzleCard {
+  title: string;
+  creatorName: string;
+  creatorSlug: string | null;
+  mode: CustomPuzzleMode;
+  shortCode: string;
+  favoriteCount: number;
+}
+
+export async function getMyFavorites(): Promise<FavoritePuzzleCard[]> {
+  const { data, error } = await supabase.rpc("get_my_favorites");
+  if (error || !Array.isArray(data)) return [];
+  return (
+    data as unknown as {
+      title: string;
+      creator_name: string;
+      creator_slug: string | null;
+      mode: CustomPuzzleMode;
+      short_code: string;
+      favorite_count: number;
+    }[]
+  ).map((r) => ({
+    title: r.title,
+    creatorName: r.creator_name,
+    creatorSlug: r.creator_slug ?? null,
+    mode: r.mode,
+    shortCode: r.short_code,
+    favoriteCount: r.favorite_count ?? 0,
+  }));
+}
+
+// ── Creator profiles ───────────────────────────────────────────────────────
+
+export type CreatorSort = "newest" | "plays" | "favorites";
+
+export interface CreatorPuzzleCard {
+  title: string;
+  mode: CustomPuzzleMode;
+  shortCode: string;
+  finishedPlays: number;
+  favoriteCount: number;
+  createdAt: string;
+}
+
+export interface CreatorProfile {
+  displayName: string;
+  publicSlug: string;
+  puzzleCount: number;
+  totalPlays: number;
+  totalFavorites: number;
+  puzzles: CreatorPuzzleCard[];
+}
+
+export async function getCreatorProfile(slug: string, sort: CreatorSort = "newest"): Promise<CreatorProfile | null> {
+  const { data, error } = await supabase.rpc("get_creator_profile", { _slug: slug, _sort: sort });
+  if (error || !data) return null;
+  const r = data as unknown as {
+    display_name: string;
+    public_slug: string;
+    puzzle_count: number;
+    total_plays: number;
+    total_favorites: number;
+    puzzles: {
+      title: string;
+      mode: CustomPuzzleMode;
+      short_code: string;
+      finished_plays: number;
+      favorite_count: number;
+      created_at: string;
+    }[];
+  };
+  return {
+    displayName: r.display_name,
+    publicSlug: r.public_slug,
+    puzzleCount: r.puzzle_count,
+    totalPlays: r.total_plays,
+    totalFavorites: r.total_favorites,
+    puzzles: r.puzzles.map((p) => ({
+      title: p.title,
+      mode: p.mode,
+      shortCode: p.short_code,
+      finishedPlays: p.finished_plays,
+      favoriteCount: p.favorite_count,
+      createdAt: p.created_at,
+    })),
+  };
 }
 
 /**

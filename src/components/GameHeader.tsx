@@ -7,8 +7,9 @@ import type { User as AuthUser } from "@supabase/supabase-js";
 const STACKED_LOGO = "/rainbow-connect-logo-stacked.png";
 
 interface GameHeaderProps {
-  onStatsClick: () => void;
-  onHowToPlayClick: () => void;
+  /** Omit on pages with no stats to show, and the stats icon is not rendered. */
+  onStatsClick?: () => void;
+  onHowToPlayClick?: () => void;
   onSettingsClick?: () => void;
   onHintClick?: () => void;
   showHint?: boolean;
@@ -71,7 +72,7 @@ export function GameHeader({
           // Holiday override applies to both sizes — there's no stacked
           // variant of the flag logo, so it isn't part of the mobile/desktop
           // swap below; this one <img> just keeps today's existing behavior.
-          <img src={todaysLogo()} alt="Rainbow Connect" className="h-[clamp(11px,4.3vw,40px)] w-auto" />
+          <img src={todaysLogo()} alt="Rainbow Connect" className="h-[clamp(11px,3.7vw,40px)] min-[360px]:h-[clamp(11px,4.3vw,40px)] w-auto" />
         ) : (
           <>
             <img
@@ -92,7 +93,7 @@ export function GameHeader({
               // Hidden at lg+ in favor of the stacked wordmark below — md/tablet
               // widths keep this one-line logo, since a tablet-sized header
               // still reads as "mobile/tablet" for this design.
-              className="block lg:hidden h-[clamp(11px,4.3vw,40px)] w-auto"
+              className="block lg:hidden h-[clamp(11px,3.7vw,40px)] min-[360px]:h-[clamp(11px,4.3vw,40px)] w-auto"
             />
             {/* Desktop-only stacked two-line wordmark ("Rainbow" / "Connect"),
                 shown from lg (1024px) up. Fixed height rather than fluid —
@@ -109,6 +110,23 @@ export function GameHeader({
       </Link>
 
       <div className={`ml-auto flex items-center shrink-0 ${hideExtraIcons ? "gap-0.5 sm:gap-1.5" : "gap-0 sm:gap-1"}`}>
+        {/* Every header tap target stays 44x44. Daily's 4-icon header cannot fit
+            that plus this pill below ~430px, so there the Calendar icon is
+            hidden (Archive stays one tap away in Settings > Menu). */}
+        {/* Prominent, but a compact pill: the Ink primary-button colors, sized
+            well under the game board. Deliberately a real link (not an icon)
+            so it reads as the header's one call to action. */}
+        <Link
+          to="/create"
+          aria-label="Create a puzzle"
+          className="inline-flex items-center justify-center shrink-0 whitespace-nowrap h-8 sm:h-9 px-1.5 min-[360px]:px-2 sm:px-3.5 mr-0.5 sm:mr-1
+            rounded-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition
+            text-[11px] min-[360px]:text-xs sm:text-sm font-bold
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          <span className="sm:hidden">+ Create</span>
+          <span className="hidden sm:inline">+ Create a Puzzle</span>
+        </Link>
         {showHint && (
           <button
             onClick={onHintClick}
@@ -118,13 +136,15 @@ export function GameHeader({
             <Lightbulb className={iconGlyphClass} strokeWidth={iconStrokeWidth} />
           </button>
         )}
-        <button
-          onClick={onStatsClick}
-          className={iconButtonClass}
-          aria-label="My stats"
-        >
-          <BarChart3 className={iconGlyphClass} strokeWidth={iconStrokeWidth} />
-        </button>
+        {onStatsClick && (
+          <button
+            onClick={onStatsClick}
+            className={iconButtonClass}
+            aria-label="My stats"
+          >
+            <BarChart3 className={iconGlyphClass} strokeWidth={iconStrokeWidth} />
+          </button>
+        )}
         {/* Daily-homepage-only: the "minimal" variant's own dedicated
             Archive icon (a calendar, not the box-shaped Archive icon used
             below on the default variant) — Archive/ArchivePuzzle already
@@ -134,7 +154,7 @@ export function GameHeader({
         {isMinimal && (
           <Link
             to="/archive"
-            className={iconButtonClass}
+            className={`${iconButtonClass} max-[429px]:hidden`}
             aria-label="Puzzle archive"
           >
             <Calendar className={iconGlyphClass} strokeWidth={iconStrokeWidth} />

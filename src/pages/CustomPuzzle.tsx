@@ -1,28 +1,40 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ChevronLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { GameBoard } from "@/components/GameBoard";
 import { GameHeader } from "@/components/GameHeader";
+import { CustomPuzzleHeader } from "@/components/CustomPuzzleHeader";
 import { TutorialModal } from "@/components/TutorialModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SEO } from "@/components/SEO";
 import { HintModal } from "@/components/HintModal";
-import { getCustomPuzzleByShareId } from "@/lib/customPuzzles";
-import { Puzzle } from "@/lib/types";
+import {
+  customPuzzlePath,
+  getCustomPuzzleByShareId,
+  getCustomPuzzleByShortCode,
+  type CustomPlayablePuzzle,
+} from "@/lib/customPuzzles";
+import { useCustomFavorite } from "@/hooks/useCustomFavorite";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
 import type { User } from "@supabase/supabase-js";
 
 type ModalName = "help" | "settings" | "feedback" | null;
 
+/**
+ * Serves BOTH /p/:shortCode (the link new shares use) and the permanent
+ * /custom/:shareId (every link shared before short codes existed). Either way
+ * the puzzle resolves to the same Puzzle whose id is the long share id, so
+ * local progress (`custom:<shareId>`), favorites and results are one identity
+ * and moving between the two URLs never resets anything.
+ */
 export default function CustomPuzzle() {
-  const { shareId } = useParams<{ shareId: string }>();
+  const { shareId, shortCode } = useParams<{ shareId?: string; shortCode?: string }>();
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null | undefined>(undefined);
-  const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
+  const [loaded, setLoaded] = useState<CustomPlayablePuzzle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [activeModal, setActiveModal] = useState<ModalName>(null);
@@ -30,6 +42,7 @@ export default function CustomPuzzle() {
   const [showHintModal, setShowHintModal] = useState(false);
   const [smallHintUsed, setSmallHintUsed] = useState(false);
   const [fullHintUsed, setFullHintUsed] = useState(false);
+  const puzzle = loaded?.puzzle ?? null;
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", settings.darkMode);
@@ -44,17 +57,18 @@ export default function CustomPuzzle() {
   }, []);
 
   useEffect(() => {
-    if (!shareId) { setError(true); setLoading(false); return; }
+    const key = shortCode ?? shareId;
+    if (!key) { setError(true); setLoading(false); return; }
     setLoading(true);
     setError(false);
     const timeout = setTimeout(() => { setError(true); setLoading(false); }, 8000);
-    getCustomPuzzleByShareId(shareId)
+    (shortCode ? getCustomPuzzleByShortCode(shortCode) : getCustomPuzzleByShareId(shareId!))
       .then((result) => {
         clearTimeout(timeout);
         if (!result) { setError(true); setLoading(false); return; }
-        setPuzzle(result.puzzle);
+        setLoaded(result);
         setLoading(false);
-        trackEvent("custom_puzzle_opened", { share_id: shareId });
+        trackEvent("custom_puzzle_opened", { via: shortCode ? "short" : "long" });
       })
       .catch(() => {
         clearTimeout(timeout);
@@ -62,7 +76,14 @@ export default function CustomPuzzle() {
         setLoading(false);
       });
     return () => clearTimeout(timeout);
-  }, [shareId]);
+  }, [shareId, shortCode]);
+
+  const favorite = useCustomFavorite({
+    shareId: puzzle?.id ?? null,
+    serverFavorited: loaded?.favoritedByMe ?? false,
+    serverCount: loaded?.favoriteCount ?? 0,
+    userId: user === undefined ? undefined : user?.id ?? null,
+  });
 
   const handleSettingsChange = (s: GameSettings) => {
     setSettings(s);
@@ -78,7 +99,7 @@ export default function CustomPuzzle() {
       <SEO
         title={puzzle?.title?.trim() ? `${puzzle.title.trim()} — Rainbow Connect` : "Custom Puzzle — Rainbow Connect"}
         description="A custom Rainbow Connect puzzle shared by a player."
-        path={`/custom/${shareId ?? ""}`}
+        path={puzzle ? customPuzzlePath(puzzle) : shortCode ? `/p/${shortCode}` : `/custom/${shareId ?? ""}`}
         noIndex
       />
 
@@ -95,29 +116,22 @@ export default function CustomPuzzle() {
       />
       <div className="w-full max-w-[840px] border-b border-border mb-3" />
 
-      <div className="w-full max-w-[840px] px-4 mb-2">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 sm:gap-2 mt-2">
-          <button
-            onClick={() => navigate("/create")}
-            className="w-[68px] sm:w-[88px] shrink-0 inline-flex items-center justify-center gap-0.5 whitespace-nowrap h-8 sm:h-9 rounded-full border border-border bg-card
-              text-foreground text-[11px] sm:text-sm font-semibold
-              hover:bg-secondary transition-colors active:scale-95"
-          >
-            <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
-            Create
-          </button>
-          <h1 className="min-w-0 text-center overflow-hidden whitespace-nowrap text-ellipsis
-            font-tile font-extrabold tracking-tight text-foreground text-[clamp(1.5rem,8vw,2rem)] sm:text-3xl">
-            {puzzle?.title?.trim() || "Custom Puzzle"}
+      {puzzle && !error ? (
+        <CustomPuzzleHeader
+          title={puzzle.title?.trim() || "Custom Puzzle"}
+          designerName={puzzle.designerName}
+          creatorSlug={loaded?.creatorSlug ?? null}
+          isRainbow={!!puzzle.rainbowHerring}
+          onBack={() => navigate("/create")}
+          favorite={{ favorited: favorite.favorited, count: favorite.count, onToggle: favorite.toggle, note: favorite.note }}
+        />
+      ) : (
+        <div className="w-full max-w-[840px] px-4 mb-2">
+          <h1 className="text-center font-tile font-extrabold tracking-tight text-foreground text-[clamp(1.5rem,8vw,2rem)] sm:text-3xl mt-2">
+            Custom Puzzle
           </h1>
-          <div className="w-[68px] sm:w-[88px] shrink-0" />
         </div>
-        {puzzle && !error && (
-          <p className="text-center text-xs sm:text-sm text-muted-foreground mt-1">
-            by {puzzle.designerName}
-          </p>
-        )}
-      </div>
+      )}
 
       {loading ? (
         <div className="flex-1 flex items-center justify-center">

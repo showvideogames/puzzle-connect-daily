@@ -211,6 +211,53 @@ export type Database = {
           },
         ]
       }
+      creator_profiles: {
+        Row: {
+          created_at: string
+          display_name: string
+          public_slug: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          public_slug: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          public_slug?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      custom_puzzle_favorites: {
+        Row: {
+          created_at: string
+          custom_puzzle_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          custom_puzzle_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          custom_puzzle_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_puzzle_favorites_custom_puzzle_id_fkey"
+            columns: ["custom_puzzle_id"]
+            isOneToOne: false
+            referencedRelation: "custom_puzzles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_puzzle_results: {
         Row: {
           completed_at: string
@@ -255,6 +302,7 @@ export type Database = {
           id: string
           moderation_status: string
           share_id: string
+          short_code: string
           title: string
           visibility: string
         }
@@ -266,6 +314,7 @@ export type Database = {
           id?: string
           moderation_status?: string
           share_id: string
+          short_code: string
           title: string
           visibility: string
         }
@@ -277,6 +326,7 @@ export type Database = {
           id?: string
           moderation_status?: string
           share_id?: string
+          short_code?: string
           title?: string
           visibility?: string
         }
@@ -1099,6 +1149,20 @@ export type Database = {
         }
         Returns: string
       }
+      custom_creator_new_slug: { Args: { _name: string }; Returns: string }
+      custom_ensure_creator_profile: {
+        Args: { _name: string; _uid: string }
+        Returns: undefined
+      }
+      custom_puzzle_new_short_code: { Args: never; Returns: string }
+      custom_puzzle_public_json: {
+        Args: { _p: Database["public"]["Tables"]["custom_puzzles"]["Row"] }
+        Returns: Json
+      }
+      custom_random_string: {
+        Args: { _alphabet: string; _len: number }
+        Returns: string
+      }
       decline_guest_history: {
         Args: { _device_id?: string; _device_token?: string }
         Returns: {
@@ -1135,8 +1199,17 @@ export type Database = {
           title: string
         }[]
       }
+      get_creator_profile: {
+        Args: { _slug: string; _sort?: string }
+        Returns: Json
+      }
       get_custom_puzzle: { Args: { _share_id: string }; Returns: Json }
+      get_custom_puzzle_by_short_code: {
+        Args: { _short_code: string }
+        Returns: Json
+      }
       get_custom_puzzle_stats: { Args: { _share_id: string }; Returns: Json }
+      get_my_favorites: { Args: never; Returns: Json }
       get_own_completed_sessions: {
         Args: { _device_id?: string; _device_token?: string }
         Returns: {
@@ -1256,6 +1329,10 @@ export type Database = {
       session_capability_ok: {
         Args: { _device_id: string; _device_token: string; _session_id: string }
         Returns: boolean
+      }
+      set_custom_puzzle_favorite: {
+        Args: { _favorite: boolean; _share_id: string }
+        Returns: Json
       }
       start_beta_playtest: {
         Args: {

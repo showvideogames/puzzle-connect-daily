@@ -3,7 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Switch } from "@/components/ui/switch";
 import { GameSettings } from "@/lib/settings";
 import { Link } from "react-router-dom";
-import { BookOpen, Archive as ArchiveIcon, X } from "lucide-react";
+import { BookOpen, Archive as ArchiveIcon, Star, X } from "lucide-react";
 import { PlayerAuth } from "./PlayerAuth";
 import type { User as AuthUser } from "@supabase/supabase-js";
 
@@ -146,6 +146,17 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                       <ArchiveIcon className="w-4 h-4 text-slate" />
                       Puzzle Archive
                     </Link>
+                    {user && (
+                      <Link
+                        to="/favorites"
+                        onClick={onClose}
+                        className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
+                          hover:bg-secondary transition-colors active:scale-95"
+                      >
+                        <Star className="w-4 h-4 text-slate" />
+                        Favorites
+                      </Link>
+                    )}
                     <div className="flex items-center gap-3 px-2 py-1.5">
                       {/* PlayerAuth's own icon button keeps working exactly
                           as before (unchanged click target) — forceOpen only
