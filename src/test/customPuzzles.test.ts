@@ -284,13 +284,31 @@ describe("creating a custom puzzle", () => {
     expect(error).toBeTruthy();
   });
 
-  it("a Small Hint can never duplicate a board answer (so it can never become a board or Rainbow answer)", async () => {
+  it("a Small Hint can never duplicate a board answer in its OWN category", async () => {
     const bad: CreateCustomPuzzleInput = {
       ...CLASSIC_INPUT,
       content: {
         ...CLASSIC_INPUT.content,
         groups: [
-          { ...CLASSIC_INPUT.content.groups[0], hintWord: "GREEN" }, // GREEN is group 2's board answer
+          { ...CLASSIC_INPUT.content.groups[0], hintWord: "GREEN" }, // GREEN is group 0's own board answer
+          ...CLASSIC_INPUT.content.groups.slice(1),
+        ],
+      },
+    };
+    await expect(createCustomPuzzle(bad)).rejects.toBeTruthy();
+  });
+
+  it("a Small Hint can never duplicate a board answer from a LATER category either (so it can never become a board or Rainbow answer)", async () => {
+    // Regression test: an earlier draft of validate_custom_puzzle_content
+    // only checked a group's hint against the groups already processed
+    // before it, so group 0's hint could silently duplicate a word from
+    // group 1-3 undetected. TIRE belongs to group 1 (Car Parts), not group 0.
+    const bad: CreateCustomPuzzleInput = {
+      ...CLASSIC_INPUT,
+      content: {
+        ...CLASSIC_INPUT.content,
+        groups: [
+          { ...CLASSIC_INPUT.content.groups[0], hintWord: "TIRE" },
           ...CLASSIC_INPUT.content.groups.slice(1),
         ],
       },

@@ -149,6 +149,7 @@ declare
   _words       jsonb;
   _all         text[] := '{}';
   _group_words text[][];
+  _hints       text[] := array[null, null, null, null];
   _out         jsonb := '[]'::jsonb;
   _herring     jsonb;
   _order       jsonb;
@@ -203,15 +204,17 @@ begin
       _group_words[_i + 1] := array_append(_group_words[_i + 1], _w);
     end loop;
 
+    -- Length-checked here, but NOT checked for duplication yet: _all only
+    -- holds groups 0..i so far, and a hint must be compared against all 16
+    -- board answers, including groups that haven't been processed yet (see
+    -- the dedicated pass below, once _all is complete). Checking here was a
+    -- real bug -- it let group 0's hint duplicate a word from group 2 or 3
+    -- undetected, since those words weren't in _all yet at this point.
     _hint := nullif(btrim(coalesce(_g ->> 'hint_word', '')), '');
-    if _hint is not null then
-      if length(_hint) > 40 then
-        raise exception 'group % Small Hint is too long (max 40 characters)', _i + 1 using errcode = 'invalid_parameter_value';
-      end if;
-      if upper(_hint) = any (select upper(x) from unnest(_all) x) then
-        raise exception 'group % Small Hint cannot duplicate a board answer', _i + 1 using errcode = 'invalid_parameter_value';
-      end if;
+    if _hint is not null and length(_hint) > 40 then
+      raise exception 'group % Small Hint is too long (max 40 characters)', _i + 1 using errcode = 'invalid_parameter_value';
     end if;
+    _hints[_i + 1] := _hint;
 
     _out := _out || jsonb_build_array(jsonb_build_object(
       'category',   btrim(_g ->> 'category'),
@@ -224,6 +227,14 @@ begin
   if (select count(distinct upper(w)) from unnest(_all) w) <> 16 then
     raise exception 'a puzzle needs 16 unique answers' using errcode = 'invalid_parameter_value';
   end if;
+
+  -- Now that _all holds all 16 board answers, check every group's hint
+  -- against the COMPLETE board -- not just the groups seen before it.
+  for _i in 1 .. 4 loop
+    if _hints[_i] is not null and upper(_hints[_i]) = any (select upper(x) from unnest(_all) x) then
+      raise exception 'group % Small Hint cannot duplicate a board answer', _i using errcode = 'invalid_parameter_value';
+    end if;
+  end loop;
 
   -- Rainbow: 'classic' must carry none at all; 'rainbow' must select EXACTLY
   -- one answer from EACH group (not merely 4-of-16 anywhere in the puzzle).

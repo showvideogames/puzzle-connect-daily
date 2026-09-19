@@ -201,19 +201,27 @@ export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
       thisGroupWords.push(w);
     }
     groupWords.push(thisGroupWords);
+    // Length-checked here, but NOT checked for duplication yet: `all` only
+    // holds groups 0..index so far. Checking here was a real bug in the SQL
+    // this mirrors (fixed in 20260919000000) -- it let group 0's hint
+    // duplicate a word from group 2 or 3 undetected, since those words
+    // weren't in `all` yet at this point. See the dedicated pass below.
     const hint = blankToNull(group.hint_word as string | undefined);
-    if (hint !== null) {
-      if (hint.length > 40) throw new Error(`group ${index + 1} Small Hint is too long`);
-      if (all.some((w) => w.toUpperCase() === hint.toUpperCase())) {
-        throw new Error(`group ${index + 1} Small Hint cannot duplicate a board answer`);
-      }
-    }
+    if (hint !== null && hint.length > 40) throw new Error(`group ${index + 1} Small Hint is too long`);
     return { category, words: [...(words as string[])], hint_word: hint, sort_order: index };
   });
 
   if (new Set(all.map((w) => w.toUpperCase())).size !== 16) {
     throw new Error("a puzzle needs 16 unique answers");
   }
+
+  // Now that `all` holds every board answer, check every group's hint
+  // against the COMPLETE board -- not just the groups seen before it.
+  outGroups.forEach((g, index) => {
+    if (g.hint_word && all.some((w) => w.toUpperCase() === (g.hint_word as string).toUpperCase())) {
+      throw new Error(`group ${index + 1} Small Hint cannot duplicate a board answer`);
+    }
+  });
 
   const herringRaw = content.rainbow_herring;
   let herring: string[] | null =
