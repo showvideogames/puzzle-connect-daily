@@ -25,6 +25,7 @@ export interface CustomGroupInput {
   category: string;
   words: string[];
   hintWord: string | null;
+  categoryEmoji?: string | null;
 }
 
 export interface CustomPuzzleContentInput {
@@ -34,6 +35,7 @@ export interface CustomPuzzleContentInput {
   rainbowHerring: string[] | null;
   rainbowCategoryName: string | null;
   rainbowHintWord: string | null;
+  rainbowCategoryEmoji?: string | null;
   alphabetizeCompleted: boolean;
 }
 
@@ -58,11 +60,13 @@ function contentPayload(content: CustomPuzzleContentInput) {
       category: g.category,
       words: g.words,
       hint_word: g.hintWord,
+      category_emoji: g.categoryEmoji?.trim() || null,
     })),
     word_order: content.wordOrder,
     rainbow_herring: content.mode === "rainbow" ? content.rainbowHerring : null,
     rainbow_category_name: content.mode === "rainbow" ? content.rainbowCategoryName : null,
     rainbow_hint_word: content.mode === "rainbow" ? content.rainbowHintWord : null,
+    rainbow_category_emoji: content.mode === "rainbow" ? content.rainbowCategoryEmoji?.trim() || null : null,
     alphabetize_completed: content.alphabetizeCompleted,
   };
 }
@@ -103,11 +107,12 @@ interface CustomPuzzleRow {
   visibility: CustomPuzzleVisibility;
   content: {
     mode: CustomPuzzleMode;
-    groups: { category: string; words: string[]; hint_word: string | null; sort_order: number }[];
+    groups: { category: string; words: string[]; hint_word: string | null; category_emoji?: string | null; sort_order: number }[];
     word_order: string[] | null;
     rainbow_herring: string[] | null;
     rainbow_category_name: string | null;
     rainbow_hint_word: string | null;
+    rainbow_category_emoji?: string | null;
     alphabetize_completed: boolean;
   };
 }
@@ -120,6 +125,7 @@ function mapRowToPuzzle(row: CustomPuzzleRow): Puzzle {
       words: g.words,
       difficulty: (i + 1) as 1 | 2 | 3 | 4,
       hintWord: g.hint_word ?? null,
+      categoryEmoji: g.category_emoji ?? null,
     }));
 
   return {
@@ -136,6 +142,7 @@ function mapRowToPuzzle(row: CustomPuzzleRow): Puzzle {
     rainbowHerring: row.content.mode === "rainbow" ? row.content.rainbow_herring : null,
     rainbowCategoryName: row.content.mode === "rainbow" ? row.content.rainbow_category_name : null,
     rainbowHintWord: row.content.mode === "rainbow" ? row.content.rainbow_hint_word : null,
+    rainbowCategoryEmoji: row.content.mode === "rainbow" ? row.content.rainbow_category_emoji ?? null : null,
     isEmojiPuzzle: false,
     isFreePuzzle: false,
     theme: null,
@@ -304,7 +311,9 @@ export async function getCreatorProfile(slug: string, sort: CreatorSort = "newes
 }
 
 /**
- * Records this device's finished result for a custom puzzle.
+ * Records one completed run of a custom puzzle. Every completed run counts
+ * once (a completed replay is another play); the run id makes a retry,
+ * refresh or remount of the same run a no-op.
  *
  * `totalGuesses` must already be "submitted board guesses only" — the caller
  * (useGame.ts's commitOfficialResult "custom" branch) derives it from the
@@ -316,6 +325,8 @@ export async function getCreatorProfile(slug: string, sort: CreatorSort = "newes
  */
 export async function submitCustomPuzzleResult(params: {
   shareId: string;
+  /** This playthrough's id; a repeat of the same run is a no-op server-side. */
+  runId: string;
   won: boolean;
   totalGuesses: number;
 }): Promise<void> {
@@ -328,6 +339,7 @@ export async function submitCustomPuzzleResult(params: {
       _device_token: identity.deviceToken,
       _won: params.won,
       _total_guesses: params.totalGuesses,
+      _run_id: params.runId,
     });
     if (error) console.error("submitCustomPuzzleResult failed:", error);
   } catch (err) {
@@ -335,30 +347,49 @@ export async function submitCustomPuzzleResult(params: {
   }
 }
 
+/** The fixed guess buckets, in display order. Losses are never in them. */
+export const GUESS_BUCKETS = ["4", "5", "6", "7", "8+"] as const;
+export type GuessBucket = (typeof GUESS_BUCKETS)[number];
+
 export interface CustomPuzzleStats {
-  finishedPlays: number;
+  completedPlays: number;
   wins: number;
   losses: number;
-  avgGuesses: number;
-  /** Keyed by total_guesses (as a string), value = count of finished plays with that many guesses. */
-  guessDistribution: Record<string, number>;
+  /** Average total guesses over WINS only (0 when there are none). */
+  avgGuessesToSolve: number;
+  /** Always all five buckets, zeros included. Wins only. */
+  guessDistribution: Record<GuessBucket, number>;
+}
+
+/** Which bucket a winning run's guess count falls in. */
+export function guessBucketFor(totalGuesses: number): GuessBucket {
+  if (totalGuesses >= 8) return "8+";
+  return String(Math.max(4, totalGuesses)) as GuessBucket;
 }
 
 export async function getCustomPuzzleStats(shareId: string): Promise<CustomPuzzleStats | null> {
   const { data, error } = await supabase.rpc("get_custom_puzzle_stats", { _share_id: shareId });
   if (error || !data) return null;
   const row = data as {
+    completed_plays?: number;
     finished_plays?: number;
     wins?: number;
     losses?: number;
     avg_guesses?: number;
     guess_distribution?: Record<string, number>;
   };
+  const dist = row.guess_distribution ?? {};
   return {
-    finishedPlays: row.finished_plays ?? 0,
+    completedPlays: row.completed_plays ?? row.finished_plays ?? 0,
     wins: row.wins ?? 0,
     losses: row.losses ?? 0,
-    avgGuesses: row.avg_guesses ?? 0,
-    guessDistribution: row.guess_distribution ?? {},
+    avgGuessesToSolve: Number(row.avg_guesses ?? 0),
+    guessDistribution: {
+      "4": dist["4"] ?? 0,
+      "5": dist["5"] ?? 0,
+      "6": dist["6"] ?? 0,
+      "7": dist["7"] ?? 0,
+      "8+": dist["8+"] ?? 0,
+    },
   };
 }

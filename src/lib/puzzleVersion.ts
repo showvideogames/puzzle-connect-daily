@@ -76,6 +76,8 @@ export interface PinnedPuzzleContent {
   rainbowHerring: string[] | null;
   rainbowCategoryName: string | null;
   rainbowHintWord: string | null;
+  // Absent in snapshots written before Category Emoji existed.
+  rainbowCategoryEmoji?: string | null;
   theme: string | null;
   isEmojiPuzzle: boolean;
   alphabetizeCompleted: boolean;
@@ -101,11 +103,13 @@ export function pinnedContentFrom(puzzle: Puzzle): PinnedPuzzleContent | null {
       words: [...g.words],
       difficulty: g.difficulty,
       hintWord: g.hintWord ?? null,
+      categoryEmoji: g.categoryEmoji ?? null,
     })),
     wordOrder: puzzle.wordOrder ? [...puzzle.wordOrder] : null,
     rainbowHerring: puzzle.rainbowHerring ? [...puzzle.rainbowHerring] : null,
     rainbowCategoryName: puzzle.rainbowCategoryName ?? null,
     rainbowHintWord: puzzle.rainbowHintWord ?? null,
+    rainbowCategoryEmoji: puzzle.rainbowCategoryEmoji ?? null,
     theme: puzzle.theme ?? null,
     isEmojiPuzzle: puzzle.isEmojiPuzzle ?? false,
     alphabetizeCompleted: puzzle.alphabetizeCompleted ?? true,
@@ -154,6 +158,7 @@ export function applyPinnedContent(current: Puzzle, pinned: PinnedPuzzleContent)
     rainbowHerring: pinned.rainbowHerring,
     rainbowCategoryName: pinned.rainbowCategoryName,
     rainbowHintWord: pinned.rainbowHintWord,
+    rainbowCategoryEmoji: pinned.rainbowCategoryEmoji ?? null,
     theme: pinned.theme,
     isEmojiPuzzle: pinned.isEmojiPuzzle,
     // ?? true (not a bare trust-the-type read like the fields above): unlike

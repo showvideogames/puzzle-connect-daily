@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBuilderForm } from "@/hooks/useBuilderForm";
 import { CategoryEditor } from "@/components/builder/CategoryEditor";
+import { CategoryList } from "@/components/builder/CategoryList";
+import { StyleSelector } from "@/components/builder/StyleSelector";
+import { StartOverButton } from "@/components/builder/StartOverButton";
 import { StartingBoardArranger } from "@/components/builder/StartingBoardArranger";
 import { RainbowPanel } from "@/components/builder/RainbowPanel";
 import { EmojiCodesModal } from "@/components/EmojiCodesModal";
@@ -40,7 +43,9 @@ export default function CreatePuzzle() {
 
   const [puzzleTitle, setPuzzleTitle] = useState("");
   const [designerName, setDesignerName] = useState("");
-  const [styleTab, setStyleTab] = useState<"classic" | "rainbow">("classic");
+  // Rainbow is the default for a brand-new puzzle; the style lives in the
+  // shared builder so Start Over restores it the same way as everything else.
+  const styleTab = builder.style;
   const [visibility, setVisibility] = useState<CustomPuzzleVisibility>("public");
   const [showEmojiCodes, setShowEmojiCodes] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -54,6 +59,7 @@ export default function CreatePuzzle() {
         category: g.category.trim(),
         words: parseWords(g.answersRaw),
         hintWord: g.hintWord.trim() || null,
+        categoryEmoji: g.categoryEmoji.trim() || null,
       })),
     [builder.groups]
   );
@@ -82,6 +88,15 @@ export default function CreatePuzzle() {
 
   const canAttempt = builder.hasAll16;
 
+  // Clears every field but the designer name, then restores the new-puzzle
+  // defaults (Rainbow, alphabetize on, fresh random board, Public).
+  function handleStartOver() {
+    setPuzzleTitle("");
+    setVisibility("public");
+    setError(null);
+    builder.reset();
+  }
+
   async function handleCreate() {
     const validationError = validate();
     if (validationError) {
@@ -107,11 +122,13 @@ export default function CreatePuzzle() {
             category: g.category,
             words: g.words,
             hintWord: g.hintWord,
+            categoryEmoji: g.categoryEmoji,
           })),
           wordOrder,
           rainbowHerring,
           rainbowCategoryName: styleTab === "rainbow" ? builder.rainbowCategoryName.trim() || null : null,
           rainbowHintWord: styleTab === "rainbow" ? builder.rainbowHintWord.trim() || null : null,
+          rainbowCategoryEmoji: styleTab === "rainbow" ? builder.rainbowCategoryEmoji.trim() || null : null,
           alphabetizeCompleted: builder.alphabetizeCompleted,
         },
       });
@@ -246,22 +263,7 @@ export default function CreatePuzzle() {
                   </span>
                 </div>
               </div>
-              <div>
-                <span className="text-xs font-medium text-slate block mb-1">Style</span>
-                <div className="inline-flex rounded-lg border border-border p-0.5 bg-secondary/50">
-                  {(["classic", "rainbow"] as const).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setStyleTab(s)}
-                      className={`px-3 py-1.5 rounded-md text-xs font-semibold capitalize transition-colors
-                        ${styleTab === s ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <StyleSelector value={builder.style} onChange={builder.setStyle} />
               <div>
                 <span className="text-xs font-medium text-slate block mb-1">Visibility</span>
                 <div className="inline-flex rounded-lg border border-border p-0.5 bg-secondary/50">
@@ -295,26 +297,35 @@ export default function CreatePuzzle() {
               <span className="text-sm font-medium text-ink">Alphabetize answers in completed categories</span>
             </label>
 
-            <div className="space-y-3">
-              {builder.groups.map((g, i) => (
-                <CategoryEditor
-                  key={i}
-                  colorIndex={(i + 1) as 1 | 2 | 3 | 4}
-                  label={CATEGORY_LABELS[i]}
-                  difficultyLabel={DIFFICULTY_LABELS[i]}
-                  category={g.category}
-                  onCategoryChange={(v) => builder.updateCategoryName(i, v)}
-                  categoryPlaceholder={CATEGORY_PLACEHOLDERS[i]}
-                  answersRaw={g.answersRaw}
-                  onAnswersRawChange={(v) => builder.updateAnswersRaw(i, v)}
-                  answersLabel="4 answers, separated by commas"
-                  answersPlaceholder={ANSWERS_PLACEHOLDERS[i]}
-                  hintWord={g.hintWord}
-                  onHintWordChange={(v) => builder.updateHintWord(i, v)}
-                  hintPlaceholder={HINT_PLACEHOLDERS[i]}
-                />
-              ))}
-            </div>
+            <CategoryList
+              keys={builder.groups.map((g) => g.poolIds[0])}
+              labels={[...CATEGORY_LABELS]}
+              onMove={builder.moveGroup}
+              renderCard={(i, dnd) => {
+                const g = builder.groups[i];
+                return (
+                  <CategoryEditor
+                    colorIndex={(i + 1) as 1 | 2 | 3 | 4}
+                    label={CATEGORY_LABELS[i]}
+                    difficultyLabel={DIFFICULTY_LABELS[i]}
+                    category={g.category}
+                    onCategoryChange={(v) => builder.updateCategoryName(i, v)}
+                    categoryEmoji={g.categoryEmoji}
+                    onCategoryEmojiChange={(v) => builder.updateCategoryEmoji(i, v)}
+                    categoryPlaceholder={CATEGORY_PLACEHOLDERS[i]}
+                    answersRaw={g.answersRaw}
+                    onAnswersRawChange={(v) => builder.updateAnswersRaw(i, v)}
+                    answersLabel="4 answers, separated by commas"
+                    answersPlaceholder={ANSWERS_PLACEHOLDERS[i]}
+                    hintWord={g.hintWord}
+                    onHintWordChange={(v) => builder.updateHintWord(i, v)}
+                    hintPlaceholder={HINT_PLACEHOLDERS[i]}
+                    dragHandle={dnd.handle}
+                    isDragging={dnd.isDragging}
+                  />
+                );
+              }}
+            />
 
             {styleTab === "rainbow" && builder.hasAll16 && (
               <RainbowPanel
@@ -327,6 +338,8 @@ export default function CreatePuzzle() {
                 onSelect={builder.selectRainbowAnswer}
                 categoryName={builder.rainbowCategoryName}
                 onCategoryNameChange={builder.setRainbowCategoryName}
+                categoryEmoji={builder.rainbowCategoryEmoji}
+                onCategoryEmojiChange={builder.setRainbowCategoryEmoji}
                 hintWord={builder.rainbowHintWord}
                 onHintWordChange={builder.setRainbowHintWord}
                 theme={builder.theme}
@@ -354,9 +367,12 @@ export default function CreatePuzzle() {
               <p className="text-sm text-destructive font-medium" role="alert">{error}</p>
             )}
 
-            <Button onClick={handleCreate} disabled={creating || !canAttempt}>
-              {creating ? "Creating…" : "Create Game"}
-            </Button>
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={handleCreate} disabled={creating || !canAttempt}>
+                {creating ? "Creating…" : "Create Game"}
+              </Button>
+              <StartOverButton onConfirm={handleStartOver} disabled={creating} />
+            </div>
             {!canAttempt && (
               <p className="text-xs text-muted-foreground">Fill in all 4 categories with 4 answers each to continue.</p>
             )}
@@ -368,6 +384,9 @@ export default function CreatePuzzle() {
               tiles={boardTiles}
               onReorder={builder.setWordOrderIds}
               onRandomize={builder.randomizeWordOrder}
+              title={puzzleTitle}
+              designerName={designerName}
+              isRainbow={builder.style === "rainbow"}
             />
           </div>
         </div>

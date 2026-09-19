@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Puzzle, GameState, GuessAttempt } from "@/lib/types";
+import { dedupeHintMarkers } from "@/lib/hints";
 import { vibrateSuccess, vibrateError, vibrateCelebration } from "@/lib/haptics";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,7 +44,7 @@ const DIFFICULTY_SQUARE: Record<number, string> = {
 
 function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle): string {
   const lines: string[] = [];
-  for (const attempt of guessHistory) {
+  for (const attempt of dedupeHintMarkers(guessHistory)) {
     if (attempt.isHintMarker) {
       const emoji = attempt.hintType === "small" ? "💡" : "🔦";
       const last = lines[lines.length - 1];
@@ -90,6 +91,9 @@ export function useGame(
     isArchive = false,
     smallHintUsed = false,
     fullHintUsed = false,
+    // True once the player has seen the Rainbow bonus result (found or failed).
+    // With the board complete this puts hints into view-only mode.
+    rainbowResolved = false,
     // How the player reached this game. Recorded once, on the durable
     // session, at creation — see lib/entryContext.ts. Defaults to the Daily
     // home route because that is the only caller that does not pass one.
@@ -108,6 +112,7 @@ export function useGame(
     isArchive?: boolean;
     smallHintUsed?: boolean;
     fullHintUsed?: boolean;
+    rainbowResolved?: boolean;
     entryContext?: EntryContext;
     mode?: "official" | "beta" | "custom";
   } = {}
@@ -165,14 +170,22 @@ export function useGame(
   // true, so effectiveSmallHintUsed/effectiveFullHintUsed below stay
   // correct across refresh/resume regardless of what the fresh page-level
   // state happens to be.
-  const restoredSmallHintUsedRef = useRef(
-    saved?.smallHintUsed ?? hintUsedInHistory(saved?.guessHistory, "small")
+  //
+  // These refs are also the once-only latch for each hint type: a reveal is
+  // recorded only while its ref is false, and the ref flips true in the same
+  // tick. Reopening, remounting, repeated clicks or a restored blob can
+  // therefore never record (or add a share marker for) the same hint twice.
+  const smallHintRevealedRef = useRef(
+    !!saved?.smallHintUsed || hintUsedInHistory(saved?.guessHistory, "small")
   );
-  const restoredFullHintUsedRef = useRef(
-    saved?.fullHintUsed ?? hintUsedInHistory(saved?.guessHistory, "full")
+  const fullHintRevealedRef = useRef(
+    !!saved?.fullHintUsed || hintUsedInHistory(saved?.guessHistory, "full")
   );
-  const effectiveSmallHintUsed = smallHintUsed || restoredSmallHintUsedRef.current;
-  const effectiveFullHintUsed = fullHintUsed || restoredFullHintUsedRef.current;
+  // This playthrough's identity (see SavedProgress.runId).
+  const runIdRef = useRef<string>(saved?.runId ?? crypto.randomUUID());
+  const [, setHintRevealVersion] = useState(0);
+  const effectiveSmallHintUsed = smallHintRevealedRef.current;
+  const effectiveFullHintUsed = fullHintRevealedRef.current;
 
   const [shuffledWords, setShuffledWords] = useState(() => {
     if (saved) return saved.shuffledWords;
@@ -199,7 +212,7 @@ export function useGame(
         selectedWords: [],
         isComplete: saved.isComplete ?? false,
         isWon: saved.isWon ?? false,
-        guessHistory: saved.guessHistory,
+        guessHistory: dedupeHintMarkers(saved.guessHistory),
         gotRainbow: saved.gotRainbow,
         rainbowSolveIndex: saved.rainbowSolveIndex ?? null,
       };
@@ -453,13 +466,19 @@ export function useGame(
   // modal merely opens. A resumed page restores hint state through
   // restoredSmallHintUsedRef WITHOUT touching these props, so a refresh
   // cannot replay a reveal that already happened.
-  const prevSmallHintRef = useRef(smallHintUsed);
-  const prevFullHintRef = useRef(fullHintUsed);
+  //
+  // Once the whole puzzle is resolved (board complete AND the Rainbow result
+  // known) the result is final: hints become view-only. A view-only reveal
+  // shows the hint but writes no event, marker, flag or progress.
+  const hintsViewOnly =
+    state.isComplete && (!puzzle.rainbowHerring || state.gotRainbow || rainbowResolved);
 
   const addHintMarker = useCallback((type: "small" | "full") => {
     setState((s) => ({
       ...s,
-      guessHistory: [
+      guessHistory: s.guessHistory.some((g) => g.isHintMarker && g.hintType === type)
+        ? s.guessHistory
+        : [
         ...s.guessHistory,
         { words: [], groupIndices: [], isCorrect: false, isHintMarker: true, hintType: type },
       ],
@@ -488,20 +507,22 @@ export function useGame(
   );
 
   useEffect(() => {
-    if (smallHintUsed && !prevSmallHintRef.current) {
+    if (smallHintUsed && !smallHintRevealedRef.current && !hintsViewOnly) {
+      smallHintRevealedRef.current = true;
+      setHintRevealVersion((v) => v + 1);
       addHintMarker("small");
       persistHintReveal("small");
     }
-    prevSmallHintRef.current = smallHintUsed;
-  }, [smallHintUsed, addHintMarker, persistHintReveal]);
+  }, [smallHintUsed, hintsViewOnly, addHintMarker, persistHintReveal]);
 
   useEffect(() => {
-    if (fullHintUsed && !prevFullHintRef.current) {
+    if (fullHintUsed && !fullHintRevealedRef.current && !hintsViewOnly) {
+      fullHintRevealedRef.current = true;
+      setHintRevealVersion((v) => v + 1);
       addHintMarker("full");
       persistHintReveal("full");
     }
-    prevFullHintRef.current = fullHintUsed;
-  }, [fullHintUsed, addHintMarker, persistHintReveal]);
+  }, [fullHintUsed, hintsViewOnly, addHintMarker, persistHintReveal]);
 
   useEffect(() => {
     if (oneAway) setOneAway(false);
@@ -523,6 +544,7 @@ export function useGame(
         tileColors,
         smallHintUsed: effectiveSmallHintUsed,
         fullHintUsed: effectiveFullHintUsed,
+        runId: runIdRef.current,
         activeTimeSeconds: activeSecondsRef.current,
         gameSessionId: sessionIdRef.current,
         puzzleSnapshot,
@@ -557,6 +579,7 @@ export function useGame(
       tileColors,
       smallHintUsed: effectiveSmallHintUsed,
       fullHintUsed: effectiveFullHintUsed,
+      runId: runIdRef.current,
       activeTimeSeconds: activeSecondsRef.current,
         gameSessionId: sessionIdRef.current,
         puzzleSnapshot,
@@ -645,6 +668,7 @@ export function useGame(
       // the product rule defines it — no separate counting needed.
       await submitCustomPuzzleResult({
         shareId: puzzle.id,
+        runId: runIdRef.current,
         won,
         totalGuesses: statsParams.guessHistory.length,
       });
@@ -1201,6 +1225,11 @@ export function useGame(
      */
     effectiveSmallHintUsed,
     effectiveFullHintUsed,
+    // What the board SHOWS: recorded reveals, plus hints opened view-only after
+    // the puzzle was resolved (never persisted, never counted).
+    smallHintVisible: effectiveSmallHintUsed || (hintsViewOnly && smallHintUsed),
+    fullHintVisible: effectiveFullHintUsed || (hintsViewOnly && fullHintUsed),
+    hintsViewOnly,
     markRainbowFound,
     handleDragStart,
     handleDragOver,

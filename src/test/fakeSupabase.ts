@@ -72,6 +72,8 @@ export function canonicalizePuzzleContent(raw: unknown): FakeRow {
       }
       all.push(w);
     }
+    const emoji = blankToNull(group.category_emoji);
+    if (emoji !== null && emoji.length > 40) throw new Error(`group ${index + 1} Category Emoji is too long`);
     return {
       category,
       words: [...(words as string[])],
@@ -79,6 +81,9 @@ export function canonicalizePuzzleContent(raw: unknown): FakeRow {
       hint_word: blankToNull(group.hint_word),
       // Positional, exactly as the SQL assigns it.
       sort_order: index,
+      // Emitted ONLY when set, like validate_puzzle_content, so an older puzzle
+      // canonicalises unchanged and never mints a spurious version.
+      ...(emoji !== null ? { category_emoji: emoji } : {}),
     };
   });
 
@@ -125,6 +130,11 @@ export function canonicalizePuzzleContent(raw: unknown): FakeRow {
     // Mirrors coalesce((_content ->> 'alphabetize_completed')::boolean, true)
     // in validate_puzzle_content: missing/non-boolean input defaults true.
     alphabetize_completed: content.alphabetize_completed !== false,
+    ...(() => {
+      const e = blankToNull(content.rainbow_category_emoji);
+      if (e !== null && e.length > 40) throw new Error("Rainbow Category Emoji is too long");
+      return e !== null ? { rainbow_category_emoji: e } : {};
+    })(),
   };
 }
 
@@ -208,7 +218,15 @@ export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
     // weren't in `all` yet at this point. See the dedicated pass below.
     const hint = blankToNull(group.hint_word as string | undefined);
     if (hint !== null && hint.length > 40) throw new Error(`group ${index + 1} Small Hint is too long`);
-    return { category, words: [...(words as string[])], hint_word: hint, sort_order: index };
+    const emoji = blankToNull(group.category_emoji as string | undefined);
+    if (emoji !== null && emoji.length > 40) throw new Error(`group ${index + 1} Category Emoji is too long`);
+    return {
+      category,
+      words: [...(words as string[])],
+      hint_word: hint,
+      sort_order: index,
+      ...(emoji !== null ? { category_emoji: emoji } : {}),
+    };
   });
 
   if (new Set(all.map((w) => w.toUpperCase())).size !== 16) {
@@ -261,6 +279,11 @@ export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
     rainbow_category_name: mode === "rainbow" ? blankToNull(content.rainbow_category_name) : null,
     rainbow_hint_word: mode === "rainbow" ? blankToNull(content.rainbow_hint_word) : null,
     alphabetize_completed: content.alphabetize_completed !== false,
+    ...(() => {
+      const e = blankToNull(content.rainbow_category_emoji);
+      if (e !== null && e.length > 40) throw new Error("Rainbow Category Emoji is too long");
+      return e !== null ? { rainbow_category_emoji: e } : {};
+    })(),
   };
 }
 
@@ -290,6 +313,8 @@ export class FakeSupabase {
     custom_puzzles: [],
     /** One row per (custom_puzzle, device) that finished a game. */
     custom_puzzle_results: [],
+    /** One fixed-size aggregate counter row per custom puzzle — 20260921000000. */
+    custom_puzzle_stats: [],
     /** One favorite per (account, custom puzzle) — 20260920000000. */
     custom_puzzle_favorites: [],
     /** Public creator slug for signed-in creators — 20260920000000. */
@@ -373,6 +398,7 @@ export class FakeSupabase {
     // No SELECT policy at all, not even for admins — read only in
     // aggregate, via get_custom_puzzle_stats.
     "custom_puzzle_results",
+    "custom_puzzle_stats",
     // No policies at all (20260920000000): reachable only through the RPCs.
     "custom_puzzle_favorites",
     "creator_profiles",
@@ -435,7 +461,7 @@ export class FakeSupabase {
     if (!FakeSupabase.RLS_READ_PROTECTED.includes(table)) return rows;
     // These three are reachable ONLY through SECURITY DEFINER functions now;
     // no role has a SELECT policy on them, not even an admin.
-    if (["user_streaks", "device_identities", "account_onboarding", "custom_puzzle_results", "custom_puzzle_favorites", "creator_profiles"].includes(table)) return [];
+    if (["user_streaks", "device_identities", "account_onboarding", "custom_puzzle_results", "custom_puzzle_stats", "custom_puzzle_favorites", "creator_profiles"].includes(table)) return [];
     if (this.isAdmin) return rows;
     const uid = this.authUser?.id;
     if (!uid) return [];
@@ -696,6 +722,7 @@ export class FakeSupabase {
           theme: canonical.theme,
           is_emoji_puzzle: canonical.is_emoji_puzzle,
           alphabetize_completed: canonical.alphabetize_completed,
+          rainbow_category_emoji: (canonical.rainbow_category_emoji as string | undefined) ?? null,
         };
         // Mirrors admin_save_puzzle's `coalesce(nullif(btrim(...), ''), 'Sam
         // West')`: trimmed, and never blank -- clearing the field in the
@@ -805,6 +832,7 @@ export class FakeSupabase {
             difficulty: g.difficulty,
             sort_order: g.sort_order,
             hint_word: g.hint_word,
+            category_emoji: (g.category_emoji as string | undefined) ?? null,
           });
         }
         this._log("puzzle_groups", "upsert");
@@ -1419,7 +1447,7 @@ export class FakeSupabase {
             title: p.title,
             mode: (p.content as FakeRow).mode,
             short_code: p.short_code,
-            finished_plays: this.tables.custom_puzzle_results.filter((r) => r.custom_puzzle_id === p.id).length,
+            finished_plays: this._customPlays(p.id as string),
             favorite_count: this.tables.custom_puzzle_favorites.filter((r) => r.custom_puzzle_id === p.id).length,
             created_at: p.created_at as string,
           }));
@@ -1450,24 +1478,57 @@ export class FakeSupabase {
         if (!Number.isInteger(totalGuesses) || totalGuesses < 0 || totalGuesses > 60) {
           return { data: null, error: { code: "22023", message: "total_guesses out of range" } };
         }
+        // The legacy 5-argument form derives a per-(puzzle, device) run id, so it
+        // keeps its old "first result per device only" behaviour.
+        const runId = (args._run_id as string | undefined) ?? `legacy:${args._share_id}:${deviceId}`;
+        if (args._run_id === null) {
+          return { data: null, error: { code: "22023", message: "run_id is required" } };
+        }
         const puzzle = this.tables.custom_puzzles.find(
           (p) => p.share_id === args._share_id && p.moderation_status === "active"
         );
         if (!puzzle) return { data: false, error: null };
 
-        const clash = this.tables.custom_puzzle_results.some(
+        let row = this.tables.custom_puzzle_results.find(
           (r) => r.custom_puzzle_id === puzzle.id && r.device_id === deviceId
         );
-        if (!clash) {
-          this.tables.custom_puzzle_results.push({
+        let counted = false;
+        if (!row) {
+          row = {
             id: this._newId(),
             custom_puzzle_id: puzzle.id,
             device_id: deviceId,
             won: args._won,
             total_guesses: totalGuesses,
             completed_at: new Date().toISOString(),
-          });
+            recent_run_ids: [runId],
+          };
+          this.tables.custom_puzzle_results.push(row);
           this._log("custom_puzzle_results", "insert");
+          counted = true;
+        } else if (!((row.recent_run_ids as string[]) ?? []).includes(runId)) {
+          row.recent_run_ids = [runId, ...((row.recent_run_ids as string[]) ?? [])].slice(0, 10);
+          this._log("custom_puzzle_results", "update");
+          counted = true;
+        }
+        if (counted) {
+          let st = this.tables.custom_puzzle_stats.find((x) => x.custom_puzzle_id === puzzle.id);
+          if (!st) {
+            st = {
+              custom_puzzle_id: puzzle.id, wins: 0, losses: 0,
+              guesses_4: 0, guesses_5: 0, guesses_6: 0, guesses_7: 0, guesses_8_plus: 0, win_guess_total: 0,
+            };
+            this.tables.custom_puzzle_stats.push(st);
+          }
+          this._log("custom_puzzle_stats", "update");
+          if (args._won) {
+            st.wins = (st.wins as number) + 1;
+            const key = totalGuesses >= 8 ? "guesses_8_plus" : `guesses_${Math.max(4, totalGuesses)}`;
+            st[key] = (st[key] as number) + 1;
+            st.win_guess_total = (st.win_guess_total as number) + totalGuesses;
+          } else {
+            st.losses = (st.losses as number) + 1;
+          }
         }
         return { data: true, error: null };
       }
@@ -1476,23 +1537,19 @@ export class FakeSupabase {
           (p) => p.share_id === args._share_id && p.moderation_status === "active"
         );
         if (!puzzle) return { data: null, error: null };
-        const rows = this.tables.custom_puzzle_results.filter((r) => r.custom_puzzle_id === puzzle.id);
-        const wins = rows.filter((r) => r.won === true).length;
-        const distribution: Record<string, number> = {};
-        for (const r of rows) {
-          const key = String(r.total_guesses);
-          distribution[key] = (distribution[key] ?? 0) + 1;
-        }
+        const st = this.tables.custom_puzzle_stats.find((x) => x.custom_puzzle_id === puzzle.id);
+        const n = (k: string) => (st ? (st[k] as number) : 0);
+        const plays = n("wins") + n("losses");
         return {
           data: {
-            finished_plays: rows.length,
-            wins,
-            losses: rows.length - wins,
-            avg_guesses:
-              rows.length > 0
-                ? Math.round((rows.reduce((s, r) => s + (r.total_guesses as number), 0) / rows.length) * 100) / 100
-                : 0,
-            guess_distribution: distribution,
+            completed_plays: plays,
+            finished_plays: plays,
+            wins: n("wins"),
+            losses: n("losses"),
+            avg_guesses: n("wins") > 0 ? Math.round((n("win_guess_total") / n("wins")) * 100) / 100 : 0,
+            guess_distribution: {
+              "4": n("guesses_4"), "5": n("guesses_5"), "6": n("guesses_6"), "7": n("guesses_7"), "8+": n("guesses_8_plus"),
+            },
           },
           error: null,
         };
@@ -1545,6 +1602,12 @@ export class FakeSupabase {
   _rows(table: string) {
     return this.tables[table];
   }
+  /** Completed plays (wins + losses) for a custom puzzle, from its counter row. */
+  _customPlays(puzzleId: string): number {
+    const st = this.tables.custom_puzzle_stats.find((x) => x.custom_puzzle_id === puzzleId);
+    return st ? (st.wins as number) + (st.losses as number) : 0;
+  }
+
   _log(table: string, op: "insert" | "update" | "upsert") {
     this.writeLog.push({ table, op });
   }
@@ -1608,7 +1671,7 @@ export class FakeSupabase {
     // 20260919000000. custom_puzzles allows admin-only direct SELECT
     // (mirrored in _visibleForRead) but every write, admin included, goes
     // only through create_custom_puzzle/admin_set_custom_puzzle_status.
-    if (table === "custom_puzzle_results" || table === "custom_puzzle_favorites" || table === "creator_profiles") {
+    if (table === "custom_puzzle_results" || table === "custom_puzzle_stats" || table === "custom_puzzle_favorites" || table === "creator_profiles") {
       return `no ${op} policy on ${table}: use a scoped function`;
     }
     if (table === "custom_puzzles") {

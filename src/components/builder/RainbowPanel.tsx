@@ -15,6 +15,8 @@ interface RainbowPanelProps {
   onSelect: (groupIdx: number, slotId: string | null) => void;
   categoryName: string;
   onCategoryNameChange: (v: string) => void;
+  categoryEmoji: string;
+  onCategoryEmojiChange: (v: string) => void;
   hintWord: string;
   onHintWordChange: (v: string) => void;
   theme: string;
@@ -37,6 +39,8 @@ export function RainbowPanel({
   onSelect,
   categoryName,
   onCategoryNameChange,
+  categoryEmoji,
+  onCategoryEmojiChange,
   hintWord,
   onHintWordChange,
   theme,
@@ -112,6 +116,19 @@ export function RainbowPanel({
             <DraggableTileGrid tiles={displayOrderTiles} onReorder={onReorderDisplay} />
           </div>
         )}
+
+        <div>
+          <Label className="text-xs">Category Emoji (optional)</Label>
+          <input
+            type="text"
+            value={categoryEmoji}
+            onChange={(e) => onCategoryEmojiChange(e.target.value)}
+            onBlur={onFieldBlur}
+            placeholder="🌈"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
+          />
+          <p className="text-xs text-muted-foreground mt-1">Add an emoji or short visual, such as 🎵 or ___ 💬.</p>
+        </div>
 
         <div>
           <Label className="text-xs">Small Hint word (optional)</Label>

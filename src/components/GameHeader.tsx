@@ -75,35 +75,23 @@ export function GameHeader({
           <img src={todaysLogo()} alt="Rainbow Connect" className="h-[clamp(11px,3.7vw,40px)] min-[360px]:h-[clamp(11px,4.3vw,40px)] w-auto" />
         ) : (
           <>
-            <img
-              src={todaysLogo()}
-              alt="Rainbow Connect"
-              // Scales down at narrow viewports (aspect ratio preserved via
-              // width:auto) — the floor/vw-coefficient are tuned against the
-              // tightest real case: Daily's "minimal" 4-icon header (hint,
-              // stats, calendar, settings) at 320px, now that those icons are
-              // full 44x44px tap targets rather than the old ~36px ones —
-              // so the header never horizontally overflows there. The
-              // 28px→40px ceiling bump only matters well past mobile: every
-              // header hits its own max-width (840px when isWide, 512px
-              // otherwise) long before 40px-tall renders, so this just stops
-              // the logo from staying capped at a comparatively tiny 28px on
-              // desktop, where there was hundreds of pixels of unused gap
-              // before the icons.
-              // Hidden at lg+ in favor of the stacked wordmark below — md/tablet
-              // widths keep this one-line logo, since a tablet-sized header
-              // still reads as "mobile/tablet" for this design.
-              className="block lg:hidden h-[clamp(11px,3.7vw,40px)] min-[360px]:h-[clamp(11px,4.3vw,40px)] w-auto"
-            />
-            {/* Desktop-only stacked two-line wordmark ("Rainbow" / "Connect"),
-                shown from lg (1024px) up. Fixed height rather than fluid —
-                unlike the mobile logo, desktop headers don't have the same
-                narrow-viewport pressure, and a fixed cap keeps it from ever
-                reading as oversized on very wide screens. */}
+            {/* Logo sizing. The one-line wordmark is ~8.4:1, so at any
+                legible height it is far wider than a phone header can spare
+                (3-4 44px tap targets plus the Create pill leave ~100px at
+                320px). Below md the header therefore uses the compact stacked
+                wordmark (~2.4:1) at 32px tall (about 77px wide), which fits at
+                every width down to 320px while staying the dominant element.
+                md-lg uses the one-line wordmark at 36px; lg+ keeps the larger
+                stacked wordmark. Aspect ratio is always preserved (w-auto). */}
             <img
               src={STACKED_LOGO}
               alt="Rainbow Connect"
-              className="hidden lg:block h-14 w-auto"
+              className="block md:hidden lg:block h-8 lg:h-14 w-auto"
+            />
+            <img
+              src={todaysLogo()}
+              alt="Rainbow Connect"
+              className="hidden md:block lg:hidden h-9 w-auto"
             />
           </>
         )}

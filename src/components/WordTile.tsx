@@ -339,7 +339,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // unchanged from before this pass (md:aspect-auto hands sizing back to
   // that explicit height there).
   const baseClasses = `tile-base font-tile aspect-[11/10] md:aspect-auto md:h-[110px] font-[800] transition-all duration-150 ease-out relative
-    ${disabled ? "opacity-50 cursor-default" : ""}
+    ${disabled ? (tileColor || isRainbow ? "cursor-default" : "opacity-50 cursor-default") : ""}
   `;
 
   // Selection styling:
@@ -381,7 +381,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
           // border — that border read as its own thin multicolor edge
           // against this softer gradient, which this design intentionally
           // avoids.
-          : `rainbow-tile-static text-ink shadow-md border ${isSelected ? "border-foreground" : "border-tile-border"}`
+          : `rainbow-tile-static text-[#292825] shadow-md border ${isSelected ? "border-foreground" : "border-tile-border"}`
       : colorStyle
         // text-group-N-fg (added alongside the bg fix above): the previous
         // 35%-opacity fill left this unset, relying on whatever ambient

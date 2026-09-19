@@ -37,6 +37,7 @@ export default function BetaPuzzle() {
   const [activeModal, setActiveModal] = useState<ModalName>(null);
   const [settings, setSettings] = useState<GameSettings>(loadSettings);
   const [showHintModal, setShowHintModal] = useState(false);
+  const [hintsViewOnly, setHintsViewOnly] = useState(false);
   const [smallHintUsed, setSmallHintUsed] = useState(false);
   const [fullHintUsed, setFullHintUsed] = useState(false);
 
@@ -187,6 +188,7 @@ export default function BetaPuzzle() {
           showModeBadge={false}
           betaMode
           smallHintUsed={smallHintUsed}
+          onHintsViewOnlyChange={setHintsViewOnly}
           fullHintUsed={fullHintUsed}
           onHintClick={() => setShowHintModal(true)}
           entryContext="daily_home"
@@ -243,6 +245,7 @@ export default function BetaPuzzle() {
       <HintModal
         open={showHintModal}
         onClose={() => setShowHintModal(false)}
+        viewOnly={hintsViewOnly}
         onSmallHint={handleSmallHint}
         onFullHint={handleFullHint}
         puzzle={puzzle}
