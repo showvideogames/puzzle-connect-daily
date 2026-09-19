@@ -5,6 +5,7 @@ import { WordTile } from "./WordTile";
 import { SolvedGroup } from "./SolvedGroup";
 import { MistakeDots } from "./MistakeDots";
 import { DailyStatsModal } from "./DailyStatsModal";
+import { CustomStatsModal } from "./CustomStatsModal";
 import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
@@ -238,9 +239,19 @@ interface GameBoardProps {
    * Defaults to false so every existing call site is unaffected.
    */
   betaMode?: boolean;
+  /**
+   * The public-custom-puzzle sibling of betaMode (see useGame's `mode` doc).
+   * Reroutes persistence to the localStorage-only + one-result-row custom
+   * system (lib/customPuzzles.ts) and turns off the same official-only side
+   * effects betaMode does (streak banner, PuzzleRating, official Global
+   * Stats) — plus swaps the post-game stats button/modal for the
+   * custom-puzzle-only CustomStatsModal instead of hiding it outright.
+   * Defaults to false so every existing call site is unaffected.
+   */
+  customMode?: boolean;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", wideBoard = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, showModeBadge = true, entryContext = "daily_home", betaMode = false }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", wideBoard = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, showModeBadge = true, entryContext = "daily_home", betaMode = false, customMode = false }: GameBoardProps) {
   const isDailyHomepage = variant === "dailyHomepage";
   // Drives the board's own desktop width/tile-gap classes below — true for
   // the daily homepage itself, or any other context that explicitly opted
@@ -289,7 +300,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     sessionIdRef,
     activeSecondsRef,
     nextGuessNumber,
-  } = useGame(puzzle, { isArchive, smallHintUsed, fullHintUsed, entryContext, mode: betaMode ? "beta" : "official" });
+  } = useGame(puzzle, { isArchive, smallHintUsed, fullHintUsed, entryContext, mode: customMode ? "custom" : betaMode ? "beta" : "official" });
 
   // Preload custom emoji images so they don't pop in after the board renders
   const imagesToPreload = useMemo(() => {
@@ -650,7 +661,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     // this banner here would read the player's genuine current_streak and
     // display it as if THIS win had just extended it, directly contradicting
     // the "won't affect your official stats or streak" banner on the page.
-    if (isArchive || betaMode) return;
+    if (isArchive || betaMode || customMode) return;
     const fetchStreakBefore = async () => {
       try {
         // user_streaks is RPC-only now; the function resolves account vs
@@ -664,7 +675,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       } catch {}
     };
     void fetchStreakBefore();
-  }, [isArchive, betaMode]);
+  }, [isArchive, betaMode, customMode]);
 
   // Streak celebration is part of the victory moment, so it waits for the same
   // reveal gate. Gating on `lastRevealedGroup !== null` keeps it to LIVE wins:
@@ -672,10 +683,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // lastRevealedGroup, so it won't re-show the streak — and this stays correct
   // even if the completed state hydrates asynchronously.
   useEffect(() => {
-    if (victoryRevealReady && state.isWon && lastRevealedGroup !== null && !isArchive && !betaMode) {
+    if (victoryRevealReady && state.isWon && lastRevealedGroup !== null && !isArchive && !betaMode && !customMode) {
       setShowStreak(true);
     }
-  }, [victoryRevealReady, state.isWon, lastRevealedGroup, isArchive, betaMode]);
+  }, [victoryRevealReady, state.isWon, lastRevealedGroup, isArchive, betaMode, customMode]);
 
   useEffect(() => {
     if (state.isComplete && !prevIsComplete.current) {
@@ -1556,14 +1567,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 {/* Global Stats reads real official completions for this
                     puzzle id — meaningless (and potentially confusing) for a
                     puzzle that structurally can never have any while it's in
-                    Beta. */}
+                    Beta. Custom puzzles get their OWN lightweight stats
+                    button/modal instead of losing this row entirely — see
+                    CustomStatsModal below. */}
                 {!betaMode && (
                   <button
                     onClick={() => setShowGlobalStats(true)}
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border text-sm font-semibold
                       hover:bg-secondary transition-all duration-150 active:scale-95 shadow-md"
                   >
-                    <TrendingUp className="w-4 h-4" /> Global Stats
+                    <TrendingUp className="w-4 h-4" /> {customMode ? "Puzzle Stats" : "Global Stats"}
                   </button>
                 )}
               </div>
@@ -1573,16 +1586,27 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       )}
 
       {/* Rating — tied to the real puzzle id and account, neither of which
-          make sense for an unlisted playtest. */}
-      {showEndState && !betaMode && <PuzzleRating puzzleId={puzzle.id} user={user} />}
+          make sense for an unlisted playtest or a public custom puzzle. */}
+      {showEndState && !betaMode && !customMode && <PuzzleRating puzzleId={puzzle.id} user={user} />}
 
-      <DailyStatsModal
-        puzzleId={puzzle.id}
-        open={showGlobalStats}
-        onClose={() => setShowGlobalStats(false)}
-        userMistakes={state.mistakes}
-        isComplete={state.isComplete}
-      />
+      {customMode ? (
+        <CustomStatsModal
+          shareId={puzzle.id}
+          open={showGlobalStats}
+          onClose={() => setShowGlobalStats(false)}
+          userWon={state.isWon}
+          userTotalGuesses={state.guessHistory.filter((g) => !g.isHintMarker).length}
+          isComplete={state.isComplete}
+        />
+      ) : (
+        <DailyStatsModal
+          puzzleId={puzzle.id}
+          open={showGlobalStats}
+          onClose={() => setShowGlobalStats(false)}
+          userMistakes={state.mistakes}
+          isComplete={state.isComplete}
+        />
+      )}
 
       {puzzle.rainbowHerring && (
         <SpotTheRainbowModal

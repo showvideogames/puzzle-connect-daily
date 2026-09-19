@@ -211,6 +211,77 @@ export type Database = {
           },
         ]
       }
+      custom_puzzle_results: {
+        Row: {
+          completed_at: string
+          custom_puzzle_id: string
+          device_id: string
+          id: string
+          total_guesses: number
+          won: boolean
+        }
+        Insert: {
+          completed_at?: string
+          custom_puzzle_id: string
+          device_id: string
+          id?: string
+          total_guesses: number
+          won: boolean
+        }
+        Update: {
+          completed_at?: string
+          custom_puzzle_id?: string
+          device_id?: string
+          id?: string
+          total_guesses?: number
+          won?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_puzzle_results_custom_puzzle_id_fkey"
+            columns: ["custom_puzzle_id"]
+            isOneToOne: false
+            referencedRelation: "custom_puzzles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_puzzles: {
+        Row: {
+          content: Json
+          created_at: string
+          created_by: string | null
+          creator_name: string
+          id: string
+          moderation_status: string
+          share_id: string
+          title: string
+          visibility: string
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          created_by?: string | null
+          creator_name: string
+          id?: string
+          moderation_status?: string
+          share_id: string
+          title: string
+          visibility: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          created_by?: string | null
+          creator_name?: string
+          id?: string
+          moderation_status?: string
+          share_id?: string
+          title?: string
+          visibility?: string
+        }
+        Relationships: []
+      }
       cv_puzzles: {
         Row: {
           author: string | null
@@ -981,6 +1052,10 @@ export type Database = {
         Args: { _content: Json; _metadata: Json; _puzzle_id: string }
         Returns: Json
       }
+      admin_set_custom_puzzle_status: {
+        Args: { _puzzle_id: string; _status: string }
+        Returns: boolean
+      }
       complete_beta_playtest: {
         Args: {
           _device_id: string
@@ -995,6 +1070,15 @@ export type Database = {
       count_own_anonymous_sessions: {
         Args: { _device_id: string; _device_token: string }
         Returns: number
+      }
+      create_custom_puzzle: {
+        Args: {
+          _content: Json
+          _creator_name: string
+          _title: string
+          _visibility: string
+        }
+        Returns: Json
       }
       create_device_identity: {
         Args: never
@@ -1051,6 +1135,8 @@ export type Database = {
           title: string
         }[]
       }
+      get_custom_puzzle: { Args: { _share_id: string }; Returns: Json }
+      get_custom_puzzle_stats: { Args: { _share_id: string }; Returns: Json }
       get_own_completed_sessions: {
         Args: { _device_id?: string; _device_token?: string }
         Returns: {
@@ -1195,6 +1281,16 @@ export type Database = {
         }
         Returns: string
       }
+      submit_custom_puzzle_result: {
+        Args: {
+          _device_id: string
+          _device_token: string
+          _share_id: string
+          _total_guesses: number
+          _won: boolean
+        }
+        Returns: boolean
+      }
       touch_game_session: {
         Args: {
           _active_time_seconds: number
@@ -1204,6 +1300,10 @@ export type Database = {
           _session_id: string
         }
         Returns: boolean
+      }
+      validate_custom_puzzle_content: {
+        Args: { _content: Json }
+        Returns: Json
       }
       validate_puzzle_content: { Args: { _content: Json }; Returns: Json }
       verify_device: {

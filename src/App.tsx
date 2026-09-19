@@ -9,6 +9,8 @@ import Archive from "./pages/Archive.tsx";
 import ArchivePuzzle from "./pages/ArchivePuzzle.tsx";
 import BetaLibrary from "./pages/BetaLibrary.tsx";
 import BetaPuzzle from "./pages/BetaPuzzle.tsx";
+import CreatePuzzle from "./pages/CreatePuzzle.tsx";
+import CustomPuzzle from "./pages/CustomPuzzle.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import Privacy from "./pages/Privacy.tsx";
 import Terms from "./pages/Terms.tsx";
@@ -40,6 +42,10 @@ const App = () => (
               BetaPuzzle). No login, no admin gate: unlisted, not secret. */}
           <Route path="/beta" element={<BetaLibrary />} />
           <Route path="/beta/:puzzleId" element={<BetaPuzzle />} />
+          {/* Public custom-puzzle creator (Phase 2). Anyone may create,
+              signed in or not; /custom/:shareId is the playable link. */}
+          <Route path="/create" element={<CreatePuzzle />} />
+          <Route path="/custom/:shareId" element={<CustomPuzzle />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
