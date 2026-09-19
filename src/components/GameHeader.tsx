@@ -61,9 +61,9 @@ export function GameHeader({
   // variant's own tighter, breakpoint-scaled sizing is untouched in case a
   // future page needs the full icon set.
   const iconButtonClass = hideExtraIcons
-    ? "w-[34px] h-[34px] min-[360px]:w-[38px] min-[360px]:h-[38px] min-[450px]:w-11 min-[450px]:h-11 flex items-center justify-center shrink-0 rounded-full text-slate hover:bg-secondary hover:text-foreground active:scale-95 active:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    ? "w-11 h-11 flex items-center justify-center shrink-0 rounded-full text-slate hover:bg-secondary hover:text-foreground active:scale-95 active:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     : "p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95";
-  const iconGlyphClass = hideExtraIcons ? "w-[26px] h-[26px] min-[360px]:w-[30px] min-[360px]:h-[30px]" : "w-4 h-4 sm:w-5 sm:h-5 text-slate";
+  const iconGlyphClass = hideExtraIcons ? "w-[30px] h-[30px]" : "w-4 h-4 sm:w-5 sm:h-5 text-slate";
   const iconStrokeWidth = hideExtraIcons ? 2.5 : undefined;
   return (
     <header className={`flex items-center w-full mx-auto py-3 gap-0.5 sm:gap-2 ${isWide ? "max-w-[840px] px-2 sm:px-3 md:px-0" : "max-w-lg px-1.5 sm:px-2"}`}>
@@ -72,7 +72,7 @@ export function GameHeader({
           // Holiday override applies to both sizes — there's no stacked
           // variant of the flag logo, so it isn't part of the mobile/desktop
           // swap below; this one <img> just keeps today's existing behavior.
-          <img src={todaysLogo()} alt="Rainbow Connect" className="h-[clamp(11px,3.7vw,40px)] min-[360px]:h-[clamp(11px,3.9vw,40px)] min-[450px]:h-[clamp(11px,4.3vw,40px)] w-auto" />
+          <img src={todaysLogo()} alt="Rainbow Connect" className="h-[clamp(11px,3.7vw,40px)] min-[360px]:h-[clamp(11px,4.3vw,40px)] w-auto" />
         ) : (
           <>
             <img
@@ -93,7 +93,7 @@ export function GameHeader({
               // Hidden at lg+ in favor of the stacked wordmark below — md/tablet
               // widths keep this one-line logo, since a tablet-sized header
               // still reads as "mobile/tablet" for this design.
-              className="block lg:hidden h-[clamp(11px,3.7vw,40px)] min-[360px]:h-[clamp(11px,3.9vw,40px)] min-[450px]:h-[clamp(11px,4.3vw,40px)] w-auto"
+              className="block lg:hidden h-[clamp(11px,3.7vw,40px)] min-[360px]:h-[clamp(11px,4.3vw,40px)] w-auto"
             />
             {/* Desktop-only stacked two-line wordmark ("Rainbow" / "Connect"),
                 shown from lg (1024px) up. Fixed height rather than fluid —
@@ -109,17 +109,17 @@ export function GameHeader({
         )}
       </Link>
 
-      <div className={`ml-auto flex items-center shrink-0 ${hideExtraIcons ? "gap-0 min-[450px]:gap-0.5 sm:gap-1.5" : "gap-0 sm:gap-1"}`}>
-        {/* The 4-icon Daily header had ~zero horizontal slack at 320px, so the
-            pill fits by tiering the icon targets (34px <360, 38px <450, 44px
-            above), gaps and logo scale by viewport rather than by wrapping. */}
+      <div className={`ml-auto flex items-center shrink-0 ${hideExtraIcons ? "gap-0.5 sm:gap-1.5" : "gap-0 sm:gap-1"}`}>
+        {/* Every header tap target stays 44x44. Daily's 4-icon header cannot fit
+            that plus this pill below ~430px, so there the Calendar icon is
+            hidden (Archive stays one tap away in Settings > Menu). */}
         {/* Prominent, but a compact pill: the Ink primary-button colors, sized
             well under the game board. Deliberately a real link (not an icon)
             so it reads as the header's one call to action. */}
         <Link
           to="/create"
           aria-label="Create a puzzle"
-          className="inline-flex items-center justify-center shrink-0 whitespace-nowrap h-8 sm:h-9 px-1.5 min-[360px]:px-2 sm:px-3.5 mr-0 min-[450px]:mr-0.5 sm:mr-1
+          className="inline-flex items-center justify-center shrink-0 whitespace-nowrap h-8 sm:h-9 px-1.5 min-[360px]:px-2 sm:px-3.5 mr-0.5 sm:mr-1
             rounded-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition
             text-[11px] min-[360px]:text-xs sm:text-sm font-bold
             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -154,7 +154,7 @@ export function GameHeader({
         {isMinimal && (
           <Link
             to="/archive"
-            className={iconButtonClass}
+            className={`${iconButtonClass} max-[429px]:hidden`}
             aria-label="Puzzle archive"
           >
             <Calendar className={iconGlyphClass} strokeWidth={iconStrokeWidth} />
