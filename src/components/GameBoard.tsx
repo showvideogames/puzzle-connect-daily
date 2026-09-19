@@ -25,7 +25,8 @@ import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoj
 import { trackEvent } from "@/lib/analytics";
 import { resolveTheme } from "@/lib/themes";
 import { loadPlayedDifficulties } from "@/lib/puzzleVersion";
-import { puzzleFullLabel } from "@/lib/puzzles";
+import { buildCustomShareText, buildOfficialShareText } from "@/lib/shareText";
+import { customPuzzlePath } from "@/lib/customPuzzles";
 
 function extractTrailingEmojis(str: string): string {
   try {
@@ -916,18 +917,35 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   }, [state.guessHistory, playedDifficultyAt]);
 
   const generateShareText = useCallback(() => {
-    // puzzleFullLabel prepends "Puzzle " here (unlike ArchivePuzzle's own
-    // on-page <h1>, which shows the title bare — see that page's heroLabel
-    // comment): this text stands completely alone once it's pasted
-    // somewhere else, with none of the page's own "puzzle" framing around
-    // it, so a bare "#50" would read as meaningless on its own.
-    const header = puzzleFullLabel(puzzle.title) ?? "Rainbow Categories";
-    return `${header}\n${generateShareLines().join("\n")}\nrainbowcategories.com`;
-  }, [puzzle, generateShareLines]);
+    const lines = generateShareLines();
+    // Custom puzzles share their own real title and short link; the result
+    // rows are the exact same ones the official text uses. Daily/Archive/Beta
+    // keep the original text (see lib/shareText.ts).
+    if (customMode) {
+      return buildCustomShareText({
+        title: puzzle.title,
+        lines,
+        origin: window.location.origin,
+        path: customPuzzlePath(puzzle),
+      });
+    }
+    return buildOfficialShareText(puzzle.title, lines);
+  }, [puzzle, generateShareLines, customMode]);
 
   const handleShare = useCallback(async () => {
     trackEvent("share_clicked");
     const text = generateShareText();
+    // Custom results also offer the native share sheet where the browser has
+    // one; it carries the exact same text as Copy. Any failure other than the
+    // player dismissing the sheet falls through to copying.
+    if (customMode && typeof navigator.share === "function") {
+      try {
+        await navigator.share({ text });
+        return;
+      } catch (err) {
+        if ((err as { name?: string })?.name === "AbortError") return;
+      }
+    }
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -942,7 +960,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
-  }, [generateShareText]);
+  }, [generateShareText, customMode]);
 
   const handleTileClick = useCallback((word: string) => {
     if (!colorPaletteMode || paletteMode === "select") {

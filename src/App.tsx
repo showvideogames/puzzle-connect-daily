@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -11,12 +12,19 @@ import BetaLibrary from "./pages/BetaLibrary.tsx";
 import BetaPuzzle from "./pages/BetaPuzzle.tsx";
 import CreatePuzzle from "./pages/CreatePuzzle.tsx";
 import CustomPuzzle from "./pages/CustomPuzzle.tsx";
+import CreatorProfilePage from "./pages/CreatorProfile.tsx";
+import Favorites from "./pages/Favorites.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import Privacy from "./pages/Privacy.tsx";
 import Terms from "./pages/Terms.tsx";
 import HowToPlay from "./pages/HowToPlay.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import { OnboardingGate } from "@/components/OnboardingGate";
+
+// Dev-only visual fixtures. import.meta.env.DEV is statically false in a
+// production build, so this lazy import (and the whole fixture module) is
+// removed from the bundle.
+const CommunityFixtures = import.meta.env.DEV ? lazy(() => import("./dev/CommunityFixtures.tsx")) : null;
 
 const queryClient = new QueryClient();
 
@@ -45,7 +53,15 @@ const App = () => (
           {/* Public custom-puzzle creator (Phase 2). Anyone may create,
               signed in or not; /custom/:shareId is the playable link. */}
           <Route path="/create" element={<CreatePuzzle />} />
+          {/* /p/:shortCode is the link new shares use; /custom/:shareId is the
+              permanent original. Both render the same page and puzzle identity. */}
+          <Route path="/p/:shortCode" element={<CustomPuzzle />} />
           <Route path="/custom/:shareId" element={<CustomPuzzle />} />
+          <Route path="/creator/:publicSlug" element={<CreatorProfilePage />} />
+          <Route path="/favorites" element={<Favorites />} />
+          {CommunityFixtures && (
+            <Route path="/__fixtures/community" element={<Suspense fallback={null}><CommunityFixtures /></Suspense>} />
+          )}
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />

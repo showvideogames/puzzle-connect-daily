@@ -290,7 +290,48 @@ export class FakeSupabase {
     custom_puzzles: [],
     /** One row per (custom_puzzle, device) that finished a game. */
     custom_puzzle_results: [],
+    /** One favorite per (account, custom puzzle) — 20260920000000. */
+    custom_puzzle_favorites: [],
+    /** Public creator slug for signed-in creators — 20260920000000. */
+    creator_profiles: [],
   };
+
+  /**
+   * Short codes the next create_custom_puzzle draws will use, first to last,
+   * before falling back to random ones. Lets a test force collisions to prove
+   * the retry loop (the real loop is exercised on real Postgres separately).
+   */
+  shortCodeQueue: string[] = [];
+  /** How many short codes create_custom_puzzle has drawn (retries included). */
+  shortCodeDraws = 0;
+
+  private _drawShortCode(): string {
+    this.shortCodeDraws += 1;
+    const queued = this.shortCodeQueue.shift();
+    if (queued) return queued;
+    const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz";
+    let out = "";
+    for (let i = 0; i < 10; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+    return out;
+  }
+
+  /** The single safe public shape (custom_puzzle_public_json), shared by both lookups. */
+  private _publicPuzzleJson(p: FakeRow, uid: string | null): FakeRow {
+    const profile = this.tables.creator_profiles.find((c) => c.user_id === p.created_by);
+    const favs = this.tables.custom_puzzle_favorites.filter((x) => x.custom_puzzle_id === p.id);
+    return {
+      id: p.id,
+      share_id: p.share_id,
+      short_code: p.short_code,
+      title: p.title,
+      creator_name: p.creator_name,
+      visibility: p.visibility,
+      content: p.content,
+      creator_slug: profile ? profile.public_slug : null,
+      favorite_count: favs.length,
+      favorited_by_me: uid !== null && favs.some((x) => x.user_id === uid),
+    };
+  }
 
   /** Every write, in order — lets tests assert on write VOLUME, not just state. */
   writeLog: { table: string; op: "insert" | "update" | "upsert" | "rpc" }[] = [];
@@ -332,6 +373,9 @@ export class FakeSupabase {
     // No SELECT policy at all, not even for admins — read only in
     // aggregate, via get_custom_puzzle_stats.
     "custom_puzzle_results",
+    // No policies at all (20260920000000): reachable only through the RPCs.
+    "custom_puzzle_favorites",
+    "creator_profiles",
   ];
 
   /** True when the caller is an admin, which unlocks the admin SELECT policies. */
@@ -391,7 +435,7 @@ export class FakeSupabase {
     if (!FakeSupabase.RLS_READ_PROTECTED.includes(table)) return rows;
     // These three are reachable ONLY through SECURITY DEFINER functions now;
     // no role has a SELECT policy on them, not even an admin.
-    if (["user_streaks", "device_identities", "account_onboarding", "custom_puzzle_results"].includes(table)) return [];
+    if (["user_streaks", "device_identities", "account_onboarding", "custom_puzzle_results", "custom_puzzle_favorites", "creator_profiles"].includes(table)) return [];
     if (this.isAdmin) return rows;
     const uid = this.authUser?.id;
     if (!uid) return [];
@@ -1270,9 +1314,26 @@ export class FakeSupabase {
 
         const shareId = `share-${this._newId()}`;
         const id = this._newId();
+        // Collision retry, mirroring the SQL loop (unique_violation -> redraw).
+        let shortCode = this._drawShortCode();
+        for (let attempt = 0; this.tables.custom_puzzles.some((p) => p.short_code === shortCode); attempt++) {
+          if (attempt >= 9) return { data: null, error: { code: "23505", message: "short_code collision" } };
+          shortCode = this._drawShortCode();
+        }
+        if (uid !== null && !this.tables.creator_profiles.some((c) => c.user_id === uid)) {
+          const base = creatorName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30) || "creator";
+          this.tables.creator_profiles.push({
+            user_id: uid,
+            public_slug: `${base}-${Math.random().toString(36).slice(2, 6)}`,
+            display_name: creatorName.slice(0, 60),
+            created_at: new Date().toISOString(),
+          });
+          this._log("creator_profiles", "insert");
+        }
         this.tables.custom_puzzles.push({
           id,
           share_id: shareId,
+          short_code: shortCode,
           visibility,
           created_by: uid,
           creator_name: creatorName,
@@ -1282,21 +1343,100 @@ export class FakeSupabase {
           created_at: new Date().toISOString(),
         });
         this._log("custom_puzzles", "insert");
-        return { data: { puzzle_id: id, share_id: shareId }, error: null };
+        return { data: { puzzle_id: id, share_id: shareId, short_code: shortCode }, error: null };
       }
       case "get_custom_puzzle": {
         const row = this.tables.custom_puzzles.find(
           (p) => p.share_id === args._share_id && p.moderation_status === "active"
         );
-        if (!row) return { data: null, error: null };
+        return { data: row ? this._publicPuzzleJson(row, uid) : null, error: null };
+      }
+      case "get_custom_puzzle_by_short_code": {
+        const row = this.tables.custom_puzzles.find(
+          (p) => p.short_code === args._short_code && p.moderation_status === "active"
+        );
+        return { data: row ? this._publicPuzzleJson(row, uid) : null, error: null };
+      }
+      case "set_custom_puzzle_favorite": {
+        // anon is revoked from this function: the database refuses, it does not return null.
+        if (uid === null) {
+          return { data: null, error: { code: "42501", message: "permission denied for function set_custom_puzzle_favorite" } };
+        }
+        const puzzle = this.tables.custom_puzzles.find(
+          (p) => p.share_id === args._share_id && p.moderation_status === "active"
+        );
+        if (!puzzle) return { data: null, error: null };
+        const mine = (r: FakeRow) => r.custom_puzzle_id === puzzle.id && r.user_id === uid;
+        if (args._favorite === true) {
+          if (!this.tables.custom_puzzle_favorites.some(mine)) {
+            this.tables.custom_puzzle_favorites.push({
+              custom_puzzle_id: puzzle.id,
+              user_id: uid,
+              created_at: new Date().toISOString(),
+            });
+            this._log("custom_puzzle_favorites", "insert");
+          }
+        } else {
+          const before = this.tables.custom_puzzle_favorites.length;
+          this.tables.custom_puzzle_favorites = this.tables.custom_puzzle_favorites.filter((r) => !mine(r));
+          if (this.tables.custom_puzzle_favorites.length !== before) this._log("custom_puzzle_favorites", "update");
+        }
         return {
           data: {
-            id: row.id,
-            share_id: row.share_id,
-            title: row.title,
-            creator_name: row.creator_name,
-            visibility: row.visibility,
-            content: row.content,
+            favorited: this.tables.custom_puzzle_favorites.some(mine),
+            favorite_count: this.tables.custom_puzzle_favorites.filter((r) => r.custom_puzzle_id === puzzle.id).length,
+          },
+          error: null,
+        };
+      }
+      case "get_my_favorites": {
+        if (uid === null) {
+          return { data: null, error: { code: "42501", message: "permission denied for function get_my_favorites" } };
+        }
+        const items = this.tables.custom_puzzle_favorites
+          .filter((r) => r.user_id === uid)
+          .map((r) => ({ fav: r, p: this.tables.custom_puzzles.find((x) => x.id === r.custom_puzzle_id) }))
+          .filter((x) => x.p && x.p.moderation_status === "active")
+          .sort((a, b) => String(b.fav.created_at).localeCompare(String(a.fav.created_at)))
+          .map(({ fav, p }) => ({
+            title: p!.title,
+            creator_name: p!.creator_name,
+            creator_slug: this.tables.creator_profiles.find((c) => c.user_id === p!.created_by)?.public_slug ?? null,
+            mode: (p!.content as FakeRow).mode,
+            short_code: p!.short_code,
+            favorite_count: this.tables.custom_puzzle_favorites.filter((x) => x.custom_puzzle_id === p!.id).length,
+            favorited_at: fav.created_at,
+          }));
+        return { data: items, error: null };
+      }
+      case "get_creator_profile": {
+        const profile = this.tables.creator_profiles.find((c) => c.public_slug === args._slug);
+        if (!profile) return { data: null, error: null };
+        const sort = ["newest", "plays", "favorites"].includes(args._sort as string) ? (args._sort as string) : "newest";
+        const pub = this.tables.custom_puzzles
+          .filter((p) => p.created_by === profile.user_id && p.visibility === "public" && p.moderation_status === "active")
+          .map((p) => ({
+            title: p.title,
+            mode: (p.content as FakeRow).mode,
+            short_code: p.short_code,
+            finished_plays: this.tables.custom_puzzle_results.filter((r) => r.custom_puzzle_id === p.id).length,
+            favorite_count: this.tables.custom_puzzle_favorites.filter((r) => r.custom_puzzle_id === p.id).length,
+            created_at: p.created_at as string,
+          }));
+        const byNewest = (a: FakeRow, b: FakeRow) => String(b.created_at).localeCompare(String(a.created_at));
+        const ordered = [...pub].sort((a, b) => {
+          if (sort === "plays" && a.finished_plays !== b.finished_plays) return b.finished_plays - a.finished_plays;
+          if (sort === "favorites" && a.favorite_count !== b.favorite_count) return b.favorite_count - a.favorite_count;
+          return byNewest(a, b);
+        });
+        return {
+          data: {
+            display_name: profile.display_name,
+            public_slug: profile.public_slug,
+            puzzle_count: pub.length,
+            total_plays: pub.reduce((n, p) => n + p.finished_plays, 0),
+            total_favorites: pub.reduce((n, p) => n + p.favorite_count, 0),
+            puzzles: ordered.slice(0, 100),
           },
           error: null,
         };
@@ -1468,7 +1608,7 @@ export class FakeSupabase {
     // 20260919000000. custom_puzzles allows admin-only direct SELECT
     // (mirrored in _visibleForRead) but every write, admin included, goes
     // only through create_custom_puzzle/admin_set_custom_puzzle_status.
-    if (table === "custom_puzzle_results") {
+    if (table === "custom_puzzle_results" || table === "custom_puzzle_favorites" || table === "creator_profiles") {
       return `no ${op} policy on ${table}: use a scoped function`;
     }
     if (table === "custom_puzzles") {

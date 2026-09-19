@@ -49,6 +49,8 @@ export interface Puzzle {
    * it did before this feature.
    */
   versionId?: string | null;
+  /** Custom puzzles only: the short /p/:shortCode code, used to build the share link. */
+  shortCode?: string | null;
 }
 
 export interface GameStats {

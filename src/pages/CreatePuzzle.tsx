@@ -33,7 +33,6 @@ const HINT_PLACEHOLDERS = ["Purple", "Wheel", "Gaga", "Haunted"];
 const parseWords = (value: string) =>
   value.split(",").map(normalizeWord).filter(Boolean);
 
-const SITE = "https://rainbowcategories.com";
 
 export default function CreatePuzzle() {
   const navigate = useNavigate();
@@ -46,7 +45,7 @@ export default function CreatePuzzle() {
   const [showEmojiCodes, setShowEmojiCodes] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ shareId: string } | null>(null);
+  const [result, setResult] = useState<{ shareId: string; shortCode: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
 
   const normalizedGroups = useMemo(
@@ -98,7 +97,7 @@ export default function CreatePuzzle() {
           ? builder.textsFor(builder.rainbowWordOrderIds).map(normalizeWord)
           : null;
 
-      const { shareId } = await createCustomPuzzle({
+      const { shareId, shortCode } = await createCustomPuzzle({
         creatorName: designerName.trim(),
         title: puzzleTitle.trim(),
         visibility,
@@ -116,7 +115,7 @@ export default function CreatePuzzle() {
           alphabetizeCompleted: builder.alphabetizeCompleted,
         },
       });
-      setResult({ shareId });
+      setResult({ shareId, shortCode });
     } catch (err: any) {
       console.error("createCustomPuzzle failed:", err);
       setError(err?.message || "Something went wrong creating your puzzle. Please try again.");
@@ -136,7 +135,15 @@ export default function CreatePuzzle() {
     return { id, text: slot?.text ?? "", colorIndex: ((groupIdx === -1 ? 0 : groupIdx) + 1) as 1 | 2 | 3 | 4 };
   });
 
-  const shareUrl = result ? `${SITE}/custom/${result.shareId}` : "";
+  // New shares use the short /p/:shortCode link on whatever origin is serving
+  // this page; a database that predates short codes falls back to the
+  // permanent long link.
+  const playPath = result
+    ? result.shortCode
+      ? `/p/${result.shortCode}`
+      : `/custom/${result.shareId}`
+    : "";
+  const shareUrl = result ? `${window.location.origin}${playPath}` : "";
 
   async function handleCopyLink() {
     try {
@@ -176,7 +183,7 @@ export default function CreatePuzzle() {
               {copied ? <Check className="w-4 h-4 mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
               {copied ? "Copied!" : "Copy Link"}
             </Button>
-            <Button onClick={() => navigate(`/custom/${result.shareId}`)}>
+            <Button onClick={() => navigate(playPath)}>
               <Play className="w-4 h-4 mr-1" /> Play Now
             </Button>
           </div>
