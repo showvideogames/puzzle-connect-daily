@@ -38,13 +38,20 @@ export interface BuilderGroupForm {
   tombstones: AnswerSlot[];
   hintWord: string;
   difficulty: 1 | 2 | 3 | 4;
+  /**
+   * This category's 4 board-position ids: exactly the ids that appear in
+   * wordOrderIds for it, fixed when the group is created/loaded and never
+   * changed by editing. An answer whose id is NOT in here has no tile on the
+   * Starting Board — see the "stray id" healing effect in useBuilderForm.
+   */
+  poolIds: string[];
 }
 
 const DIFFICULTY_ORDER: (1 | 2 | 3 | 4)[] = [1, 2, 3, 4];
 
 function emptyGroup(difficulty: 1 | 2 | 3 | 4): BuilderGroupForm {
   const answers = Array.from({ length: 4 }, () => ({ id: generateSlotId(), text: "" }));
-  return { category: "", answersRaw: "", answers, tombstones: [], hintWord: "", difficulty };
+  return { category: "", answersRaw: "", answers, tombstones: [], hintWord: "", difficulty, poolIds: answers.map((a) => a.id) };
 }
 
 function defaultGroups(): BuilderGroupForm[] {
@@ -87,6 +94,7 @@ function buildStateFromLoad(input: LoadBuilderInput): BuilderState {
       tombstones: [],
       hintWord: g.hintWord ?? "",
       difficulty: g.difficulty,
+      poolIds: answers.map((a) => a.id),
     };
   });
 
@@ -279,6 +287,48 @@ export function useBuilderForm() {
   // The only things that ever change wordOrderIds after that are a manual
   // drag reorder, Randomize, or loading a different puzzle — never an
   // ordinary edit.
+
+  // Stray-id healing. A category has exactly 4 board positions (its poolIds).
+  // Ordinary editing can still hand an answer an id OUTSIDE that pool — e.g. a
+  // trailing comma ("a, b, c, d,") makes a 5th blank slot with a fresh id, and
+  // a later edit can hand that id to a real answer while the real board slot
+  // sits tombstoned. That answer then exists in the fields, the Rainbow
+  // dropdown and the display order, but has no tile on the Starting Board (the
+  // board shows a blank), and word_order no longer describes the 16 answers.
+  //
+  // Whenever an answer holds a non-pool id and one of the category's own pool
+  // ids is free (tombstoned), the answer is moved onto that pool id, and any
+  // Rainbow selection/display-order entry pointing at the stray id follows it.
+  // Non-pool tombstones are discarded so they can never be recycled later. A
+  // genuine 5th answer (no free pool id) is left alone — that category is
+  // invalid to save anyway.
+  useEffect(() => {
+    const remap = new Map<string, string>();
+    let changed = false;
+    const healed = groups.map((g) => {
+      const pool = new Set(g.poolIds);
+      const tombs = g.tombstones.filter((t) => pool.has(t.id));
+      let moved = false;
+      const answers = g.answers.map((a) => {
+        if (pool.has(a.id)) return a;
+        const free = tombs.shift();
+        if (!free) return a;
+        remap.set(a.id, free.id);
+        moved = true;
+        return { id: free.id, text: a.text };
+      });
+      if (!moved && tombs.length === g.tombstones.length) return g;
+      changed = true;
+      return { ...g, answers, tombstones: tombs };
+    });
+    if (!changed) return;
+    setGroups((prev) => (prev === groups ? healed : prev));
+    if (remap.size > 0) {
+      const follow = (id: string | null) => (id ? remap.get(id) ?? id : id);
+      setRainbowHerringIds((prev) => prev.map(follow));
+      setRainbowWordOrderIds((prev) => prev.map((id) => follow(id) as string));
+    }
+  }, [groups]);
 
   // Rainbow selections: drop a selection only once its id is gone for good
   // — not in the group's current answers AND not held as a tombstone. A

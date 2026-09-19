@@ -20,7 +20,7 @@ import { CategoryEditor } from "@/components/builder/CategoryEditor";
 import { StartingBoardArranger } from "@/components/builder/StartingBoardArranger";
 import { RainbowPanel } from "@/components/builder/RainbowPanel";
 import { splitAnswerField } from "@/lib/builder/answerIdentity";
-import { normalizeWord } from "@/lib/builder/wordNormalization";
+import { buildContentPayload, builderContentInput, parseWords } from "@/lib/builder/contentPayload";
 import { toast } from "sonner";
 
 const PUZZLES_PER_PAGE = 50;
@@ -40,78 +40,6 @@ const ANSWERS_PLACEHOLDERS = [
   "Bird, Dog, Tree, White",
 ];
 const HINT_PLACEHOLDERS = ["Purple", "Wheel", "Gaga", "Haunted"];
-
-const parseWords = (value: string) =>
-  value
-    .split(",")
-    .map(normalizeWord)
-    .filter(Boolean);
-
-/**
- * The gameplay content of a puzzle, in the exact shape admin_save_puzzle
- * expects — and in a fixed key order, so JSON.stringify of two of these is a
- * usable "is this the same puzzle?" comparison.
- *
- * WHAT COUNTS AS GAMEPLAY. Everything here can decide whether a submitted
- * group is correct, or what the board and its answers look like while being
- * played: the 16 words, which category each belongs to, the category names,
- * the difficulty/colour order, the per-group hint words, the Rainbow answer
- * and its name and hint, the theme (which drives the bonus category's
- * colours and its default name) and the emoji flag (which changes how every
- * tile renders). Changing any of them creates a new version.
- *
- * WHAT DOES NOT. Date, title, published state, the Archive card's emoji
- * icon, and free-puzzle placement are metadata: they travel in a separate
- * argument and never create a version, because correcting a title has never
- * been able to strand a player mid-game.
- *
- * This mirrors validate_puzzle_content() in the versioning migration. The
- * database is authoritative — it re-validates and re-canonicalises whatever
- * arrives — so a drift here shows up as a slightly wrong hint in the editor,
- * never as a wrong version being written.
- */
-interface PuzzleContentPayload {
-  groups: { category: string; words: string[]; difficulty: number; hint_word: string | null; sort_order: number }[];
-  word_order: string[] | null;
-  rainbow_herring: string[] | null;
-  rainbow_category_name: string | null;
-  rainbow_hint_word: string | null;
-  theme: string | null;
-  is_emoji_puzzle: boolean;
-  alphabetize_completed: boolean;
-}
-
-function buildContentPayload(input: {
-  groups: { category: string; words: string[]; difficulty: number; hintWord: string | null }[];
-  wordOrder: string[] | null;
-  rainbowHerring: string[] | null;
-  rainbowCategoryName: string | null;
-  rainbowHintWord: string | null;
-  theme: string | null;
-  isEmojiPuzzle: boolean;
-  alphabetizeCompleted: boolean;
-}): PuzzleContentPayload {
-  const blankToNull = (v: string | null | undefined) => {
-    const t = (v ?? "").trim();
-    return t === "" ? null : t;
-  };
-  return {
-    groups: input.groups.map((g, index) => ({
-      category: g.category.trim(),
-      words: g.words,
-      difficulty: g.difficulty,
-      hint_word: blankToNull(g.hintWord),
-      sort_order: index,
-    })),
-    word_order: input.wordOrder && input.wordOrder.length === 16 ? input.wordOrder : null,
-    rainbow_herring: input.rainbowHerring && input.rainbowHerring.length === 4 ? input.rainbowHerring : null,
-    rainbow_category_name: blankToNull(input.rainbowCategoryName),
-    rainbow_hint_word: blankToNull(input.rainbowHintWord),
-    theme: blankToNull(input.theme),
-    is_emoji_puzzle: input.isEmojiPuzzle,
-    alphabetize_completed: input.alphabetizeCompleted,
-  };
-}
 
 // ─── Mini Calendar ──────────────────────────────────────────────────────────
 
@@ -420,21 +348,7 @@ export default function Admin() {
   // handleSave, so the two can never disagree about what is about to be
   // saved.
   function currentContentInput() {
-    return {
-      groups: builder.groups.map((g) => ({
-        category: g.category,
-        words: parseWords(g.answersRaw),
-        difficulty: g.difficulty,
-        hintWord: g.hintWord,
-      })),
-      wordOrder: builder.textsFor(builder.wordOrderIds),
-      rainbowHerring: builder.rainbowComplete ? builder.textsFor(builder.rainbowWordOrderIds) : null,
-      rainbowCategoryName: builder.rainbowCategoryName,
-      rainbowHintWord: builder.rainbowHintWord,
-      theme: builder.theme,
-      isEmojiPuzzle,
-      alphabetizeCompleted: builder.alphabetizeCompleted,
-    };
+    return builderContentInput(builder, isEmojiPuzzle);
   }
 
   /**
