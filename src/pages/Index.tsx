@@ -41,6 +41,7 @@ export default function Index() {
   const [smallHintUsed, setSmallHintUsed] = useState(false);
   const [fullHintUsed, setFullHintUsed] = useState(false);
   const [isPuzzleComplete, setIsPuzzleComplete] = useState(false);
+  const [hintsViewOnly, setHintsViewOnly] = useState(false);
   const [showSillyGoose, setShowSillyGoose] = useState(false);
   // Tracks whether the user has dismissed the landing via the Play button.
   const [landingDismissed, setLandingDismissed] = useState(false);
@@ -182,12 +183,13 @@ export default function Index() {
 
   // Header hint button — routes to silly goose if puzzle is complete
   const handleHeaderHintClick = useCallback(() => {
-    if (isPuzzleComplete) {
+    // Fully resolved (Rainbow result included) = view-only hints, no goose.
+    if (isPuzzleComplete && !hintsViewOnly) {
       setShowSillyGoose(true);
     } else {
       setShowHintModal(true);
     }
-  }, [isPuzzleComplete]);
+  }, [isPuzzleComplete, hintsViewOnly]);
 
   if (showLanding) {
     return (
@@ -278,6 +280,7 @@ export default function Index() {
           user={user}
           clearColorsTrigger={clearColorsTrigger}
           smallHintUsed={smallHintUsed}
+          onHintsViewOnlyChange={setHintsViewOnly}
           fullHintUsed={fullHintUsed}
           onHintClick={handleHeaderHintClick}
           onComplete={() => setIsPuzzleComplete(true)}
@@ -319,6 +322,7 @@ export default function Index() {
       <HintModal
         open={showHintModal}
         onClose={() => setShowHintModal(false)}
+        viewOnly={hintsViewOnly}
         onSmallHint={handleSmallHint}
         onFullHint={handleFullHint}
         puzzle={puzzle}

@@ -43,6 +43,7 @@ export default function ArchivePuzzle() {
   const [smallHintUsed, setSmallHintUsed] = useState(false);
   const [fullHintUsed, setFullHintUsed] = useState(false);
   const [isPuzzleComplete, setIsPuzzleComplete] = useState(false);
+  const [hintsViewOnly, setHintsViewOnly] = useState(false);
   const [showSillyGoose, setShowSillyGoose] = useState(false);
 
   const handleSettingsChange = (s: GameSettings) => {
@@ -104,12 +105,13 @@ export default function ArchivePuzzle() {
   }, []);
 
   const handleHeaderHintClick = useCallback(() => {
-    if (isPuzzleComplete) {
+    // Fully resolved (Rainbow result included) = view-only hints, no goose.
+    if (isPuzzleComplete && !hintsViewOnly) {
       setShowSillyGoose(true);
     } else {
       setShowHintModal(true);
     }
-  }, [isPuzzleComplete]);
+  }, [isPuzzleComplete, hintsViewOnly]);
 
   const puzzleLabel = puzzle?.title?.trim() || puzzleId || "";
 
@@ -291,6 +293,7 @@ export default function ArchivePuzzle() {
           // its own right-aligned row over the instructions.
           showModeBadge={false}
           smallHintUsed={smallHintUsed}
+          onHintsViewOnlyChange={setHintsViewOnly}
           fullHintUsed={fullHintUsed}
           onHintClick={handleHeaderHintClick}
           onComplete={() => setIsPuzzleComplete(true)}
@@ -319,6 +322,7 @@ export default function ArchivePuzzle() {
       <HintModal
         open={showHintModal}
         onClose={() => setShowHintModal(false)}
+        viewOnly={hintsViewOnly}
         onSmallHint={handleSmallHint}
         onFullHint={handleFullHint}
         puzzle={puzzle}

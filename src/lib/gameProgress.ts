@@ -35,6 +35,11 @@ export interface SavedProgress {
   // this field existed (see hintUsedInHistory for the legacy fallback).
   smallHintUsed?: boolean;
   fullHintUsed?: boolean;
+  // One id per playthrough, minted when the run starts and kept in its
+  // progress. Custom puzzles send it with the completed result so a refresh or
+  // remount of the SAME run can never be counted twice, while a replay (a
+  // cleared blob, hence a new id) counts as its own play.
+  runId?: string;
   // Cumulative ACTIVE play seconds accumulated so far this puzzle attempt
   // (background-tab time already excluded — see activeSecondsRef/isVisibleRef
   // in useGame). Persisted so a refresh/resume continues counting from here

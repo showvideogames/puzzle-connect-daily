@@ -264,6 +264,7 @@ export type Database = {
           custom_puzzle_id: string
           device_id: string
           id: string
+          recent_run_ids: string[]
           total_guesses: number
           won: boolean
         }
@@ -272,6 +273,7 @@ export type Database = {
           custom_puzzle_id: string
           device_id: string
           id?: string
+          recent_run_ids?: string[]
           total_guesses: number
           won: boolean
         }
@@ -280,6 +282,7 @@ export type Database = {
           custom_puzzle_id?: string
           device_id?: string
           id?: string
+          recent_run_ids?: string[]
           total_guesses?: number
           won?: boolean
         }
@@ -288,6 +291,53 @@ export type Database = {
             foreignKeyName: "custom_puzzle_results_custom_puzzle_id_fkey"
             columns: ["custom_puzzle_id"]
             isOneToOne: false
+            referencedRelation: "custom_puzzles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_puzzle_stats: {
+        Row: {
+          custom_puzzle_id: string
+          guesses_4: number
+          guesses_5: number
+          guesses_6: number
+          guesses_7: number
+          guesses_8_plus: number
+          losses: number
+          updated_at: string
+          win_guess_total: number
+          wins: number
+        }
+        Insert: {
+          custom_puzzle_id: string
+          guesses_4?: number
+          guesses_5?: number
+          guesses_6?: number
+          guesses_7?: number
+          guesses_8_plus?: number
+          losses?: number
+          updated_at?: string
+          win_guess_total?: number
+          wins?: number
+        }
+        Update: {
+          custom_puzzle_id?: string
+          guesses_4?: number
+          guesses_5?: number
+          guesses_6?: number
+          guesses_7?: number
+          guesses_8_plus?: number
+          losses?: number
+          updated_at?: string
+          win_guess_total?: number
+          wins?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_puzzle_stats_custom_puzzle_id_fkey"
+            columns: ["custom_puzzle_id"]
+            isOneToOne: true
             referencedRelation: "custom_puzzles"
             referencedColumns: ["id"]
           },
@@ -677,6 +727,7 @@ export type Database = {
       puzzle_groups: {
         Row: {
           category: string
+          category_emoji: string | null
           difficulty: number
           hint_word: string | null
           id: string
@@ -686,6 +737,7 @@ export type Database = {
         }
         Insert: {
           category: string
+          category_emoji?: string | null
           difficulty: number
           hint_word?: string | null
           id?: string
@@ -695,6 +747,7 @@ export type Database = {
         }
         Update: {
           category?: string
+          category_emoji?: string | null
           difficulty?: number
           hint_word?: string | null
           id?: string
@@ -786,6 +839,7 @@ export type Database = {
           is_emoji_puzzle: boolean | null
           is_free_puzzle: boolean | null
           is_published: boolean
+          rainbow_category_emoji: string | null
           rainbow_category_name: string | null
           rainbow_herring: string[] | null
           rainbow_hint_word: string | null
@@ -808,6 +862,7 @@ export type Database = {
           is_emoji_puzzle?: boolean | null
           is_free_puzzle?: boolean | null
           is_published?: boolean
+          rainbow_category_emoji?: string | null
           rainbow_category_name?: string | null
           rainbow_herring?: string[] | null
           rainbow_hint_word?: string | null
@@ -830,6 +885,7 @@ export type Database = {
           is_emoji_puzzle?: boolean | null
           is_free_puzzle?: boolean | null
           is_published?: boolean
+          rainbow_category_emoji?: string | null
           rainbow_category_name?: string | null
           rainbow_herring?: string[] | null
           rainbow_hint_word?: string | null
@@ -1358,16 +1414,28 @@ export type Database = {
         }
         Returns: string
       }
-      submit_custom_puzzle_result: {
-        Args: {
-          _device_id: string
-          _device_token: string
-          _share_id: string
-          _total_guesses: number
-          _won: boolean
-        }
-        Returns: boolean
-      }
+      submit_custom_puzzle_result:
+        | {
+            Args: {
+              _device_id: string
+              _device_token: string
+              _share_id: string
+              _total_guesses: number
+              _won: boolean
+            }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              _device_id: string
+              _device_token: string
+              _run_id: string
+              _share_id: string
+              _total_guesses: number
+              _won: boolean
+            }
+            Returns: boolean
+          }
       touch_game_session: {
         Args: {
           _active_time_seconds: number

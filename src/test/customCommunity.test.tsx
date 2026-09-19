@@ -502,8 +502,10 @@ describe("creator profiles", () => {
     // plays: Oldest 3, Middle 1;  favorites: Middle 2, Newest 1
     const play = (shareId: string, n: number) => {
       const pid = db.tables.custom_puzzles.find((p) => p.share_id === shareId)!.id;
-      for (let i = 0; i < n; i++)
-        db.tables.custom_puzzle_results.push({ custom_puzzle_id: pid, device_id: `d${shareId}${i}`, won: true, total_guesses: 4 });
+      db.tables.custom_puzzle_stats.push({
+        custom_puzzle_id: pid, wins: n, losses: 0,
+        guesses_4: n, guesses_5: 0, guesses_6: 0, guesses_7: 0, guesses_8_plus: 0, win_guess_total: n * 4,
+      });
     };
     play(oldest.shareId, 3);
     play(middle.shareId, 1);

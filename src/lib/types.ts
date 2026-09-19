@@ -3,6 +3,10 @@ export interface PuzzleGroup {
   words: string[];
   difficulty: 1 | 2 | 3 | 4; // 1=easiest, 4=hardest
   hintWord?: string | null;
+  // Explicit Category Emoji, kept literally. Absent/null on puzzles saved
+  // before the field existed; those fall back to the title's trailing emoji
+  // (lib/categoryVisual.ts).
+  categoryEmoji?: string | null;
 }
 
 export interface Puzzle {
@@ -19,6 +23,7 @@ export interface Puzzle {
   rainbowHerring?: string[] | null;
   rainbowCategoryName?: string | null;
   rainbowHintWord?: string | null;
+  rainbowCategoryEmoji?: string | null;
   isEmojiPuzzle?: boolean | null;
   // Manually-entered emoji shown on this puzzle's card in the Emoji Puzzles
   // section (admin-editable, only meaningful when isEmojiPuzzle is true).

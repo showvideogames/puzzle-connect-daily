@@ -45,13 +45,13 @@ html {
 
     /* Puzzle group colors — official category colors (Yellow/Green/Blue/Red) */
     --group-1: 48 89% 69%;
-    --group-1-fg: 50 80% 18%;
+    --group-1-fg: 45 5.128% 15.294%;
     --group-2: 125 38% 67%;
-    --group-2-fg: 130 50% 14%;
+    --group-2-fg: 45 5.128% 15.294%;
     --group-3: 203 59% 68%;
-    --group-3-fg: 200 70% 18%;
+    --group-3-fg: 45 5.128% 15.294%;
     --group-4: 5 74% 67%;
-    --group-4-fg: 0 70% 20%;
+    --group-4-fg: 45 5.128% 15.294%;
 
     /* Tile colors */
     --tile: 36 18% 88%;

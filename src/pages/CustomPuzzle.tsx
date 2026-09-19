@@ -19,6 +19,7 @@ import {
 import { useCustomFavorite } from "@/hooks/useCustomFavorite";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
+import { clearProgress } from "@/lib/gameProgress";
 import type { User } from "@supabase/supabase-js";
 
 type ModalName = "help" | "settings" | "feedback" | null;
@@ -40,8 +41,12 @@ export default function CustomPuzzle() {
   const [activeModal, setActiveModal] = useState<ModalName>(null);
   const [settings, setSettings] = useState<GameSettings>(loadSettings);
   const [showHintModal, setShowHintModal] = useState(false);
+  const [hintsViewOnly, setHintsViewOnly] = useState(false);
   const [smallHintUsed, setSmallHintUsed] = useState(false);
   const [fullHintUsed, setFullHintUsed] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
+  // Bumped by Replay to remount the board into a clean run.
+  const [runKey, setRunKey] = useState(0);
   const puzzle = loaded?.puzzle ?? null;
 
   useEffect(() => {
@@ -94,6 +99,21 @@ export default function CustomPuzzle() {
   const handleSmallHint = useCallback(() => setSmallHintUsed(true), []);
   const handleFullHint = useCallback(() => setFullHintUsed(true), []);
 
+  // Replay: wipe this puzzle's local progress (the puzzle itself is untouched)
+  // and remount the board. The new run has its own run id, so it is counted as
+  // another play only if it is actually completed.
+  const handleReplay = useCallback(() => {
+    if (!puzzle) return;
+    clearProgress(`custom:${puzzle.id}`);
+    setSmallHintUsed(false);
+    setFullHintUsed(false);
+    setHintsViewOnly(false);
+    setShowHintModal(false);
+    setStatsOpen(false);
+    setRunKey((k) => k + 1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [puzzle]);
+
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       <SEO
@@ -104,7 +124,7 @@ export default function CustomPuzzle() {
       />
 
       <GameHeader
-        onStatsClick={() => {}}
+        onStatsClick={() => setStatsOpen(true)}
         onHowToPlayClick={() => setActiveModal("help")}
         onSettingsClick={() => setActiveModal("settings")}
         onHintClick={() => setShowHintModal(true)}
@@ -151,13 +171,18 @@ export default function CustomPuzzle() {
         </div>
       ) : (
         <GameBoard
+          key={runKey}
           puzzle={puzzle}
           settings={settings}
           user={user ?? null}
           wideBoard
           showModeBadge={false}
           customMode
+          statsOpen={statsOpen}
+          onStatsOpenChange={setStatsOpen}
+          onReplay={handleReplay}
           smallHintUsed={smallHintUsed}
+          onHintsViewOnlyChange={setHintsViewOnly}
           fullHintUsed={fullHintUsed}
           onHintClick={() => setShowHintModal(true)}
           entryContext="daily_home"
@@ -184,6 +209,7 @@ export default function CustomPuzzle() {
       <HintModal
         open={showHintModal}
         onClose={() => setShowHintModal(false)}
+        viewOnly={hintsViewOnly}
         onSmallHint={handleSmallHint}
         onFullHint={handleFullHint}
         puzzle={puzzle}

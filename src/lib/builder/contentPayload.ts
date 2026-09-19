@@ -14,22 +14,24 @@ export const parseWords = (value: string) =>
  * validate_puzzle_content() in the versioning migration.
  */
 export interface PuzzleContentPayload {
-  groups: { category: string; words: string[]; difficulty: number; hint_word: string | null; sort_order: number }[];
+  groups: { category: string; words: string[]; difficulty: number; hint_word: string | null; category_emoji: string | null; sort_order: number }[];
   word_order: string[] | null;
   rainbow_herring: string[] | null;
   rainbow_category_name: string | null;
   rainbow_hint_word: string | null;
+  rainbow_category_emoji: string | null;
   theme: string | null;
   is_emoji_puzzle: boolean;
   alphabetize_completed: boolean;
 }
 
 export interface ContentInput {
-  groups: { category: string; words: string[]; difficulty: number; hintWord: string | null }[];
+  groups: { category: string; words: string[]; difficulty: number; hintWord: string | null; categoryEmoji?: string | null }[];
   wordOrder: string[] | null;
   rainbowHerring: string[] | null;
   rainbowCategoryName: string | null;
   rainbowHintWord: string | null;
+  rainbowCategoryEmoji?: string | null;
   theme: string | null;
   isEmojiPuzzle: boolean;
   alphabetizeCompleted: boolean;
@@ -46,12 +48,14 @@ export function buildContentPayload(input: ContentInput): PuzzleContentPayload {
       words: g.words,
       difficulty: g.difficulty,
       hint_word: blankToNull(g.hintWord),
+      category_emoji: blankToNull(g.categoryEmoji),
       sort_order: index,
     })),
     word_order: input.wordOrder && input.wordOrder.length === 16 ? input.wordOrder : null,
     rainbow_herring: input.rainbowHerring && input.rainbowHerring.length === 4 ? input.rainbowHerring : null,
     rainbow_category_name: blankToNull(input.rainbowCategoryName),
     rainbow_hint_word: blankToNull(input.rainbowHintWord),
+    rainbow_category_emoji: blankToNull(input.rainbowCategoryEmoji),
     theme: blankToNull(input.theme),
     is_emoji_puzzle: input.isEmojiPuzzle,
     alphabetize_completed: input.alphabetizeCompleted,
@@ -67,6 +71,7 @@ type BuilderContentSource = Pick<
   | "rainbowWordOrderIds"
   | "rainbowCategoryName"
   | "rainbowHintWord"
+  | "rainbowCategoryEmoji"
   | "theme"
   | "alphabetizeCompleted"
 >;
@@ -91,6 +96,7 @@ export function builderContentInput(builder: BuilderContentSource, isEmojiPuzzle
       words: parseWords(g.answersRaw),
       difficulty: g.difficulty,
       hintWord: g.hintWord,
+      categoryEmoji: g.categoryEmoji,
     })),
     wordOrder: builder.textsFor(builder.wordOrderIds).map(normalizeWord),
     rainbowHerring: builder.rainbowComplete
@@ -98,6 +104,7 @@ export function builderContentInput(builder: BuilderContentSource, isEmojiPuzzle
       : null,
     rainbowCategoryName: builder.rainbowCategoryName,
     rainbowHintWord: builder.rainbowHintWord,
+    rainbowCategoryEmoji: builder.rainbowCategoryEmoji,
     theme: builder.theme,
     isEmojiPuzzle,
     alphabetizeCompleted: builder.alphabetizeCompleted,

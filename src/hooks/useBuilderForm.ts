@@ -37,6 +37,8 @@ export interface BuilderGroupForm {
    */
   tombstones: AnswerSlot[];
   hintWord: string;
+  /** Optional Category Emoji, kept exactly as typed (independent of the name and the hint). */
+  categoryEmoji: string;
   difficulty: 1 | 2 | 3 | 4;
   /**
    * This category's 4 board-position ids: exactly the ids that appear in
@@ -51,7 +53,7 @@ const DIFFICULTY_ORDER: (1 | 2 | 3 | 4)[] = [1, 2, 3, 4];
 
 function emptyGroup(difficulty: 1 | 2 | 3 | 4): BuilderGroupForm {
   const answers = Array.from({ length: 4 }, () => ({ id: generateSlotId(), text: "" }));
-  return { category: "", answersRaw: "", answers, tombstones: [], hintWord: "", difficulty, poolIds: answers.map((a) => a.id) };
+  return { category: "", answersRaw: "", answers, tombstones: [], hintWord: "", categoryEmoji: "", difficulty, poolIds: answers.map((a) => a.id) };
 }
 
 function defaultGroups(): BuilderGroupForm[] {
@@ -63,28 +65,40 @@ function nonBlank(answers: AnswerSlot[]): AnswerSlot[] {
   return answers.filter((a) => a.text.trim() !== "");
 }
 
+export type BuilderStyle = "rainbow" | "classic";
+
 export interface BuilderState {
   groups: BuilderGroupForm[];
   rainbowHerringIds: (string | null)[];
   rainbowWordOrderIds: string[];
   rainbowCategoryName: string;
   rainbowHintWord: string;
+  rainbowCategoryEmoji: string;
   theme: string;
   alphabetizeCompleted: boolean;
   wordOrderIds: string[];
+  style: BuilderStyle;
 }
 
 export interface LoadBuilderInput {
-  groups: { category: string; words: string[]; difficulty: 1 | 2 | 3 | 4; hintWord: string | null }[];
+  groups: { category: string; words: string[]; difficulty: 1 | 2 | 3 | 4; hintWord: string | null; categoryEmoji?: string | null }[];
   wordOrder: string[] | null;
   rainbowHerring: string[] | null;
   rainbowCategoryName: string;
   rainbowHintWord: string;
+  /** Absent for older sources; treated as none. */
+  rainbowCategoryEmoji?: string;
   theme: string;
   alphabetizeCompleted: boolean;
+  /**
+   * The stored style when the source knows it (an existing puzzle, a saved
+   * draft). Left undefined, the CURRENT style is kept: loading must never
+   * silently overwrite it with the new-puzzle default.
+   */
+  style?: BuilderStyle;
 }
 
-function buildStateFromLoad(input: LoadBuilderInput): BuilderState {
+function buildStateFromLoad(input: LoadBuilderInput, currentStyle: BuilderStyle): BuilderState {
   const groups: BuilderGroupForm[] = input.groups.map((g) => {
     const answers = g.words.map((text) => ({ id: generateSlotId(), text }));
     return {
@@ -93,6 +107,7 @@ function buildStateFromLoad(input: LoadBuilderInput): BuilderState {
       answers,
       tombstones: [],
       hintWord: g.hintWord ?? "",
+      categoryEmoji: g.categoryEmoji ?? "",
       difficulty: g.difficulty,
       poolIds: answers.map((a) => a.id),
     };
@@ -142,9 +157,11 @@ function buildStateFromLoad(input: LoadBuilderInput): BuilderState {
     rainbowWordOrderIds,
     rainbowCategoryName: input.rainbowCategoryName,
     rainbowHintWord: input.rainbowHintWord,
+    rainbowCategoryEmoji: input.rainbowCategoryEmoji ?? "",
     theme: input.theme,
     alphabetizeCompleted: input.alphabetizeCompleted,
     wordOrderIds,
+    style: input.style ?? currentStyle,
   };
 }
 
@@ -156,8 +173,12 @@ function blankState(): BuilderState {
     rainbowWordOrderIds: [],
     rainbowCategoryName: "",
     rainbowHintWord: "",
+    rainbowCategoryEmoji: "",
     theme: "",
     alphabetizeCompleted: true,
+    // Brand-new puzzles default to Rainbow. Only blankState() sets this;
+    // load() never does, so an existing puzzle keeps its stored style.
+    style: "rainbow",
     // All 16 board positions already exist the instant a blank form is
     // created (emptyGroup gives each of the 4 categories 4 real, stable
     // ids up front, even blank) — so the random opening arrangement is
@@ -179,29 +200,35 @@ export function useBuilderForm() {
   const [rainbowWordOrderIds, setRainbowWordOrderIds] = useState<string[]>(initial.rainbowWordOrderIds);
   const [rainbowCategoryName, setRainbowCategoryName] = useState(initial.rainbowCategoryName);
   const [rainbowHintWord, setRainbowHintWord] = useState(initial.rainbowHintWord);
+  const [rainbowCategoryEmoji, setRainbowCategoryEmoji] = useState(initial.rainbowCategoryEmoji);
   const [theme, setTheme] = useState(initial.theme);
   const [alphabetizeCompleted, setAlphabetizeCompleted] = useState(initial.alphabetizeCompleted);
   const [wordOrderIds, setWordOrderIds] = useState<string[]>(initial.wordOrderIds);
+  const [style, setStyle] = useState<BuilderStyle>(initial.style);
 
   const load = useCallback((input: LoadBuilderInput) => {
-    const s = buildStateFromLoad(input);
+    const s = buildStateFromLoad(input, style);
+    setStyle(s.style);
     setGroups(s.groups);
     setRainbowHerringIds(s.rainbowHerringIds);
     setRainbowWordOrderIds(s.rainbowWordOrderIds);
     setRainbowCategoryName(s.rainbowCategoryName);
     setRainbowHintWord(s.rainbowHintWord);
+    setRainbowCategoryEmoji(s.rainbowCategoryEmoji);
     setTheme(s.theme);
     setAlphabetizeCompleted(s.alphabetizeCompleted);
     setWordOrderIds(s.wordOrderIds);
-  }, []);
+  }, [style]);
 
   const reset = useCallback(() => {
     const s = blankState();
+    setStyle(s.style);
     setGroups(s.groups);
     setRainbowHerringIds(s.rainbowHerringIds);
     setRainbowWordOrderIds(s.rainbowWordOrderIds);
     setRainbowCategoryName(s.rainbowCategoryName);
     setRainbowHintWord(s.rainbowHintWord);
+    setRainbowCategoryEmoji(s.rainbowCategoryEmoji);
     setTheme(s.theme);
     setAlphabetizeCompleted(s.alphabetizeCompleted);
     setWordOrderIds(s.wordOrderIds);
@@ -209,6 +236,10 @@ export function useBuilderForm() {
 
   const updateCategoryName = useCallback((idx: number, category: string) => {
     setGroups((prev) => prev.map((g, i) => (i === idx ? { ...g, category } : g)));
+  }, []);
+
+  const updateCategoryEmoji = useCallback((idx: number, categoryEmoji: string) => {
+    setGroups((prev) => prev.map((g, i) => (i === idx ? { ...g, categoryEmoji } : g)));
   }, []);
 
   const updateHintWord = useCallback((idx: number, hintWord: string) => {
@@ -243,6 +274,23 @@ export function useBuilderForm() {
       [next[a], next[b]] = [next[b], next[a]];
       return next;
     });
+  }, []);
+
+  // Drag-and-drop category ordering: moves the card at `from` to `to`. A
+  // group's content (answers, ids, tombstones, poolIds, hint) travels intact
+  // and its Rainbow selection travels with it; only its difficulty/colour is
+  // reassigned from the destination slot. Board order is keyed by answer id
+  // and is untouched.
+  const moveGroup = useCallback((from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= 4 || to >= 4) return;
+    const reorder = <T,>(list: T[]): T[] => {
+      const next = [...list];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    };
+    setGroups((prev) => reorder(prev).map((g, i) => ({ ...g, difficulty: DIFFICULTY_ORDER[i] })));
+    setRainbowHerringIds((prev) => reorder(prev));
   }, []);
 
   const selectRainbowAnswer = useCallback((groupIdx: number, slotId: string | null) => {
@@ -392,12 +440,16 @@ export function useBuilderForm() {
     rainbowWordOrderIds,
     rainbowCategoryName,
     rainbowHintWord,
+    rainbowCategoryEmoji,
     theme,
     alphabetizeCompleted,
     wordOrderIds,
+    style,
     // setters (simple fields)
     setRainbowCategoryName,
     setRainbowHintWord,
+    setRainbowCategoryEmoji,
+    setStyle,
     setTheme,
     setAlphabetizeCompleted,
     setRainbowWordOrderIds,
@@ -407,8 +459,10 @@ export function useBuilderForm() {
     reset,
     updateCategoryName,
     updateHintWord,
+    updateCategoryEmoji,
     updateAnswersRaw,
     swapGroups,
+    moveGroup,
     selectRainbowAnswer,
     resetRainbowOrder,
     randomizeWordOrder,

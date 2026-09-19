@@ -1,13 +1,20 @@
-import { ArrowLeftRight } from "lucide-react";
+import type { ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const HEADER_CLASSES: Record<1 | 2 | 3 | 4, string> = {
-  1: "bg-[hsl(var(--group-1)/0.4)] text-group-1-fg",
-  2: "bg-[hsl(var(--group-2)/0.4)] text-group-2-fg",
-  3: "bg-[hsl(var(--group-3)/0.4)] text-group-3-fg",
-  4: "bg-[hsl(var(--group-4)/0.4)] text-group-4-fg",
+// The whole card wears its category colour (the same --group-N tokens the
+// solved bars and tiles use). Text on it is always solid Ink, never faded via
+// opacity, and the inputs stay off-white so they read as editable.
+const CARD_CLASSES: Record<1 | 2 | 3 | 4, string> = {
+  1: "bg-group-1",
+  2: "bg-group-2",
+  3: "bg-group-3",
+  4: "bg-group-4",
 };
+
+const INK = "text-[#292825]";
+const INPUT_CLASSES =
+  "bg-[#FFFDF8] text-[#292825] border-[#292825]/15 placeholder:text-[#6B675F] focus-visible:ring-[#292825]";
 
 export interface CategoryEditorProps {
   colorIndex: 1 | 2 | 3 | 4;
@@ -15,6 +22,8 @@ export interface CategoryEditorProps {
   difficultyLabel: string;
   category: string;
   onCategoryChange: (value: string) => void;
+  categoryEmoji: string;
+  onCategoryEmojiChange: (value: string) => void;
   categoryPlaceholder: string;
   answersRaw: string;
   onAnswersRawChange: (value: string) => void;
@@ -24,15 +33,15 @@ export interface CategoryEditorProps {
   onHintWordChange: (value: string) => void;
   hintPlaceholder: string;
   onFieldBlur?: () => void;
-  /** Admin-only: renders a small swap-order control in the header when provided. */
-  onSwapClick?: () => void;
-  isSwapSelected?: boolean;
+  /** The six-dot drag handle, rendered in the header. Only it starts a drag. */
+  dragHandle?: ReactNode;
+  isDragging?: boolean;
 }
 
 /**
  * One category's editor card: name, comma-separated answers, optional Small
- * Hint. Shared by the Admin builder and (later) the public creator — no
- * admin-only or public-only concepts live here.
+ * Hint. Shared by the Admin builder and the public creator — no admin-only or
+ * public-only concepts live here.
  */
 export function CategoryEditor({
   colorIndex,
@@ -40,6 +49,8 @@ export function CategoryEditor({
   difficultyLabel,
   category,
   onCategoryChange,
+  categoryEmoji,
+  onCategoryEmojiChange,
   categoryPlaceholder,
   answersRaw,
   onAnswersRawChange,
@@ -49,57 +60,63 @@ export function CategoryEditor({
   onHintWordChange,
   hintPlaceholder,
   onFieldBlur,
-  onSwapClick,
-  isSwapSelected,
+  dragHandle,
+  isDragging,
 }: CategoryEditorProps) {
   return (
     <div
-      className={`rounded-xl border border-tile-border bg-tile-bg overflow-hidden transition-shadow
-        ${isSwapSelected ? "ring-2 ring-primary ring-offset-1" : ""}`}
+      data-testid={`category-card-${colorIndex}`}
+      className={`rounded-xl shadow-sm ${CARD_CLASSES[colorIndex]} ${INK} transition-shadow
+        ${isDragging ? "shadow-lg scale-[1.01]" : ""}`}
     >
-      <div className={`flex items-center justify-between px-4 py-2 ${HEADER_CLASSES[colorIndex]}`}>
+      <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+        {dragHandle}
         <span className="text-xs font-bold uppercase tracking-wider">
           {label} · {difficultyLabel}
         </span>
-        {onSwapClick && (
-          <button
-            type="button"
-            onClick={onSwapClick}
-            aria-label={`Select ${label} to swap with another category`}
-            className="p-1 -m-1 rounded hover:bg-black/10 transition-colors"
-          >
-            <ArrowLeftRight className="w-3.5 h-3.5" />
-          </button>
-        )}
       </div>
-      <div className="p-4 space-y-3">
+      <div className="px-4 pb-4 pt-1 space-y-3">
         <div>
-          <Label className="text-xs">Category Name</Label>
+          <Label className={`text-xs ${INK}`}>Category Name</Label>
           <Input
             value={category}
             onChange={(e) => onCategoryChange(e.target.value)}
             onBlur={onFieldBlur}
             placeholder={categoryPlaceholder}
+            className={INPUT_CLASSES}
           />
         </div>
         <div>
-          <Label className="text-xs">{answersLabel}</Label>
+          <Label className={`text-xs ${INK}`}>Category Emoji (optional)</Label>
+          <Input
+            value={categoryEmoji}
+            onChange={(e) => onCategoryEmojiChange(e.target.value)}
+            onBlur={onFieldBlur}
+            placeholder="🎵"
+            className={INPUT_CLASSES}
+          />
+          <p className={`text-[11px] mt-1 ${INK}`}>Add an emoji or short visual, such as 🎵 or ___ 💬.</p>
+        </div>
+        <div>
+          <Label className={`text-xs ${INK}`}>{answersLabel}</Label>
           <Input
             value={answersRaw}
             onChange={(e) => onAnswersRawChange(e.target.value)}
             onBlur={onFieldBlur}
             placeholder={answersPlaceholder}
+            className={INPUT_CLASSES}
           />
         </div>
         <div>
-          <Label className="text-xs">Small Hint word (optional)</Label>
+          <Label className={`text-xs ${INK}`}>Small Hint word (optional)</Label>
           <Input
             value={hintWord}
             onChange={(e) => onHintWordChange(e.target.value)}
             onBlur={onFieldBlur}
             placeholder={hintPlaceholder}
+            className={INPUT_CLASSES}
           />
-          <p className="text-[11px] text-muted-foreground mt-1">
+          <p className={`text-[11px] mt-1 ${INK}`}>
             An extra answer that fits this category but does not appear on the board.
           </p>
         </div>

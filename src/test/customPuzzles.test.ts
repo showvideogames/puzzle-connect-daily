@@ -9,8 +9,9 @@
  *
  * The property under test throughout: a custom puzzle plays on the real
  * game engine, but NOTHING it does can ever create, mutate or count toward
- * an official OR Beta table, and at most one result row per (puzzle,
- * device) is ever recorded.
+ * an official OR Beta table. Every COMPLETED run counts once (a completed
+ * replay is another play), aggregated into fixed counters; a run is
+ * idempotent by its run id.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
@@ -177,6 +178,7 @@ beforeEach(async () => {
   db.tables.beta_feedback = [];
   db.tables.custom_puzzles = [];
   db.tables.custom_puzzle_results = [];
+  db.tables.custom_puzzle_stats = [];
   db.failAggregateWrites = 0;
   db.rpcUnavailable = false;
 
@@ -382,9 +384,9 @@ describe("custom gameplay isolation", () => {
     expect(db.tables.beta_playtests).toHaveLength(0);
     expect(db.tables.beta_feedback).toHaveLength(0);
 
-    // The only write this game made landed in custom_puzzle_results.
+    // The only writes this game made landed in the custom result tables.
     const tablesWritten = new Set(db.writeLog.map((w) => w.table));
-    expect(tablesWritten).toEqual(new Set(["custom_puzzle_results"]));
+    expect(tablesWritten).toEqual(new Set(["custom_puzzle_results", "custom_puzzle_stats"]));
     expect(results()).toHaveLength(1);
     expect(results()[0].won).toBe(true);
     // 4 correct guesses, no misses.
@@ -444,28 +446,145 @@ describe("custom puzzle statistics", () => {
     expect(results()).toHaveLength(0);
   });
 
-  it("a replay from the same device does not inflate totals", async () => {
+  it("the same run submitted again (refresh / retry) is a no-op", async () => {
     const { shareId } = await createCustomPuzzle(CLASSIC_INPUT);
     const { puzzle } = (await getCustomPuzzleByShareId(shareId))!;
     const view = mount(puzzle, { mode: "custom" });
     await winGame(view, puzzle);
-    expect(results()).toHaveLength(1);
+    expect((await getCustomPuzzleStats(shareId))!.completedPlays).toBe(1);
 
-    // Same device, calling completion directly again (a reload + replay).
     const deviceId = localStorage.getItem("rc-device-id")!;
     const deviceToken = localStorage.getItem("rc-device-token")!;
+    const runId = loadProgress(`custom:${shareId}`)!.runId!;
     const { data } = await db.rpc("submit_custom_puzzle_result", {
-      _share_id: shareId,
-      _device_id: deviceId,
-      _device_token: deviceToken,
-      _won: false,
-      _total_guesses: 1,
+      _share_id: shareId, _device_id: deviceId, _device_token: deviceToken,
+      _won: true, _total_guesses: 4, _run_id: runId,
     });
     expect(data).toBe(true); // idempotent no-op, not an error
+    expect((await getCustomPuzzleStats(shareId))!.completedPlays).toBe(1);
     expect(results()).toHaveLength(1);
-    // The FIRST result is the one that's kept.
-    expect(results()[0].won).toBe(true);
-    expect(results()[0].total_guesses).toBe(4);
+  });
+
+  it("refreshing or reopening a completed run does not record it again", async () => {
+    const { shareId } = await createCustomPuzzle(CLASSIC_INPUT);
+    const { puzzle } = (await getCustomPuzzleByShareId(shareId))!;
+    const view = mount(puzzle, { mode: "custom" });
+    await winGame(view, puzzle);
+    view.unmount();
+    const writesBefore = db.writeLog.length;
+
+    const reopened = mount(puzzle, { mode: "custom" });
+    await settle();
+    expect(reopened.result.current.state.isComplete).toBe(true);
+    reopened.unmount();
+    const again = mount(puzzle, { mode: "custom" });
+    await settle();
+    expect(db.writeLog.length).toBe(writesBefore);
+    expect((await getCustomPuzzleStats(shareId))!.completedPlays).toBe(1);
+    again.unmount();
+  });
+
+  it("each COMPLETED replay counts once, with its own win/loss and guess count", async () => {
+    const { shareId } = await createCustomPuzzle(CLASSIC_INPUT);
+    const { puzzle } = (await getCustomPuzzleByShareId(shareId))!;
+    const key = `custom:${shareId}`;
+
+    const run1 = mount(puzzle, { mode: "custom" });
+    await winGame(run1, puzzle);
+    const runId1 = loadProgress(key)!.runId;
+    run1.unmount();
+
+    // Replay: local progress cleared (what the Replay button does), fresh mount.
+    clearProgress(key);
+    const run2 = mount(puzzle, { mode: "custom" });
+    await loseGame(run2, puzzle);
+    const runId2 = loadProgress(key)!.runId;
+    run2.unmount();
+
+    expect(runId2).not.toBe(runId1);
+    let stats = (await getCustomPuzzleStats(shareId))!;
+    expect(stats.completedPlays).toBe(2);
+    expect(stats.wins).toBe(1);
+    expect(stats.losses).toBe(1);
+
+    clearProgress(key);
+    const run3 = mount(puzzle, { mode: "custom" });
+    await winGame(run3, puzzle);
+    run3.unmount();
+    stats = (await getCustomPuzzleStats(shareId))!;
+    expect(stats.completedPlays).toBe(3);
+    expect(stats.wins).toBe(2);
+    // One row per device, however many replays: storage stays lean.
+    expect(results()).toHaveLength(1);
+  });
+
+  it("clicking Replay and abandoning the new run counts nothing", async () => {
+    const { shareId } = await createCustomPuzzle(CLASSIC_INPUT);
+    const { puzzle } = (await getCustomPuzzleByShareId(shareId))!;
+    const key = `custom:${shareId}`;
+    const run1 = mount(puzzle, { mode: "custom" });
+    await winGame(run1, puzzle);
+    run1.unmount();
+
+    clearProgress(key); // Replay clicked
+    const run2 = mount(puzzle, { mode: "custom" });
+    await guess(run2, puzzle.groups[0].words); // one correct guess, then walk away
+    run2.unmount();
+
+    const stats = (await getCustomPuzzleStats(shareId))!;
+    expect(stats.completedPlays).toBe(1);
+  });
+
+  it("a run keeps its run id through a mid-run refresh (so it still counts once)", async () => {
+    const { shareId } = await createCustomPuzzle(CLASSIC_INPUT);
+    const { puzzle } = (await getCustomPuzzleByShareId(shareId))!;
+    const key = `custom:${shareId}`;
+    const first = mount(puzzle, { mode: "custom" });
+    await guess(first, puzzle.groups[0].words);
+    const runId = loadProgress(key)!.runId;
+    first.unmount();
+
+    const resumed = mount(puzzle, { mode: "custom" });
+    await settle();
+    for (const g of puzzle.groups.slice(1)) await guess(resumed, g.words);
+    expect(loadProgress(key)!.runId).toBe(runId);
+    expect((await getCustomPuzzleStats(shareId))!.completedPlays).toBe(1);
+  });
+
+  it("losses never affect Average Guesses to Solve or the distribution", async () => {
+    const { shareId } = await createCustomPuzzle(CLASSIC_INPUT);
+    const { puzzle } = (await getCustomPuzzleByShareId(shareId))!;
+    const key = `custom:${shareId}`;
+    const win = mount(puzzle, { mode: "custom" });
+    await winGame(win, puzzle); // 4 guesses
+    win.unmount();
+    const before = (await getCustomPuzzleStats(shareId))!;
+
+    clearProgress(key);
+    const loss = mount(puzzle, { mode: "custom" });
+    await loseGame(loss, puzzle);
+    loss.unmount();
+    const after = (await getCustomPuzzleStats(shareId))!;
+
+    expect(after.losses).toBe(1);
+    expect(after.avgGuessesToSolve).toBe(before.avgGuessesToSolve);
+    expect(after.guessDistribution).toEqual(before.guessDistribution);
+    expect(after.guessDistribution).toEqual({ "4": 1, "5": 0, "6": 0, "7": 0, "8+": 0 });
+  });
+
+  it("the guess buckets group 8 and above together and always list all five", async () => {
+    const { shareId } = await createCustomPuzzle(CLASSIC_INPUT);
+    const id = await mintDeviceIdentity("bucket");
+    const guesses = [4, 5, 5, 7, 8, 12, 30];
+    for (const [i, g] of guesses.entries()) {
+      await db.rpc("submit_custom_puzzle_result", {
+        _share_id: shareId, _device_id: id.device_id, _device_token: id.device_token,
+        _won: true, _total_guesses: g, _run_id: `00000000-0000-4000-8000-00000000000${i}`,
+      });
+    }
+    const stats = (await getCustomPuzzleStats(shareId))!;
+    expect(stats.guessDistribution).toEqual({ "4": 1, "5": 2, "6": 0, "7": 1, "8+": 3 });
+    expect(stats.avgGuessesToSolve).toBe(Math.round((guesses.reduce((a, b) => a + b, 0) / guesses.length) * 100) / 100);
   });
 
   it("two different devices produce two finished plays, and wins/losses/avg/distribution aggregate correctly", async () => {
@@ -488,11 +607,12 @@ describe("custom puzzle statistics", () => {
 
     const stats = await getCustomPuzzleStats(shareId);
     expect(stats).not.toBeNull();
-    expect(stats!.finishedPlays).toBe(2);
+    expect(stats!.completedPlays).toBe(2);
     expect(stats!.wins).toBe(1);
     expect(stats!.losses).toBe(1);
-    expect(stats!.avgGuesses).toBe(4);
-    expect(stats!.guessDistribution["4"]).toBe(2);
+    // Average and distribution cover WINS only.
+    expect(stats!.avgGuessesToSolve).toBe(4);
+    expect(stats!.guessDistribution["4"]).toBe(1);
   });
 
   it("direct reads and writes on custom_puzzle_results are refused for every role, including admin", async () => {
@@ -523,7 +643,7 @@ describe("custom puzzle statistics", () => {
     const { data } = await db.rpc("get_custom_puzzle_stats", { _share_id: shareId });
     const keys = Object.keys(data as Record<string, unknown>);
     expect(keys).toEqual(
-      expect.arrayContaining(["finished_plays", "wins", "losses", "avg_guesses", "guess_distribution"])
+      expect.arrayContaining(["completed_plays", "wins", "losses", "avg_guesses", "guess_distribution"])
     );
     expect(keys).not.toContain("device_id");
     expect(keys).not.toContain("user_id");
@@ -533,6 +653,12 @@ describe("custom puzzle statistics", () => {
   it("a puzzle nobody has finished shows an empty-but-valid stats shape", async () => {
     const { shareId } = await createCustomPuzzle(CLASSIC_INPUT);
     const stats = await getCustomPuzzleStats(shareId);
-    expect(stats).toEqual({ finishedPlays: 0, wins: 0, losses: 0, avgGuesses: 0, guessDistribution: {} });
+    expect(stats).toEqual({
+      completedPlays: 0,
+      wins: 0,
+      losses: 0,
+      avgGuessesToSolve: 0,
+      guessDistribution: { "4": 0, "5": 0, "6": 0, "7": 0, "8+": 0 },
+    });
   });
 });

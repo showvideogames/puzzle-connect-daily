@@ -3,6 +3,7 @@ import { GameSettings } from "@/lib/settings";
 import { useGame } from "@/hooks/useGame";
 import { WordTile } from "./WordTile";
 import { SolvedGroup } from "./SolvedGroup";
+import { dedupeHintMarkers } from "@/lib/hints";
 import { MistakeDots } from "./MistakeDots";
 import { DailyStatsModal } from "./DailyStatsModal";
 import { CustomStatsModal } from "./CustomStatsModal";
@@ -11,7 +12,7 @@ import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
 import { ResultGrid, ResultCellKind, ResultRow } from "./ResultGrid";
 import { PuzzleModeBadge } from "./PuzzleModeBadge";
-import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown } from "lucide-react";
+import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown, RotateCcw } from "lucide-react";
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useImagePreload } from "@/hooks/useImagePreload";
@@ -27,27 +28,7 @@ import { resolveTheme } from "@/lib/themes";
 import { loadPlayedDifficulties } from "@/lib/puzzleVersion";
 import { buildCustomShareText, buildOfficialShareText } from "@/lib/shareText";
 import { customPuzzlePath } from "@/lib/customPuzzles";
-
-function extractTrailingEmojis(str: string): string {
-  try {
-    const segmenter = new Intl.Segmenter();
-    const segments = [...segmenter.segment(str)].map(s => s.segment);
-    const emojiRegex = /\p{Emoji}/u;
-    const result: string[] = [];
-    for (let i = segments.length - 1; i >= 0; i--) {
-      const seg = segments[i].trim();
-      if (seg === "") continue;
-      if (emojiRegex.test(seg)) {
-        result.unshift(seg);
-      } else {
-        break;
-      }
-    }
-    return result.join("");
-  } catch {
-    return "";
-  }
-}
+import { resolveCategoryVisual, splitCategoryVisual } from "@/lib/categoryVisual";
 
 const DIFFICULTY_SQUARE: Record<number, string> = {
   1: "🟨",
@@ -134,7 +115,7 @@ function getResultHeadline(isWon: boolean, mistakes: number): string {
 // family as the four main categories, differing only in background.
 function RainbowWordsRow({ words }: { words: string[] }) {
   return (
-    <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-1 opacity-80 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
+    <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-1 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
       {words.map((w, i) => (
         <span key={`${w}-${i}`} className="inline-flex items-center gap-x-1">
           {i > 0 && <span aria-hidden="true">·</span>}
@@ -222,6 +203,8 @@ interface GameBoardProps {
   fullHintUsed?: boolean;
   onHintClick?: () => void;
   onComplete?: () => void;
+  // Fires whenever hints flip into/out of view-only mode (puzzle fully resolved).
+  onHintsViewOnlyChange?: (viewOnly: boolean) => void;
   // Whether to show the RAINBOW / 4 GROUPS PuzzleModeBadge above the board.
   // Defaults to true so every current call site keeps rendering it exactly
   // as before; pass false for contexts that shouldn't show it (e.g. a future
@@ -250,9 +233,18 @@ interface GameBoardProps {
    * Defaults to false so every existing call site is unaffected.
    */
   customMode?: boolean;
+  /**
+   * Custom mode only. The page owns the stats modal so its header Stats button
+   * can open it at any time (before, during and after play); when omitted the
+   * board falls back to its own local state.
+   */
+  statsOpen?: boolean;
+  onStatsOpenChange?: (open: boolean) => void;
+  /** Custom mode only. Called by the post-completion Replay button. */
+  onReplay?: () => void;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", wideBoard = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, showModeBadge = true, entryContext = "daily_home", betaMode = false, customMode = false }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", wideBoard = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, onHintsViewOnlyChange, showModeBadge = true, entryContext = "daily_home", betaMode = false, customMode = false, statsOpen: statsOpenProp, onStatsOpenChange, onReplay }: GameBoardProps) {
   const isDailyHomepage = variant === "dailyHomepage";
   // Drives the board's own desktop width/tile-gap classes below — true for
   // the daily homepage itself, or any other context that explicitly opted
@@ -264,6 +256,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const arrangeTiles = settings?.arrangeTiles ?? false;
   const colorCodeTiles = settings?.colorCodeTiles ?? false;
   const colorPaletteMode = settings?.colorPaletteMode ?? false;
+
+  // Declared before useGame: whether the Rainbow bonus result is known feeds
+  // the hook's "puzzle fully resolved" (view-only hints) decision.
+  const [bonusRainbowCorrect, setBonusRainbowCorrect] = useState<boolean | null>(null);
 
   const {
     state,
@@ -288,8 +284,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     setTileColor,
     clearAllColors,
     hasAnyColor,
-    effectiveSmallHintUsed,
-    effectiveFullHintUsed,
+    smallHintVisible,
+    fullHintVisible,
+    hintsViewOnly,
     markRainbowFound,
     handleDragStart,
     handleDragOver,
@@ -301,7 +298,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     sessionIdRef,
     activeSecondsRef,
     nextGuessNumber,
-  } = useGame(puzzle, { isArchive, smallHintUsed, fullHintUsed, entryContext, mode: customMode ? "custom" : betaMode ? "beta" : "official" });
+  } = useGame(puzzle, { isArchive, smallHintUsed, fullHintUsed, rainbowResolved: bonusRainbowCorrect !== null, entryContext, mode: customMode ? "custom" : betaMode ? "beta" : "official" });
 
   // Preload custom emoji images so they don't pop in after the board renders
   const imagesToPreload = useMemo(() => {
@@ -638,14 +635,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   }, [colorPaletteMode]);
 
   const [copied, setCopied] = useState(false);
-  const [showGlobalStats, setShowGlobalStats] = useState(false);
+  const [localStatsOpen, setLocalStatsOpen] = useState(false);
+  const showGlobalStats = statsOpenProp ?? localStatsOpen;
+  const setShowGlobalStats = onStatsOpenChange ?? setLocalStatsOpen;
   const [showSpotModal, setShowSpotModal] = useState(false);
   // How many bonus "Spot the Rainbow" attempts have FAILED this mount.
   // A failed attempt is not appended to guessHistory (it has no share-grid
   // row), so it has to advance the durable guess numbering itself — see
   // handleSpotResult below.
   const failedBonusAttemptsRef = useRef(0);
-  const [bonusRainbowCorrect, setBonusRainbowCorrect] = useState<boolean | null>(null);
   const [rainbowVisible, setRainbowVisible] = useState(state.gotRainbow);
   const [spotShaking, setSpotShaking] = useState(false);
   const [bonusRainbowWords, setBonusRainbowWords] = useState<string[]>([]);
@@ -723,8 +721,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   }, [bonusRainbowCorrect]);
 
   useEffect(() => {
-    if (effectiveFullHintUsed) setHintVisible(true);
-  }, [effectiveFullHintUsed]);
+    if (fullHintVisible) setHintVisible(true);
+  }, [fullHintVisible]);
+
+  useEffect(() => {
+    onHintsViewOnlyChange?.(hintsViewOnly);
+  }, [hintsViewOnly, onHintsViewOnlyChange]);
 
   const handleSpotResult = useCallback((correct: boolean, words: string[]) => {
     // Captured HERE — the moment SpotTheRainbowModal's Submit actually fired
@@ -814,12 +816,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     const sorted = [...puzzle.groups].sort((a, b) => a.difficulty - b.difficulty);
     const items: { color?: string; squareEmoji?: string; emoji: string }[] = sorted.map(g => ({
       color: DIFFICULTY_COLOR[g.difficulty],
-      emoji: extractTrailingEmojis(g.category),
+      emoji: resolveCategoryVisual(g.categoryEmoji, g.category),
     }));
-    if (puzzle.rainbowHerring && puzzle.rainbowCategoryName) {
+    if (puzzle.rainbowHerring && (puzzle.rainbowCategoryName || puzzle.rainbowCategoryEmoji)) {
       items.push({
         squareEmoji: theme.emoji,
-        emoji: extractTrailingEmojis(puzzle.rainbowCategoryName),
+        emoji: resolveCategoryVisual(puzzle.rainbowCategoryEmoji, puzzle.rainbowCategoryName ?? ""),
       });
     }
     return items;
@@ -861,7 +863,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   const generateShareLines = useCallback((): string[] => {
     const lines: string[] = [];
-    for (const attempt of state.guessHistory) {
+    for (const attempt of dedupeHintMarkers(state.guessHistory)) {
       if (attempt.isHintMarker) {
         const emoji = attempt.hintType === "small" ? "💡" : "🔦";
         const last = lines[lines.length - 1];
@@ -899,7 +901,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // feature existed simply have no isHintMarker entries in their history,
   // so they render exactly as before — nothing to migrate.
   const resultRows = useMemo((): ResultRow[] => {
-    return state.guessHistory.map((attempt): ResultRow => {
+    return dedupeHintMarkers(state.guessHistory).map((attempt): ResultRow => {
       if (attempt.isHintMarker) {
         return { type: "hint", hint: attempt.hintType === "small" ? "bulb" : "flashlight" };
       }
@@ -992,7 +994,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // default) bonus's gradient is a fixed image regardless of this setting.
   const rainbowCardStatic = theme.isDefault && !showRainbow;
   const rainbowCardBg = rainbowCardStatic ? "var(--rainbow-static-gradient)" : theme.gradient;
-  const rainbowCardTextClass = rainbowCardStatic ? "text-ink" : "text-white";
+  const rainbowCardTextClass = rainbowCardStatic ? "text-[#292825]" : "text-white";
   const rainbowCardTextShadow = rainbowCardStatic ? undefined : theme.textShadow;
 
   return (
@@ -1017,83 +1019,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         Select four words that share a connection!
       </p>
 
-      {/* Solved groups — rainbow is interleaved at the position it was actually
-          found (boardSlots), not always pinned to the top */}
-      <div className="space-y-2 mb-2">
-        {boardSlots.map((slot) =>
-          slot.kind === "rainbow" ? (
-            <div
-              key="rainbow-reveal"
-              className={`w-full rounded-lg py-3 px-4 text-center ${rainbowCardTextClass} ${
-                rainbowVisible ? "animate-rainbow-curtain" : ""
-              }`}
-              style={{
-                background: rainbowCardBg,
-                textShadow: rainbowCardTextShadow,
-                clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
-              }}
-            >
-              <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
-                {puzzle.rainbowCategoryName || theme.defaultCategoryName}
-              </div>
-              <RainbowWordsRow words={puzzle.rainbowHerring!} />
-            </div>
-          ) : (
-            <SolvedGroup
-              key={slot.groupIdx}
-              ref={reveal?.groupIdx === slot.groupIdx ? (el) => { revealBarRef.current = el; } : undefined}
-              group={puzzle.groups[slot.groupIdx]}
-              alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
-              // animate-group-appear is only for bars that DIDN'T go through the
-              // clone reveal (reduced-motion path, loss cascade). Clone-revealed
-              // bars cross-fade in via the `reveal` prop instead.
-              animate={slot.groupIdx === lastRevealedGroup && !cloneRevealedGroupsRef.current.has(slot.groupIdx)}
-              reveal={
-                reveal?.groupIdx === slot.groupIdx
-                  ? (reveal.phase === "arrived"
-                      ? "arrived"
-                      : reveal.phase === "merging"
-                        ? "shown"
-                        : "hidden")
-                  : undefined
-              }
-            />
-          )
-        )}
-
-        {showEndState && !state.gotRainbow && puzzle.rainbowHerring && (
-          bonusRainbowCorrect === null ? (
-            <button
-              onClick={() => setShowSpotModal(true)}
-              className="w-full rounded-lg py-3 px-4 text-center text-white
-                hover:opacity-90 transition-opacity active:scale-[0.99]
-                animate-rainbow-breathe animate-rainbow-shimmer"
-              style={{ background: theme.gradient, textShadow: theme.textShadow }}
-            >
-              <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">{theme.spotPrompt}</div>
-              <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-0.5 opacity-80">Find one word from each group</div>
-            </button>
-          ) : (
-            <div
-              className={`w-full rounded-lg py-3 px-4 text-center ${rainbowCardTextClass} ${
-                rainbowVisible ? "animate-rainbow-curtain" : ""
-              }`}
-              style={{
-                background: rainbowCardBg,
-                textShadow: rainbowCardTextShadow,
-                clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
-              }}
-            >
-              <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
-                {puzzle.rainbowCategoryName || theme.defaultCategoryName}
-              </div>
-              <RainbowWordsRow words={puzzle.rainbowHerring} />
-            </div>
-          )
-        )}
-      </div>
-
-      {/* Color Palette Mode buttons - ABOVE THE GRID */}
+      {/* Color Palette Mode buttons. Fixed position: directly under the
+          instruction and ABOVE the solved bars, so solving a category never
+          moves it. Order: instruction, palette, solved bars, remaining board. */}
       {colorPaletteMode && remainingWords.length > 0 && (
         <div className="flex items-center justify-center gap-2 mb-3">
           <button
@@ -1151,6 +1079,82 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           </button>
         </div>
       )}
+
+      {/* Solved groups — rainbow is interleaved at the position it was actually
+          found (boardSlots), not always pinned to the top */}
+      <div className="space-y-2 mb-2">
+        {boardSlots.map((slot) =>
+          slot.kind === "rainbow" ? (
+            <div
+              key="rainbow-reveal"
+              className={`w-full rounded-lg py-3 px-4 text-center ${rainbowCardTextClass} ${
+                rainbowVisible ? "animate-rainbow-curtain" : ""
+              }`}
+              style={{
+                background: rainbowCardBg,
+                textShadow: rainbowCardTextShadow,
+                clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
+              }}
+            >
+              <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
+                {puzzle.rainbowCategoryName || theme.defaultCategoryName}
+              </div>
+              <RainbowWordsRow words={puzzle.rainbowHerring!} />
+            </div>
+          ) : (
+            <SolvedGroup
+              key={slot.groupIdx}
+              ref={reveal?.groupIdx === slot.groupIdx ? (el) => { revealBarRef.current = el; } : undefined}
+              group={puzzle.groups[slot.groupIdx]}
+              alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
+              // animate-group-appear is only for bars that DIDN'T go through the
+              // clone reveal (reduced-motion path, loss cascade). Clone-revealed
+              // bars cross-fade in via the `reveal` prop instead.
+              animate={slot.groupIdx === lastRevealedGroup && !cloneRevealedGroupsRef.current.has(slot.groupIdx)}
+              reveal={
+                reveal?.groupIdx === slot.groupIdx
+                  ? (reveal.phase === "arrived"
+                      ? "arrived"
+                      : reveal.phase === "merging"
+                        ? "shown"
+                        : "hidden")
+                  : undefined
+              }
+            />
+          )
+        )}
+
+        {showEndState && !state.gotRainbow && puzzle.rainbowHerring && (
+          bonusRainbowCorrect === null ? (
+            <button
+              onClick={() => setShowSpotModal(true)}
+              className="w-full rounded-lg py-3 px-4 text-center text-white
+                hover:opacity-90 transition-opacity active:scale-[0.99]
+                animate-rainbow-breathe animate-rainbow-shimmer"
+              style={{ background: theme.gradient, textShadow: theme.textShadow }}
+            >
+              <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">{theme.spotPrompt}</div>
+              <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-0.5">Find one word from each group</div>
+            </button>
+          ) : (
+            <div
+              className={`w-full rounded-lg py-3 px-4 text-center ${rainbowCardTextClass} ${
+                rainbowVisible ? "animate-rainbow-curtain" : ""
+              }`}
+              style={{
+                background: rainbowCardBg,
+                textShadow: rainbowCardTextShadow,
+                clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
+              }}
+            >
+              <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
+                {puzzle.rainbowCategoryName || theme.defaultCategoryName}
+              </div>
+              <RainbowWordsRow words={puzzle.rainbowHerring} />
+            </div>
+          )
+        )}
+      </div>
 
       {/* Word grid */}
       {remainingWords.length > 0 && (
@@ -1252,7 +1256,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           <div
             className={`${
               theme.isDefault
-                ? showRainbow ? "rainbow-tile text-white" : "rainbow-tile-static text-ink"
+                ? showRainbow ? "rainbow-tile text-white" : "rainbow-tile-static text-[#292825]"
                 : "text-white"
             } px-6 py-2.5 rounded-full text-sm font-bold shadow-lg`}
             style={!theme.isDefault ? { background: theme.gradient, textShadow: theme.textShadow } : undefined}
@@ -1396,7 +1400,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       )}
 
       {/* Hint pill */}
-      {effectiveFullHintUsed && (
+      {fullHintVisible && (
         <div className="mt-4 flex justify-center">
           {hintVisible ? (
             <div className="flex items-center gap-3 flex-wrap justify-center animate-fade-up">
@@ -1408,7 +1412,22 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                     <span>{item.squareEmoji}</span>
                   )}
                   <span className="text-base text-muted-foreground">:</span>
-                  <span>{item.emoji}</span>
+                  <span data-testid="hint-visual">
+                    {splitCategoryVisual(item.emoji).map((part, k) =>
+                      part.type === "text" ? (
+                        <span key={k}>{part.value}</span>
+                      ) : (
+                        <img
+                          key={k}
+                          src={customEmojiUrl(part.name)}
+                          alt={part.name}
+                          draggable={false}
+                          className="inline-block align-middle"
+                          style={{ height: "1em", width: "auto" }}
+                        />
+                      )
+                    )}
+                  </span>
                 </span>
               ))}
             </div>
@@ -1425,7 +1444,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       )}
 
       {/* Small Hint tile row */}
-      {effectiveSmallHintUsed && (
+      {smallHintVisible && (
         <div className="mt-4 flex flex-wrap justify-center gap-2 animate-fade-up">
           {[...puzzle.groups]
             .sort((a, b) => a.difficulty - b.difficulty)
@@ -1573,7 +1592,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   generateShareLines()/generateShareText() exactly as
                   before and is unaffected by this. */}
               <ResultGrid rows={resultRows} />
-              <div className="flex items-center justify-center gap-3">
+              <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
                   onClick={handleShare}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold
@@ -1594,7 +1613,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border text-sm font-semibold
                       hover:bg-secondary transition-all duration-150 active:scale-95 shadow-md"
                   >
-                    <TrendingUp className="w-4 h-4" /> {customMode ? "Puzzle Stats" : "Global Stats"}
+                    <TrendingUp className="w-4 h-4" /> {customMode ? "Results" : "Global Stats"}
+                  </button>
+                )}
+                {customMode && onReplay && (
+                  <button
+                    onClick={onReplay}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border text-sm font-semibold
+                      hover:bg-secondary transition-all duration-150 active:scale-95 shadow-md"
+                  >
+                    <RotateCcw className="w-4 h-4" /> Replay
                   </button>
                 )}
               </div>

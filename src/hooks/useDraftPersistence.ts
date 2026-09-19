@@ -7,6 +7,8 @@ export interface GroupForm {
   words: string;
   difficulty: 1 | 2 | 3 | 4;
   hintWord: string;
+  /** Absent in drafts saved before Category Emoji existed. */
+  categoryEmoji?: string;
 }
 
 export interface DraftData {
@@ -20,6 +22,7 @@ export interface DraftData {
   rainbowHerring: (string | null)[];
   rainbowCategoryName: string;
   rainbowHintWord: string;
+  rainbowCategoryEmoji?: string;
   rainbowWordOrder: string[];
   theme: string;
   isEmojiPuzzle: boolean;
@@ -27,6 +30,8 @@ export interface DraftData {
   isFreePuzzle: boolean;
   freePuzzleOrder: number | null;
   alphabetizeCompleted: boolean;
+  /** Absent in drafts saved before style was stored; loading then keeps the current style. */
+  style?: "rainbow" | "classic";
   editingId: string | null;
 }
 

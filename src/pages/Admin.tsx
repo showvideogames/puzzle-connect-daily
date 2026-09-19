@@ -17,6 +17,9 @@ import { PuzzleListItem, type RatingSummary } from "@/components/admin/PuzzleLis
 import { useDraftPersistence, type DraftData } from "@/hooks/useDraftPersistence";
 import { useBuilderForm, type LoadBuilderInput } from "@/hooks/useBuilderForm";
 import { CategoryEditor } from "@/components/builder/CategoryEditor";
+import { CategoryList } from "@/components/builder/CategoryList";
+import { StyleSelector } from "@/components/builder/StyleSelector";
+import { StartOverButton } from "@/components/builder/StartOverButton";
 import { StartingBoardArranger } from "@/components/builder/StartingBoardArranger";
 import { RainbowPanel } from "@/components/builder/RainbowPanel";
 import { splitAnswerField } from "@/lib/builder/answerIdentity";
@@ -217,10 +220,6 @@ function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) 
 export default function Admin() {
   const { user, loading, isAdmin, signOut } = useAuth();
 
-  // Tap-to-swap selection state (category order only — board/Rainbow order
-  // is drag-based, owned by the builder hook below).
-  const [selectedGroupIdx, setSelectedGroupIdx] = useState<number | null>(null);
-
   // Puzzle form
   const [puzzleDate, setPuzzleDate] = useState("");
   const [puzzleTitle, setPuzzleTitle] = useState("");
@@ -237,11 +236,12 @@ export default function Admin() {
   // same engine capability (a puzzle either has a Rainbow selection or it
   // doesn't), so this is never sent to admin_save_puzzle. Toggling to
   // Classic hides the panel without clearing anything already filled in.
-  const [styleTab, setStyleTab] = useState<"classic" | "rainbow">("classic");
 
   // Category editing, Rainbow selection and starting-board order — the
   // reusable builder core. See hooks/useBuilderForm.ts.
   const builder = useBuilderForm();
+  // Rainbow (default for a new puzzle) / Classic lives in the shared builder.
+  const styleTab = builder.style;
 
   const [isPublished, setIsPublished] = useState(false);
   // One clear status selector: Draft / Beta / Published. isPublished and
@@ -326,6 +326,7 @@ export default function Admin() {
       words: g.answersRaw,
       difficulty: g.difficulty,
       hintWord: g.hintWord,
+      categoryEmoji: g.categoryEmoji,
     })),
     isPublished,
     isBeta,
@@ -333,6 +334,7 @@ export default function Admin() {
     rainbowHerring: builder.rainbowHerringIds.map((id) => (id ? builder.slotById.get(id)?.text ?? null : null)),
     rainbowCategoryName: builder.rainbowCategoryName,
     rainbowHintWord: builder.rainbowHintWord,
+    rainbowCategoryEmoji: builder.rainbowCategoryEmoji,
     rainbowWordOrder: builder.textsFor(builder.rainbowWordOrderIds),
     theme: builder.theme,
     isEmojiPuzzle,
@@ -340,6 +342,7 @@ export default function Admin() {
     isFreePuzzle,
     freePuzzleOrder,
     alphabetizeCompleted: builder.alphabetizeCompleted,
+    style: builder.style,
     editingId,
   };
 
@@ -386,6 +389,7 @@ export default function Admin() {
     builder.rainbowComplete,
     builder.rainbowCategoryName,
     builder.rainbowHintWord,
+    builder.rainbowCategoryEmoji,
     builder.theme,
     builder.alphabetizeCompleted,
     isEmojiPuzzle,
@@ -411,13 +415,17 @@ export default function Admin() {
           words: splitAnswerField(g.words),
           difficulty: g.difficulty,
           hintWord: g.hintWord,
+          categoryEmoji: g.categoryEmoji ?? "",
         })),
         wordOrder: draft.wordOrder,
         rainbowHerring: draft.rainbowHerring.every(Boolean) ? (draft.rainbowHerring as string[]) : null,
         rainbowCategoryName: draft.rainbowCategoryName ?? "",
         rainbowHintWord: draft.rainbowHintWord ?? "",
+        rainbowCategoryEmoji: draft.rainbowCategoryEmoji ?? "",
         theme: draft.theme ?? "",
         alphabetizeCompleted: draft.alphabetizeCompleted ?? true,
+        // A draft without a stored style leaves the current style alone.
+        style: draft.style,
       });
     },
   });
@@ -511,17 +519,6 @@ export default function Admin() {
       toast.error("Couldn't load global stats.");
     } finally {
       setGlobalStatsLoading(false);
-    }
-  }
-
-  function handleGroupTap(i: number) {
-    if (selectedGroupIdx === null) {
-      setSelectedGroupIdx(i);
-    } else if (selectedGroupIdx === i) {
-      setSelectedGroupIdx(null);
-    } else {
-      builder.swapGroups(selectedGroupIdx, i);
-      setSelectedGroupIdx(null);
     }
   }
 
@@ -669,7 +666,6 @@ export default function Admin() {
     setPuzzleTitle("");
     setDesignerName("Sam West");
     builder.reset();
-    setStyleTab("classic");
     setIsPublished(false);
     setIsBeta(false);
     setIsEmojiPuzzle(false);
@@ -677,6 +673,27 @@ export default function Admin() {
     setIsFreePuzzle(false);
     setFreePuzzleOrder(null);
     setLoadedContent(null);
+  }
+
+  // Start Over: clears the form but keeps the designer name. For a NEW puzzle it
+  // also drops the saved local draft and restores every new-puzzle default. For
+  // an EXISTING puzzle it only clears the form (the visible Date included):
+  // editingId, the hidden identity, is kept and the stored puzzle is untouched,
+  // so nothing is deleted or overwritten until Update Puzzle is pressed.
+  function handleStartOver() {
+    setPuzzleTitle("");
+    setPuzzleDate("");
+    builder.reset();
+    if (!editingId) {
+      clearDraft();
+      setDraftRestored(false);
+      setIsPublished(false);
+      setIsBeta(false);
+      setIsEmojiPuzzle(false);
+      setEmojiPuzzleIcon("");
+      setIsFreePuzzle(false);
+      setFreePuzzleOrder(null);
+    }
   }
 
   function handleClearDraft() {
@@ -699,6 +716,7 @@ export default function Admin() {
       words: g.words as string[],
       difficulty: g.difficulty as 1 | 2 | 3 | 4,
       hintWord: (g.hint_word ?? null) as string | null,
+      categoryEmoji: (g.category_emoji ?? null) as string | null,
     }));
     const loadInput: LoadBuilderInput = {
       groups: loadedGroups,
@@ -706,11 +724,13 @@ export default function Admin() {
       rainbowHerring: p.rainbow_herring && p.rainbow_herring.length === 4 ? p.rainbow_herring : null,
       rainbowCategoryName: p.rainbow_category_name || "",
       rainbowHintWord: p.rainbow_hint_word || "",
+      rainbowCategoryEmoji: p.rainbow_category_emoji || "",
       theme: p.theme || "",
       alphabetizeCompleted: p.alphabetize_completed ?? true,
+      // An existing puzzle keeps the style it was saved with.
+      style: p.rainbow_herring && p.rainbow_herring.length === 4 ? "rainbow" : "classic",
     };
     builder.load(loadInput);
-    setStyleTab(loadInput.rainbowHerring ? "rainbow" : "classic");
     setIsEmojiPuzzle(p.is_emoji_puzzle ?? false);
     setEmojiPuzzleIcon(p.emoji_puzzle_icon ?? "");
     setIsFreePuzzle(p.is_free_puzzle ?? false);
@@ -725,6 +745,7 @@ export default function Admin() {
           rainbowHerring: p.rainbow_herring ?? null,
           rainbowCategoryName: p.rainbow_category_name ?? null,
           rainbowHintWord: p.rainbow_hint_word ?? null,
+          rainbowCategoryEmoji: p.rainbow_category_emoji ?? null,
           theme: p.theme ?? null,
           isEmojiPuzzle: p.is_emoji_puzzle ?? false,
           alphabetizeCompleted: p.alphabetize_completed ?? true,
@@ -904,22 +925,7 @@ export default function Admin() {
                     </span>
                   </div>
                 </div>
-                <div>
-                  <span className="text-xs font-medium text-slate block mb-1">Style</span>
-                  <div className="inline-flex rounded-lg border border-border p-0.5 bg-secondary/50">
-                    {(["classic", "rainbow"] as const).map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setStyleTab(s)}
-                        className={`px-3 py-1.5 rounded-md text-xs font-semibold capitalize transition-colors
-                          ${styleTab === s ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <StyleSelector value={builder.style} onChange={builder.setStyle} />
               </div>
 
               <label className="flex items-center gap-2 cursor-pointer">
@@ -937,32 +943,36 @@ export default function Admin() {
                 <span className="text-sm font-medium text-ink">Alphabetize answers in completed categories</span>
               </label>
 
-              <div className="space-y-3">
-                {builder.groups.map((g, i) => (
-                  <CategoryEditor
-                    key={i}
-                    colorIndex={(i + 1) as 1 | 2 | 3 | 4}
-                    label={CATEGORY_LABELS[i]}
-                    difficultyLabel={DIFFICULTY_LABELS[i]}
-                    category={g.category}
-                    onCategoryChange={(v) => builder.updateCategoryName(i, v)}
-                    categoryPlaceholder={CATEGORY_PLACEHOLDERS[i]}
-                    answersRaw={g.answersRaw}
-                    onAnswersRawChange={(v) => builder.updateAnswersRaw(i, v)}
-                    answersLabel="4 answers, separated by commas"
-                    answersPlaceholder={ANSWERS_PLACEHOLDERS[i]}
-                    hintWord={g.hintWord}
-                    onHintWordChange={(v) => builder.updateHintWord(i, v)}
-                    hintPlaceholder={HINT_PLACEHOLDERS[i]}
-                    onFieldBlur={handleBlurSave}
-                    onSwapClick={() => handleGroupTap(i)}
-                    isSwapSelected={selectedGroupIdx === i}
-                  />
-                ))}
-              </div>
-              {selectedGroupIdx !== null && (
-                <p className="text-xs text-muted-foreground">Tap another category's swap icon to swap it with this one.</p>
-              )}
+              <CategoryList
+                keys={builder.groups.map((g) => g.poolIds[0])}
+                labels={[...CATEGORY_LABELS]}
+                onMove={builder.moveGroup}
+                renderCard={(i, dnd) => {
+                  const g = builder.groups[i];
+                  return (
+                    <CategoryEditor
+                      colorIndex={(i + 1) as 1 | 2 | 3 | 4}
+                      label={CATEGORY_LABELS[i]}
+                      difficultyLabel={DIFFICULTY_LABELS[i]}
+                      category={g.category}
+                      onCategoryChange={(v) => builder.updateCategoryName(i, v)}
+                      categoryEmoji={g.categoryEmoji}
+                      onCategoryEmojiChange={(v) => builder.updateCategoryEmoji(i, v)}
+                      categoryPlaceholder={CATEGORY_PLACEHOLDERS[i]}
+                      answersRaw={g.answersRaw}
+                      onAnswersRawChange={(v) => builder.updateAnswersRaw(i, v)}
+                      answersLabel="4 answers, separated by commas"
+                      answersPlaceholder={ANSWERS_PLACEHOLDERS[i]}
+                      hintWord={g.hintWord}
+                      onHintWordChange={(v) => builder.updateHintWord(i, v)}
+                      hintPlaceholder={HINT_PLACEHOLDERS[i]}
+                      onFieldBlur={handleBlurSave}
+                      dragHandle={dnd.handle}
+                      isDragging={dnd.isDragging}
+                    />
+                  );
+                }}
+              />
 
               {styleTab === "rainbow" && builder.hasAll16 && (
                 <RainbowPanel
@@ -975,6 +985,8 @@ export default function Admin() {
                   onSelect={builder.selectRainbowAnswer}
                   categoryName={builder.rainbowCategoryName}
                   onCategoryNameChange={builder.setRainbowCategoryName}
+                  categoryEmoji={builder.rainbowCategoryEmoji}
+                  onCategoryEmojiChange={builder.setRainbowCategoryEmoji}
                   hintWord={builder.rainbowHintWord}
                   onHintWordChange={builder.setRainbowHintWord}
                   theme={builder.theme}
@@ -1108,6 +1120,14 @@ export default function Admin() {
                 {editingId && (
                   <Button variant="outline" onClick={resetForm}>Cancel Edit</Button>
                 )}
+                <StartOverButton
+                  onConfirm={handleStartOver}
+                  description={
+                    editingId
+                      ? "This clears the form only. The saved puzzle is not changed until you press Update Puzzle."
+                      : undefined
+                  }
+                />
               </div>
             </div>
 
@@ -1123,6 +1143,9 @@ export default function Admin() {
                 tiles={boardTiles}
                 onReorder={builder.setWordOrderIds}
                 onRandomize={builder.randomizeWordOrder}
+                title={puzzleTitle}
+                designerName={designerName}
+                isRainbow={builder.style === "rainbow"}
               />
             </div>
           </div>
