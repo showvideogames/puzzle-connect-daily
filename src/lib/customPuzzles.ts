@@ -8,21 +8,15 @@
  * puzzle_aggregates or beta_playtests/beta_feedback — see the
  * 20260919000000 migration's access model.
  *
- * The four RPCs this calls (create_custom_puzzle, get_custom_puzzle,
- * submit_custom_puzzle_result, get_custom_puzzle_stats) are not yet in the
- * generated Database type (that migration has not been applied to the
- * project this codegen ran against), so calls to them go through `rpc`
- * below — a thin `as any` shim, exactly as narrow as the untyped call itself.
- * Once the migration is applied and types are regenerated, this shim can be
- * deleted and every call site here switches back to the normal typed
- * `supabase.rpc`.
+ * The five RPCs this module calls (create_custom_puzzle, get_custom_puzzle,
+ * submit_custom_puzzle_result, get_custom_puzzle_stats,
+ * admin_set_custom_puzzle_status) are in the generated Database type as of
+ * the 20260919000000 migration — this goes through the normal typed
+ * `supabase.rpc`, no shim needed.
  */
 import { supabase } from "@/integrations/supabase/client";
 import { Puzzle, PuzzleGroup } from "./types";
 import { ensureDeviceIdentity } from "./gameStats";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const rpc = (fn: string, args: Record<string, unknown>) => (supabase.rpc as any)(fn, args);
 
 export type CustomPuzzleMode = "classic" | "rainbow";
 export type CustomPuzzleVisibility = "public" | "private";
@@ -73,7 +67,7 @@ function contentPayload(content: CustomPuzzleContentInput) {
 
 /** Throws on failure (the caller — the /create page — needs the real message to show near the right field). */
 export async function createCustomPuzzle(input: CreateCustomPuzzleInput): Promise<CreateCustomPuzzleResult> {
-  const { data, error } = await rpc("create_custom_puzzle", {
+  const { data, error } = await supabase.rpc("create_custom_puzzle", {
     _creator_name: input.creatorName,
     _title: input.title,
     _visibility: input.visibility,
@@ -140,7 +134,7 @@ function mapRowToPuzzle(row: CustomPuzzleRow): Puzzle {
 }
 
 export async function getCustomPuzzleByShareId(shareId: string): Promise<CustomPlayablePuzzle | null> {
-  const { data, error } = await rpc("get_custom_puzzle", { _share_id: shareId });
+  const { data, error } = await supabase.rpc("get_custom_puzzle", { _share_id: shareId });
   if (error || !data) return null;
   const row = data as unknown as CustomPuzzleRow;
   if (!row.id) return null;
@@ -166,7 +160,7 @@ export async function submitCustomPuzzleResult(params: {
   try {
     const identity = await ensureDeviceIdentity();
     if (!identity) return;
-    const { error } = await rpc("submit_custom_puzzle_result", {
+    const { error } = await supabase.rpc("submit_custom_puzzle_result", {
       _share_id: params.shareId,
       _device_id: identity.deviceId,
       _device_token: identity.deviceToken,
@@ -189,7 +183,7 @@ export interface CustomPuzzleStats {
 }
 
 export async function getCustomPuzzleStats(shareId: string): Promise<CustomPuzzleStats | null> {
-  const { data, error } = await rpc("get_custom_puzzle_stats", { _share_id: shareId });
+  const { data, error } = await supabase.rpc("get_custom_puzzle_stats", { _share_id: shareId });
   if (error || !data) return null;
   const row = data as {
     finished_plays?: number;
