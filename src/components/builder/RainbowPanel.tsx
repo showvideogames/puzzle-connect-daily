@@ -22,6 +22,8 @@ interface RainbowPanelProps {
   displayOrderTiles: GridTile[];
   onReorderDisplay: (ids: string[]) => void;
   onFieldBlur?: () => void;
+  /** Hides the Bonus Theme picker — the public creator doesn't expose holiday themes in this MVP. Admin-only feature, unaffected. */
+  hideTheme?: boolean;
 }
 
 /**
@@ -42,6 +44,7 @@ export function RainbowPanel({
   displayOrderTiles,
   onReorderDisplay,
   onFieldBlur,
+  hideTheme = false,
 }: RainbowPanelProps) {
   const allSelected = groups.every((g) => !!g.selectedId);
 
@@ -122,20 +125,22 @@ export function RainbowPanel({
           />
         </div>
 
-        <div>
-          <Label className="text-xs">Bonus Theme</Label>
-          <select
-            value={theme}
-            onChange={(e) => onThemeChange(e.target.value)}
-            onBlur={onFieldBlur}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
-          >
-            {THEME_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <p className="text-xs text-muted-foreground mt-1">Swaps the bonus gradient, emoji, and copy for a holiday look. Default keeps the rainbow.</p>
-        </div>
+        {!hideTheme && (
+          <div>
+            <Label className="text-xs">Bonus Theme</Label>
+            <select
+              value={theme}
+              onChange={(e) => onThemeChange(e.target.value)}
+              onBlur={onFieldBlur}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
+            >
+              {THEME_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">Swaps the bonus gradient, emoji, and copy for a holiday look. Default keeps the rainbow.</p>
+          </div>
+        )}
       </div>
     </div>
   );

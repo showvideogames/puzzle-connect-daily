@@ -5,6 +5,7 @@ import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
 import { finalizeGameSession, hasOfficialResult } from "@/lib/gameStats";
 import { finalizeBetaPlaytest } from "@/lib/betaPlaytest";
+import { submitCustomPuzzleResult } from "@/lib/customPuzzles";
 import { playRainbowSound } from "@/lib/sounds";
 import { trackEvent } from "@/lib/analytics";
 import type { EntryContext } from "@/lib/entryContext";
@@ -98,14 +99,17 @@ export function useGame(
     // (see GameBoard's betaMode prop) that reroutes every persistence path
     // below to the separate beta_playtests system and skips official-only
     // checks entirely, instead of scattering `if (isBetaPuzzle)` checks
-    // through this file.
+    // through this file. "custom": a public player-created puzzle (see
+    // GameBoard's customMode prop) — no durable per-guess/hint writes at
+    // all, and completion writes one lightweight result row through
+    // lib/customPuzzles.ts instead of finalize_game_session.
     mode = "official",
   }: {
     isArchive?: boolean;
     smallHintUsed?: boolean;
     fullHintUsed?: boolean;
     entryContext?: EntryContext;
-    mode?: "official" | "beta";
+    mode?: "official" | "beta" | "custom";
   } = {}
 ) {
   /**
@@ -119,8 +123,13 @@ export function useGame(
    * live. The pin mechanism inside the blob (puzzleSnapshot.versionId) still
    * does the per-version resume work exactly as it does for official/Archive
    * play; only the storage KEY differs.
+   *
+   * Custom play uses `custom:<shareId>` (puzzle.id IS the share id for a
+   * custom puzzle — see lib/customPuzzles.ts's mapRowToPuzzle) for the same
+   * reason: an isolated namespace that can never collide with Daily,
+   * Archive, Beta, or another custom puzzle's progress.
    */
-  const storageId = mode === "beta" ? `beta:${puzzle.id}` : puzzle.id;
+  const storageId = mode === "beta" ? `beta:${puzzle.id}` : mode === "custom" ? `custom:${puzzle.id}` : puzzle.id;
 
   const MAX_MISTAKES = 4;
   // Shared "checking guess" suspense: every submitted guess (correct OR
@@ -220,10 +229,10 @@ export function useGame(
   // existence here would lock a player out of the game they are in the middle
   // of playing the moment they refreshed.
   useEffect(() => {
-    // A Beta puzzle structurally can never have an official result (beta
-    // play never writes game_sessions) — nothing to check, and no lock to
+    // A Beta or custom puzzle structurally can never have an official result
+    // (neither ever writes game_sessions) — nothing to check, and no lock to
     // apply.
-    if (mode === "beta") return;
+    if (mode === "beta" || mode === "custom") return;
     if (saved) return;
     let cancelled = false;
     hasOfficialResult(puzzle.id).then((played) => {
@@ -623,6 +632,26 @@ export function useGame(
       // replay's bonus Rainbow find is safe to persist, and beta bonus
       // writes are skipped outright regardless (see GameBoard's betaMode
       // guard on canPersist).
+      isOfficialAttemptRef.current = false;
+      return;
+    }
+
+    if (mode === "custom") {
+      // Another completely separate, even smaller write path — one result
+      // row, once, per device (see lib/customPuzzles.ts). statsParams
+      // .guessHistory is already "submitted board guesses only" (hint
+      // markers and anything that isn't a real guess are filtered out by
+      // toGuessEventInputs above), so its length IS total_guesses exactly as
+      // the product rule defines it — no separate counting needed.
+      await submitCustomPuzzleResult({
+        shareId: puzzle.id,
+        won,
+        totalGuesses: statsParams.guessHistory.length,
+      });
+      // Never "official"; sessionIdRef stays null for custom mode (see
+      // useGameSession's mode==="custom" no-op), so GameBoard's bonus-
+      // Rainbow persistence is already skipped via its own !!sessionId
+      // check regardless of this flag.
       isOfficialAttemptRef.current = false;
       return;
     }

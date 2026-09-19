@@ -29,9 +29,15 @@ export interface UseGameSessionOptions {
    * "official" (default) writes to the real durable-session system exactly
    * as before. "beta" writes to the separate, lightweight beta_playtests
    * table instead (see lib/betaPlaytest.ts) — no per-guess/hint event log,
-   * no touch heartbeat, and never a row in game_sessions.
+   * no touch heartbeat, and never a row in game_sessions. "custom" writes
+   * NOTHING here at all — a custom puzzle's in-progress play is
+   * localStorage-only, and the only server write happens once, at
+   * completion (see lib/customPuzzles.ts, called from useGame's
+   * commitOfficialResult "custom" branch). recordGuess/recordHint below are
+   * both no-ops in this mode: there is no early "session" row to create and
+   * nothing to attach a per-guess event to.
    */
-  mode?: "official" | "beta";
+  mode?: "official" | "beta" | "custom";
   /**
    * The localStorage progress key to resume/persist the session id under.
    * Defaults to puzzleId. Beta play uses a DIFFERENT key (see useGame's
@@ -177,6 +183,10 @@ export function useGameSession(
    */
   const recordGuess = useCallback(
     async (guess: GuessEventInput, activity: SessionActivity) => {
+      // Custom mode writes nothing per-guess at all — not even a "session
+      // started" row. In-progress play is localStorage-only; the server
+      // only ever hears about a finished game (see lib/customPuzzles.ts).
+      if (mode === "custom") return;
       // Beta mode has no per-guess event log and no heartbeat — this is
       // purely the "first meaningful action starts the playtest" trigger.
       // See lib/betaPlaytest.ts for what IS recorded (the summary, at
@@ -203,6 +213,7 @@ export function useGameSession(
    */
   const recordHint = useCallback(
     async (hint: HintEventInput) => {
+      if (mode === "custom") return;
       if (mode === "beta") {
         await ensureSession(hint.snapshot);
         return;

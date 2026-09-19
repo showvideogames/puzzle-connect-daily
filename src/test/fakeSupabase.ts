@@ -156,6 +156,106 @@ const COLUMN_DEFAULTS: Record<string, FakeRow> = {
   },
 };
 
+/**
+ * validate_custom_puzzle_content(), mirrored — see the 20260919000000
+ * migration. Distinct from canonicalizePuzzleContent above: enforces
+ * one-Rainbow-answer-PER-GROUP (not just 4-of-16 anywhere) and rejects any
+ * Rainbow content on a classic puzzle. Throws on invalid content, exactly as
+ * the SQL raises.
+ */
+export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
+  const content = (raw ?? {}) as Record<string, unknown>;
+  const blankToNull = (v: unknown): string | null => {
+    const t = typeof v === "string" ? v.trim() : "";
+    return t === "" ? null : t;
+  };
+
+  const mode = content.mode;
+  if (mode !== "classic" && mode !== "rainbow") {
+    throw new Error("mode must be classic or rainbow");
+  }
+
+  const groups = content.groups;
+  if (!Array.isArray(groups) || groups.length !== 4) {
+    throw new Error("puzzle content must contain exactly 4 groups");
+  }
+
+  const all: string[] = [];
+  const groupWords: string[][] = [];
+  const outGroups = groups.map((g, index) => {
+    const group = (g ?? {}) as Record<string, unknown>;
+    const category = typeof group.category === "string" ? group.category.trim() : "";
+    if (category === "") throw new Error(`group ${index + 1} needs a category name`);
+    if (category.length > 80) throw new Error(`group ${index + 1} category name is too long`);
+    const words = group.words;
+    if (!Array.isArray(words) || words.length !== 4) {
+      throw new Error(`group ${index + 1} needs exactly 4 answers`);
+    }
+    const thisGroupWords: string[] = [];
+    for (const w of words) {
+      if (typeof w !== "string" || w.trim() === "") {
+        throw new Error(`group ${index + 1} contains an empty answer`);
+      }
+      if (w.length > 40) throw new Error(`group ${index + 1} has an answer that is too long`);
+      all.push(w);
+      thisGroupWords.push(w);
+    }
+    groupWords.push(thisGroupWords);
+    const hint = blankToNull(group.hint_word as string | undefined);
+    if (hint !== null) {
+      if (hint.length > 40) throw new Error(`group ${index + 1} Small Hint is too long`);
+      if (all.some((w) => w.toUpperCase() === hint.toUpperCase())) {
+        throw new Error(`group ${index + 1} Small Hint cannot duplicate a board answer`);
+      }
+    }
+    return { category, words: [...(words as string[])], hint_word: hint, sort_order: index };
+  });
+
+  if (new Set(all.map((w) => w.toUpperCase())).size !== 16) {
+    throw new Error("a puzzle needs 16 unique answers");
+  }
+
+  const herringRaw = content.rainbow_herring;
+  let herring: string[] | null =
+    herringRaw === null || herringRaw === undefined ? null : (herringRaw as string[]);
+
+  if (mode === "classic") {
+    if (herring !== null) throw new Error("classic puzzles cannot include a Rainbow selection");
+  } else {
+    if (!Array.isArray(herring) || herring.length !== 4) {
+      throw new Error("a Rainbow puzzle needs exactly one selected answer from each of the 4 groups");
+    }
+    for (let i = 0; i < 4; i++) {
+      const hits = herring.filter((hw) =>
+        groupWords[i].some((gw) => gw.toUpperCase() === (hw as string).toUpperCase())
+      ).length;
+      if (hits !== 1) {
+        throw new Error(`group ${i + 1} must contribute exactly one Rainbow answer (got ${hits})`);
+      }
+    }
+  }
+
+  const orderRaw = content.word_order;
+  if (!Array.isArray(orderRaw) || orderRaw.length !== 16) {
+    throw new Error("a starting board order is required");
+  }
+  for (const w of orderRaw) {
+    if (!all.some((x) => x.toUpperCase() === (w as string).toUpperCase())) {
+      throw new Error(`starting board answer "${w}" is not one of this puzzle's 16 answers`);
+    }
+  }
+
+  return {
+    mode,
+    groups: outGroups,
+    word_order: [...(orderRaw as string[])],
+    rainbow_herring: herring ? [...herring] : null,
+    rainbow_category_name: mode === "rainbow" ? blankToNull(content.rainbow_category_name) : null,
+    rainbow_hint_word: mode === "rainbow" ? blankToNull(content.rainbow_hint_word) : null,
+    alphabetize_completed: content.alphabetize_completed !== false,
+  };
+}
+
 export class FakeSupabase {
   tables: Record<string, FakeRow[]> = {
     game_sessions: [],
@@ -178,6 +278,10 @@ export class FakeSupabase {
     beta_playtests: [],
     /** Beta-only feedback forms. */
     beta_feedback: [],
+    /** Public player-created puzzles (20260919000000). Immutable after creation. */
+    custom_puzzles: [],
+    /** One row per (custom_puzzle, device) that finished a game. */
+    custom_puzzle_results: [],
   };
 
   /** Every write, in order — lets tests assert on write VOLUME, not just state. */
@@ -214,6 +318,12 @@ export class FakeSupabase {
     // caller always gets [] regardless of identity.
     "beta_playtests",
     "beta_feedback",
+    // Admin-only direct SELECT (20260919000000) — everyone else reads
+    // exclusively through get_custom_puzzle.
+    "custom_puzzles",
+    // No SELECT policy at all, not even for admins — read only in
+    // aggregate, via get_custom_puzzle_stats.
+    "custom_puzzle_results",
   ];
 
   /** True when the caller is an admin, which unlocks the admin SELECT policies. */
@@ -273,7 +383,7 @@ export class FakeSupabase {
     if (!FakeSupabase.RLS_READ_PROTECTED.includes(table)) return rows;
     // These three are reachable ONLY through SECURITY DEFINER functions now;
     // no role has a SELECT policy on them, not even an admin.
-    if (["user_streaks", "device_identities", "account_onboarding"].includes(table)) return [];
+    if (["user_streaks", "device_identities", "account_onboarding", "custom_puzzle_results"].includes(table)) return [];
     if (this.isAdmin) return rows;
     const uid = this.authUser?.id;
     if (!uid) return [];
@@ -1127,6 +1237,128 @@ export class FakeSupabase {
         this._log("game_sessions", "update");
         return { data: true, error: null };
       }
+      // ── Public custom puzzles (20260919000000) ──
+      // Deliberately separate from every official/Beta case above: none of
+      // these touch puzzles/puzzle_groups/puzzle_versions/game_sessions/
+      // guess_events/hint_events/game_results/user_streaks/
+      // puzzle_aggregates/beta_playtests/beta_feedback.
+      case "create_custom_puzzle": {
+        let canonical: FakeRow;
+        try {
+          canonical = canonicalizeCustomPuzzleContent(args._content);
+        } catch (err) {
+          return { data: null, error: { code: "22023", message: (err as Error).message } };
+        }
+        const visibility = args._visibility;
+        if (visibility !== "public" && visibility !== "private") {
+          return { data: null, error: { code: "22023", message: "visibility must be public or private" } };
+        }
+        const title = typeof args._title === "string" ? args._title.trim() : "";
+        if (!title) return { data: null, error: { code: "22023", message: "a puzzle needs a title" } };
+        if (title.length > 100) return { data: null, error: { code: "22023", message: "title is too long" } };
+        const creatorName = typeof args._creator_name === "string" ? args._creator_name.trim() : "";
+        if (!creatorName) return { data: null, error: { code: "22023", message: "a designer name is required" } };
+        if (creatorName.length > 60) return { data: null, error: { code: "22023", message: "designer name is too long" } };
+
+        const shareId = `share-${this._newId()}`;
+        const id = this._newId();
+        this.tables.custom_puzzles.push({
+          id,
+          share_id: shareId,
+          visibility,
+          created_by: uid,
+          creator_name: creatorName,
+          title,
+          moderation_status: "active",
+          content: canonical,
+          created_at: new Date().toISOString(),
+        });
+        this._log("custom_puzzles", "insert");
+        return { data: { puzzle_id: id, share_id: shareId }, error: null };
+      }
+      case "get_custom_puzzle": {
+        const row = this.tables.custom_puzzles.find(
+          (p) => p.share_id === args._share_id && p.moderation_status === "active"
+        );
+        if (!row) return { data: null, error: null };
+        return {
+          data: {
+            id: row.id,
+            share_id: row.share_id,
+            title: row.title,
+            creator_name: row.creator_name,
+            visibility: row.visibility,
+            content: row.content,
+          },
+          error: null,
+        };
+      }
+      case "submit_custom_puzzle_result": {
+        if (!deviceProven) return { data: false, error: null };
+        if (args._won === null || args._won === undefined) {
+          return { data: null, error: { code: "22023", message: "won is required" } };
+        }
+        const totalGuesses = args._total_guesses as number;
+        if (!Number.isInteger(totalGuesses) || totalGuesses < 0 || totalGuesses > 60) {
+          return { data: null, error: { code: "22023", message: "total_guesses out of range" } };
+        }
+        const puzzle = this.tables.custom_puzzles.find(
+          (p) => p.share_id === args._share_id && p.moderation_status === "active"
+        );
+        if (!puzzle) return { data: false, error: null };
+
+        const clash = this.tables.custom_puzzle_results.some(
+          (r) => r.custom_puzzle_id === puzzle.id && r.device_id === deviceId
+        );
+        if (!clash) {
+          this.tables.custom_puzzle_results.push({
+            id: this._newId(),
+            custom_puzzle_id: puzzle.id,
+            device_id: deviceId,
+            won: args._won,
+            total_guesses: totalGuesses,
+            completed_at: new Date().toISOString(),
+          });
+          this._log("custom_puzzle_results", "insert");
+        }
+        return { data: true, error: null };
+      }
+      case "get_custom_puzzle_stats": {
+        const puzzle = this.tables.custom_puzzles.find(
+          (p) => p.share_id === args._share_id && p.moderation_status === "active"
+        );
+        if (!puzzle) return { data: null, error: null };
+        const rows = this.tables.custom_puzzle_results.filter((r) => r.custom_puzzle_id === puzzle.id);
+        const wins = rows.filter((r) => r.won === true).length;
+        const distribution: Record<string, number> = {};
+        for (const r of rows) {
+          const key = String(r.total_guesses);
+          distribution[key] = (distribution[key] ?? 0) + 1;
+        }
+        return {
+          data: {
+            finished_plays: rows.length,
+            wins,
+            losses: rows.length - wins,
+            avg_guesses:
+              rows.length > 0
+                ? Math.round((rows.reduce((s, r) => s + (r.total_guesses as number), 0) / rows.length) * 100) / 100
+                : 0,
+            guess_distribution: distribution,
+          },
+          error: null,
+        };
+      }
+      case "admin_set_custom_puzzle_status": {
+        if (uid === null || !this.isAdmin) {
+          return { data: null, error: { code: "42501", message: "admin role required" } };
+        }
+        const row = this.tables.custom_puzzles.find((p) => p.id === args._puzzle_id);
+        if (!row) return { data: false, error: null };
+        row.moderation_status = args._status;
+        this._log("custom_puzzles", "update");
+        return { data: true, error: null };
+      }
       default:
         // Includes claim_anonymous_sessions, which the cutover migration
         // dropped: an unknown function is not a silent success.
@@ -1222,6 +1454,17 @@ export class FakeSupabase {
       table === "beta_playtests" ||
       table === "beta_feedback"
     ) {
+      return `no ${op} policy on ${table}: use a scoped function`;
+    }
+    // custom_puzzle_results: no policy at all, not even for admins — see
+    // 20260919000000. custom_puzzles allows admin-only direct SELECT
+    // (mirrored in _visibleForRead) but every write, admin included, goes
+    // only through create_custom_puzzle/admin_set_custom_puzzle_status.
+    if (table === "custom_puzzle_results") {
+      return `no ${op} policy on ${table}: use a scoped function`;
+    }
+    if (table === "custom_puzzles") {
+      if (op === "select") return null;
       return `no ${op} policy on ${table}: use a scoped function`;
     }
     return null;
