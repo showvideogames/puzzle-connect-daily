@@ -7,6 +7,9 @@ import { CustomPuzzleHeader } from "@/components/CustomPuzzleHeader";
 import { TutorialModal } from "@/components/TutorialModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { FeedbackModal } from "@/components/FeedbackModal";
+import { StatsModal } from "@/components/StatsModal";
+import { CustomPuzzleCta } from "@/components/CustomPuzzleCta";
+import { getSupportUrl } from "@/lib/supportUrl";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SEO } from "@/components/SEO";
 import { HintModal } from "@/components/HintModal";
@@ -22,7 +25,7 @@ import { trackEvent } from "@/lib/analytics";
 import { clearProgress } from "@/lib/gameProgress";
 import type { User } from "@supabase/supabase-js";
 
-type ModalName = "help" | "settings" | "feedback" | null;
+type ModalName = "help" | "settings" | "feedback" | "stats" | null;
 
 /**
  * Serves BOTH /p/:shortCode (the link new shares use) and the permanent
@@ -44,6 +47,8 @@ export default function CustomPuzzle() {
   const [hintsViewOnly, setHintsViewOnly] = useState(false);
   const [smallHintUsed, setSmallHintUsed] = useState(false);
   const [fullHintUsed, setFullHintUsed] = useState(false);
+  // This puzzle's aggregate stats (CustomStatsModal). The header's "My stats"
+  // button is separate: it opens the player's personal StatsModal.
   const [statsOpen, setStatsOpen] = useState(false);
   // Bumped by Replay to remount the board into a clean run.
   const [runKey, setRunKey] = useState(0);
@@ -124,7 +129,7 @@ export default function CustomPuzzle() {
       />
 
       <GameHeader
-        onStatsClick={() => setStatsOpen(true)}
+        onStatsClick={() => setActiveModal("stats")}
         onHowToPlayClick={() => setActiveModal("help")}
         onSettingsClick={() => setActiveModal("settings")}
         onHintClick={() => setShowHintModal(true)}
@@ -143,6 +148,7 @@ export default function CustomPuzzle() {
           creatorSlug={loaded?.creatorSlug ?? null}
           isRainbow={!!puzzle.rainbowHerring}
           onBack={() => navigate("/create")}
+          onOpenPuzzleStats={() => setStatsOpen(true)}
           favorite={{ favorited: favorite.favorited, count: favorite.count, onToggle: favorite.toggle, note: favorite.note }}
         />
       ) : (
@@ -189,6 +195,9 @@ export default function CustomPuzzle() {
         />
       )}
 
+      {puzzle && !error && !loading && <CustomPuzzleCta supportUrl={getSupportUrl()} />}
+
+      <StatsModal open={activeModal === "stats"} onClose={() => setActiveModal(null)} />
       <TutorialModal open={activeModal === "help"} onClose={() => setActiveModal(null)} />
       <SettingsModal
         open={activeModal === "settings"}

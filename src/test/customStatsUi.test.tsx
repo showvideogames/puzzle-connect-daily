@@ -141,9 +141,9 @@ const dialog = () => screen.getByRole("dialog", { name: "Puzzle stats" });
 const bucketRow = (b: string) => within(dialog()).getByTestId(`bucket-${b}`);
 
 describe("stats are reachable before, during and after play", () => {
-  it("the header Stats button opens custom stats on a fresh puzzle, showing the empty state and all five buckets", async () => {
+  it("the page-level Puzzle Stats button opens custom stats on a fresh puzzle, showing the empty state and all five buckets", async () => {
     await renderPage();
-    fireEvent.click(screen.getByRole("button", { name: "My stats" }));
+    fireEvent.click(screen.getByRole("button", { name: "Puzzle Stats" }));
     await waitFor(() => expect(screen.getByRole("dialog", { name: "Puzzle stats" })).toBeTruthy());
     await within(dialog()).findByText("No completed plays yet. Be the first!");
     for (const [b, label] of [["4", "4 guesses"], ["5", "5 guesses"], ["6", "6 guesses"], ["7", "7 guesses"], ["8+", "8+ guesses"]]) {
@@ -158,7 +158,7 @@ describe("stats are reachable before, during and after play", () => {
   it("works mid-game, and never shows a confusing 1/1 tile", async () => {
     await renderPage();
     await playGroups([GROUPS[0]]); // one group solved, game in progress
-    fireEvent.click(screen.getByRole("button", { name: "My stats" }));
+    fireEvent.click(screen.getByRole("button", { name: "Puzzle Stats" }));
     await within(await screen.findByRole("dialog", { name: "Puzzle stats" })).findByText("No completed plays yet. Be the first!");
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog", { name: "Puzzle stats" })).toBeNull();

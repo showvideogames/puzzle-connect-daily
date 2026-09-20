@@ -13,6 +13,8 @@ import { useSearchParams } from "react-router-dom";
 import { GameBoard } from "@/components/GameBoard";
 import { GameHeader } from "@/components/GameHeader";
 import { CustomPuzzleHeader } from "@/components/CustomPuzzleHeader";
+import { CustomPuzzleCta } from "@/components/CustomPuzzleCta";
+import { getSupportUrl } from "@/lib/supportUrl";
 import { CommunityPuzzleCard } from "@/components/CommunityPuzzleCard";
 import { SiteFooter } from "@/components/SiteFooter";
 import { CreatorProfileView } from "@/pages/CreatorProfile";
@@ -65,6 +67,7 @@ export default function CommunityFixtures() {
   const view = params.get("view") ?? "custom";
   const [sort, setSort] = useState<CreatorSort>("newest");
   const [favorited, setFavorited] = useState(params.get("fav") === "1");
+  const [statsOpen, setStatsOpen] = useState(false);
   const rainbow = params.get("mode") === "rainbow";
   const long = params.get("long") === "1";
   const puzzle = fixturePuzzle(rainbow, long);
@@ -92,6 +95,7 @@ export default function CommunityFixtures() {
             creatorSlug={params.get("creator") === "1" ? "sam-west-k7m2" : null}
             isRainbow={rainbow}
             onBack={() => {}}
+            onOpenPuzzleStats={() => setStatsOpen(true)}
             favorite={{
               favorited,
               count: params.get("count") ? Number(params.get("count")) : favorited ? 4 : 3,
@@ -99,7 +103,8 @@ export default function CommunityFixtures() {
               note: params.get("note") === "1" ? "Saved on this device" : null,
             }}
           />
-          <GameBoard puzzle={puzzle} settings={loadSettings()} user={null} wideBoard showModeBadge={false} customMode />
+          <GameBoard puzzle={puzzle} settings={loadSettings()} user={null} wideBoard showModeBadge={false} customMode statsOpen={statsOpen} onStatsOpenChange={setStatsOpen} />
+          <CustomPuzzleCta supportUrl={getSupportUrl()} />
         </>
       )}
       {view === "creator" && (
