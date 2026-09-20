@@ -116,6 +116,7 @@ describe("custom puzzle header: type badge and byline", () => {
           creatorSlug={null}
           isRainbow={false}
           onBack={() => {}}
+          onOpenPuzzleStats={() => {}}
           favorite={{ favorited: false, count: 0, onToggle: () => {} }}
           {...over}
         />
@@ -177,11 +178,10 @@ describe("shared header Create action", () => {
       </MemoryRouter>
     );
 
-  it("renders a labelled link to /create with both responsive labels", () => {
+  it("renders a labelled link to /create (desktop label only; hidden on phones by CSS)", () => {
     renderShared({ onStatsClick: () => {}, onSettingsClick: () => {}, showHint: true, onHintClick: () => {} });
     const create = screen.getByRole("link", { name: "Create a puzzle" });
     expect(create).toHaveAttribute("href", "/create");
-    expect(create).toHaveTextContent("+ Create");
     expect(create).toHaveTextContent("+ Create a Puzzle");
     expect(create.className).toMatch(/bg-primary/); // the Ink primary treatment
   });

@@ -63,7 +63,9 @@ export function GameHeader({
   const iconButtonClass = hideExtraIcons
     ? "w-11 h-11 flex items-center justify-center shrink-0 rounded-full text-slate hover:bg-secondary hover:text-foreground active:scale-95 active:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     : "p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95";
-  const iconGlyphClass = hideExtraIcons ? "w-[30px] h-[30px]" : "w-4 h-4 sm:w-5 sm:h-5 text-slate";
+  // Phones get a 24px glyph inside the 44px target so the logo can be the
+  // dominant element; sm+ keeps the larger 30px glyph.
+  const iconGlyphClass = hideExtraIcons ? "w-6 h-6 sm:w-[30px] sm:h-[30px]" : "w-4 h-4 sm:w-5 sm:h-5 text-slate";
   const iconStrokeWidth = hideExtraIcons ? 2.5 : undefined;
   return (
     <header className={`flex items-center w-full mx-auto py-3 gap-0.5 sm:gap-2 ${isWide ? "max-w-[840px] px-2 sm:px-3 md:px-0" : "max-w-lg px-1.5 sm:px-2"}`}>
@@ -86,7 +88,7 @@ export function GameHeader({
             <img
               src={STACKED_LOGO}
               alt="Rainbow Connect"
-              className="block md:hidden lg:block h-8 lg:h-14 w-auto"
+              className="block md:hidden lg:block w-[128px] max-w-none shrink-0 h-auto lg:w-auto lg:h-14"
             />
             <img
               src={todaysLogo()}
@@ -97,23 +99,23 @@ export function GameHeader({
         )}
       </Link>
 
-      <div className={`ml-auto flex items-center shrink-0 ${hideExtraIcons ? "gap-0.5 sm:gap-1.5" : "gap-0 sm:gap-1"}`}>
+      <div className={`ml-auto flex items-center shrink-0 ${hideExtraIcons ? "gap-1 sm:gap-1.5" : "gap-0 sm:gap-1"}`}>
         {/* Every header tap target stays 44x44. Daily's 4-icon header cannot fit
-            that plus this pill below ~430px, so there the Calendar icon is
+            that plus the logo below ~430px, so there the Calendar icon is
             hidden (Archive stays one tap away in Settings > Menu). */}
-        {/* Prominent, but a compact pill: the Ink primary-button colors, sized
-            well under the game board. Deliberately a real link (not an icon)
-            so it reads as the header's one call to action. */}
+        {/* Desktop-only (sm+, 640px): phones drop the pill so the logo and the
+            three utility icons have room; Create stays reachable from the
+            page-level "Create Your Own" CTA and Settings > Menu. Prominent but
+            compact: the Ink primary-button colors, a real link. */}
         <Link
           to="/create"
           aria-label="Create a puzzle"
-          className="inline-flex items-center justify-center shrink-0 whitespace-nowrap h-8 sm:h-9 px-1.5 min-[360px]:px-2 sm:px-3.5 mr-0.5 sm:mr-1
+          className="hidden sm:inline-flex items-center justify-center shrink-0 whitespace-nowrap h-9 px-3.5 mr-1
             rounded-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition
-            text-[11px] min-[360px]:text-xs sm:text-sm font-bold
+            text-sm font-bold
             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          <span className="sm:hidden">+ Create</span>
-          <span className="hidden sm:inline">+ Create a Puzzle</span>
+          + Create a Puzzle
         </Link>
         {showHint && (
           <button
