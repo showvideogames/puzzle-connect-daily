@@ -16,9 +16,9 @@ import { RainbowPanel } from "@/components/builder/RainbowPanel";
 import { EmojiCodesModal } from "@/components/EmojiCodesModal";
 import { normalizeWord } from "@/lib/builder/wordNormalization";
 import { createCustomPuzzle, type CustomPuzzleVisibility } from "@/lib/customPuzzles";
+import { FormatSelector } from "@/components/builder/FormatSelector";
+import { categoryColorLabels, difficultyLabels } from "@/lib/puzzleFormat";
 
-const CATEGORY_LABELS = ["Yellow", "Green", "Blue", "Red"] as const;
-const DIFFICULTY_LABELS = ["Easiest", "Easy", "Hard", "Hardest"] as const;
 const CATEGORY_PLACEHOLDERS = [
   "Colors of the Rainbow 🌈",
   "Parts of a Car 🚘",
@@ -40,6 +40,13 @@ const parseWords = (value: string) =>
 export default function CreatePuzzle() {
   const navigate = useNavigate();
   const builder = useBuilderForm();
+  // Same shared builder as Admin, configured by format. /create only offers
+  // Full today (see the FormatSelector below), so these resolve to the Full
+  // labels — but they are derived, not hardcoded, so enabling Mini here is a
+  // one-prop change rather than a second implementation.
+  const format = builder.format;
+  const CATEGORY_LABELS = categoryColorLabels(format);
+  const DIFFICULTY_LABELS = difficultyLabels(format);
 
   const [puzzleTitle, setPuzzleTitle] = useState("");
   const [designerName, setDesignerName] = useState("");
@@ -70,10 +77,10 @@ export default function CreatePuzzle() {
     for (let i = 0; i < normalizedGroups.length; i++) {
       const g = normalizedGroups[i];
       if (!g.category) return `${CATEGORY_LABELS[i]} category needs a name.`;
-      if (g.words.length !== 4) return `${CATEGORY_LABELS[i]} category needs exactly 4 answers.`;
+      if (g.words.length !== format.answersPerCategory) return `${CATEGORY_LABELS[i]} category needs exactly ${format.answersPerCategory} answers.`;
     }
     const allWords = normalizedGroups.flatMap((g) => g.words);
-    if (new Set(allWords).size !== 16) return "All 16 answers must be unique.";
+    if (new Set(allWords).size !== format.tileCount) return `All ${format.tileCount} answers must be unique.`;
     for (let i = 0; i < normalizedGroups.length; i++) {
       const g = normalizedGroups[i];
       if (g.hintWord && allWords.includes(g.hintWord)) {
@@ -81,7 +88,7 @@ export default function CreatePuzzle() {
       }
     }
     if (styleTab === "rainbow" && !builder.rainbowComplete) {
-      return "Choose one Rainbow answer from each of the 4 categories, or switch to Classic.";
+      return `Choose one Rainbow answer from each of the ${format.categoryCount} categories, or switch to Classic.`;
     }
     return null;
   }
@@ -141,16 +148,15 @@ export default function CreatePuzzle() {
     }
   }
 
-  const boardTiles = builder.wordOrderIds.map((id) => {
+  // Tile colour comes from the owning category's DIFFICULTY, not its
+  // position — identical to position+1 on Full, and correct on any format.
+  const tileFor = (id: string) => {
     const slot = builder.slotById.get(id);
-    const groupIdx = builder.groups.findIndex((g) => g.answers.some((a) => a.id === id));
-    return { id, text: slot?.text ?? "", colorIndex: ((groupIdx === -1 ? 0 : groupIdx) + 1) as 1 | 2 | 3 | 4 };
-  });
-  const rainbowDisplayTiles = builder.rainbowWordOrderIds.map((id) => {
-    const slot = builder.slotById.get(id);
-    const groupIdx = builder.groups.findIndex((g) => g.answers.some((a) => a.id === id));
-    return { id, text: slot?.text ?? "", colorIndex: ((groupIdx === -1 ? 0 : groupIdx) + 1) as 1 | 2 | 3 | 4 };
-  });
+    const group = builder.groups.find((g) => g.answers.some((a) => a.id === id));
+    return { id, text: slot?.text ?? "", colorIndex: group?.difficulty ?? format.difficultyOrder[0] };
+  };
+  const boardTiles = builder.wordOrderIds.map(tileFor);
+  const rainbowDisplayTiles = builder.rainbowWordOrderIds.map(tileFor);
 
   // New shares use the short /p/:shortCode link on whatever origin is serving
   // this page; a database that predates short codes falls back to the
@@ -251,18 +257,20 @@ export default function CreatePuzzle() {
             </div>
 
             <div className="flex flex-wrap gap-6">
-              <div>
-                <span className="text-xs font-medium text-slate block mb-1">Size</span>
-                <div className="inline-flex rounded-lg border border-border p-0.5 bg-secondary/50">
-                  <span className="px-3 py-1.5 rounded-md text-xs font-semibold bg-card text-foreground shadow-sm">Full 4×4</span>
-                  <span
-                    className="px-3 py-1.5 rounded-md text-xs font-semibold text-muted-foreground/50 cursor-not-allowed"
-                    title="Mini 3×3 isn't available yet."
-                  >
-                    Mini 3×3
-                  </span>
-                </div>
-              </div>
+              {/* Mini is deliberately NOT offered here yet. The shared
+                  schema, validation and gameplay all support it, but the
+                  database migration that stores a custom puzzle's format is
+                  written and not applied — so a Mini created here today would
+                  save as a Full puzzle with 3 groups and be unplayable. The
+                  reason shown says so plainly rather than a permanent
+                  "(soon)". Enable by removing the `unavailable` prop once the
+                  migration is applied and the custom Mini flow is verified
+                  end to end. */}
+              <FormatSelector
+                value={builder.format.id}
+                onChange={builder.changeFormat}
+                unavailable={{ mini: "Mini 3×3 custom puzzles are not switched on yet — the shared puzzle builder supports them, but the database change that stores a custom puzzle's size has not been applied." }}
+              />
               <StyleSelector value={builder.style} onChange={builder.setStyle} />
               <div>
                 <span className="text-xs font-medium text-slate block mb-1">Visibility</span>
@@ -305,7 +313,7 @@ export default function CreatePuzzle() {
                 const g = builder.groups[i];
                 return (
                   <CategoryEditor
-                    colorIndex={(i + 1) as 1 | 2 | 3 | 4}
+                    colorIndex={g.difficulty}
                     label={CATEGORY_LABELS[i]}
                     difficultyLabel={DIFFICULTY_LABELS[i]}
                     category={g.category}
@@ -315,7 +323,7 @@ export default function CreatePuzzle() {
                     categoryPlaceholder={CATEGORY_PLACEHOLDERS[i]}
                     answersRaw={g.answersRaw}
                     onAnswersRawChange={(v) => builder.updateAnswersRaw(i, v)}
-                    answersLabel="4 answers, separated by commas"
+                    answersLabel={`${format.answersPerCategory} answers, separated by commas`}
                     answersPlaceholder={ANSWERS_PLACEHOLDERS[i]}
                     hintWord={g.hintWord}
                     onHintWordChange={(v) => builder.updateHintWord(i, v)}
@@ -330,7 +338,7 @@ export default function CreatePuzzle() {
             {styleTab === "rainbow" && builder.hasAll16 && (
               <RainbowPanel
                 groups={builder.groups.map((g, i) => ({
-                  colorIndex: (i + 1) as 1 | 2 | 3 | 4,
+                  colorIndex: g.difficulty,
                   label: g.category || CATEGORY_LABELS[i],
                   answers: g.answers,
                   selectedId: builder.rainbowHerringIds[i],
@@ -374,7 +382,7 @@ export default function CreatePuzzle() {
               <StartOverButton onConfirm={handleStartOver} disabled={creating} />
             </div>
             {!canAttempt && (
-              <p className="text-xs text-muted-foreground">Fill in all 4 categories with 4 answers each to continue.</p>
+              <p className="text-xs text-muted-foreground">Fill in all {format.categoryCount} categories with {format.answersPerCategory} answers each to continue.</p>
             )}
           </div>
 
@@ -387,6 +395,8 @@ export default function CreatePuzzle() {
               title={puzzleTitle}
               designerName={designerName}
               isRainbow={builder.style === "rainbow"}
+              columns={format.columns}
+              showModeBadge={format.hasRainbow}
             />
           </div>
         </div>

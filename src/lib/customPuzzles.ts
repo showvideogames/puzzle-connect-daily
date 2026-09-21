@@ -17,6 +17,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Puzzle, PuzzleGroup } from "./types";
 import { ensureDeviceIdentity } from "./gameStats";
+import { getFormat, type Difficulty, type PuzzleFormatId } from "./puzzleFormat";
 
 export type CustomPuzzleMode = "classic" | "rainbow";
 export type CustomPuzzleVisibility = "public" | "private";
@@ -29,6 +30,13 @@ export interface CustomGroupInput {
 }
 
 export interface CustomPuzzleContentInput {
+  /**
+   * The board format. OMITTED for Full — validate_custom_puzzle_content
+   * treats an absent format as Full and emits no format key, so every custom
+   * puzzle already stored canonicalises exactly as it does today and every
+   * existing /p/:shortCode and /custom/:shareId URL is unaffected.
+   */
+  format?: PuzzleFormatId;
   mode: CustomPuzzleMode;
   groups: CustomGroupInput[];
   wordOrder: string[];
@@ -54,7 +62,10 @@ export interface CreateCustomPuzzleResult {
 }
 
 function contentPayload(content: CustomPuzzleContentInput) {
+  const format = getFormat(content.format);
   return {
+    // Full sends no format key at all — see CustomPuzzleContentInput.format.
+    ...(format.id === "full" ? {} : { format: format.id }),
     mode: content.mode,
     groups: content.groups.map((g) => ({
       category: g.category,
@@ -106,6 +117,7 @@ interface CustomPuzzleRow {
   creator_name: string;
   visibility: CustomPuzzleVisibility;
   content: {
+    format?: PuzzleFormatId;
     mode: CustomPuzzleMode;
     groups: { category: string; words: string[]; hint_word: string | null; category_emoji?: string | null; sort_order: number }[];
     word_order: string[] | null;
@@ -118,12 +130,18 @@ interface CustomPuzzleRow {
 }
 
 function mapRowToPuzzle(row: CustomPuzzleRow): Puzzle {
+  // A custom puzzle stores its categories in display order and derives the
+  // difficulty/colour from that position. Which colours those are is the
+  // FORMAT's business: Full gives Yellow/Green/Blue/Red (1-4), Mini gives
+  // Green/Blue/Red (2-4). An absent format is Full, so every custom puzzle
+  // stored before Mini maps exactly as it always has.
+  const format = getFormat(row.content.format);
   const groups: PuzzleGroup[] = [...row.content.groups]
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((g, i) => ({
       category: g.category,
       words: g.words,
-      difficulty: (i + 1) as 1 | 2 | 3 | 4,
+      difficulty: (format.difficultyOrder[i] ?? format.difficultyOrder[format.difficultyOrder.length - 1]) as Difficulty,
       hintWord: g.hint_word ?? null,
       categoryEmoji: g.category_emoji ?? null,
     }));
@@ -134,6 +152,7 @@ function mapRowToPuzzle(row: CustomPuzzleRow): Puzzle {
     // `custom:<shareId>` and what lib/customPuzzles' completion/stats calls
     // key on, with no separate id plumbing needed anywhere downstream.
     id: row.share_id,
+    format: format.id,
     date: "",
     title: row.title,
     designerName: row.creator_name,

@@ -13,6 +13,8 @@ import BetaPuzzle from "./pages/BetaPuzzle.tsx";
 import CreatePuzzle from "./pages/CreatePuzzle.tsx";
 import CustomPuzzle from "./pages/CustomPuzzle.tsx";
 import CreatorProfilePage from "./pages/CreatorProfile.tsx";
+import { MiniDaily, MiniArchivePuzzle } from "./pages/Mini.tsx";
+import MiniArchive from "./pages/MiniArchive.tsx";
 import Favorites from "./pages/Favorites.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import Privacy from "./pages/Privacy.tsx";
@@ -25,6 +27,7 @@ import { OnboardingGate } from "@/components/OnboardingGate";
 // production build, so this lazy import (and the whole fixture module) is
 // removed from the bundle.
 const CommunityFixtures = import.meta.env.DEV ? lazy(() => import("./dev/CommunityFixtures.tsx")) : null;
+const MiniFixtures = import.meta.env.DEV ? lazy(() => import("./dev/MiniFixtures.tsx")) : null;
 
 const queryClient = new QueryClient();
 
@@ -45,6 +48,13 @@ const App = () => (
               separate FreePuzzle component anymore. New navigation (Archive's
               Free Puzzles cards) links straight to /archive/:puzzleId. */}
           <Route path="/free/:puzzleId" element={<ArchivePuzzle />} />
+          {/* Mini 3×3 — the sibling Daily. Same page components as "/" and
+              /archive/:id, configured with the Mini format (see
+              pages/Mini.tsx and lib/puzzleFormat.ts), so there is one game
+              system and two sizes rather than two implementations. */}
+          <Route path="/mini" element={<MiniDaily />} />
+          <Route path="/mini/archive" element={<MiniArchive />} />
+          <Route path="/mini/archive/:puzzleId" element={<MiniArchivePuzzle />} />
           {/* Unlisted playtesting area — never linked from normal nav, kept
               out of search indexes via SEO's noIndex (see BetaLibrary/
               BetaPuzzle). No login, no admin gate: unlisted, not secret. */}
@@ -61,6 +71,9 @@ const App = () => (
           <Route path="/favorites" element={<Favorites />} />
           {CommunityFixtures && (
             <Route path="/__fixtures/community" element={<Suspense fallback={null}><CommunityFixtures /></Suspense>} />
+          )}
+          {MiniFixtures && (
+            <Route path="/__fixtures/mini" element={<Suspense fallback={null}><MiniFixtures /></Suspense>} />
           )}
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/privacy" element={<Privacy />} />

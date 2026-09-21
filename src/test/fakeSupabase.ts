@@ -18,6 +18,7 @@ export interface FakeRow {
 
 type Filter =
   | { kind: "eq"; column: string; value: unknown }
+  | { kind: "cmp"; column: string; op: "lte" | "gte" | "lt" | "gt"; value: unknown }
   | { kind: "in"; column: string; values: unknown[] }
   | { kind: "is"; column: string; value: null }
   | { kind: "or"; clauses: { column: string; value: unknown }[] };
@@ -41,6 +42,19 @@ const UNIQUE_KEYS: Record<string, string[]> = {
  *
  * Throws on invalid content, exactly as the SQL raises.
  */
+/**
+ * The size rules a format imposes, mirroring the CASE in
+ * validate_puzzle_content. An absent format is Full — the single line that
+ * keeps every pre-Mini payload valid.
+ */
+function formatRules(raw: unknown) {
+  const format = typeof raw === "string" && raw.trim() !== "" ? raw.trim() : "full";
+  if (format !== "full" && format !== "mini") throw new Error(`unknown puzzle format "${format}"`);
+  return format === "mini"
+    ? { format, cats: 3, per: 3, tiles: 9, firstDiff: 2, hasRainbow: false }
+    : { format, cats: 4, per: 4, tiles: 16, firstDiff: 1, hasRainbow: true };
+}
+
 export function canonicalizePuzzleContent(raw: unknown): FakeRow {
   const content = (raw ?? {}) as Record<string, unknown>;
   const blankToNull = (v: unknown): string | null => {
@@ -48,12 +62,15 @@ export function canonicalizePuzzleContent(raw: unknown): FakeRow {
     return t === "" ? null : t;
   };
 
+  const f = formatRules(content.format);
+
   const groups = content.groups;
-  if (!Array.isArray(groups) || groups.length !== 4) {
-    throw new Error("puzzle content must contain exactly 4 groups");
+  if (!Array.isArray(groups) || groups.length !== f.cats) {
+    throw new Error(`a ${f.format} puzzle must contain exactly ${f.cats} groups`);
   }
 
   const all: string[] = [];
+  const diffs: number[] = [];
   const outGroups = groups.map((g, index) => {
     const group = (g ?? {}) as Record<string, unknown>;
     const category = typeof group.category === "string" ? group.category.trim() : "";
@@ -62,9 +79,16 @@ export function canonicalizePuzzleContent(raw: unknown): FakeRow {
     if (!Number.isInteger(difficulty) || difficulty < 1 || difficulty > 4) {
       throw new Error(`group ${index + 1} needs a difficulty between 1 and 4`);
     }
+    // A format restricted to a SUBSET of the ladder must use only its own
+    // colours (Mini is Green/Blue/Red = 2, 3, 4). Full keeps its original
+    // rule -- any difficulty 1-4, in any group order -- unchanged.
+    if (f.firstDiff > 1 && (difficulty < f.firstDiff || difficulty > f.firstDiff + f.cats - 1)) {
+      throw new Error(`a ${f.format} puzzle needs difficulties between ${f.firstDiff} and ${f.firstDiff + f.cats - 1} (group ${index + 1} has ${difficulty})`);
+    }
+    diffs.push(difficulty);
     const words = group.words;
-    if (!Array.isArray(words) || words.length !== 4) {
-      throw new Error(`group ${index + 1} needs exactly 4 words`);
+    if (!Array.isArray(words) || words.length !== f.per) {
+      throw new Error(`group ${index + 1} needs exactly ${f.per} words`);
     }
     for (const w of words) {
       if (typeof w !== "string" || w.trim() === "") {
@@ -87,39 +111,53 @@ export function canonicalizePuzzleContent(raw: unknown): FakeRow {
     };
   });
 
-  if (new Set(all).size !== 16) throw new Error("a puzzle needs 16 unique words");
+  if (new Set(all).size !== f.tiles) throw new Error(`a ${f.format} puzzle needs ${f.tiles} unique words`);
+
+  if (f.firstDiff > 1 && new Set(diffs).size !== f.cats) {
+    throw new Error(`a ${f.format} puzzle needs one category per colour`);
+  }
 
   const herringRaw = content.rainbow_herring;
   let herring: string[] | null = null;
   if (herringRaw !== null && herringRaw !== undefined) {
-    if (!Array.isArray(herringRaw) || herringRaw.length !== 4) {
-      throw new Error("rainbow_herring must have exactly 4 words");
+    if (!f.hasRainbow) throw new Error(`a ${f.format} puzzle cannot have a Rainbow category`);
+    if (!Array.isArray(herringRaw) || herringRaw.length !== f.cats) {
+      throw new Error(`rainbow_herring must have exactly ${f.cats} words`);
     }
     for (const w of herringRaw) {
       if (!all.includes(w as string)) {
-        throw new Error(`rainbow_herring word "${w}" is not one of this puzzle's 16 words`);
+        throw new Error(`rainbow_herring word "${w}" is not one of this puzzle's ${f.tiles} words`);
       }
     }
     herring = [...(herringRaw as string[])];
   }
 
+  if (!f.hasRainbow && (blankToNull(content.rainbow_category_name) !== null
+      || blankToNull(content.rainbow_hint_word) !== null
+      || blankToNull(content.rainbow_category_emoji) !== null)) {
+    throw new Error(`a ${f.format} puzzle cannot have Rainbow category details`);
+  }
+
   const orderRaw = content.word_order;
   let order: string[] | null = null;
   if (orderRaw !== null && orderRaw !== undefined) {
-    if (!Array.isArray(orderRaw) || orderRaw.length !== 16) {
-      throw new Error("word_order must list all 16 words");
+    if (!Array.isArray(orderRaw) || orderRaw.length !== f.tiles) {
+      throw new Error(`word_order must list all ${f.tiles} words`);
     }
     for (const w of orderRaw) {
       if (!all.includes(w as string)) {
-        throw new Error(`word_order word "${w}" is not one of this puzzle's 16 words`);
+        throw new Error(`word_order word "${w}" is not one of this puzzle's ${f.tiles} words`);
       }
     }
     order = [...(orderRaw as string[])];
   }
 
   // Fixed key order, so JSON.stringify of two canonical forms is the same
-  // exact-equality test jsonb comparison gives the real function.
+  // exact-equality test jsonb comparison gives the real function. Full emits
+  // NO format key, so an existing puzzle canonicalises byte-identically and
+  // re-saving it unchanged still mints no new version.
   return {
+    ...(f.format === "full" ? {} : { format: f.format }),
     groups: outGroups,
     word_order: order,
     rainbow_herring: herring,
@@ -150,6 +188,22 @@ export function canonicalizePuzzleContent(raw: unknown): FakeRow {
  * Applied only when the insert does not mention the column, exactly as a SQL
  * DEFAULT behaves — an explicit null stays null.
  */
+/**
+ * NOT NULL ... DEFAULT columns, as a READ sees them.
+ *
+ * Distinct from COLUMN_DEFAULTS below, which models what an INSERT stores. A
+ * column added by a later migration with NOT NULL DEFAULT 'x' is never null
+ * on an existing row — Postgres materialises the default for every row that
+ * predates it. Modelling that lets a fixture represent a genuinely
+ * pre-migration row by simply OMITTING the column, which is exactly what the
+ * "existing Full rows have no explicit format" cases exercise.
+ */
+const NOT_NULL_DEFAULTS: Record<string, FakeRow> = {
+  puzzles: { format: "full" },
+  game_sessions: { format: "full" },
+  user_streaks: { format: "full" },
+};
+
 const COLUMN_DEFAULTS: Record<string, FakeRow> = {
   game_sessions: {
     status: "in_progress",
@@ -180,14 +234,19 @@ export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
     return t === "" ? null : t;
   };
 
+  const f = formatRules(content.format);
+
   const mode = content.mode;
   if (mode !== "classic" && mode !== "rainbow") {
     throw new Error("mode must be classic or rainbow");
   }
+  if (mode === "rainbow" && !f.hasRainbow) {
+    throw new Error(`a ${f.format} puzzle cannot be a Rainbow puzzle`);
+  }
 
   const groups = content.groups;
-  if (!Array.isArray(groups) || groups.length !== 4) {
-    throw new Error("puzzle content must contain exactly 4 groups");
+  if (!Array.isArray(groups) || groups.length !== f.cats) {
+    throw new Error(`a ${f.format} puzzle must contain exactly ${f.cats} groups`);
   }
 
   const all: string[] = [];
@@ -198,8 +257,8 @@ export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
     if (category === "") throw new Error(`group ${index + 1} needs a category name`);
     if (category.length > 80) throw new Error(`group ${index + 1} category name is too long`);
     const words = group.words;
-    if (!Array.isArray(words) || words.length !== 4) {
-      throw new Error(`group ${index + 1} needs exactly 4 answers`);
+    if (!Array.isArray(words) || words.length !== f.per) {
+      throw new Error(`group ${index + 1} needs exactly ${f.per} answers`);
     }
     const thisGroupWords: string[] = [];
     for (const w of words) {
@@ -229,8 +288,8 @@ export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
     };
   });
 
-  if (new Set(all.map((w) => w.toUpperCase())).size !== 16) {
-    throw new Error("a puzzle needs 16 unique answers");
+  if (new Set(all.map((w) => w.toUpperCase())).size !== f.tiles) {
+    throw new Error(`a ${f.format} puzzle needs ${f.tiles} unique answers`);
   }
 
   // Now that `all` holds every board answer, check every group's hint
@@ -248,10 +307,10 @@ export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
   if (mode === "classic") {
     if (herring !== null) throw new Error("classic puzzles cannot include a Rainbow selection");
   } else {
-    if (!Array.isArray(herring) || herring.length !== 4) {
-      throw new Error("a Rainbow puzzle needs exactly one selected answer from each of the 4 groups");
+    if (!Array.isArray(herring) || herring.length !== f.cats) {
+      throw new Error(`a Rainbow puzzle needs exactly one selected answer from each of the ${f.cats} groups`);
     }
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < f.cats; i++) {
       const hits = herring.filter((hw) =>
         groupWords[i].some((gw) => gw.toUpperCase() === (hw as string).toUpperCase())
       ).length;
@@ -262,16 +321,18 @@ export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
   }
 
   const orderRaw = content.word_order;
-  if (!Array.isArray(orderRaw) || orderRaw.length !== 16) {
+  if (!Array.isArray(orderRaw) || orderRaw.length !== f.tiles) {
     throw new Error("a starting board order is required");
   }
   for (const w of orderRaw) {
     if (!all.some((x) => x.toUpperCase() === (w as string).toUpperCase())) {
-      throw new Error(`starting board answer "${w}" is not one of this puzzle's 16 answers`);
+      throw new Error(`starting board answer "${w}" is not one of this puzzle's ${f.tiles} answers`);
     }
   }
 
   return {
+    // Full emits no format key — see canonicalizePuzzleContent.
+    ...(f.format === "full" ? {} : { format: f.format }),
     mode,
     groups: outGroups,
     word_order: [...(orderRaw as string[])],
@@ -285,6 +346,22 @@ export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
       return e !== null ? { rainbow_category_emoji: e } : {};
     })(),
   };
+}
+
+/**
+ * The `format` a stored row declares — absent/null means "full", exactly as
+ * the NOT NULL DEFAULT 'full' columns the Mini migration adds behave for
+ * every row that predates them.
+ */
+function rowFormat(row: FakeRow | undefined | null): string {
+  const v = row?.format;
+  return v === "mini" || v === "full" ? v : "full";
+}
+
+/** The `_format` RPC argument, defaulting to "full" like the SQL default. */
+function argFormat(args: Record<string, unknown>): string {
+  const v = args._format;
+  return v === "mini" || v === "full" ? v : "full";
 }
 
 export class FakeSupabase {
@@ -653,13 +730,17 @@ export class FakeSupabase {
         return { data: [{ outcome: "started_fresh" }], error: null };
       }
       case "get_own_streak": {
+        // Absent _format means full — the SQL default, and what every client
+        // that predates Mini sends.
+        const fmt = argFormat(args);
         const pick = (rows: FakeRow[]) =>
           rows.sort((a, b) => ((b.longest_streak as number) ?? 0) - ((a.longest_streak as number) ?? 0))[0];
+        const inFormat = (r: FakeRow) => rowFormat(r) === fmt;
         const row =
           uid !== null
-            ? pick(this.tables.user_streaks.filter((s) => s.user_id === uid))
+            ? pick(this.tables.user_streaks.filter((s) => s.user_id === uid && inFormat(s)))
             : deviceProven
-              ? pick(this.tables.user_streaks.filter((s) => s.device_id === deviceId && s.user_id == null))
+              ? pick(this.tables.user_streaks.filter((s) => s.device_id === deviceId && s.user_id == null && inFormat(s)))
               : undefined;
         if (!row) return { data: [], error: null };
         return {
@@ -714,7 +795,12 @@ export class FakeSupabase {
           return { data: null, error: { code: "22023", message: "a puzzle needs a date" } };
         }
 
+        // The format comes from the CANONICAL CONTENT, already validated —
+        // one source, so a save cannot claim one format while submitting
+        // another format's groups.
+        const canonicalFormat = (canonical.format as string | undefined) ?? "full";
         const contentColumns = {
+          format: canonicalFormat,
           word_order: canonical.word_order,
           rainbow_herring: canonical.rainbow_herring,
           rainbow_category_name: canonical.rainbow_category_name,
@@ -749,6 +835,17 @@ export class FakeSupabase {
         }
 
         let pid = (args._puzzle_id as string | null) ?? null;
+        // A puzzle's format is fixed for life: its stored groups, its
+        // players' pinned boards and its statistics all assume one shape.
+        if (pid !== null) {
+          const existingRow = this.tables.puzzles.find((p) => p.id === pid);
+          if (existingRow && rowFormat(existingRow) !== canonicalFormat) {
+            return {
+              data: null,
+              error: { code: "22023", message: "a puzzle cannot change format after it is created" },
+            };
+          }
+        }
         let puzzleRow: FakeRow;
         if (pid === null) {
           pid = this._newId();
@@ -844,6 +941,7 @@ export class FakeSupabase {
             version_id: versionId,
             version_number: (versionRow?.version_number as number) ?? null,
             created_version: createdVersion,
+            format: canonicalFormat,
           },
           error: null,
         };
@@ -892,6 +990,9 @@ export class FakeSupabase {
         const row = this._withDefaults("game_sessions", {
           id: this._newId(),
           puzzle_id: args._puzzle_id,
+          // Copied from the PUZZLE, never asserted by the caller — the same
+          // rule create_game_session enforces.
+          format: rowFormat(targetPuzzle),
           puzzle_version_id: versionId,
           // user_id comes from auth inside the function; the caller has no say.
           user_id: uid,
@@ -944,8 +1045,9 @@ export class FakeSupabase {
         };
       }
       case "get_own_completed_sessions": {
+        const fmt = argFormat(args);
         const rows = this.tables.game_sessions
-          .filter((r) => completed(r) && r.is_official === true && ownsRow(r))
+          .filter((r) => completed(r) && r.is_official === true && rowFormat(r) === fmt && ownsRow(r))
           .map((r) => ({
             puzzle_id: r.puzzle_id,
             won: r.won,
@@ -1220,7 +1322,10 @@ export class FakeSupabase {
             (row.user_id as string | null) ?? null,
             (row.device_id as string | null) ?? null,
             won,
-            (args._local_date as string | undefined) ?? null
+            (args._local_date as string | undefined) ?? null,
+            // From the SESSION, so a Mini completion can only move the Mini
+            // streak.
+            rowFormat(row)
           );
         }
 
@@ -1576,17 +1681,35 @@ export class FakeSupabase {
     return `id-${this.idCounter}`;
   }
 
-  private matches(row: FakeRow, filters: Filter[]): boolean {
+  private matches(row: FakeRow, filters: Filter[], table?: string): boolean {
+    // Reads go through the NOT NULL DEFAULT table (see NOT_NULL_DEFAULTS), so
+    // a fixture row that omits a defaulted column behaves exactly like a real
+    // pre-migration row does after the column is added: it HAS the default,
+    // it is not null.
+    const read = (col: string) => {
+      const v = row[col];
+      if (v !== undefined || !table) return v;
+      return NOT_NULL_DEFAULTS[table]?.[col];
+    };
     return filters.every((f) => {
       switch (f.kind) {
         case "eq":
-          return row[f.column] === f.value;
+          return read(f.column) === f.value;
         case "in":
-          return f.values.includes(row[f.column]);
+          return f.values.includes(read(f.column));
         case "is":
           return row[f.column] === null || row[f.column] === undefined;
         case "or":
-          return f.clauses.some((c) => row[c.column] === c.value);
+          return f.clauses.some((c) => read(c.column) === c.value);
+        case "cmp": {
+          const v = read(f.column) as string | number | null | undefined;
+          if (v === null || v === undefined) return false;
+          const target = f.value as string | number;
+          if (f.op === "lte") return v <= target;
+          if (f.op === "gte") return v >= target;
+          if (f.op === "lt") return v < target;
+          return v > target;
+        }
       }
     });
   }
@@ -1614,8 +1737,8 @@ export class FakeSupabase {
   _newId() {
     return this.nextId();
   }
-  _match(row: FakeRow, filters: Filter[]) {
-    return this.matches(row, filters);
+  _match(row: FakeRow, filters: Filter[], table?: string) {
+    return this.matches(row, filters, table);
   }
   /**
    * Which direct writes the post-migration policies refuse.
@@ -1760,15 +1883,17 @@ export class FakeSupabase {
     userId: string | null,
     deviceId: string | null,
     won: boolean,
-    localDate: string | null
+    localDate: string | null,
+    format: string = "full"
   ) {
     const today = localDate ?? new Date().toLocaleDateString("en-CA");
     const rows = this.tables.user_streaks;
+    const inFormat = (r: FakeRow) => rowFormat(r) === format;
     const row =
       userId != null
-        ? rows.find((r) => r.user_id === userId)
+        ? rows.find((r) => r.user_id === userId && inFormat(r))
         : deviceId && deviceId !== "unknown"
-          ? rows.find((r) => r.device_id === deviceId && r.user_id == null)
+          ? rows.find((r) => r.device_id === deviceId && r.user_id == null && inFormat(r))
           : undefined;
 
     if (!row) {
@@ -1777,6 +1902,7 @@ export class FakeSupabase {
         id: this._newId(),
         user_id: userId,
         device_id: deviceId,
+        format,
         current_streak: 1,
         longest_streak: 1,
         last_played_date: today,
@@ -1841,12 +1967,21 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: unknown }> {
   private wantSingle: "single" | "maybeSingle" | null = null;
   private limitCount: number | null = null;
   private headCount = false;
+  private orderBy: { column: string; ascending: boolean } | null = null;
+  /** Embedded child tables requested as `child(*)` in select(). */
+  private embeds: string[] = [];
 
   constructor(private db: FakeSupabase, private table: string) {}
 
-  select(_cols?: string, opts?: { count?: string; head?: boolean }) {
+  select(cols?: string, opts?: { count?: string; head?: boolean }) {
     if (!this.pending) this.pending = { op: "select" };
     if (opts?.head) this.headCount = true;
+    // PostgREST embedded resources: `"*, puzzle_groups(*)"`. The live game
+    // board loads through exactly this shape, so the fake has to reproduce
+    // it or a page test would see a puzzle with no categories.
+    for (const m of (cols ?? "").matchAll(/([a-z_]+)\s*\(\s*\*\s*\)/g)) {
+      this.embeds.push(m[1]);
+    }
     return this;
   }
   insert(rows: FakeRow | FakeRow[]) {
@@ -1880,7 +2015,24 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: unknown }> {
   not() {
     return this;
   }
-  order() {
+  lte(column: string, value: unknown) {
+    this.filters.push({ kind: "cmp", column, op: "lte", value });
+    return this;
+  }
+  gte(column: string, value: unknown) {
+    this.filters.push({ kind: "cmp", column, op: "gte", value });
+    return this;
+  }
+  lt(column: string, value: unknown) {
+    this.filters.push({ kind: "cmp", column, op: "lt", value });
+    return this;
+  }
+  gt(column: string, value: unknown) {
+    this.filters.push({ kind: "cmp", column, op: "gt", value });
+    return this;
+  }
+  order(column?: string, opts?: { ascending?: boolean }) {
+    if (column) this.orderBy = { column, ascending: opts?.ascending !== false };
     return this;
   }
   /** Supports the `user_id.eq.X,device_id.eq.Y` form this codebase uses. */
@@ -1953,7 +2105,7 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: unknown }> {
     }
 
     if (p.op === "update") {
-      const targets = rows.filter((r) => this.db._match(r, this.filters));
+      const targets = rows.filter((r) => this.db._match(r, this.filters, this.table));
       if (this.table === "puzzles" && "current_version_id" in p.patch) {
         for (const t of targets) {
           const denied = this.db._currentVersionDenied(t.id, p.patch.current_version_id);
@@ -1968,10 +2120,43 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: unknown }> {
     // Modelled SELECT policies apply before any client filter, exactly as
     // RLS does: a policy restricts the visible set, the WHERE clause then
     // narrows it further.
-    let out = this.db._visibleForRead(this.table, rows).filter((r) => this.db._match(r, this.filters));
+    let out = this.db._visibleForRead(this.table, rows).filter((r) => this.db._match(r, this.filters, this.table));
+    if (this.orderBy) {
+      const { column, ascending } = this.orderBy;
+      // Stable (Array#sort is stable in every engine this runs on), so rows
+      // with an equal key keep their insertion order, like Postgres with no
+      // secondary key.
+      out = [...out].sort((a, b) => {
+        const av = a[column] as string | number | null | undefined;
+        const bv = b[column] as string | number | null | undefined;
+        if (av === bv) return 0;
+        if (av === null || av === undefined) return 1;
+        if (bv === null || bv === undefined) return -1;
+        return (av < bv ? -1 : 1) * (ascending ? 1 : -1);
+      });
+    }
     if (this.limitCount !== null) out = out.slice(0, this.limitCount);
     if (this.headCount) return { data: null, error: null, count: out.length };
-    return this.shape(out);
+    return this.shape(this.withEmbeds(out));
+  }
+
+  /**
+   * Attaches each requested embedded child table, joined on <table>_id —
+   * the FK naming every relationship in this schema uses.
+   */
+  private withEmbeds(out: FakeRow[]): FakeRow[] {
+    if (this.embeds.length === 0) return out;
+    const fk = `${this.table.replace(/s$/, "")}_id`;
+    return out.map((row) => {
+      const withChildren: FakeRow = { ...row };
+      for (const child of this.embeds) {
+        withChildren[child] = this.db
+          ._rows(child)
+          .filter((c) => String(c[fk]) === String(row.id))
+          .map((c) => ({ ...c }));
+      }
+      return withChildren;
+    });
   }
 
   private shape(out: FakeRow[]) {

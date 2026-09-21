@@ -24,25 +24,43 @@ import { StartingBoardArranger } from "@/components/builder/StartingBoardArrange
 import { RainbowPanel } from "@/components/builder/RainbowPanel";
 import { splitAnswerField } from "@/lib/builder/answerIdentity";
 import { buildContentPayload, builderContentInput, parseWords } from "@/lib/builder/contentPayload";
+import { FormatSelector } from "@/components/builder/FormatSelector";
+import { categoryColorLabels, difficultyLabels, getFormat, type Difficulty, type PuzzleFormatId } from "@/lib/puzzleFormat";
 import { toast } from "sonner";
 
 const PUZZLES_PER_PAGE = 50;
 
-const DIFFICULTY_LABELS = ["Easiest", "Easy", "Hard", "Hardest"] as const;
-const CATEGORY_LABELS = ["Yellow", "Green", "Blue", "Red"] as const;
-const CATEGORY_PLACEHOLDERS = [
-  "Colors of the Rainbow 🌈",
-  "Parts of a Car 🚘",
-  "Last Names of Famous Singers 🎤🎶",
-  "___ House 🏠",
-];
-const ANSWERS_PLACEHOLDERS = [
-  "Blue, Green, Red, Yellow",
-  "Battery, Hood, Tire, Trunk",
-  "Houston, Mars, Mercury, Swift",
-  "Bird, Dog, Tree, White",
-];
-const HINT_PLACEHOLDERS = ["Purple", "Wheel", "Gaga", "Haunted"];
+// Per-format editorial placeholders. Positional, easiest category first.
+const PLACEHOLDERS: Record<PuzzleFormatId, { category: string[]; answers: string[]; hint: string[] }> = {
+  full: {
+    category: [
+      "Colors of the Rainbow 🌈",
+      "Parts of a Car 🚘",
+      "Last Names of Famous Singers 🎤🎶",
+      "___ House 🏠",
+    ],
+    answers: [
+      "Blue, Green, Red, Yellow",
+      "Battery, Hood, Tire, Trunk",
+      "Houston, Mars, Mercury, Swift",
+      "Bird, Dog, Tree, White",
+    ],
+    hint: ["Purple", "Wheel", "Gaga", "Haunted"],
+  },
+  mini: {
+    category: [
+      "Parts of a Car 🚘",
+      "Last Names of Famous Singers 🎤🎶",
+      "___ House 🏠",
+    ],
+    answers: [
+      "Hood, Tire, Trunk",
+      "Mars, Mercury, Swift",
+      "Bird, Dog, White",
+    ],
+    hint: ["Wheel", "Gaga", "Haunted"],
+  },
+};
 
 // ─── Mini Calendar ──────────────────────────────────────────────────────────
 
@@ -52,9 +70,15 @@ const MINI_MONTHS = ["January","February","March","April","May","June","July","A
 interface MiniCalendarProps {
   puzzles: any[];
   onDateClick: (dateStr: string) => void;
+  /**
+   * Which format this calendar is showing. Full and Mini can each have a
+   * puzzle on the same date, so a single date -> status map would silently
+   * let one hide the other.
+   */
+  format: PuzzleFormatId;
 }
 
-function MiniCalendar({ puzzles, onDateClick }: MiniCalendarProps) {
+function MiniCalendar({ puzzles, onDateClick, format }: MiniCalendarProps) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -63,10 +87,11 @@ function MiniCalendar({ puzzles, onDateClick }: MiniCalendarProps) {
   const statusByDate = useMemo(() => {
     const map: Record<string, "published" | "beta" | "draft"> = {};
     for (const p of puzzles) {
+      if (getFormat(p.format).id !== format) continue;
       map[p.date] = p.is_published ? "published" : p.is_beta ? "beta" : "draft";
     }
     return map;
-  }, [puzzles]);
+  }, [puzzles, format]);
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -242,6 +267,13 @@ export default function Admin() {
   const builder = useBuilderForm();
   // Rainbow (default for a new puzzle) / Classic lives in the shared builder.
   const styleTab = builder.style;
+  // The format the form is currently building. Everything positional below —
+  // card colours, labels, placeholders, the preview grid — reads from it, so
+  // Admin has ONE builder implementation for Full and Mini, not two.
+  const builderFormat = builder.format;
+  const categoryLabels = useMemo(() => categoryColorLabels(builderFormat), [builderFormat]);
+  const difficultyCardLabels = useMemo(() => difficultyLabels(builderFormat), [builderFormat]);
+  const placeholders = PLACEHOLDERS[builderFormat.id];
 
   const [isPublished, setIsPublished] = useState(false);
   // One clear status selector: Draft / Beta / Published. isPublished and
@@ -343,6 +375,7 @@ export default function Admin() {
     freePuzzleOrder,
     alphabetizeCompleted: builder.alphabetizeCompleted,
     style: builder.style,
+    format: builderFormat.id,
     editingId,
   };
 
@@ -426,6 +459,9 @@ export default function Admin() {
         alphabetizeCompleted: draft.alphabetizeCompleted ?? true,
         // A draft without a stored style leaves the current style alone.
         style: draft.style,
+        // A draft saved before Mini existed has no format and restores as
+        // Full, which is what it is.
+        format: draft.format,
       });
     },
   });
@@ -522,9 +558,39 @@ export default function Admin() {
     }
   }
 
+  /**
+   * Switch the form between Full and Mini.
+   *
+   * The two formats have different category counts, answer counts and board
+   * positions, so there is no honest way to carry typed content across —
+   * changeFormat always produces a blank form in the new size. So anything
+   * already entered is confirmed first, and the local draft is dropped along
+   * with it, because a draft describes the format it was typed in.
+   */
+  function handleFormatChange(next: PuzzleFormatId) {
+    if (next === builderFormat.id) return;
+    if (
+      builder.isDirty &&
+      !confirm(
+        `Switching to ${getFormat(next).name} ${getFormat(next).sizeLabel} clears the categories and answers you have entered. Continue?`
+      )
+    ) {
+      return;
+    }
+    builder.changeFormat(next);
+    if (!editingId) {
+      clearDraft();
+      setDraftRestored(false);
+    }
+  }
+
   // Calendar date click — populate the date field in the form
   function handleCalendarDateClick(dateStr: string) {
-    const existingPuzzle = puzzles.find((p) => p.date === dateStr);
+    // The puzzle of the format currently being edited — a date can hold one
+    // Full and one Mini.
+    const existingPuzzle = puzzles.find(
+      (p) => p.date === dateStr && getFormat(p.format).id === builderFormat.id
+    );
     if (existingPuzzle) {
       editPuzzle(existingPuzzle);
     } else {
@@ -558,20 +624,32 @@ export default function Admin() {
       hint_word: g.hintWord.trim() || null,
     }));
 
+    // Every count below comes from the format being built, so a Mini is
+    // checked as 3 groups of 3 and a Full as 4 of 4 — the same check, not
+    // two.
+    if (normalizedGroups.length !== builderFormat.categoryCount) {
+      toast.error(`A ${builderFormat.name} ${builderFormat.sizeLabel} puzzle needs exactly ${builderFormat.categoryCount} categories.`);
+      return;
+    }
+
     for (let i = 0; i < normalizedGroups.length; i++) {
       const group = normalizedGroups[i];
-      if (!group.category || group.words.length !== 4) {
-        toast.error(`Group ${i + 1}: needs a category and exactly 4 comma-separated words.`);
+      if (!group.category || group.words.length !== builderFormat.answersPerCategory) {
+        toast.error(`Group ${i + 1}: needs a category and exactly ${builderFormat.answersPerCategory} comma-separated words.`);
         return;
       }
     }
 
-    if (new Set(normalizedGroups.flatMap((group) => group.words)).size !== 16) {
-      toast.error("Each puzzle needs 16 unique words.");
+    if (new Set(normalizedGroups.flatMap((group) => group.words)).size !== builderFormat.tileCount) {
+      toast.error(`Each ${builderFormat.sizeLabel} puzzle needs ${builderFormat.tileCount} unique words.`);
       return;
     }
 
-    const existingPuzzleForDate = puzzles.find((p) => p.date === puzzleDate && p.id !== editingId);
+    // One puzzle per date PER FORMAT: Full and Mini are sibling Dailies, so
+    // the same date legitimately holds one of each.
+    const existingPuzzleForDate = puzzles.find(
+      (p) => p.date === puzzleDate && p.id !== editingId && getFormat(p.format).id === builderFormat.id
+    );
     if (existingPuzzleForDate) {
       toast.error("A puzzle already exists for this date.");
       return;
@@ -714,11 +792,17 @@ export default function Admin() {
     const loadedGroups = sorted.map((g: any) => ({
       category: g.category as string,
       words: g.words as string[],
-      difficulty: g.difficulty as 1 | 2 | 3 | 4,
+      difficulty: g.difficulty as Difficulty,
       hintWord: (g.hint_word ?? null) as string | null,
       categoryEmoji: (g.category_emoji ?? null) as string | null,
     }));
+    // The puzzle's OWN stored format, never the one the form happened to be
+    // on. A row with no format column (pre-migration) or a null value is a
+    // Full puzzle and loads back as one — opening an existing puzzle can
+    // never silently change its size.
+    const loadedFormat = getFormat(p.format).id;
     const loadInput: LoadBuilderInput = {
+      format: loadedFormat,
       groups: loadedGroups,
       wordOrder: p.word_order ?? null,
       rainbowHerring: p.rainbow_herring && p.rainbow_herring.length === 4 ? p.rainbow_herring : null,
@@ -740,6 +824,7 @@ export default function Admin() {
     setLoadedContent(
       JSON.stringify(
         buildContentPayload({
+          format: loadedFormat,
           groups: loadedGroups,
           wordOrder: p.word_order ?? null,
           rainbowHerring: p.rainbow_herring ?? null,
@@ -816,16 +901,17 @@ export default function Admin() {
   if (!user) return <AdminLogin />;
   if (!isAdmin) return <AdminNoAccess />;
 
-  const boardTiles = builder.wordOrderIds.map((id) => {
+  // Tile colour comes from the owning category's DIFFICULTY, not its
+  // position. Identical to the old position+1 for Full (where they are always
+  // the same); on a Mini it is what makes the three cards Green/Blue/Red
+  // instead of Yellow/Green/Blue.
+  const tileFor = (id: string) => {
     const slot = builder.slotById.get(id);
-    const groupIdx = builder.groups.findIndex((g) => g.answers.some((a) => a.id === id));
-    return { id, text: slot?.text ?? "", colorIndex: ((groupIdx === -1 ? 0 : groupIdx) + 1) as 1 | 2 | 3 | 4 };
-  });
-  const rainbowDisplayTiles = builder.rainbowWordOrderIds.map((id) => {
-    const slot = builder.slotById.get(id);
-    const groupIdx = builder.groups.findIndex((g) => g.answers.some((a) => a.id === id));
-    return { id, text: slot?.text ?? "", colorIndex: ((groupIdx === -1 ? 0 : groupIdx) + 1) as 1 | 2 | 3 | 4 };
-  });
+    const group = builder.groups.find((g) => g.answers.some((a) => a.id === id));
+    return { id, text: slot?.text ?? "", colorIndex: group?.difficulty ?? builderFormat.difficultyOrder[0] };
+  };
+  const boardTiles = builder.wordOrderIds.map(tileFor);
+  const rainbowDisplayTiles = builder.rainbowWordOrderIds.map(tileFor);
 
   return (
     <div className="min-h-screen pb-16">
@@ -864,7 +950,7 @@ export default function Admin() {
               {calendarOpen ? "▾ Hide calendar" : "▸ Show calendar"}
             </button>
             {calendarOpen && (
-              <MiniCalendar puzzles={puzzles} onDateClick={handleCalendarDateClick} />
+              <MiniCalendar puzzles={puzzles} onDateClick={handleCalendarDateClick} format={builderFormat.id} />
             )}
           </div>
         )}
@@ -913,19 +999,20 @@ export default function Admin() {
               </div>
 
               <div className="flex flex-wrap gap-6">
-                <div>
-                  <span className="text-xs font-medium text-slate block mb-1">Size</span>
-                  <div className="inline-flex rounded-lg border border-border p-0.5 bg-secondary/50">
-                    <span className="px-3 py-1.5 rounded-md text-xs font-semibold bg-card text-foreground shadow-sm">Full 4×4</span>
-                    <span
-                      className="px-3 py-1.5 rounded-md text-xs font-semibold text-muted-foreground/50 cursor-not-allowed"
-                      title="Mini 3×3 gameplay isn't supported by the game engine yet."
-                    >
-                      Mini 3×3 (soon)
-                    </span>
-                  </div>
-                </div>
-                <StyleSelector value={builder.style} onChange={builder.setStyle} />
+                <FormatSelector
+                  value={builderFormat.id}
+                  onChange={handleFormatChange}
+                  // An existing puzzle's format is fixed: its saved content,
+                  // its players' pinned boards and its statistics all assume
+                  // one shape, and re-shaping it in place would invalidate
+                  // all three. Create a new puzzle instead.
+                  lockedReason={editingId ? "An existing puzzle keeps the size it was saved with. Start a new puzzle to build the other size." : undefined}
+                />
+                {/* Rainbow is a Full-only capability today (format.hasRainbow),
+                    so the Classic/Rainbow selector only makes sense there. */}
+                {builderFormat.hasRainbow && (
+                  <StyleSelector value={builder.style} onChange={builder.setStyle} />
+                )}
               </div>
 
               <label className="flex items-center gap-2 cursor-pointer">
@@ -945,27 +1032,27 @@ export default function Admin() {
 
               <CategoryList
                 keys={builder.groups.map((g) => g.poolIds[0])}
-                labels={[...CATEGORY_LABELS]}
+                labels={categoryLabels}
                 onMove={builder.moveGroup}
                 renderCard={(i, dnd) => {
                   const g = builder.groups[i];
                   return (
                     <CategoryEditor
-                      colorIndex={(i + 1) as 1 | 2 | 3 | 4}
-                      label={CATEGORY_LABELS[i]}
-                      difficultyLabel={DIFFICULTY_LABELS[i]}
+                      colorIndex={g.difficulty}
+                      label={categoryLabels[i]}
+                      difficultyLabel={difficultyCardLabels[i]}
                       category={g.category}
                       onCategoryChange={(v) => builder.updateCategoryName(i, v)}
                       categoryEmoji={g.categoryEmoji}
                       onCategoryEmojiChange={(v) => builder.updateCategoryEmoji(i, v)}
-                      categoryPlaceholder={CATEGORY_PLACEHOLDERS[i]}
+                      categoryPlaceholder={placeholders.category[i]}
                       answersRaw={g.answersRaw}
                       onAnswersRawChange={(v) => builder.updateAnswersRaw(i, v)}
-                      answersLabel="4 answers, separated by commas"
-                      answersPlaceholder={ANSWERS_PLACEHOLDERS[i]}
+                      answersLabel={`${builderFormat.answersPerCategory} answers, separated by commas`}
+                      answersPlaceholder={placeholders.answers[i]}
                       hintWord={g.hintWord}
                       onHintWordChange={(v) => builder.updateHintWord(i, v)}
-                      hintPlaceholder={HINT_PLACEHOLDERS[i]}
+                      hintPlaceholder={placeholders.hint[i]}
                       onFieldBlur={handleBlurSave}
                       dragHandle={dnd.handle}
                       isDragging={dnd.isDragging}
@@ -977,8 +1064,8 @@ export default function Admin() {
               {styleTab === "rainbow" && builder.hasAll16 && (
                 <RainbowPanel
                   groups={builder.groups.map((g, i) => ({
-                    colorIndex: (i + 1) as 1 | 2 | 3 | 4,
-                    label: g.category || CATEGORY_LABELS[i],
+                    colorIndex: g.difficulty,
+                    label: g.category || categoryLabels[i],
                     answers: g.answers,
                     selectedId: builder.rainbowHerringIds[i],
                   }))}
@@ -1037,6 +1124,12 @@ export default function Admin() {
                 )}
               </div>
 
+              {/* Emoji Puzzles and Free Puzzles are the FULL archive's own
+                  curated collections (see pages/Archive.tsx) and their cards
+                  link to /archive/:id, which serves Full puzzles only. Hiding
+                  them for any other format is what stops an admin creating a
+                  Mini that is advertised on a page it cannot be opened from. */}
+              {builderFormat.id === "full" && (
               <div className="flex items-center gap-6 flex-wrap">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -1103,6 +1196,7 @@ export default function Admin() {
                   </div>
                 )}
               </div>
+              )}
 
               {/* Version hint.
                   Informational, and intentionally low-key: versioning PROTECTS
@@ -1146,6 +1240,8 @@ export default function Admin() {
                 title={puzzleTitle}
                 designerName={designerName}
                 isRainbow={builder.style === "rainbow"}
+                columns={builderFormat.columns}
+                showModeBadge={builderFormat.hasRainbow}
               />
             </div>
           </div>

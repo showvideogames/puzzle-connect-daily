@@ -19,6 +19,7 @@ import { HintModal } from "@/components/HintModal";
 import { getTodaysPuzzle } from "@/lib/puzzles";
 import { resolvePlayablePuzzle } from "@/lib/puzzleVersion";
 import { Puzzle } from "@/lib/types";
+import { FULL_FORMAT, progressStorageId, rainbowHerringFor, type PuzzleFormat } from "@/lib/puzzleFormat";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,7 +30,17 @@ const LANDING_KEY_PREFIX = "landing-seen-";
 
 type ModalName = "stats" | "help" | "settings" | "feedback" | null;
 
-export default function Index() {
+interface IndexProps {
+  /**
+   * Which Daily this page IS. Full and Mini are sibling games — separate
+   * published puzzle per date, separate progress, separate statistics and
+   * streak — and this one prop is the whole difference between the two
+   * routes. Defaults to Full, so "/" is untouched.
+   */
+  format?: PuzzleFormat;
+}
+
+export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
   const [activeModal, setActiveModal] = useState<ModalName>(null);
   const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +58,15 @@ export default function Index() {
   const [landingDismissed, setLandingDismissed] = useState(false);
   const [landingAuthOpen, setLandingAuthOpen] = useState(false);
 
+  // The "already saw the landing for this date" flag is per format as well as
+  // per date, so seeing the Full landing today does not silently skip the
+  // Mini one. Full keeps its original un-suffixed key, so nobody who has
+  // already dismissed today's landing sees it again.
+  const landingKey = useCallback(
+    (date: string) => LANDING_KEY_PREFIX + date + (format.id === "full" ? "" : `-${format.id}`),
+    [format.id]
+  );
+
   // Compute eligibility synchronously on every render so there's no flash
   // in either direction. While the puzzle is still loading we *optimistically*
   // show the landing (rainbow background already paints from the static
@@ -56,15 +76,26 @@ export default function Index() {
   // straight to the board.
   const isLandingEligible = useMemo(() => {
     if (error) return false;
-    if (!puzzle) return true;
+    // Still loading: optimistically show the landing (the rainbow background
+    // is already painted by index.html, so this reads as continuous colour
+    // rather than a white screen).
+    if (loading) return true;
+    // Loading FINISHED and there is no puzzle for this format today. The
+    // landing's Play button would lead nowhere, so the page shows its
+    // unavailable state instead of a door with nothing behind it. This is
+    // what makes /mini honest before any Mini has been published.
+    if (!puzzle) return false;
     try {
-      if (localStorage.getItem(LANDING_KEY_PREFIX + puzzle.date)) return false;
+      if (localStorage.getItem(landingKey(puzzle.date))) return false;
     } catch {
       // localStorage unavailable — fall through and show landing
     }
-    if (hasInProgressGame(puzzle.id)) return false;
+    // The FORMAT-NAMESPACED progress key, not the bare puzzle id: today's
+    // Full game and today's Mini game are separate boards a player may have
+    // in progress at the same time.
+    if (hasInProgressGame(progressStorageId(puzzle.id, format))) return false;
     return true;
-  }, [puzzle, error]);
+  }, [puzzle, error, loading, format, landingKey]);
 
   const showLanding = isLandingEligible && !landingDismissed;
 
@@ -73,7 +104,7 @@ export default function Index() {
     if (!puzzle) return [] as string[];
     return [
       ...puzzle.groups.flatMap((g) => g.words),
-      ...(puzzle.rainbowHerring ?? []),
+      ...(rainbowHerringFor(puzzle) ?? []),
     ]
       .filter(isCustomEmoji)
       .map((w) => customEmojiUrl(w));
@@ -83,12 +114,27 @@ export default function Index() {
   const handleLandingPlay = useCallback(() => {
     if (!puzzle) return;
     try {
-      localStorage.setItem(LANDING_KEY_PREFIX + puzzle.date, "1");
+      localStorage.setItem(landingKey(puzzle.date), "1");
     } catch {
       // ignore
     }
     setLandingDismissed(true);
-  }, [puzzle]);
+  }, [puzzle, landingKey]);
+
+  // Per-format page copy. Full keeps its exact existing title and
+  // description — those are its live search-result text and are not being
+  // rewritten here.
+  const seo =
+    format.id === "full"
+      ? {
+          title: "Rainbow Categories — A Daily Word Puzzle Game with a Hidden Twist",
+          description:
+            "Free daily word puzzle game. Sort 16 words into 4 categories and find the hidden rainbow within. A creative twist on word categorization games.",
+        }
+      : {
+          title: `Rainbow Categories ${format.name} — A Quick ${format.sizeLabel} Daily Word Puzzle`,
+          description: `A quicker daily word puzzle. Sort ${format.tileCount} words into ${format.categoryCount} hidden categories.`,
+        };
 
   const updateAvailable = useVersionCheck();
 
@@ -127,7 +173,7 @@ export default function Index() {
       setLoading(false);
     }, 8000);
 
-    getTodaysPuzzle()
+    getTodaysPuzzle(format.id)
       .then((p) => {
         clearTimeout(timeout);
         // Resolve the version to actually play BEFORE the board is built, so
@@ -135,7 +181,9 @@ export default function Index() {
         // that content rather than flickering through the newer one. For a
         // new player, a completed game, or a puzzle that was never edited,
         // this returns exactly what was loaded. See lib/puzzleVersion.ts.
-        setPuzzle(p ? resolvePlayablePuzzle(p) : null);
+        // The progress key is format-namespaced for the same reason the
+        // landing check above is.
+        setPuzzle(p ? resolvePlayablePuzzle(p, progressStorageId(p.id, format)) : null);
         setLoading(false);
       })
       .catch(() => {
@@ -145,7 +193,7 @@ export default function Index() {
       });
 
     return () => clearTimeout(timeout);
-  }, []);
+  }, [format]);
 
   useEffect(() => loadPuzzle(), [loadPuzzle]);
 
@@ -194,14 +242,11 @@ export default function Index() {
   if (showLanding) {
     return (
       <>
-        <SEO
-          title="Rainbow Categories — A Daily Word Puzzle Game with a Hidden Twist"
-          description="Free daily word puzzle game. Sort 16 words into 4 categories and find the hidden rainbow within. A creative twist on word categorization games."
-          path="/"
-        />
+        <SEO title={seo.title} description={seo.description} path={format.dailyPath} />
         <LandingScreen
           puzzle={puzzle}
           user={user}
+          format={format}
           onPlay={handleLandingPlay}
           onSignInClick={() => setLandingAuthOpen(true)}
         />
@@ -221,11 +266,7 @@ export default function Index() {
       {updateAvailable && (
         <UpdateBanner onUpdate={() => window.location.reload()} />
       )}
-      <SEO
-        title="Rainbow Categories — A Daily Word Puzzle Game with a Hidden Twist"
-        description="Free daily word puzzle game. Sort 16 words into 4 categories and find the hidden rainbow within. A creative twist on word categorization games."
-        path="/"
-      />
+      <SEO title={seo.title} description={seo.description} path={format.dailyPath} />
       <GameHeader
         onStatsClick={() => openModal("stats")}
         onHowToPlayClick={() => openModal("help")}
@@ -285,6 +326,7 @@ export default function Index() {
           onHintClick={handleHeaderHintClick}
           onComplete={() => setIsPuzzleComplete(true)}
           variant="dailyHomepage"
+          key={format.id}
           // Removed per feedback: the Rainbow/4-Groups badge read as
           // needless clutter floating over the Daily homepage board.
           showModeBadge={false}
@@ -292,13 +334,18 @@ export default function Index() {
       ) : (
         <div className="flex-1 flex items-center justify-center text-center px-4">
           <div>
-            <p className="text-lg font-medium">No puzzle available today.</p>
+            <p className="text-lg font-medium">No {format.name} {format.sizeLabel} puzzle available today.</p>
             <p className="text-sm text-muted-foreground mt-1">Check back soon!</p>
+            {format.id !== "full" && (
+              <a href="/" className="inline-block mt-4 text-sm font-semibold underline underline-offset-2">
+                Play today's Full 4×4 puzzle
+              </a>
+            )}
           </div>
         </div>
       )}
 
-      <StatsModal open={activeModal === "stats"} onClose={closeModal} />
+      <StatsModal open={activeModal === "stats"} onClose={closeModal} format={format} />
       <TutorialModal
         open={activeModal === "help"}
         onClose={handleTutorialClose}

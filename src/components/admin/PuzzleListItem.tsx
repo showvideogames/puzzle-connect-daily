@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { BarChart3, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
+import { getFormat, type PuzzleFormatId } from "@/lib/puzzleFormat";
 
 function formatDateDisplay(dateStr: string): string {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -18,6 +19,8 @@ export interface AdminPuzzle {
   id: string;
   date: string;
   title: string | null;
+  /** Absent on a database without the Mini migration — that means Full. */
+  format?: PuzzleFormatId | null;
   is_published: boolean;
   is_beta?: boolean;
   puzzle_groups?: AdminPuzzleGroup[];
@@ -69,6 +72,13 @@ export function PuzzleListItem({
         <div>
           <span className="font-medium">{formatDateDisplay(p.date)}</span>
           {p.title && <span className="text-muted-foreground ml-2">— {p.title}</span>}
+          {/* Size badge — only for a non-Full puzzle, so the existing list
+              of Full puzzles looks exactly as it does today. */}
+          {getFormat(p.format).id !== "full" && (
+            <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+              {getFormat(p.format).sizeLabel}
+            </span>
+          )}
           <span className={`ml-3 text-xs font-medium px-2 py-0.5 rounded-full ${
             p.is_published ? "bg-green-100 text-green-700"
             : p.is_beta ? "bg-purple-100 text-purple-700"

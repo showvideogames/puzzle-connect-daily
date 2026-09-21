@@ -2,6 +2,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { GameStats } from "./types";
 import type { EntryContext } from "./entryContext";
 import {
+  FULL_FORMAT,
+  SOLVE_ORDER_NAME,
+  ascendingSolveOrder,
+  descendingSolveOrder,
+  type PuzzleFormat,
+} from "./puzzleFormat";
+import {
   backfillGuessEvents,
   createGameSession,
   getIdentity,
@@ -472,14 +479,30 @@ export async function finalizeGameSession(
   }
 }
 
-export async function loadStatsFromSupabase(): Promise<GameStats> {
+/**
+ * A player's personal statistics FOR ONE FORMAT.
+ *
+ * Full and Mini are sibling games with sibling records: playing one must never
+ * add a Played to the other, extend or break the other's streak, or land in
+ * the other's mistake distribution. That isolation is enforced server-side —
+ * `game_sessions.format` and `user_streaks.format` (see the Mini migration) —
+ * and this function simply asks for one format's rows.
+ *
+ * `format` defaults to Full, so every existing caller keeps its exact current
+ * meaning, and a Full request sends exactly the request it always has (see
+ * formatRpcArgs: `_format` is only added for a non-Full format).
+ */
+export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT): Promise<GameStats> {
+  // One bucket per possible mistake count, 0..maxMistakes inclusive.
+  const emptyDistribution = () => Array<number>(format.maxMistakes + 1).fill(0);
+
   const empty: GameStats = {
     gamesPlayed: 0,
     gamesWon: 0,
     currentStreak: 0,
     maxStreak: 0,
     lastPlayedDate: null,
-    guessDistribution: [0, 0, 0, 0, 0],
+    guessDistribution: emptyDistribution(),
     rainbowSpotRate: null,
     rainbowSpottedCount: 0,
     hardestFirstCount: 0,
@@ -499,10 +522,14 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     // grants for ordinary clients any more. The function answers for the
     // account when there is one and for the proven device otherwise, and it
     // does the "prefer the account's own row" selection server-side.
-    const { data: streakRows } = await supabase.rpc("get_own_streak", {
+    const { data: streakRows, error: streakError } = await supabase.rpc("get_own_streak", {
       _device_id: deviceId,
       _device_token: getDeviceToken(),
+      _format: format.statsNamespace,
     });
+    if (streakError) {
+      console.error("get_own_streak failed:", streakError);
+    }
     const streak = (Array.isArray(streakRows) ? streakRows[0] : streakRows) ?? null;
 
     // EVERY player-facing stat below is derived from `rows`, so this single
@@ -527,12 +554,17 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     const { data: sessions } = await supabase.rpc("get_own_completed_sessions", {
       _device_id: deviceId,
       _device_token: getDeviceToken(),
+      _format: format.statsNamespace,
     });
 
     const rows = (sessions ?? []) as unknown as OwnCompletedSession[];
 
     // Separate query: which of these puzzles actually had a rainbow herring?
-    const puzzleIds = Array.from(new Set(rows.map((r) => r.puzzle_id).filter(Boolean)));
+    // Skipped entirely for a format with no bonus category — there is nothing
+    // to be eligible for, so Rainbows Spotted stays null rather than 0%.
+    const puzzleIds = format.hasRainbow
+      ? Array.from(new Set(rows.map((r) => r.puzzle_id).filter(Boolean)))
+      : [];
     const rainbowPuzzleIds = new Set<string>();
     if (puzzleIds.length > 0) {
       const { data: puzzleRows } = await supabase
@@ -541,24 +573,28 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
         .in("id", puzzleIds);
       for (const p of puzzleRows ?? []) {
         const herring = (p as any).rainbow_herring;
-        if (Array.isArray(herring) && herring.length === 4) {
+        if (Array.isArray(herring) && herring.length === format.categoryCount) {
           rainbowPuzzleIds.add(p.id);
         }
       }
     }
 
     // Ascending/descending-difficulty solve order ("Yellow -> Green -> Blue
-    // -> Red" and its reverse, in player-facing terms). getSolveOrder()
-    // (useGame.ts) names difficulty-1 "orange" internally — an existing
-    // naming quirk, not something this file invents — so these are the
-    // literal arrays it writes when the 4 categories are solved in order.
-    const ASCENDING_ORDER = ["orange", "green", "blue", "red"];
-    const DESCENDING_ORDER = ["red", "blue", "green", "orange"];
+    // -> Red" and its reverse, in player-facing terms; Mini's is
+    // "Green -> Blue -> Red"). getSolveOrder() (useGame.ts) names
+    // difficulty-1 "orange" internally — an existing naming quirk preserved
+    // in SOLVE_ORDER_NAME, not something this file invents — so these are the
+    // literal arrays it writes when a format's categories are solved in order.
+    const ASCENDING_ORDER = ascendingSolveOrder(format);
+    const DESCENDING_ORDER = descendingSolveOrder(format);
+    // The name the HARDEST category writes — "red" for both formats today,
+    // read from the format rather than assumed.
+    const HARDEST_NAME = SOLVE_ORDER_NAME[format.difficultyOrder[format.difficultyOrder.length - 1]];
 
     const arraysEqual = (a: unknown, b: string[]): boolean =>
       Array.isArray(a) && a.length === b.length && a.every((v, i) => v === b[i]);
 
-    const guessDistribution: number[] = [0, 0, 0, 0, 0];
+    const guessDistribution: number[] = emptyDistribution();
     let gamesWon = 0;
     let rainbowEligible = 0;
     let rainbowFound = 0;
@@ -578,7 +614,7 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
     // counts every row in `rows` regardless of its mistakes value.
     let mistakesKnownCount = 0;
     for (const r of rows) {
-      if (Number.isInteger(r.mistakes) && (r.mistakes as number) >= 0 && (r.mistakes as number) <= 4) {
+      if (Number.isInteger(r.mistakes) && (r.mistakes as number) >= 0 && (r.mistakes as number) <= format.maxMistakes) {
         totalMistakes += r.mistakes as number;
         mistakesKnownCount++;
       }
@@ -605,7 +641,7 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
       // row is still counted everywhere else (Played, totalMistakes for
       // Average Mistakes, etc. below) exactly as before; only this one
       // bucketing decision excludes it.
-      if (Number.isInteger(r.mistakes) && (r.mistakes as number) >= 0 && (r.mistakes as number) <= 4) {
+      if (Number.isInteger(r.mistakes) && (r.mistakes as number) >= 0 && (r.mistakes as number) <= format.maxMistakes) {
         guessDistribution[r.mistakes as number]++;
       }
 
@@ -620,7 +656,7 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
         // end"; null (unknown/historical) or 1-3 (found in the middle)
         // never qualify — never guessed at, never treated as a known miss.
         const rsi = (r as { rainbow_solve_index?: number | null }).rainbow_solve_index ?? null;
-        const rainbowAtEnd = rsi === 0 || rsi === 4;
+        const rainbowAtEnd = rsi === 0 || rsi === format.categoryCount;
         if (isRainbowEligible) {
           if (arraysEqual(r.solve_order, ASCENDING_ORDER) && rainbowAtEnd) inOrderCount++;
           if (arraysEqual(r.solve_order, DESCENDING_ORDER) && rainbowAtEnd) reverseRainbowCount++;
@@ -643,7 +679,7 @@ export async function loadStatsFromSupabase(): Promise<GameStats> {
         rainbowEligible++;
         if (r.found_rainbow) rainbowFound++;
       }
-      if (Array.isArray(r.solve_order) && r.solve_order[0] === "red") hardestFirstCount++;
+      if (Array.isArray(r.solve_order) && r.solve_order[0] === HARDEST_NAME) hardestFirstCount++;
     }
 
     return {

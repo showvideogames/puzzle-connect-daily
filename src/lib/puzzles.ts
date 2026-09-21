@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Puzzle } from "./types";
+import { getFormat, type PuzzleFormat, type PuzzleFormatId } from "./puzzleFormat";
 
 /**
  * The puzzle's display identifier WITH "Puzzle" spelled out in front — for
@@ -36,32 +37,43 @@ export function resolveDesignerName(name: string | null | undefined): string {
   return trimmed ? trimmed : OFFICIAL_DESIGNER_FALLBACK;
 }
 
-// Fetch today's published puzzle from the database
-export async function getTodaysPuzzle(): Promise<Puzzle | null> {
+const PUZZLE_SELECT = "*, puzzle_groups(*)";
+
+/**
+ * Today's published puzzle OF THIS FORMAT.
+ *
+ * Full and Mini are sibling Dailies: each has its own published puzzle for a
+ * date (enforced by the puzzles_date_format_key unique index), and neither
+ * may ever show the other's. `format` defaults to "full", so every existing
+ * caller keeps exactly its current meaning.
+ */
+export async function getTodaysPuzzle(format: PuzzleFormatId = "full"): Promise<Puzzle | null> {
   const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
 
   // Try today's puzzle first, then the most recent published one
   const { data, error } = await supabase
     .from("puzzles")
-    .select("*, puzzle_groups(*)")
+    .select(PUZZLE_SELECT)
     .eq("is_published", true)
+    .eq("format", format)
     .lte("date", today)
     .order("date", { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
   if (error || !data) return null;
 
   return mapPuzzle(data);
 }
 
-export async function getPuzzleById(id: string): Promise<Puzzle | null> {
+export async function getPuzzleById(id: string, format: PuzzleFormatId = "full"): Promise<Puzzle | null> {
   const { data, error } = await supabase
     .from("puzzles")
-    .select("*, puzzle_groups(*)")
+    .select(PUZZLE_SELECT)
     .eq("id", id)
     .eq("is_published", true)
-    .single();
+    .eq("format", format)
+    .maybeSingle();
 
   if (error || !data) return null;
   return mapPuzzle(data);
@@ -71,10 +83,15 @@ export async function getPuzzleById(id: string): Promise<Puzzle | null> {
 // getPuzzleById exactly, filtered on is_beta instead of is_published. Never
 // overlaps with the published read paths above: the mutual-exclusion CHECK
 // constraint on puzzles guarantees no row is ever both.
+//
+// Deliberately NOT format-filtered: the Beta library is one unlisted list of
+// everything being playtested, and a Mini in it renders as a Mini from its own
+// row (see mapPuzzle). Splitting it would add a second unlisted route for no
+// product reason.
 export async function getBetaPuzzles(): Promise<Puzzle[]> {
   const { data, error } = await supabase
     .from("puzzles")
-    .select("*, puzzle_groups(*)")
+    .select(PUZZLE_SELECT)
     .eq("is_beta", true)
     .order("date", { ascending: false });
 
@@ -85,7 +102,7 @@ export async function getBetaPuzzles(): Promise<Puzzle[]> {
 export async function getBetaPuzzleById(id: string): Promise<Puzzle | null> {
   const { data, error } = await supabase
     .from("puzzles")
-    .select("*, puzzle_groups(*)")
+    .select(PUZZLE_SELECT)
     .eq("id", id)
     .eq("is_beta", true)
     .single();
@@ -94,21 +111,30 @@ export async function getBetaPuzzleById(id: string): Promise<Puzzle | null> {
   return mapPuzzle(data);
 }
 
-export async function getPuzzleByDate(date: string): Promise<Puzzle | null> {
+export async function getPuzzleByDate(date: string, format: PuzzleFormatId = "full"): Promise<Puzzle | null> {
   const { data, error } = await supabase
     .from("puzzles")
-    .select("*, puzzle_groups(*)")
+    .select(PUZZLE_SELECT)
     .eq("date", date)
     .eq("is_published", true)
-    .single();
+    .eq("format", format)
+    .maybeSingle();
 
   if (error || !data) return null;
   return mapPuzzle(data);
 }
 
+/** The format a loaded puzzle row declares — Full for anything that does not. */
+export function puzzleFormatOfRow(data: unknown): PuzzleFormat {
+  return getFormat((data as { format?: unknown } | null)?.format);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapPuzzle(data: any): Puzzle {
   const groups = [...(data.puzzle_groups || [])]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .sort((a: any, b: any) => a.sort_order - b.sort_order)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((g: any) => ({
       category: g.category,
       words: g.words as string[],
@@ -120,6 +146,10 @@ function mapPuzzle(data: any): Puzzle {
   return {
     id: data.id,
     date: data.date,
+    // getFormat resolves anything unrecognised to Full — which is what a row
+    // written before the format column existed means, and what the column's
+    // own NOT NULL DEFAULT 'full' already guarantees for every live row.
+    format: getFormat(data.format).id,
     title: data.title ?? null,
     designerName: resolveDesignerName(data.designer_name),
     groups,

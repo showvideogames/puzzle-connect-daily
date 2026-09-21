@@ -29,6 +29,7 @@ import { loadPlayedDifficulties } from "@/lib/puzzleVersion";
 import { buildCustomShareText, buildOfficialShareText } from "@/lib/shareText";
 import { customPuzzlePath } from "@/lib/customPuzzles";
 import { resolveCategoryVisual, splitCategoryVisual } from "@/lib/categoryVisual";
+import { DIFFICULTY_COLOR_NAME, type CategoryColor } from "@/lib/puzzleFormat";
 
 const DIFFICULTY_SQUARE: Record<number, string> = {
   1: "🟨",
@@ -179,7 +180,26 @@ function StreakCelebration({ streak }: { streak: number }) {
   );
 }
 
-type PaletteMode = "select" | "yellow" | "green" | "blue" | "red" | "eraser";
+type PaletteMode = "select" | CategoryColor | "eraser";
+
+// The paint-palette swatch for one category colour. bg-group-N is the exact
+// same CSS custom property the SOLVED category bars use (SolvedGroup.tsx), not
+// a separately hardcoded hex — see WordTile.tsx's COLOR_STYLES/COLOR_CIRCLES
+// for the matching painted-tile fill and per-tile picker, which read the
+// identical classes. Since --group-1..4 has no .dark override (index.css),
+// these are automatically the same colour in both themes with no dark:
+// variant needed. Keyed by difficulty, so a format that uses difficulties
+// 2-4 (Mini: Green/Blue/Red) picks up exactly its own three swatches.
+// The board instruction reads as prose, so the count is spelled out. Falls
+// back to the digit for any size not listed, rather than printing nothing.
+const SELECTION_COUNT_WORD: Record<number, string> = { 3: "three", 4: "four" };
+
+const PALETTE_SWATCH_CLASS: Record<1 | 2 | 3 | 4, string> = {
+  1: "bg-group-1",
+  2: "bg-group-2",
+  3: "bg-group-3",
+  4: "bg-group-4",
+};
 
 interface GameBoardProps {
   puzzle: Puzzle;
@@ -262,6 +282,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const [bonusRainbowCorrect, setBonusRainbowCorrect] = useState<boolean | null>(null);
 
   const {
+    format,
+    rainbowHerring,
+    storageId,
     state,
     remainingWords,
     toggleWord,
@@ -304,10 +327,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const imagesToPreload = useMemo(() => {
     const words = [
       ...puzzle.groups.flatMap((g) => g.words),
-      ...(puzzle.rainbowHerring ?? []),
+      ...(rainbowHerring ?? []),
     ];
     return words.filter(isCustomEmoji).map((w) => customEmojiUrl(w));
-  }, [puzzle]);
+  }, [puzzle, rainbowHerring]);
   const imagesReady = useImagePreload(imagesToPreload);
 
   const [historyExpanded, setHistoryExpanded] = useState(true);
@@ -325,12 +348,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const boardSlots = useMemo(() => {
     const slots: ({ kind: "group"; groupIdx: number } | { kind: "rainbow" })[] =
       state.solvedGroups.map((groupIdx) => ({ kind: "group" as const, groupIdx }));
-    if (state.gotRainbow && puzzle.rainbowHerring) {
+    if (state.gotRainbow && rainbowHerring) {
       const insertAt = Math.min(state.rainbowSolveIndex ?? 0, slots.length);
       slots.splice(insertAt, 0, { kind: "rainbow" as const });
     }
     return slots;
-  }, [state.solvedGroups, state.gotRainbow, state.rainbowSolveIndex, puzzle.rainbowHerring]);
+  }, [state.solvedGroups, state.gotRainbow, state.rainbowSolveIndex, rainbowHerring]);
 
   // Shared "checking guess" suspense: which tiles are animating, and their
   // stagger order (by grid position, so the bounce reads as a left-to-right
@@ -433,7 +456,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
     const words = puzzle.groups[groupIdx]?.words ?? [];
     const fromByWord: Record<string, DOMRect> = {};
-    let haveAllRects = words.length === 4;
+    let haveAllRects = words.length === format.answersPerCategory;
     words.forEach((w) => {
       const el = wordTileRefs.current[w];
       if (el) fromByWord[w] = el.getBoundingClientRect();
@@ -443,7 +466,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     if (!haveAllRects) {
       // Couldn't measure the real tiles (shouldn't normally happen) — skip
       // the clone animation rather than get stuck; just reveal plainly.
-      console.warn("[reveal] couldn't measure all 4 tiles for group", groupIdx, "— falling back to a plain reveal");
+      console.warn(`[reveal] couldn't measure all ${format.answersPerCategory} tiles for group`, groupIdx, "— falling back to a plain reveal");
       releaseRevealHold();
       // Fallback still has to un-gate the victory UI on a winning solve, or the
       // results would never appear.
@@ -468,7 +491,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       to: null,
       phase: "cloned",
     });
-  }, [lastRevealedGroup, puzzle, releaseRevealHold, clearRevealTimers, revealVictory]);
+  }, [lastRevealedGroup, puzzle, format.answersPerCategory, releaseRevealHold, clearRevealTimers, revealVictory]);
 
   // Once the bar has mounted (hidden) for this reveal, measure it and start
   // the fly. Runs whenever `reveal` is freshly "cloned" — i.e. once per
@@ -665,16 +688,20 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       try {
         // user_streaks is RPC-only now; the function resolves account vs
         // proven-device ownership server-side.
+        // Scoped to THIS format: the celebration says "day N streak" about
+        // the game that was just won, so a Mini win must never display the
+        // player's Full streak (or extend the wrong one in the copy).
         const { data } = await supabase.rpc("get_own_streak", {
           _device_id: getDeviceId(),
           _device_token: getDeviceToken(),
+          _format: format.statsNamespace,
         });
         const row = Array.isArray(data) ? data[0] : data;
         if (row?.current_streak != null) setStreakBefore(row.current_streak);
       } catch {}
     };
     void fetchStreakBefore();
-  }, [isArchive, betaMode, customMode]);
+  }, [isArchive, betaMode, customMode, format.statsNamespace]);
 
   // Streak celebration is part of the victory moment, so it waits for the same
   // reveal gate. Gating on `lastRevealedGroup !== null` keeps it to LIVE wins:
@@ -779,11 +806,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       const attemptOffset = failedBonusAttemptsRef.current;
       if (!correct) failedBonusAttemptsRef.current = attemptOffset + 1;
 
-      if (correct && puzzle.rainbowHerring) {
-        setBonusRainbowWords([...puzzle.rainbowHerring]);
+      if (correct && rainbowHerring) {
+        setBonusRainbowWords([...rainbowHerring]);
         confetti({ particleCount: 100, spread: 80, origin: { y: 0.55 } });
         playRainbowSound();
-        markRainbowFound(puzzle.rainbowHerring, guessedAt);
+        markRainbowFound(rainbowHerring, guessedAt);
       }
 
       // ONE write path for both outcomes. This is the only call site in the
@@ -810,7 +837,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
       setTimeout(() => setBonusRainbowCorrect(correct), correct ? 600 : 0);
     }, 400);
-  }, [puzzle.rainbowHerring, markRainbowFound, isOfficialAttemptRef, sessionIdRef, activeSecondsRef, nextGuessNumber, state.solvedGroups.length, betaMode]);
+  }, [rainbowHerring, markRainbowFound, isOfficialAttemptRef, sessionIdRef, activeSecondsRef, nextGuessNumber, state.solvedGroups.length, betaMode]);
 
   const hintItems = useCallback((): { color?: string; squareEmoji?: string; emoji: string }[] => {
     const sorted = [...puzzle.groups].sort((a, b) => a.difficulty - b.difficulty);
@@ -818,14 +845,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       color: DIFFICULTY_COLOR[g.difficulty],
       emoji: resolveCategoryVisual(g.categoryEmoji, g.category),
     }));
-    if (puzzle.rainbowHerring && (puzzle.rainbowCategoryName || puzzle.rainbowCategoryEmoji)) {
+    if (rainbowHerring && (puzzle.rainbowCategoryName || puzzle.rainbowCategoryEmoji)) {
       items.push({
         squareEmoji: theme.emoji,
         emoji: resolveCategoryVisual(puzzle.rainbowCategoryEmoji, puzzle.rainbowCategoryName ?? ""),
       });
     }
     return items;
-  }, [puzzle, theme]);
+  }, [puzzle, rainbowHerring, theme]);
 
   /**
    * The colour of each group AS THIS PLAYER PLAYED IT.
@@ -849,8 +876,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
    * exactly as before.
    */
   const playedDifficulties = useMemo(
-    () => loadPlayedDifficulties(puzzle.id),
-    [puzzle.id]
+    () => loadPlayedDifficulties(storageId),
+    [storageId]
   );
   // 0 when neither source knows this index — not a valid difficulty, so the
   // lookups below fall through to their existing "unknown" rendering rather
@@ -906,7 +933,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         return { type: "hint", hint: attempt.hintType === "small" ? "bulb" : "flashlight" };
       }
       if (attempt.isRainbow) {
-        return { type: "guess", cells: ["rainbow", "rainbow", "rainbow", "rainbow"] };
+        // As wide as the board's own guesses, not a fixed four.
+        return { type: "guess", cells: Array<ResultCellKind>(format.categoryCount).fill("rainbow") };
       }
       return {
         type: "guess",
@@ -916,7 +944,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         }),
       };
     });
-  }, [state.guessHistory, playedDifficultyAt]);
+  }, [state.guessHistory, playedDifficultyAt, format.categoryCount]);
 
   const generateShareText = useCallback(() => {
     const lines = generateShareLines();
@@ -929,10 +957,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         lines,
         origin: window.location.origin,
         path: customPuzzlePath(puzzle),
+        format,
       });
     }
-    return buildOfficialShareText(puzzle.title, lines);
-  }, [puzzle, generateShareLines, customMode]);
+    return buildOfficialShareText(puzzle.title, lines, format);
+  }, [puzzle, generateShareLines, customMode, format]);
 
   const handleShare = useCallback(async () => {
     trackEvent("share_clicked");
@@ -1012,11 +1041,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           each so this whole block stays compact above the board. */}
       {showModeBadge && (
         <div className="flex justify-end mb-1">
-          <PuzzleModeBadge isRainbow={!!puzzle.rainbowHerring} />
+          <PuzzleModeBadge isRainbow={!!rainbowHerring} groupCount={format.categoryCount} />
         </div>
       )}
       <p className="text-center font-sans text-[clamp(13px,4.2vw,16px)] font-bold tracking-wide text-foreground mb-2">
-        Select four words that share a connection!
+        Select {SELECTION_COUNT_WORD[format.answersPerCategory] ?? format.answersPerCategory} words that share a connection!
       </p>
 
       {/* Color Palette Mode buttons. Fixed position: directly under the
@@ -1035,37 +1064,23 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           >
             <MousePointer2 className="w-5 h-5" />
           </button>
-          {/* bg-group-N: the exact same CSS custom property the SOLVED
-              category bars use (SolvedGroup.tsx), not a separately
-              hardcoded hex — see WordTile.tsx's COLOR_STYLES/COLOR_CIRCLES
-              for the matching painted-tile fill and per-tile picker, which
-              read the identical classes. Since --group-1..4 has no .dark
-              override (index.css), this is automatically the same color in
-              both themes with no dark: variant needed here. */}
-          <button
-            onClick={() => setPaletteMode("yellow")}
-            className={`w-10 h-10 rounded-lg bg-group-1 hover:scale-110 transition-all
-              ${paletteMode === "yellow" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
-            aria-label="Yellow paint"
-          />
-          <button
-            onClick={() => setPaletteMode("green")}
-            className={`w-10 h-10 rounded-lg bg-group-2 hover:scale-110 transition-all
-              ${paletteMode === "green" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
-            aria-label="Green paint"
-          />
-          <button
-            onClick={() => setPaletteMode("blue")}
-            className={`w-10 h-10 rounded-lg bg-group-3 hover:scale-110 transition-all
-              ${paletteMode === "blue" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
-            aria-label="Blue paint"
-          />
-          <button
-            onClick={() => setPaletteMode("red")}
-            className={`w-10 h-10 rounded-lg bg-group-4 hover:scale-110 transition-all
-              ${paletteMode === "red" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
-            aria-label="Red paint"
-          />
+          {/* One swatch per colour THIS FORMAT uses, in difficulty order —
+              Full gets Yellow/Green/Blue/Red, Mini gets Green/Blue/Red. See
+              PALETTE_SWATCH_CLASS for why these are the solved-bar variables
+              rather than hardcoded hexes. */}
+          {format.difficultyOrder.map((difficulty) => {
+            const color = DIFFICULTY_COLOR_NAME[difficulty];
+            const label = color.charAt(0).toUpperCase() + color.slice(1);
+            return (
+              <button
+                key={color}
+                onClick={() => setPaletteMode(color)}
+                className={`w-10 h-10 rounded-lg ${PALETTE_SWATCH_CLASS[difficulty]} hover:scale-110 transition-all
+                  ${paletteMode === color ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+                aria-label={`${label} paint`}
+              />
+            );
+          })}
           <button
             onClick={() => setPaletteMode("eraser")}
             className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
@@ -1099,7 +1114,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
                 {puzzle.rainbowCategoryName || theme.defaultCategoryName}
               </div>
-              <RainbowWordsRow words={puzzle.rainbowHerring!} />
+              <RainbowWordsRow words={rainbowHerring!} />
             </div>
           ) : (
             <SolvedGroup
@@ -1124,7 +1139,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           )
         )}
 
-        {showEndState && !state.gotRainbow && puzzle.rainbowHerring && (
+        {showEndState && !state.gotRainbow && rainbowHerring && (
           bonusRainbowCorrect === null ? (
             <button
               onClick={() => setShowSpotModal(true)}
@@ -1150,7 +1165,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
                 {puzzle.rainbowCategoryName || theme.defaultCategoryName}
               </div>
-              <RainbowWordsRow words={puzzle.rainbowHerring} />
+              <RainbowWordsRow words={rainbowHerring} />
             </div>
           )
         )}
@@ -1159,7 +1174,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* Word grid */}
       {remainingWords.length > 0 && (
         <div className="relative">
-          <div className={`grid grid-cols-4 gap-1.5 ${useWideBoard ? "md:gap-3" : ""} ${shaking || spotShaking ? "animate-shake" : ""}`}>
+          {/* Columns come from the format (4 on Full, 3 on Mini) as an inline
+              grid-template rather than a `grid-cols-N` class, because Tailwind
+              only emits the classes it can see in the source and a computed
+              class name would be purged from the production build. */}
+          <div
+            className={`grid gap-1.5 ${useWideBoard ? "md:gap-3" : ""} ${shaking || spotShaking ? "animate-shake" : ""}`}
+            style={{ gridTemplateColumns: `repeat(${format.columns}, minmax(0, 1fr))` }}
+          >
           {remainingWords.map((word, index) => {
             const isRevealingWord = reveal?.words.includes(word) ?? false;
             return (
@@ -1190,7 +1212,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
                 onTouchDragMove={handleTouchDragMove}
-                column={(index % 4) + 1}
+                column={(index % format.columns) + 1}
+                columnCount={format.columns}
                 onTouchDragEnd={handleTouchDragEnd}
                 isEmojiPuzzle={puzzle.isEmojiPuzzle ?? false}
                 colorPaletteMode={colorPaletteMode}
@@ -1352,7 +1375,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             </button>
             <button
               onClick={submitGuess}
-              disabled={state.selectedWords.length !== 4 || isChecking || reveal !== null}
+              disabled={state.selectedWords.length !== format.answersPerCategory || isChecking || reveal !== null}
               className="w-full h-14 rounded-full text-sm md:text-base font-bold text-white transition-all
                 bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
                 shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]
@@ -1531,11 +1554,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 return (
                   <div key={i} className="py-2 text-center first:pt-0 last:pb-0">
                     <p className="text-xs font-semibold text-muted-foreground mb-1">{label}</p>
-                    {/* Equal-width 4-column grid, matching the Spot the Rainbow
+                    {/* Equal-width grid, one column per answer in a guess (4 on
+                        Full, 3 on Mini), matching the Spot the Rainbow
                         selection rows — cell width never varies with word
-                        length, and grid rows keep all four cells the same
+                        length, and grid rows keep every cell the same
                         height even when one wraps to two lines. */}
-                    <div className="grid grid-cols-4 gap-1">
+                    <div
+                      className="grid gap-1"
+                      style={{ gridTemplateColumns: `repeat(${format.answersPerCategory}, minmax(0, 1fr))` }}
+                    >
                       {sorted.map((w, j) => (
                         <span
                           key={`${w}-${j}`}
@@ -1654,7 +1681,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         />
       )}
 
-      {puzzle.rainbowHerring && (
+      {rainbowHerring && (
         <SpotTheRainbowModal
           open={showSpotModal}
           puzzle={puzzle}

@@ -5,24 +5,35 @@ import { GameStats } from "@/lib/types";
 import { X, Puzzle, Trophy, Flame, Crown, Star, LightbulbOff, BarChart3, ListOrdered } from "lucide-react";
 import { RainbowIcon } from "./RainbowIcon";
 import { ReverseRainbowIcon } from "./ReverseRainbowIcon";
+import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 
 interface StatsModalProps {
   open: boolean;
   onClose: () => void;
+  /**
+   * Which format's personal record to show. Full and Mini keep entirely
+   * separate Played/Win %/Streak/Max Streak/distribution/advanced numbers —
+   * see loadStatsFromSupabase. Defaults to Full so existing call sites are
+   * unchanged.
+   */
+  format?: PuzzleFormat;
 }
 
-export function StatsModal({ open, onClose }: StatsModalProps) {
+export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalProps) {
   const [stats, setStats] = useState<GameStats | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
-    loadStatsFromSupabase().then((s) => {
+    let cancelled = false;
+    loadStatsFromSupabase(format).then((s) => {
+      if (cancelled) return;
       setStats(s);
       setLoading(false);
     });
-  }, [open]);
+    return () => { cancelled = true; };
+  }, [open, format]);
 
   const winRate = stats && stats.gamesPlayed > 0
     ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100)
@@ -60,6 +71,10 @@ export function StatsModal({ open, onClose }: StatsModalProps) {
         { key: "reverserainbow", label: "Reverse Rainbow", value: stats.reverseRainbowCount, icon: <ReverseRainbowIcon className="w-4 h-4" /> },
         { key: "avgmistakes", label: "Average Mistakes", value: stats.averageMistakes.toFixed(1), icon: <BarChart3 className="w-4 h-4 text-muted-foreground" /> },
       ]
+        // The two Rainbow achievements are only meaningful for a format that
+        // has a bonus category. A format without one would show a permanent
+        // zero that no amount of play could ever move.
+        .filter((item) => format.hasRainbow || (item.key !== "rainbows" && item.key !== "reverserainbow"))
     : [];
 
   return (
