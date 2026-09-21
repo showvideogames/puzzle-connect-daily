@@ -19,6 +19,13 @@ import {
   type SavedProgress,
 } from "@/lib/gameProgress";
 import { pinnedContentFrom } from "@/lib/puzzleVersion";
+import {
+  SOLVE_ORDER_NAME,
+  formatOf,
+  oneAwayThreshold,
+  progressStorageId,
+  rainbowHerringFor,
+} from "@/lib/puzzleFormat";
 
 // Re-exported so existing importers (Index.tsx, Archive.tsx) keep working —
 // the implementations moved to lib/gameProgress.ts so that both this hook and
@@ -43,6 +50,10 @@ const DIFFICULTY_SQUARE: Record<number, string> = {
 };
 
 function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle): string {
+  // One square per answer in a guess, so a Mini row is 3 wide and a Full row
+  // is 4 — the Rainbow row included, which is as wide as the board it was
+  // found on rather than a fixed four emoji.
+  const rainbowRow = "🌈".repeat(formatOf(puzzle).categoryCount);
   const lines: string[] = [];
   for (const attempt of dedupeHintMarkers(guessHistory)) {
     if (attempt.isHintMarker) {
@@ -54,7 +65,7 @@ function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle): string {
         lines.push(emoji);
       }
     } else if (attempt.isRainbow) {
-      lines.push("🌈🌈🌈🌈");
+      lines.push(rainbowRow);
     } else {
       const row = attempt.groupIndices
         .map((gi) => {
@@ -118,25 +129,47 @@ export function useGame(
   } = {}
 ) {
   /**
+   * This board's shape — grid size, category count, answers per category,
+   * colour order, mistake allowance and whether a Rainbow can exist at all.
+   * Every "how many" decision below reads from here instead of a literal, so
+   * the same hook runs a Full 4×4 and a Mini 3×3 with no branching.
+   */
+  const format = useMemo(() => formatOf(puzzle), [puzzle]);
+
+  /**
+   * This puzzle's Rainbow answers, or null. Resolved through the format (see
+   * rainbowHerringFor) rather than read straight off the puzzle, so a format
+   * without a bonus category can never pick one up from stray row data.
+   */
+  const rainbowHerring = useMemo(() => rainbowHerringFor(puzzle), [puzzle]);
+
+  /**
    * The localStorage progress key for this attempt.
    *
-   * Beta play uses a DIFFERENT namespace than the puzzle's own id
-   * (`beta:<id>`, never colliding with `progressKey(id)`) because a Beta
-   * puzzle keeps its id when promoted to Published (see the Admin status
-   * workflow) — without this, a tester's beta progress blob would collide
-   * with that same puzzle's real official progress blob the moment it goes
-   * live. The pin mechanism inside the blob (puzzleSnapshot.versionId) still
-   * does the per-version resume work exactly as it does for official/Archive
-   * play; only the storage KEY differs.
+   * Namespaced by FORMAT and by mode — see progressStorageId in
+   * lib/puzzleFormat.ts for the full key table. Two reasons the namespace is
+   * explicit rather than trusting ids to differ:
    *
-   * Custom play uses `custom:<shareId>` (puzzle.id IS the share id for a
-   * custom puzzle — see lib/customPuzzles.ts's mapRowToPuzzle) for the same
-   * reason: an isolated namespace that can never collide with Daily,
-   * Archive, Beta, or another custom puzzle's progress.
+   * Beta play uses a different namespace than the puzzle's own id
+   * (`beta:<id>`) because a Beta puzzle keeps its id when promoted to
+   * Published (see the Admin status workflow) — without this, a tester's beta
+   * progress blob would collide with that same puzzle's real official
+   * progress blob the moment it goes live. Custom play uses `custom:<shareId>`
+   * (puzzle.id IS the share id for a custom puzzle — see lib/customPuzzles.ts's
+   * mapRowToPuzzle) for the same reason.
+   *
+   * And Mini prefixes everything with `mini:`, so a player can have today's
+   * Full Daily and today's Mini Daily in progress at once, reset one without
+   * touching the other, and finish both.
+   *
+   * A Full official game keeps the BARE puzzle id it has always used, so every
+   * board already in progress resumes exactly as before. The pin mechanism
+   * inside the blob (puzzleSnapshot.versionId) does the per-version resume
+   * work unchanged in every case; only the storage KEY differs.
    */
-  const storageId = mode === "beta" ? `beta:${puzzle.id}` : mode === "custom" ? `custom:${puzzle.id}` : puzzle.id;
+  const storageId = progressStorageId(puzzle.id, format, mode);
 
-  const MAX_MISTAKES = 4;
+  const MAX_MISTAKES = format.maxMistakes;
   // Shared "checking guess" suspense: every submitted guess (correct OR
   // incorrect) first plays a staggered per-tile bounce, then holds a beat,
   // before the outcome is revealed — matching NYT Connections.
@@ -441,7 +474,7 @@ export function useGame(
           words: g.words,
           correct: g.isCorrect,
           groupName: g.isCorrect
-            ? (["orange", "green", "blue", "red"][puzzle.groups[g.groupIndices?.[0]]?.difficulty - 1] ?? null)
+            ? (SOLVE_ORDER_NAME[puzzle.groups[g.groupIndices?.[0]]?.difficulty] ?? null)
             : null,
           guessedAt: g.guessedAt ?? null,
           isRainbowAttempt: g.isRainbowAttempt ?? false,
@@ -471,7 +504,7 @@ export function useGame(
   // known) the result is final: hints become view-only. A view-only reveal
   // shows the hint but writes no event, marker, flag or progress.
   const hintsViewOnly =
-    state.isComplete && (!puzzle.rainbowHerring || state.gotRainbow || rainbowResolved);
+    state.isComplete && (!rainbowHerring || state.gotRainbow || rainbowResolved);
 
   const addHintMarker = useCallback((type: "small" | "full") => {
     setState((s) => ({
@@ -499,11 +532,11 @@ export function useGame(
         guessCount: submittedGuessCount(state.guessHistory),
         // null, not false, when the puzzle has no Rainbow at all — "there was
         // no Rainbow to find" must not be recorded as "hadn't found it yet".
-        rainbowFound: puzzle.rainbowHerring ? state.gotRainbow : null,
+        rainbowFound: rainbowHerring ? state.gotRainbow : null,
         snapshot: eventSnapshot(),
       });
     },
-    [recordHint, submittedGuessCount, state.guessHistory, state.gotRainbow, puzzle.rainbowHerring, eventSnapshot]
+    [recordHint, submittedGuessCount, state.guessHistory, state.gotRainbow, rainbowHerring, eventSnapshot]
   );
 
   useEffect(() => {
@@ -789,10 +822,12 @@ export function useGame(
       if (s.selectedWords.includes(word)) {
         return { ...s, selectedWords: s.selectedWords.filter((w) => w !== word) };
       }
-      if (s.selectedWords.length >= 4) return s;
+      // A guess is exactly one category's worth of answers: 4 on Full, 3 on
+      // Mini. Nothing here assumes four.
+      if (s.selectedWords.length >= format.answersPerCategory) return s;
       return { ...s, selectedWords: [...s.selectedWords, word] };
     });
-  }, [state.isComplete]);
+  }, [state.isComplete, format.answersPerCategory]);
 
   const deselectAll = useCallback(() => {
     if (checkingRef.current) return;
@@ -853,15 +888,14 @@ export function useGame(
   }, [fireConfetti]);
 
   const getSolveOrder = useCallback((solvedGroups: number[]): string[] => {
-    const colorNames = ["orange", "green", "blue", "red"];
     return solvedGroups.map((groupIdx) => {
       const diff = puzzle.groups[groupIdx]?.difficulty;
-      return colorNames[diff - 1] ?? "unknown";
+      return SOLVE_ORDER_NAME[diff] ?? "unknown";
     });
   }, [puzzle]);
 
   const submitGuess = useCallback(() => {
-    if (state.selectedWords.length !== 4 || state.isComplete || checkingRef.current) return;
+    if (state.selectedWords.length !== format.answersPerCategory || state.isComplete || checkingRef.current) return;
 
     // Captured HERE — the moment the player actually submits — not inside
     // the setTimeout below, which only fires after the ~1s "checking guess"
@@ -869,13 +903,22 @@ export function useGame(
     // happened now.
     const guessedAt = new Date().toISOString();
 
+    // "All but one answer of a single unsolved category" — 3 of 4 on Full,
+    // 2 of 3 on Mini. Never the literal 3.
+    const oneAwayCount = oneAwayThreshold(format);
+
     const sortedSelected = [...state.selectedWords].sort();
     const isDuplicate = state.guessHistory.some(
-      (g) => !g.isRainbow && g.words.length === 4 && [...g.words].sort().every((w, i) => w === sortedSelected[i])
+      (g) =>
+        !g.isRainbow &&
+        g.words.length === format.answersPerCategory &&
+        [...g.words].sort().every((w, i) => w === sortedSelected[i])
     );
     if (isDuplicate) {
       const isOneAway = puzzle.groups.some(
-        (g, idx) => !state.solvedGroups.includes(idx) && g.words.filter((w) => state.selectedWords.includes(w)).length === 3
+        (g, idx) =>
+          !state.solvedGroups.includes(idx) &&
+          g.words.filter((w) => state.selectedWords.includes(w)).length === oneAwayCount
       );
       setAlreadyGuessed(isOneAway ? "oneaway" : "plain");
       setTimeout(() => setAlreadyGuessed(null), 2000);
@@ -884,11 +927,13 @@ export function useGame(
 
     const guessGroupIndices = state.selectedWords.map((w) => getWordGroupIndex(w));
 
-    // Hidden rainbow/flag: the 4 selected words are exactly the herring set.
-    const herring = puzzle.rainbowHerring;
+    // Hidden rainbow/flag: the selected words are exactly the herring set.
+    // rainbowHerring is already null for a format with no bonus category and
+    // for a herring whose size does not match the board, so this whole branch
+    // is structurally unreachable on Mini.
+    const herring = rainbowHerring;
     const isRainbowHerring =
       !!herring &&
-      herring.length === 4 &&
       rainbowWords.length === 0 &&
       (() => {
         const sel = [...state.selectedWords].sort();
@@ -905,12 +950,16 @@ export function useGame(
     // durable guess event can carry it too. Pure functions of the state this
     // guess was made against, so computing them here rather than after the
     // suspense delay changes nothing about the values.
-    const rainbowHerringWords = puzzle.rainbowHerring ?? [];
+    const rainbowHerringWords = rainbowHerring ?? [];
     const rainbowHits = state.selectedWords.filter((w) => rainbowHerringWords.includes(w)).length;
     const isAlmostRainbow =
-      rainbowHerringWords.length === 4 && rainbowWords.length === 0 && rainbowHits === 3;
+      rainbowHerringWords.length > 0 &&
+      rainbowWords.length === 0 &&
+      rainbowHits === rainbowHerringWords.length - 1;
     const isOneAway = puzzle.groups.some(
-      (g, idx) => !state.solvedGroups.includes(idx) && g.words.filter((w) => state.selectedWords.includes(w)).length === 3
+      (g, idx) =>
+        !state.solvedGroups.includes(idx) &&
+        g.words.filter((w) => state.selectedWords.includes(w)).length === oneAwayCount
     );
 
     // ── Durable guess event, written as it happens ──
@@ -934,13 +983,15 @@ export function useGame(
       words: [...state.selectedWords],
       correct: isCorrect,
       groupName: isCorrect
-        ? (["orange", "green", "blue", "red"][puzzle.groups[matchedGroupIndex].difficulty - 1] ?? null)
+        ? (SOLVE_ORDER_NAME[puzzle.groups[matchedGroupIndex].difficulty] ?? null)
         : null,
       guessedAt,
-      // HEURISTIC, by shape only — one word from each of the 4 categories.
-      // Does not prove the player intended a Rainbow guess. Preserved exactly
-      // as previously defined; see GuessEventInput.isRainbowAttempt.
-      isRainbowAttempt: isRainbowHerring || new Set(guessGroupIndices).size === 4,
+      // HEURISTIC, by shape only — one word from each category. Does not prove
+      // the player intended a Rainbow guess. Preserved exactly as previously
+      // defined; see GuessEventInput.isRainbowAttempt. Gated on the format
+      // actually having a Rainbow, so a Mini guess (which unavoidably touches
+      // all 3 categories fairly often) is never mislabelled as one.
+      isRainbowAttempt: isRainbowHerring || (format.hasRainbow && new Set(guessGroupIndices).size === format.categoryCount),
       // Always "normal" here — this is the in-game board, whatever shape the
       // guess happened to take. Even the in-game Rainbow FIND is a normal
       // guess: the player submitted the herring set from the board, they did
@@ -1014,7 +1065,7 @@ export function useGame(
           words: [...state.selectedWords],
           groupIndices: guessGroupIndices,
           isCorrect: true,
-          isRainbowAttempt: new Set(guessGroupIndices).size === 4,
+          isRainbowAttempt: format.hasRainbow && new Set(guessGroupIndices).size === format.categoryCount,
           guessedAt,
         };
 
@@ -1028,7 +1079,11 @@ export function useGame(
         trackEvent("category_solved", { difficulty: puzzle.groups[groupIdx].difficulty });
 
         const newSolved = [...state.solvedGroups, groupIdx];
-        const isWon = newSolved.length === 4;
+        // The win condition is "every category solved", and the LAST one is
+        // never granted for free: the player must select and submit its
+        // answers like any other. That has always been true for Full and is
+        // inherited unchanged by Mini — there is no auto-solve anywhere here.
+        const isWon = newSolved.length === format.categoryCount;
 
         setState((s) => ({
           ...s,
@@ -1099,7 +1154,7 @@ export function useGame(
           isCorrect: false,
           isOneAway: isOneAway && !isAlmostRainbow,
           isAlmostRainbow,
-          isRainbowAttempt: new Set(guessGroupIndices).size === 4,
+          isRainbowAttempt: format.hasRainbow && new Set(guessGroupIndices).size === format.categoryCount,
           guessedAt,
         };
 
@@ -1184,7 +1239,7 @@ export function useGame(
         }
       }
     }, totalDelay);
-  }, [state, puzzle, rainbowWords, getWordGroupIndex, tileColors, smallHintUsed, fullHintUsed, recordGuess, submittedGuessCount, toGuessEventInputs, eventSnapshot, commitOfficialResult, effectiveSmallHintUsed, effectiveFullHintUsed, getSolveOrder]);
+  }, [state, puzzle, format, rainbowHerring, rainbowWords, getWordGroupIndex, tileColors, smallHintUsed, fullHintUsed, recordGuess, submittedGuessCount, toGuessEventInputs, eventSnapshot, commitOfficialResult, effectiveSmallHintUsed, effectiveFullHintUsed, getSolveOrder]);
 
   const remainingWords = useMemo(() => {
     const solvedWords = state.solvedGroups
@@ -1194,6 +1249,23 @@ export function useGame(
   }, [shuffledWords, state.solvedGroups, revealHoldGroupIdx, puzzle]);
 
   return {
+    /**
+     * The board shape this game is running: grid size, category count,
+     * answers per category, colour order, mistake allowance and whether a
+     * Rainbow exists. Exposed so the board renders from the same single
+     * source the rules are enforced from, rather than re-deriving it.
+     */
+    format,
+    /** This puzzle's Rainbow answers, or null. See rainbowHerringFor. */
+    rainbowHerring,
+    /**
+     * The localStorage progress key this attempt reads and writes. Exposed so
+     * anything that needs THIS attempt's stored blob (the board's played-
+     * difficulty lookup, for one) reads the same namespaced key the hook
+     * does, rather than re-deriving a bare puzzle id that would miss a Mini,
+     * Beta or custom game entirely.
+     */
+    storageId,
     state,
     remainingWords,
     toggleWord,

@@ -14,6 +14,7 @@ import { HintModal } from "@/components/HintModal";
 import { getBetaPuzzleById } from "@/lib/puzzles";
 import { resolvePlayablePuzzle } from "@/lib/puzzleVersion";
 import { loadProgress, clearProgress } from "@/lib/gameProgress";
+import { formatOf, progressStorageId } from "@/lib/puzzleFormat";
 import { resetBetaPlaytest } from "@/lib/betaPlaytest";
 import { Puzzle } from "@/lib/types";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
@@ -23,8 +24,11 @@ import type { User } from "@supabase/supabase-js";
 type ModalName = "help" | "settings" | "feedback" | "betaFeedback" | null;
 
 /** Beta progress lives under this namespace — see useGame's storageId doc. */
-function betaStorageKey(puzzleId: string) {
-  return `beta:${puzzleId}`;
+// The beta progress key for a puzzle, namespaced by its own format so a
+// Mini beta can never share a blob with a Full one. Identical to the old
+// literal `beta:<id>` for a Full puzzle — see progressStorageId.
+function betaStorageKey(puzzle: Pick<Puzzle, "id" | "format">) {
+  return progressStorageId(puzzle.id, formatOf(puzzle), "beta");
 }
 
 export default function BetaPuzzle() {
@@ -70,7 +74,7 @@ export default function BetaPuzzle() {
         // Same version-pin resolution the Daily/Archive pages use, but keyed
         // to the beta-only progress namespace so this never reads (or
         // collides with) the puzzle's official progress blob.
-        setPuzzle(resolvePlayablePuzzle(p, betaStorageKey(p.id)));
+        setPuzzle(resolvePlayablePuzzle(p, betaStorageKey(p)));
         setLoading(false);
         trackEvent("beta_puzzle_opened", { puzzle_id: p.id });
       })
@@ -97,7 +101,7 @@ export default function BetaPuzzle() {
       return;
     }
     await resetBetaPlaytest(puzzle.id);
-    clearProgress(betaStorageKey(puzzle.id));
+    clearProgress(betaStorageKey(puzzle));
     trackEvent("beta_puzzle_reset", { puzzle_id: puzzle.id });
     // Simplest correct way to give every piece of GameBoard/useGame state a
     // genuinely fresh start (selections, shuffled board, tile colors, guess
@@ -107,7 +111,7 @@ export default function BetaPuzzle() {
     window.location.reload();
   }, [puzzle]);
 
-  const currentPlaytestId = puzzle ? loadProgress(betaStorageKey(puzzle.id))?.gameSessionId ?? null : null;
+  const currentPlaytestId = puzzle ? loadProgress(betaStorageKey(puzzle))?.gameSessionId ?? null : null;
 
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">

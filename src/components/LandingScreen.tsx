@@ -3,17 +3,26 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId, getDeviceToken } from "@/lib/gameStats";
 import { Puzzle } from "@/lib/types";
+import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 
 interface LandingScreenProps {
   puzzle: Puzzle | null;
   user: User | null;
   onPlay: () => void;
   onSignInClick: () => void;
+  /**
+   * Which game this landing is the door to. Drives the one-line description
+   * and — importantly — WHICH streak is shown: Full and Mini keep separate
+   * streaks, so a Mini landing showing the player's Full streak would be
+   * telling them a number that has nothing to do with the game behind the
+   * button. Defaults to Full, so "/" is unchanged.
+   */
+  format?: PuzzleFormat;
 }
 
 const RAINBOW_GRADIENT = "linear-gradient(to bottom, #fb923c, #facc15, #4ade80, #60a5fa, #c084fc)";
 
-export function LandingScreen({ puzzle, user, onPlay, onSignInClick }: LandingScreenProps) {
+export function LandingScreen({ puzzle, user, onPlay, onSignInClick, format = FULL_FORMAT }: LandingScreenProps) {
   const [streak, setStreak] = useState<number>(0);
 
   useEffect(() => {
@@ -25,6 +34,7 @@ export function LandingScreen({ puzzle, user, onPlay, onSignInClick }: LandingSc
         const { data } = await supabase.rpc("get_own_streak", {
           _device_id: getDeviceId(),
           _device_token: getDeviceToken(),
+          _format: format.statsNamespace,
         });
         const row = Array.isArray(data) ? data[0] : data;
         if (!cancelled && row?.current_streak != null) {
@@ -36,7 +46,7 @@ export function LandingScreen({ puzzle, user, onPlay, onSignInClick }: LandingSc
     };
     void fetchStreak();
     return () => { cancelled = true; };
-  }, []);
+  }, [format.statsNamespace]);
 
   const formattedDate = puzzle
     ? new Date(puzzle.date + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
@@ -66,7 +76,12 @@ export function LandingScreen({ puzzle, user, onPlay, onSignInClick }: LandingSc
           Rainbow Categories
         </h1>
         <p className="text-base text-foreground/80 mt-3 leading-relaxed">
-          Find groups of four hidden words — then spot the secret Rainbow.
+          {/* Full keeps its exact existing sentence; any other format states
+              its own real shape rather than inheriting a claim about four
+              words and a Rainbow it does not have. */}
+          {format.hasRainbow
+            ? "Find groups of four hidden words — then spot the secret Rainbow."
+            : `Find ${format.categoryCount} groups of ${format.answersPerCategory} hidden words.`}
         </p>
 
         <div className="mt-8 w-full flex flex-col items-center gap-3">

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
+import type { Difficulty, PuzzleFormatId } from "@/lib/puzzleFormat";
 
 const DRAFT_KEY = "admin-puzzle-draft";
 
 export interface GroupForm {
   category: string;
   words: string;
-  difficulty: 1 | 2 | 3 | 4;
+  difficulty: Difficulty;
   hintWord: string;
   /** Absent in drafts saved before Category Emoji existed. */
   categoryEmoji?: string;
@@ -32,6 +33,14 @@ export interface DraftData {
   alphabetizeCompleted: boolean;
   /** Absent in drafts saved before style was stored; loading then keeps the current style. */
   style?: "rainbow" | "classic";
+  /**
+   * The format this draft was typed in.
+   *
+   * Absent in every draft saved before Mini existed — and those are all Full
+   * 4×4 drafts, which is exactly what an absent value resolves to. So an
+   * older draft restores as Full with its content intact, never reshaped.
+   */
+  format?: PuzzleFormatId;
   editingId: string | null;
 }
 

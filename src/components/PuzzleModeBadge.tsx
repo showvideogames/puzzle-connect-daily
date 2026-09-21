@@ -3,11 +3,22 @@ import { Rainbow, Grid2x2 } from "lucide-react";
 
 const RAINBOW_MODE_TITLE = "Hidden Rainbow";
 const RAINBOW_MODE_BODY = "This puzzle contains a fifth connection made from one word in each group.";
-const NO_RAINBOW_MODE_TITLE = "Four Groups Only";
+const noRainbowModeTitle = (groupCount: number) =>
+  `${GROUP_COUNT_WORD[groupCount] ?? groupCount} Groups Only`;
 const NO_RAINBOW_MODE_BODY = "This puzzle does not contain a hidden Rainbow.";
+
+// Spelled out for the tooltip heading, which reads as prose. Falls back to
+// the digit for any size not listed.
+const GROUP_COUNT_WORD: Record<number, string> = { 3: "Three", 4: "Four" };
 
 export interface PuzzleModeBadgeProps {
   isRainbow: boolean;
+  /**
+   * How many categories this puzzle has — 4 on a Full board, 3 on a Mini.
+   * Drives the non-Rainbow label so a Mini never claims "4 Groups". Defaults
+   * to 4, so every existing call site is unchanged.
+   */
+  groupCount?: number;
 }
 
 // Compact puzzle-mode badge — RAINBOW when the puzzle has hidden-Rainbow
@@ -22,7 +33,7 @@ export interface PuzzleModeBadgeProps {
 // GameBoard renders it only when its own showModeBadge prop is true, and a
 // future non-GameBoard puzzle surface can render <PuzzleModeBadge /> the
 // same way without depending on GameBoard at all.
-export function PuzzleModeBadge({ isRainbow }: PuzzleModeBadgeProps) {
+export function PuzzleModeBadge({ isRainbow, groupCount = 4 }: PuzzleModeBadgeProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -42,7 +53,8 @@ export function PuzzleModeBadge({ isRainbow }: PuzzleModeBadgeProps) {
   }, [open]);
 
   const Icon = isRainbow ? Rainbow : Grid2x2;
-  const title = isRainbow ? RAINBOW_MODE_TITLE : NO_RAINBOW_MODE_TITLE;
+  const groupsLabel = `${groupCount} Groups`;
+  const title = isRainbow ? RAINBOW_MODE_TITLE : noRainbowModeTitle(groupCount);
   const body = isRainbow ? RAINBOW_MODE_BODY : NO_RAINBOW_MODE_BODY;
 
   return (
@@ -51,7 +63,7 @@ export function PuzzleModeBadge({ isRainbow }: PuzzleModeBadgeProps) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        aria-label={`${isRainbow ? "Rainbow" : "4 Groups"} puzzle mode — tap for details`}
+        aria-label={`${isRainbow ? "Rainbow" : groupsLabel} puzzle mode — tap for details`}
         className={`inline-flex items-center gap-1 sm:gap-1.5 h-6 sm:h-7 pl-1.5 pr-2 sm:pl-2 sm:pr-2.5
           rounded-full border text-[10px] sm:text-[11px] font-bold uppercase tracking-wide
           transition-transform active:scale-95
@@ -60,7 +72,7 @@ export function PuzzleModeBadge({ isRainbow }: PuzzleModeBadgeProps) {
             : "bg-secondary text-muted-foreground border-border"}`}
       >
         <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
-        {isRainbow ? "Rainbow" : "4 Groups"}
+        {isRainbow ? "Rainbow" : groupsLabel}
       </button>
 
       {open && (

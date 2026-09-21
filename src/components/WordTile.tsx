@@ -125,6 +125,11 @@ interface WordTileProps {
   onTouchDragMove?: (x: number, y: number) => void;
   onTouchDragEnd?: () => void;
   column?: number;
+  /**
+   * How many columns the board has, so the colour-picker popover's
+   * right-edge flip works on any grid width (4 on Full, 3 on Mini).
+   */
+  columnCount?: number;
   isEmojiPuzzle?: boolean;
   // When set, "rainbow" tiles use this themed gradient (e.g. flag colors) instead
   // of the animated rainbow. rainbowTextShadow keeps the word legible over it.
@@ -170,6 +175,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   onTouchDragMove,
   onTouchDragEnd,
   column = 1,
+  columnCount = 4,
   isEmojiPuzzle = false,
   rainbowGradient,
   rainbowTextShadow,
@@ -327,11 +333,13 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // A themed bonus (e.g. flag) swaps the animated rainbow tile for a static gradient.
   const themedRainbow = !!isRainbow && !!rainbowGradient;
 
-  const isRightEdge = column === 4;
+  // The colour-picker popover flips to the right edge on the LAST column,
+  // whichever column that is for this board's width.
+  const isRightEdge = column === columnCount;
 
   // Mobile height is DERIVED from width via aspect-ratio (11:10, i.e. tiles
   // are ~10% wider than tall) rather than an independently-tuned vw clamp —
-  // width already comes from the 4-column grid dividing up the available
+  // width already comes from the board grid dividing up the available
   // board width, so deriving height from it guarantees the same tile
   // proportions at every mobile screen width instead of tiles getting
   // progressively taller/narrower-looking as the screen shrinks. Tablet/

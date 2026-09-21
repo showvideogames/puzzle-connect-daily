@@ -1,7 +1,12 @@
+import type { PuzzleFormatId } from "./puzzleFormat";
+
 export interface PuzzleGroup {
   category: string;
   words: string[];
-  difficulty: 1 | 2 | 3 | 4; // 1=easiest, 4=hardest
+  // The category's difficulty/colour slot: 1=Yellow, 2=Green, 3=Blue, 4=Red.
+  // A Full puzzle uses all four; a Mini uses 2, 3 and 4 (Green/Blue/Red), so
+  // one colour table serves both formats — see lib/puzzleFormat.ts.
+  difficulty: 1 | 2 | 3 | 4;
   hintWord?: string | null;
   // Explicit Category Emoji, kept literally. Absent/null on puzzles saved
   // before the field existed; those fall back to the title's trailing emoji
@@ -12,6 +17,16 @@ export interface PuzzleGroup {
 export interface Puzzle {
   id: string;
   date: string;
+  /**
+   * The board shape this puzzle is played on — see lib/puzzleFormat.ts.
+   *
+   * OPTIONAL on purpose. Every puzzle that existed before Mini is a Full
+   * 4×4 puzzle, and `formatOf()` resolves undefined/null to Full, so nothing
+   * that predates this field (a database column that has not been migrated
+   * yet, an older progress snapshot, a fixture) has to be touched to keep
+   * behaving exactly as it always did.
+   */
+  format?: PuzzleFormatId | null;
   title?: string | null;
   // Display name for the "by <designerName>" header byline. Metadata, not
   // gameplay content — see lib/puzzles.ts's resolveDesignerName. Always a

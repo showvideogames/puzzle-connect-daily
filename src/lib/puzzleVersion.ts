@@ -44,6 +44,7 @@
  * says today.
  */
 import type { Puzzle, PuzzleGroup } from "./types";
+import { getFormat, type PuzzleFormatId } from "./puzzleFormat";
 import { loadProgress } from "./gameProgress";
 
 /**
@@ -71,6 +72,12 @@ import { loadProgress } from "./gameProgress";
  */
 export interface PinnedPuzzleContent {
   versionId: string;
+  /**
+   * The board shape this content was played on. Absent in every snapshot
+   * written before Mini existed, which is exactly right: those are all Full
+   * boards, and getFormat() resolves an absent value to Full.
+   */
+  format?: PuzzleFormatId;
   groups: PuzzleGroup[];
   wordOrder: string[] | null;
   rainbowHerring: string[] | null;
@@ -96,6 +103,7 @@ export function pinnedContentFrom(puzzle: Puzzle): PinnedPuzzleContent | null {
   if (!puzzle.versionId) return null;
   return {
     versionId: puzzle.versionId,
+    format: getFormat(puzzle.format).id,
     // Deep-copied: the stored snapshot must not alias live React state, or a
     // later render could mutate the record of what was played.
     groups: puzzle.groups.map((g) => ({
@@ -129,13 +137,17 @@ function isUsableSnapshot(value: unknown): value is PinnedPuzzleContent {
   if (!value || typeof value !== "object") return false;
   const s = value as Partial<PinnedPuzzleContent>;
   if (typeof s.versionId !== "string" || s.versionId.length === 0) return false;
-  if (!Array.isArray(s.groups) || s.groups.length !== 4) return false;
+  // Shape is checked against the snapshot's OWN declared format (absent =
+  // Full), so a Mini snapshot is judged as 3 categories of 3 and a Full one
+  // as 4 of 4 — never one standard for both.
+  const format = getFormat(s.format);
+  if (!Array.isArray(s.groups) || s.groups.length !== format.categoryCount) return false;
   return s.groups.every(
     (g) =>
       !!g &&
       typeof g.category === "string" &&
       Array.isArray(g.words) &&
-      g.words.length === 4 &&
+      g.words.length === format.answersPerCategory &&
       g.words.every((w) => typeof w === "string") &&
       typeof g.difficulty === "number"
   );

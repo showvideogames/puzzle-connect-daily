@@ -521,6 +521,7 @@ export type Database = {
           completed_at: string | null
           device_id: string | null
           entry_context: string | null
+          format: string
           found_rainbow: boolean | null
           hints_used: boolean | null
           id: string
@@ -544,6 +545,7 @@ export type Database = {
           completed_at?: string | null
           device_id?: string | null
           entry_context?: string | null
+          format?: string
           found_rainbow?: boolean | null
           hints_used?: boolean | null
           id?: string
@@ -567,6 +569,7 @@ export type Database = {
           completed_at?: string | null
           device_id?: string | null
           entry_context?: string | null
+          format?: string
           found_rainbow?: boolean | null
           hints_used?: boolean | null
           id?: string
@@ -833,6 +836,7 @@ export type Database = {
           date: string
           designer_name: string
           emoji_puzzle_icon: string | null
+          format: string
           free_puzzle_order: number | null
           id: string
           is_beta: boolean
@@ -856,6 +860,7 @@ export type Database = {
           date: string
           designer_name?: string
           emoji_puzzle_icon?: string | null
+          format?: string
           free_puzzle_order?: number | null
           id?: string
           is_beta?: boolean
@@ -879,6 +884,7 @@ export type Database = {
           date?: string
           designer_name?: string
           emoji_puzzle_icon?: string | null
+          format?: string
           free_puzzle_order?: number | null
           id?: string
           is_beta?: boolean
@@ -921,6 +927,7 @@ export type Database = {
         Row: {
           current_streak: number | null
           device_id: string | null
+          format: string
           id: string
           last_played_date: string | null
           longest_streak: number | null
@@ -930,6 +937,7 @@ export type Database = {
         Insert: {
           current_streak?: number | null
           device_id?: string | null
+          format?: string
           id?: string
           last_played_date?: string | null
           longest_streak?: number | null
@@ -939,6 +947,7 @@ export type Database = {
         Update: {
           current_streak?: number | null
           device_id?: string | null
+          format?: string
           id?: string
           last_played_date?: string | null
           longest_streak?: number | null
@@ -1267,7 +1276,7 @@ export type Database = {
       get_custom_puzzle_stats: { Args: { _share_id: string }; Returns: Json }
       get_my_favorites: { Args: never; Returns: Json }
       get_own_completed_sessions: {
-        Args: { _device_id?: string; _device_token?: string }
+        Args: { _device_id?: string; _device_token?: string; _format?: string }
         Returns: {
           bonus_rainbow_attempted: boolean
           found_rainbow: boolean
@@ -1282,7 +1291,7 @@ export type Database = {
         }[]
       }
       get_own_streak: {
-        Args: { _device_id?: string; _device_token?: string }
+        Args: { _device_id?: string; _device_token?: string; _format?: string }
         Returns: {
           current_streak: number
           last_played_date: string
@@ -1362,6 +1371,7 @@ export type Database = {
       record_streak: {
         Args: {
           _device_id: string
+          _format?: string
           _local_date: string
           _user_id: string
           _won: boolean

@@ -18,11 +18,23 @@ import { Puzzle } from "@/lib/types";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
 import { resolveArchiveEntryContext } from "@/lib/entryContext";
+import { FULL_FORMAT, progressStorageId, rainbowHerringFor, type PuzzleFormat } from "@/lib/puzzleFormat";
 import type { User } from "@supabase/supabase-js";
 
 type ModalName = "stats" | "help" | "settings" | "feedback" | null;
 
-export default function ArchivePuzzle() {
+interface ArchivePuzzlePageProps {
+  /**
+   * Which format's archive this page is serving. The only difference between
+   * /archive/:id and /mini/archive/:id — the puzzle it will load, the
+   * progress namespace it resumes from, the statistics it shows and where
+   * its two nav buttons go. Defaults to Full, so /archive/:id and the legacy
+   * /free/:id are untouched.
+   */
+  format?: PuzzleFormat;
+}
+
+export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePageProps = {}) {
   const { puzzleId } = useParams<{ puzzleId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -72,7 +84,7 @@ export default function ArchivePuzzle() {
       setError(true);
       setLoading(false);
     }, 8000);
-    getPuzzleById(puzzleId)
+    getPuzzleById(puzzleId, format.id)
       .then((p) => {
         clearTimeout(timeout);
         if (!p) { setError(true); setLoading(false); return; }
@@ -81,7 +93,7 @@ export default function ArchivePuzzle() {
         // mid-game edit can never leave this board with answers it is unable
         // to submit. A completed or never-started puzzle resolves to the
         // current version. See lib/puzzleVersion.ts.
-        setPuzzle(resolvePlayablePuzzle(p));
+        setPuzzle(resolvePlayablePuzzle(p, progressStorageId(p.id, format)));
         setLoading(false);
       })
       .catch(() => {
@@ -90,7 +102,7 @@ export default function ArchivePuzzle() {
         setLoading(false);
       });
     return () => clearTimeout(timeout);
-  }, [puzzleId]);
+  }, [puzzleId, format]);
 
   const handleSmallHint = useCallback(() => {
     trackEvent("hint_small_used");
@@ -125,7 +137,7 @@ export default function ArchivePuzzle() {
   // e.g. the puzzle was opened directly via a shared link.
   const archiveReturnPath = (location.state as { archiveReturnPath?: string } | null)?.archiveReturnPath;
   const handleBackToArchive = () => {
-    navigate(archiveReturnPath ?? "/archive");
+    navigate(archiveReturnPath ?? format.archivePath);
   };
 
   // Puzzle identifier for the center of the top row — shown exactly as the
@@ -151,9 +163,9 @@ export default function ArchivePuzzle() {
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       {puzzleLabel && (
         <SEO
-          title={`Puzzle ${puzzleLabel} — Rainbow Categories Archive`}
-          description={`Play Puzzle ${puzzleLabel} from the Rainbow Categories archive. A daily word puzzle with a hidden twist.`}
-          path={`/archive/${puzzleId}`}
+          title={`Puzzle ${puzzleLabel} — Rainbow Categories${format.id === "full" ? "" : ` ${format.name}`} Archive`}
+          description={`Play Puzzle ${puzzleLabel} from the Rainbow Categories${format.id === "full" ? "" : ` ${format.name}`} archive. A daily word puzzle with a hidden twist.`}
+          path={format.archivePuzzlePath(puzzleId ?? "")}
         />
       )}
       <GameHeader
@@ -225,7 +237,7 @@ export default function ArchivePuzzle() {
           {/* Same brand-purple gradient token pair as Submit, so the two
               accent actions on the page read as one family. */}
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate(format.dailyPath)}
             className="w-[68px] sm:w-[88px] shrink-0 inline-flex items-center justify-center gap-0.5 whitespace-nowrap h-8 sm:h-9 rounded-full text-[11px] sm:text-sm font-semibold text-white
               bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
               shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45)]
@@ -255,7 +267,7 @@ export default function ArchivePuzzle() {
               <span className="whitespace-nowrap border-l border-border pl-2">{puzzleDateStr}</span>
             )}
             <span className="border-l border-border pl-2 inline-flex items-center">
-              <PuzzleModeBadge isRainbow={!!puzzle.rainbowHerring} />
+              <PuzzleModeBadge isRainbow={!!rainbowHerringFor(puzzle)} groupCount={format.categoryCount} />
             </span>
           </div>
         )}
@@ -269,7 +281,7 @@ export default function ArchivePuzzle() {
         <div className="flex-1 flex items-center justify-center text-center px-4">
           <div>
             <p className="text-lg font-medium">Puzzle not found.</p>
-            <button onClick={() => navigate("/archive")} className="text-sm mt-2 underline underline-offset-2" style={{ color: "hsl(var(--muted-foreground))" }}>
+            <button onClick={() => navigate(format.archivePath)} className="text-sm mt-2 underline underline-offset-2" style={{ color: "hsl(var(--muted-foreground))" }}>
               Back to archive
             </button>
           </div>
@@ -301,7 +313,7 @@ export default function ArchivePuzzle() {
         />
       ) : null}
 
-      <StatsModal open={activeModal === "stats"} onClose={() => setActiveModal(null)} />
+      <StatsModal open={activeModal === "stats"} onClose={() => setActiveModal(null)} format={format} />
       <TutorialModal open={activeModal === "help"} onClose={() => setActiveModal(null)} />
       <SettingsModal
         open={activeModal === "settings"}

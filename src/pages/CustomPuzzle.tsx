@@ -23,6 +23,7 @@ import { useCustomFavorite } from "@/hooks/useCustomFavorite";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
 import { clearProgress } from "@/lib/gameProgress";
+import { formatOf, progressStorageId } from "@/lib/puzzleFormat";
 import type { User } from "@supabase/supabase-js";
 
 type ModalName = "help" | "settings" | "feedback" | "stats" | null;
@@ -109,7 +110,9 @@ export default function CustomPuzzle() {
   // another play only if it is actually completed.
   const handleReplay = useCallback(() => {
     if (!puzzle) return;
-    clearProgress(`custom:${puzzle.id}`);
+    // The same namespaced key useGame writes under — identical to the old
+    // literal `custom:<shareId>` for a Full puzzle, and correct for a Mini.
+    clearProgress(progressStorageId(puzzle.id, formatOf(puzzle), "custom"));
     setSmallHintUsed(false);
     setFullHintUsed(false);
     setHintsViewOnly(false);
