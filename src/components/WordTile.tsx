@@ -92,7 +92,7 @@ function getBaseFontSizePx(tileOuterWidthPx: number): number {
 function computeShrunkFontSize(longestWord: string, availableWidthPx: number, defaultPx: number): string | undefined {
   if (!longestWord || availableWidthPx <= 0) return undefined;
   const ctx = getMeasureCtx();
-  ctx.font = `800 ${defaultPx}px "Inter Tight Variable", "Inter Tight", sans-serif`;
+  ctx.font = `700 ${defaultPx}px "Inter Variable", "Inter", sans-serif`;
   const upper = longestWord.toUpperCase();
   const letterSpacingPx = defaultPx * 0.025; // matches tracking-wide
   const rawWidth = ctx.measureText(upper).width + letterSpacingPx * Math.max(countVisibleChars(upper) - 1, 0);
@@ -346,7 +346,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // desktop (md:768px+) keep the previously-approved flat 110px height,
   // unchanged from before this pass (md:aspect-auto hands sizing back to
   // that explicit height there).
-  const baseClasses = `tile-base font-tile aspect-[11/10] md:aspect-auto md:h-[110px] font-[800] transition-all duration-150 ease-out relative
+  const baseClasses = `tile-base font-tile aspect-[11/10] md:aspect-auto md:h-[110px] font-[700] transition-all duration-150 ease-out relative
     ${disabled ? (tileColor || isRainbow ? "cursor-default" : "opacity-50 cursor-default") : ""}
   `;
 

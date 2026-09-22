@@ -1,7 +1,8 @@
 @import url('@fontsource-variable/nunito-sans/standard.css');
-/* Registers the @font-face only — applied narrowly to puzzle-tile words via
-   the `font-tile` Tailwind class (WordTile.tsx), not globally. */
-@import url('@fontsource-variable/inter-tight/wght.css');
+/* Registers the @font-face only — applied narrowly to puzzle-tile words and
+   the headings that share their typeface via the `font-tile` Tailwind
+   class, not globally (body text stays on Nunito Sans). */
+@import url('@fontsource-variable/inter/wght.css');
 
 @tailwind base;
 @tailwind components;
@@ -183,7 +184,7 @@ html {
 @layer utilities {
   .tile-base {
     /* Font weight AND size are set once, on the button element itself in
-       WordTile.tsx (font-[800], text-[clamp(...)]) — not here — so there's
+       WordTile.tsx (font-[700], text-[clamp(...)]) — not here — so there's
        a single source of truth and no risk of one class silently
        overriding the other. */
     @apply rounded-[clamp(11px,1.2vw,14px)] uppercase tracking-wide

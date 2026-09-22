@@ -156,7 +156,7 @@ export default function CustomPuzzle() {
         />
       ) : (
         <div className="w-full max-w-[840px] px-4 mb-2">
-          <h1 className="text-center font-tile font-extrabold tracking-tight text-foreground text-[clamp(1.5rem,8vw,2rem)] sm:text-3xl mt-2">
+          <h1 className="text-center font-tile font-bold tracking-tight text-foreground text-[clamp(1.5rem,8vw,2rem)] sm:text-3xl mt-2">
             Custom Puzzle
           </h1>
         </div>

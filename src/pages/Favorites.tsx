@@ -33,7 +33,7 @@ export default function Favorites() {
       <div className="w-full max-w-[840px] border-b border-border mb-4" />
 
       <main className="w-full max-w-[840px] px-4 flex-1">
-        <h1 className="font-tile font-extrabold tracking-tight text-foreground text-3xl">Favorites</h1>
+        <h1 className="font-tile font-bold tracking-tight text-foreground text-3xl">Favorites</h1>
 
         {user === undefined ? (
           <p className="text-center text-muted-foreground animate-pulse py-12">Loading…</p>

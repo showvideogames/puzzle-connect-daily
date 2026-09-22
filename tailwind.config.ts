@@ -15,10 +15,10 @@ export default {
     extend: {
       fontFamily: {
         sans: ["Nunito Sans Variable", "Nunito Sans", "system-ui", "sans-serif"],
-        // Puzzle-tile words only (WordTile.tsx) — a chunky, somewhat
-        // compact heavy face to match the reference mockup. Not used
-        // anywhere else in the app.
-        tile: ["Inter Tight Variable", "Inter Tight", "sans-serif"],
+        // Puzzle-tile words (WordTile.tsx) and the headings that share
+        // their typeface for visual hierarchy. Body text stays on Nunito
+        // Sans (the `sans` family above).
+        tile: ["Inter Variable", "Inter", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",

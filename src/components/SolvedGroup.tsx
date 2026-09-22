@@ -61,8 +61,8 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
     >
       {/* Category title is the payoff/reveal on each card — noticeably
           larger and heavier than the answer line, and shares the puzzle
-          tile's typeface (Inter Tight) to visually connect the two. */}
-      <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
+          tile's typeface (Inter) to visually connect the two. */}
+      <div className="font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
         {group.category}
         {explicitEmoji && (
           <>

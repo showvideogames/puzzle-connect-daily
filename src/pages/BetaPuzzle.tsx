@@ -147,7 +147,7 @@ export default function BetaPuzzle() {
             Beta
           </button>
           <h1 className="min-w-0 text-center overflow-hidden whitespace-nowrap text-ellipsis
-            font-tile font-extrabold tracking-tight text-foreground text-[clamp(1.5rem,8vw,2rem)] sm:text-3xl">
+            font-tile font-bold tracking-tight text-foreground text-[clamp(1.5rem,8vw,2rem)] sm:text-3xl">
             {puzzle?.title?.trim() || "Playtest"}
           </h1>
           <div className="w-[68px] sm:w-[88px] shrink-0" />

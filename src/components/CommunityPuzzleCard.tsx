@@ -33,7 +33,7 @@ export function CommunityPuzzleCard({
       <div className="flex items-start justify-between gap-2">
         <Link
           to={`/p/${shortCode}`}
-          className="min-w-0 font-tile font-bold text-lg text-foreground break-words hover:text-primary
+          className="min-w-0 font-tile font-semibold text-lg text-foreground break-words hover:text-primary
             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
         >
           {title}

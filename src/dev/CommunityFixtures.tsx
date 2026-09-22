@@ -118,7 +118,7 @@ export default function CommunityFixtures() {
       )}
       {view === "favorites" && (
         <main className="w-full max-w-[840px] px-4 flex-1">
-          <h1 className="font-tile font-extrabold tracking-tight text-foreground text-3xl">Favorites</h1>
+          <h1 className="font-tile font-bold tracking-tight text-foreground text-3xl">Favorites</h1>
           <ul className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <CommunityPuzzleCard title="Golf Words" shortCode="7Km2Qx8LpA" mode="classic" designerName="Sam West" creatorSlug="sam-west-k7m2" favoriteCount={3} />
             <CommunityPuzzleCard title="Puzzle 😈" shortCode="Hn4Vt9WqEz" mode="rainbow" designerName="Anon Designer" creatorSlug={null} favoriteCount={9} />

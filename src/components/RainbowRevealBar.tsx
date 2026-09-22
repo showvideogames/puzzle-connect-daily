@@ -47,7 +47,7 @@ export function RainbowRevealBar({
       className={`w-full rounded-lg py-3 px-4 text-center ${textClass} ${curtain ? "animate-rainbow-curtain" : ""}`}
       style={{ background, textShadow, clipPath: curtain ? undefined : "inset(0 100% 0 0)" }}
     >
-      <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
+      <div className="font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
         {title}
         {emoji && (
           <>
