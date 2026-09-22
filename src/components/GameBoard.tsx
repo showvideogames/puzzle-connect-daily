@@ -1382,30 +1382,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       )}
 
       {/* Mistakes dots — hidden when viewing an already-completed puzzle.
-          On a timed format (Mini) the running solve time sits beside the
-          pill, so it normally costs no vertical space and never pushes the
-          board around.
-          WRAPPING, not absolutely positioned: the pill is as wide as its own
-          content ("Mistakes remaining:" plus four dots), which at 320px
-          leaves no room beside it — an absolutely-placed clock printed
-          straight over the last dot. Letting the row wrap puts the clock on
-          its own centred line on the narrowest phones and keeps it inline
-          everywhere else. */}
+          The running solve time is never shown during active play (on any
+          format) — timing itself, persistence, hidden-tab pausing and
+          completion logic are all unchanged in useGame/activeTimer; only
+          this live readout is gone. The frozen final time still appears
+          once the run finishes (see showEndState below) and still goes
+          into Mini's share text (generateShareText reads activeSecondsRef
+          regardless of whether this live span ever rendered). With no
+          second item in this row, the pill is simply centered. */}
       {!wasAlreadyComplete.current && (
-        <div className="mt-4 w-full flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+        <div className="mt-4 w-full flex items-center justify-center">
           <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} />
-          {format.showsTimer && !state.isComplete && (
-            <span
-              className="text-xs sm:text-sm font-semibold tabular-nums text-muted-foreground select-none"
-              // Not announced on every tick: a clock that re-read itself
-              // once a second would make the board unusable with a screen
-              // reader. It stays readable on demand.
-              aria-live="off"
-              aria-label={`Time: ${formatActiveTime(activeSeconds)}`}
-            >
-              ⏳ {formatActiveTime(activeSeconds)}
-            </span>
-          )}
         </div>
       )}
 
@@ -1419,21 +1406,21 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <button
               onClick={shuffle}
               disabled={isChecking || reveal !== null}
-              className="w-full h-14 rounded-full text-sm md:text-base font-bold transition-colors
+              className={`w-full ${isMiniBoard ? "h-11" : "h-14"} rounded-full text-sm md:text-base font-bold transition-colors
                 bg-action-secondary-bg text-action-secondary-fg border border-transparent
                 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
                 dark:bg-secondary dark:text-foreground dark:border-border
                 dark:hover:bg-muted active:scale-95 dark:disabled:opacity-40
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
                 focus-visible:ring-offset-2 focus-visible:ring-offset-background
-                disabled:cursor-default"
+                disabled:cursor-default`}
             >
               Shuffle
             </button>
             <button
               onClick={deselectAll}
               disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
-              className={`w-full h-14 rounded-full text-sm md:text-base font-bold transition-colors
+              className={`w-full ${isMiniBoard ? "h-11" : "h-14"} rounded-full text-sm md:text-base font-bold transition-colors
                 border border-transparent
                 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
                 dark:bg-secondary dark:text-foreground dark:border-border
@@ -1451,14 +1438,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <button
               onClick={submitGuess}
               disabled={state.selectedWords.length !== format.answersPerCategory || isChecking || reveal !== null}
-              className="w-full h-14 rounded-full text-sm md:text-base font-bold text-white transition-all
+              className={`w-full ${isMiniBoard ? "h-11" : "h-14"} rounded-full text-sm md:text-base font-bold text-white transition-all
                 bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
                 shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]
                 hover:-translate-y-px active:scale-95
                 disabled:opacity-40 disabled:hover:translate-y-0
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
                 focus-visible:ring-offset-2 focus-visible:ring-offset-background
-                disabled:cursor-default"
+                disabled:cursor-default`}
             >
               Submit
             </button>
