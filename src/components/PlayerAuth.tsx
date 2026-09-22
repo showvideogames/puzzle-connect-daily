@@ -269,8 +269,18 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
             className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
             onClick={handleModalClose}
           />
-          <div className="relative bg-card rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4">
-            <h2 className="text-lg font-bold text-center mb-1">
+          {/* A real dialog: it traps the page behind a backdrop and is the
+              only thing on screen that matters while it is open, so it says
+              so. Its heading names it, which is what makes "the Sign In
+              dialog" addressable — the page can also hold a "Sign In" menu
+              button at the same time. */}
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="player-auth-heading"
+            className="relative bg-card rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4"
+          >
+            <h2 id="player-auth-heading" className="text-lg font-bold text-center mb-1">
               {view === "confirm" ? "Check your email" : view === "signup" ? "Create Account" : view === "forgot" ? "Reset your password" : "Sign In"}
             </h2>
             <p className="text-xs text-muted-foreground text-center mb-4">

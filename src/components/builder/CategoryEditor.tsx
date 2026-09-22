@@ -63,6 +63,12 @@ export function CategoryEditor({
   dragHandle,
   isDragging,
 }: CategoryEditorProps) {
+  // Each field is programmatically associated with its own label. The cards
+  // repeat (three or four per page), so the ids are namespaced by the card's
+  // colour, which is unique within a board. Before this, the <Label>s here
+  // were decorative text: a screen reader read the inputs as unnamed, and
+  // nothing could address "this card's Category Name" by its visible name.
+  const fieldId = (name: string) => `category-${colorIndex}-${name}`;
   return (
     <div
       data-testid={`category-card-${colorIndex}`}
@@ -82,8 +88,9 @@ export function CategoryEditor({
               crushing the Name field, which is edited far more often. */}
           <div className="grid grid-cols-[minmax(0,7fr)_minmax(88px,3fr)] md:grid-cols-[minmax(0,4fr)_minmax(96px,1fr)] gap-2 md:gap-3 items-end">
             <div>
-              <Label className={`text-xs ${INK}`}>Category Name</Label>
+              <Label htmlFor={fieldId("name")} className={`text-xs ${INK}`}>Category Name</Label>
               <Input
+                id={fieldId("name")}
                 value={category}
                 onChange={(e) => onCategoryChange(e.target.value)}
                 onBlur={onFieldBlur}
@@ -92,8 +99,9 @@ export function CategoryEditor({
               />
             </div>
             <div>
-              <Label className={`text-xs ${INK}`}>Category Emoji (optional)</Label>
+              <Label htmlFor={fieldId("emoji")} className={`text-xs ${INK}`}>Category Emoji (optional)</Label>
               <Input
+                id={fieldId("emoji")}
                 value={categoryEmoji}
                 onChange={(e) => onCategoryEmojiChange(e.target.value)}
                 onBlur={onFieldBlur}
@@ -105,8 +113,9 @@ export function CategoryEditor({
           <p className={`text-[11px] mt-1 ${INK}`}>Add an emoji or short visual, such as 🎵 or ___ 💬.</p>
         </div>
         <div>
-          <Label className={`text-xs ${INK}`}>{answersLabel}</Label>
+          <Label htmlFor={fieldId("answers")} className={`text-xs ${INK}`}>{answersLabel}</Label>
           <Input
+            id={fieldId("answers")}
             value={answersRaw}
             onChange={(e) => onAnswersRawChange(e.target.value)}
             onBlur={onFieldBlur}
@@ -115,8 +124,9 @@ export function CategoryEditor({
           />
         </div>
         <div>
-          <Label className={`text-xs ${INK}`}>Small Hint word (optional)</Label>
+          <Label htmlFor={fieldId("hint")} className={`text-xs ${INK}`}>Small Hint word (optional)</Label>
           <Input
+            id={fieldId("hint")}
             value={hintWord}
             onChange={(e) => onHintWordChange(e.target.value)}
             onBlur={onFieldBlur}

@@ -67,7 +67,10 @@ export function PuzzleListItem({
   onDelete,
 }: PuzzleListItemProps) {
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
+    // A row in this list has no role of its own to address it by — it is a
+    // div of text plus four icon buttons — so it carries a test id. The
+    // buttons inside it are found by their visible titles.
+    <div data-testid="puzzle-row" className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="flex items-center justify-between p-3">
         <div>
           <span className="font-medium">{formatDateDisplay(p.date)}</span>
@@ -94,10 +97,12 @@ export function PuzzleListItem({
           <Button variant="ghost" size="icon" onClick={() => onTogglePublish(p.id, p.is_published)} title={p.is_published ? "Unpublish" : "Publish"}>
             {p.is_published ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => onEdit(p)}>
+          {/* Titles, like the two icon buttons above: these were the only
+              controls in this row with no accessible name at all. */}
+          <Button variant="ghost" size="icon" onClick={() => onEdit(p)} title="Edit puzzle">
             <Pencil className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => onDelete(p.id)}>
+          <Button variant="ghost" size="icon" onClick={() => onDelete(p.id)} title="Delete puzzle">
             <Trash2 className="w-4 h-4 text-destructive" />
           </Button>
         </div>

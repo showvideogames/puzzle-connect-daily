@@ -54,13 +54,27 @@ export function RainbowPanel({
   hideTheme = false,
 }: RainbowPanelProps) {
   const allSelected = groups.every((g) => !!g.selectedId);
+  // Every control here is programmatically named. The <Label>s used to be
+  // decorative text beside unnamed inputs and selects, so assistive tech
+  // (and anything addressing a field by its visible name) could not tell
+  // the Rainbow Category Name from its Emoji, or one answer picker from the
+  // next. The per-group pickers take the group index, which is stable.
+  const fieldId = (name: string) => `rainbow-${name}`;
 
   return (
-    <div className="rounded-xl border-2 border-transparent bg-tile-bg overflow-hidden" style={{ borderImage: "linear-gradient(90deg, hsl(var(--group-1)), hsl(var(--group-2)), hsl(var(--group-3)), hsl(var(--group-4))) 1" }}>
+    // A labelled region, so the panel is addressable as a whole — its
+    // fields repeat names the four category cards also use ("Category
+    // Name", "Category Emoji"), and without a named container there is no
+    // way to say "the Rainbow one" other than by a class name.
+    <section
+      aria-labelledby="rainbow-panel-heading"
+      className="rounded-xl border-2 border-transparent bg-tile-bg overflow-hidden"
+      style={{ borderImage: "linear-gradient(90deg, hsl(var(--group-1)), hsl(var(--group-2)), hsl(var(--group-3)), hsl(var(--group-4))) 1" }}
+    >
       <div className="px-4 py-2 bg-gradient-to-r from-[hsl(var(--group-1))] via-[hsl(var(--group-3))] to-[hsl(var(--group-4))]">
-        <span className="text-xs font-bold uppercase tracking-wider text-white drop-shadow">
+        <h3 id="rainbow-panel-heading" className="text-xs font-bold uppercase tracking-wider text-white drop-shadow">
           🌈 Rainbow Category
-        </span>
+        </h3>
       </div>
       <div className="p-4 space-y-3">
         <div>
@@ -69,8 +83,9 @@ export function RainbowPanel({
               crushing the Name field, which is edited far more often. */}
           <div className="grid grid-cols-[minmax(0,7fr)_minmax(88px,3fr)] md:grid-cols-[minmax(0,4fr)_minmax(96px,1fr)] gap-2 md:gap-3 items-end">
             <div>
-              <Label className="text-xs">Category Name</Label>
+              <Label htmlFor={fieldId("name")} className="text-xs">Category Name</Label>
               <input
+                id={fieldId("name")}
                 type="text"
                 value={categoryName}
                 onChange={(e) => onCategoryNameChange(e.target.value)}
@@ -80,8 +95,9 @@ export function RainbowPanel({
               />
             </div>
             <div>
-              <Label className="text-xs">Category Emoji (optional)</Label>
+              <Label htmlFor={fieldId("emoji")} className="text-xs">Category Emoji (optional)</Label>
               <input
+                id={fieldId("emoji")}
                 type="text"
                 value={categoryEmoji}
                 onChange={(e) => onCategoryEmojiChange(e.target.value)}
@@ -101,8 +117,9 @@ export function RainbowPanel({
         <div className={`grid gap-3 ${groups.length === 3 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"}`}>
           {groups.map((g, i) => (
             <div key={i}>
-              <Label className="text-xs">{g.label}</Label>
+              <Label htmlFor={fieldId(`answer-${i}`)} className="text-xs">{g.label}</Label>
               <select
+                id={fieldId(`answer-${i}`)}
                 value={g.selectedId ?? ""}
                 onChange={(e) => onSelect(i, e.target.value || null)}
                 onBlur={onFieldBlur}
@@ -143,8 +160,9 @@ export function RainbowPanel({
         )}
 
         <div>
-          <Label className="text-xs">Small Hint word (optional)</Label>
+          <Label htmlFor={fieldId("hint")} className="text-xs">Small Hint word (optional)</Label>
           <input
+            id={fieldId("hint")}
             type="text"
             value={hintWord}
             onChange={(e) => onHintWordChange(e.target.value)}
@@ -156,8 +174,9 @@ export function RainbowPanel({
 
         {!hideTheme && (
           <div>
-            <Label className="text-xs">Bonus Theme</Label>
+            <Label htmlFor={fieldId("theme")} className="text-xs">Bonus Theme</Label>
             <select
+              id={fieldId("theme")}
               value={theme}
               onChange={(e) => onThemeChange(e.target.value)}
               onBlur={onFieldBlur}
@@ -171,6 +190,6 @@ export function RainbowPanel({
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }

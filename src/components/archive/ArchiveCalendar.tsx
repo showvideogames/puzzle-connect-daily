@@ -24,6 +24,21 @@ import { DAYS, MONTHS } from "@/lib/archiveMonth";
 // its own inverted-theme fill (see STATUS_CELL_CLASSES below).
 export type DayStatus = "unplayed" | "in-progress" | "won" | "won-rainbow" | "failed" | "none" | "no-puzzle";
 
+/**
+ * The words a day cell's accessible name uses for each state — the spoken
+ * equivalent of the colour tints below, and the same vocabulary the visible
+ * legend at the bottom of the calendar uses.
+ */
+const DAY_STATUS_LABEL: Record<DayStatus, string> = {
+  unplayed: "unplayed",
+  "in-progress": "in progress",
+  won: "completed",
+  "won-rainbow": "completed with the Rainbow",
+  failed: "failed",
+  none: "unplayed",
+  "no-puzzle": "no puzzle",
+};
+
 // ── Calendar status tints ────────────────────────────────────────────────────
 // Whole-cell tints, not badges/dots — literal hue constants (matching the
 // site's real category colors). Alpha is tuned to read as a clearly
@@ -181,6 +196,14 @@ export function ArchiveCalendar({
               key={i}
               onClick={() => onDayClick(dateStr)}
               disabled={!isClickable}
+              // The visible label is a bare number, which is all the cell has
+              // room for and all a sighted reader needs in a month grid. On
+              // its own it makes a poor accessible name — "12" says nothing
+              // about which month, and nothing about the state the colour is
+              // communicating. The full date plus the status word carries
+              // both. Status is announced only for a day that HAS a puzzle;
+              // "no puzzle" days already say so.
+              aria-label={`${dateStr}${isNoPuzzle ? " — no puzzle" : `, ${DAY_STATUS_LABEL[status]}`}`}
               className={`relative aspect-square w-full grid place-items-center rounded-lg sm:rounded-xl border transition-[filter] duration-150
                 ${cellClass}
                 ${isToday ? "ring-2 ring-inset ring-ink" : ""}
