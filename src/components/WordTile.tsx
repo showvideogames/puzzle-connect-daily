@@ -403,7 +403,14 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         // <img>, not text) but not a real word/letters, which need the same
         // guaranteed-readable dark pairing SolvedGroup.tsx uses on the same
         // background.
-        ? `${colorStyle.bg} ${colorStyle.text} hover:shadow-sm active:scale-95 border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
+        //
+        // border-[3px] md:border-[4px]: width applies to BOTH the selected
+        // and unselected states (only border-color differs below) so it
+        // stays constant across the selection toggle — same reasoning as
+        // the neutral-tile comment above, just a wider box on desktop. 3px
+        // on mobile is unchanged from before; 4px only kicks in at the
+        // existing md: breakpoint, where the tile itself is already bigger.
+        ? `${colorStyle.bg} ${colorStyle.text} hover:shadow-sm active:scale-95 border-[3px] md:border-[4px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
         : isSelected
           ? "bg-tile-selected text-tile-selected-fg border border-tile-selected active:scale-95"
           : "cloud-tile active:scale-95";
@@ -428,6 +435,18 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       <button
         ref={buttonRef}
         onClick={handleClick}
+        // Stops a mouse/touch selection from leaving the button focused —
+        // preventDefault on mousedown blocks the browser's default
+        // focus-on-click (the click itself still fires normally), so the
+        // focus-visible ring below can never double up with the tile's own
+        // selection border on a pointer interaction. Keyboard users are
+        // unaffected: Tab moves focus without a mousedown, and Enter/Space
+        // activation doesn't dispatch one either, so the ring still shows
+        // for keyboard navigation exactly as before. Skipped in arrangeTiles
+        // mode — native HTML5 drag (draggable=true) starts from this same
+        // mousedown, and preventDefault-ing it there would silently break
+        // drag-to-reorder.
+        onMouseDown={arrangeTiles ? undefined : (e) => e.preventDefault()}
         disabled={disabled}
         aria-pressed={isSelected}
         draggable={arrangeTiles && draggable}
