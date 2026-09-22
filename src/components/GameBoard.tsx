@@ -1406,7 +1406,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <button
               onClick={shuffle}
               disabled={isChecking || reveal !== null}
-              className={`w-full ${isMiniBoard ? "h-11" : "h-14"} rounded-full text-sm md:text-base font-bold transition-colors
+              className={`w-full ${isMiniBoard ? "h-12" : "h-14"} rounded-full text-sm md:text-base font-bold transition-colors
                 bg-action-secondary-bg text-action-secondary-fg border border-transparent
                 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
                 dark:bg-secondary dark:text-foreground dark:border-border
@@ -1420,7 +1420,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <button
               onClick={deselectAll}
               disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
-              className={`w-full ${isMiniBoard ? "h-11" : "h-14"} rounded-full text-sm md:text-base font-bold transition-colors
+              className={`w-full ${isMiniBoard ? "h-12" : "h-14"} rounded-full text-sm md:text-base font-bold transition-colors
                 border border-transparent
                 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
                 dark:bg-secondary dark:text-foreground dark:border-border
@@ -1438,7 +1438,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <button
               onClick={submitGuess}
               disabled={state.selectedWords.length !== format.answersPerCategory || isChecking || reveal !== null}
-              className={`w-full ${isMiniBoard ? "h-11" : "h-14"} rounded-full text-sm md:text-base font-bold text-white transition-all
+              className={`w-full ${isMiniBoard ? "h-12" : "h-14"} rounded-full text-sm md:text-base font-bold text-white transition-all
                 bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
                 shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]
                 hover:-translate-y-px active:scale-95
