@@ -399,8 +399,8 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         // background.
         ? `${colorStyle.bg} ${colorStyle.text} hover:shadow-sm active:scale-95 border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
         : isSelected
-          ? "bg-tile-selected text-tile-selected-fg border border-tile-selected"
-          : "cloud-tile";
+          ? "bg-tile-selected text-tile-selected-fg border border-tile-selected active:scale-95"
+          : "cloud-tile active:scale-95";
 
   return (
     <div
