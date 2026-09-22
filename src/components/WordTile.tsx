@@ -28,11 +28,11 @@ const COLOR_STYLES: Record<string, { bg: string; text: string }> = {
   red:    { bg: "bg-group-4", text: "text-group-4-fg" },
 };
 
-// The category-color inset ring shown on a tile that carries BOTH a Rainbow
-// mark and a regular color (see tileRainbow prop below) — same border-group-N
-// variable as COLOR_STYLES.bg above, just as a border-color instead of a
-// fill, since the ring itself is drawn by a bordered overlay, not a
-// background.
+// The category-color inset ring shown on a genuine Rainbow tile (isRainbow)
+// that the player has ALSO painted a regular color onto — same
+// border-group-N variable as COLOR_STYLES.bg above, just as a border-color
+// instead of a fill, since the ring itself is drawn by a bordered overlay,
+// not a background.
 const COLOR_RING_BORDER_CLASS: Record<string, string> = {
   yellow: "border-group-1",
   green: "border-group-2",
@@ -130,13 +130,6 @@ interface WordTileProps {
   isPaintMode?: boolean;
   tileColor?: string | null;
   onColorChange?: (word: string, color: string | null) => void;
-  // The player's own "I think this is the Rainbow answer" annotation —
-  // fully independent of tileColor (see useGame's tileRainbowMarks) and of
-  // isRainbow above (the real gameplay Rainbow truth, driven by puzzle
-  // content, not player paint). A tile can carry this AND a tileColor at
-  // once: the gradient background comes from this flag, the category color
-  // renders as a thin inset ring — see COLOR_RING_BORDER_CLASS.
-  tileRainbow?: boolean;
   draggable?: boolean;
   onDragStart?: (word: string) => void;
   onDragOver?: (word: string) => void;
@@ -192,7 +185,6 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   isPaintMode = false,
   tileColor = null,
   onColorChange,
-  tileRainbow = false,
   draggable = false,
   onDragStart,
   onDragOver,
@@ -373,7 +365,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // unchanged from before this pass (md:aspect-auto hands sizing back to
   // that explicit height there).
   const baseClasses = `tile-base font-tile ${squareTiles ? "aspect-square" : "aspect-[11/10] md:aspect-auto md:h-[110px]"} font-[700] transition-all duration-150 ease-out relative
-    ${disabled ? (tileColor || isRainbow || tileRainbow ? "cursor-default" : "opacity-50 cursor-default") : ""}
+    ${disabled ? (tileColor || isRainbow ? "cursor-default" : "opacity-50 cursor-default") : ""}
   `;
 
   // Selection styling:
@@ -405,28 +397,17 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
     ? "bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
       ? themedRainbow
-        ? `text-white shadow-md border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
+        ? `text-white shadow-md border-[3px] md:border-[4px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
         : rainbowAnimated
-          ? `rainbow-tile text-white shadow-md border-[3px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
+          ? `rainbow-tile text-white shadow-md border-[3px] md:border-[4px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
           // Static rainbow: the smooth blended gradient reads better with
           // dark ink text than white (much stronger contrast across its
           // lighter bands), and with the tile's normal hairline border
-          // instead of the animated variant's reserved 3px selection
-          // border — that border read as its own thin multicolor edge
-          // against this softer gradient, which this design intentionally
-          // avoids.
+          // instead of the animated variant's reserved selection border —
+          // that border read as its own thin multicolor edge against this
+          // softer gradient, which this design intentionally avoids.
           : `rainbow-tile-static text-[#292825] shadow-md border ${isSelected ? "border-foreground" : "border-tile-border"}`
-      : tileRainbow
-        // The player's own Rainbow annotation — same gradient treatment as
-        // the real isRainbow branch above (respects the Rainbow Animation
-        // setting the same way), but always white text/the responsive
-        // 3px→4px selection border, since this is a plain paint mark with no
-        // themed-puzzle gradient to react to. Any category color (colorStyle)
-        // this tile ALSO carries renders as a separate inset ring overlay
-        // below — never folded into these classes, so it can never look like
-        // a themedRainbow-style combination value.
-        ? `${rainbowAnimated ? "rainbow-tile" : "rainbow-tile-static"} text-white shadow-md border-[3px] md:border-[4px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
-        : colorStyle
+      : colorStyle
         // text-group-N-fg (added alongside the bg fix above): the previous
         // 35%-opacity fill left this unset, relying on whatever ambient
         // text color happened to inherit — harmless for emoji tiles (an
@@ -491,9 +472,11 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
           ...(themedRainbow ? { background: rainbowGradient, textShadow: rainbowTextShadow } : {}),
         }}
       >
-        {/* Category-color inset ring — only when this tile carries BOTH the
-            Rainbow annotation and a regular color. A separate absolutely-
-            positioned overlay (not a box-shadow/ring utility) on purpose: the
+        {/* Category-color inset ring — only on a GENUINE Rainbow tile
+            (isRainbow, the real gameplay find) that the player has ALSO
+            painted a regular color onto, recording which ordinary category
+            they think it belongs to. A separate absolutely-positioned
+            overlay (not a box-shadow/ring utility) on purpose: the
             focus-visible ring below and this element's own selection border
             both already use box-shadow/border on the BUTTON itself, and
             layering a THIRD color onto either of those risks the exact
@@ -507,22 +490,22 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
             The animated rainbow gradient cycles through every hue, including
             each category color itself — so on some frames a same-hue ring
             (Yellow against the gradient's own yellow band, Green against its
-            green band, etc.) nearly disappears into the background it's
-            meant to stand out from. The 1px inset Ink separator below fixes
-            that: Ink (hsl(45 5.128% 15.294%), the same near-black token
-            already proven to read on every --group-N background — see
-            gameplayPolish.test.tsx's "text on coloured backgrounds" suite)
-            is never a hue this gradient passes through, so it stays visible
-            against all seven of its bands, in both themes, without changing
-            the ring's own color or thickening it. Drawn on the ring's INNER
-            edge (a second inset box-shadow, not a second border) so it reads
-            as a hairline trim on the ring rather than a second colored ring
-            of its own. */}
-        {tileRainbow && colorStyle && (
+            green band, etc.) can get hard to place. The 1px inset separator
+            below fixes that: hsl(var(--ink)) is the theme's own foreground/
+            Ink token (dark in light mode, light in dark mode — see
+            index.css), so it adapts with the theme instead of being a fixed
+            color, and reads reliably against every band of the gradient.
+            Kept subtle (~40% opacity) so it trims the ring rather than
+            reading as its own second colored ring — raise the opacity only
+            if a specific color still gets lost against the gradient. Drawn
+            on the ring's INNER edge (a second inset box-shadow, not a second
+            border) so it never changes the 4px ring's own thickness or
+            color. */}
+        {isRainbow && colorStyle && (
           <span
             aria-hidden="true"
             className={`pointer-events-none absolute inset-0 rounded-[clamp(11px,1.2vw,14px)] border-[4px] ${COLOR_RING_BORDER_CLASS[tileColor as string]}`}
-            style={{ boxShadow: "inset 0 0 0 1px hsl(45 5.128% 15.294% / 0.85)" }}
+            style={{ boxShadow: "inset 0 0 0 1px hsl(var(--ink) / 0.4)" }}
           />
         )}
         {isImage ? (

@@ -242,18 +242,6 @@ export function useGame(
     return saved?.tileColors ?? {};
   });
 
-  // A player's own "I think this is the Rainbow answer" annotation —
-  // completely independent of tileColors (a word can carry a regular
-  // category color, a Rainbow mark, both, or neither) and independent of the
-  // real isRainbow gameplay truth in `rainbowWords` above. Modeled as its
-  // own sibling record rather than folding a combination value into
-  // tileColors (e.g. "rainbow-green") so the two dimensions can never get
-  // tangled, and so old saved progress with no tileRainbowMarks field at all
-  // restores cleanly as "nothing marked" with no migration needed.
-  const [tileRainbowMarks, setTileRainbowMarks] = useState<Record<string, boolean>>(() => {
-    return saved?.tileRainbowMarks ?? {};
-  });
-
   const [state, setState] = useState<GameState>(() => {
     if (saved) {
       const solvedGroups = saved.finalSolvedGroups ?? saved.solvedGroups;
@@ -678,7 +666,6 @@ export function useGame(
         isComplete: state.isComplete,
         isWon: state.isWon,
         tileColors,
-        tileRainbowMarks,
         smallHintUsed: effectiveSmallHintUsed,
         fullHintUsed: effectiveFullHintUsed,
         runId: runIdRef.current,
@@ -687,16 +674,15 @@ export function useGame(
         puzzleSnapshot,
       });
     }
-  }, [state, shuffledWords, rainbowWords, tileColors, tileRainbowMarks, storageId, effectiveSmallHintUsed, effectiveFullHintUsed]);
+  }, [state, shuffledWords, rainbowWords, tileColors, storageId, effectiveSmallHintUsed, effectiveFullHintUsed]);
 
   // Skip the very first run (mount) — otherwise merely opening a puzzle
-  // would immediately persist a progress row (tileColors'/tileRainbowMarks'
-  // own useState initializers always "change" on mount, which fires this
-  // effect once regardless of the dependency array), making an untouched
-  // archived puzzle indistinguishable from one the player actually started.
-  // Archive's "in progress" calendar status relies on
-  // hasInProgressGame/progressKey below only appearing after real
-  // interaction.
+  // would immediately persist a progress row (tileColors' own useState
+  // initializer always "changes" on mount, which fires this effect once
+  // regardless of the dependency array), making an untouched archived
+  // puzzle indistinguishable from one the player actually started. Archive's
+  // "in progress" calendar status relies on hasInProgressGame/progressKey
+  // below only appearing after real interaction.
   const tileColorsMountedRef = useRef(false);
   useEffect(() => {
     if (!tileColorsMountedRef.current) {
@@ -715,7 +701,6 @@ export function useGame(
       isComplete: state.isComplete,
       isWon: state.isWon,
       tileColors,
-      tileRainbowMarks,
       smallHintUsed: effectiveSmallHintUsed,
       fullHintUsed: effectiveFullHintUsed,
       runId: runIdRef.current,
@@ -724,7 +709,7 @@ export function useGame(
         puzzleSnapshot,
       ...(existing?.finalSolvedGroups ? { finalSolvedGroups: existing.finalSolvedGroups } : {}),
     });
-  }, [tileColors, tileRainbowMarks]);
+  }, [tileColors]);
 
   // game_results is no longer written from here. It is written by
   // finalize_game_session, under exactly the same condition as before —
@@ -842,13 +827,6 @@ export function useGame(
     setTileColors((prev) => ({ ...prev, [word]: color }));
   }, []);
 
-  // Independent of setTileColor above — see the tileRainbowMarks state
-  // comment. Toggling this never touches tileColors, so a word's regular
-  // category color survives a Rainbow mark being added, replaced or removed.
-  const setTileRainbow = useCallback((word: string, marked: boolean) => {
-    setTileRainbowMarks((prev) => ({ ...prev, [word]: marked }));
-  }, []);
-
   // Marks the rainbow as found after the puzzle is already complete (the
   // "Spot the Rainbow?" bonus prompt). Records a guessHistory entry and solve
   // position just like the mid-game find does, so the board and share grid
@@ -880,12 +858,11 @@ export function useGame(
 
   const clearAllColors = useCallback(() => {
     setTileColors({});
-    setTileRainbowMarks({});
   }, []);
 
   const hasAnyColor = useMemo(() => {
-    return Object.values(tileColors).some(Boolean) || Object.values(tileRainbowMarks).some(Boolean);
-  }, [tileColors, tileRainbowMarks]);
+    return Object.values(tileColors).some(Boolean);
+  }, [tileColors]);
 
   const handleDragStart = useCallback((word: string) => {
     setDraggedWord(word);
@@ -1400,8 +1377,6 @@ export function useGame(
     matchedWords,
     tileColors,
     setTileColor,
-    tileRainbowMarks,
-    setTileRainbow,
     clearAllColors,
     hasAnyColor,
     /**

@@ -26,14 +26,6 @@ export interface SavedProgress {
   isWon?: boolean;
   finalSolvedGroups?: number[];
   tileColors?: Record<string, string | null>;
-  /**
-   * A player's own "I think this is the Rainbow answer" annotation, keyed by
-   * word — independent of tileColors above (see useGame.ts's
-   * tileRainbowMarks state comment) and independent of the puzzle's real
-   * Rainbow answer. Absent on progress blobs saved before this field
-   * existed, which restores identically to an empty object: nothing marked.
-   */
-  tileRainbowMarks?: Record<string, boolean>;
   rainbowSolveIndex?: number | null;
   // Whether Small/Full Hint had been revealed at any point in this puzzle
   // session. Persisted alongside the rest of progress so a refresh/resume
@@ -123,10 +115,7 @@ export function hasMeaningfulProgress(puzzleId: string): boolean {
   const saved = loadProgress(puzzleId);
   if (!saved) return false;
   if (saved.solvedGroups.length > 0) return true;
-  return (
-    Object.values(saved.tileColors ?? {}).some(Boolean) ||
-    Object.values(saved.tileRainbowMarks ?? {}).some(Boolean)
-  );
+  return Object.values(saved.tileColors ?? {}).some(Boolean);
 }
 
 export function saveProgress(puzzleId: string, data: SavedProgress) {
