@@ -29,10 +29,13 @@ interface RainbowPanelProps {
 }
 
 /**
- * The Rainbow bonus category: one answer picked from each of the four main
+ * The Rainbow bonus category: one answer picked from each of the main
  * categories, plus its own title/hint/theme and a display-order arranger for
- * the picked answers. Shown once all 16 answers exist, same gate as the
+ * the picked answers. Shown once every answer exists, same gate as the
  * starting board.
+ *
+ * Size-neutral — it renders one picker per entry in `groups`, so a Full board
+ * offers four and a Mini three with no branching here.
  */
 export function RainbowPanel({
   groups,
@@ -73,7 +76,10 @@ export function RainbowPanel({
         </div>
 
         <p className="text-xs text-muted-foreground">Choose one answer from each category.</p>
-        <div className="grid grid-cols-2 gap-3">
+        {/* Four categories read best as a 2×2; three would leave a lone
+            dangling card, so a 3-category board lays them out in one row from
+            sm up (still stacked two-up on the narrowest phones). */}
+        <div className={`grid gap-3 ${groups.length === 3 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"}`}>
           {groups.map((g, i) => (
             <div key={i}>
               <Label className="text-xs">{g.label}</Label>

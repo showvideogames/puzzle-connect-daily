@@ -206,10 +206,10 @@ function blankState(format: PuzzleFormat): BuilderState {
     rainbowCategoryEmoji: "",
     theme: "",
     alphabetizeCompleted: true,
-    // Brand-new puzzles default to Rainbow, where the format can have one.
-    // Only blankState() sets this; load() never does, so an existing puzzle
-    // keeps its stored style.
-    style: format.hasRainbow ? "rainbow" : "classic",
+    // The format's own new-puzzle default (Full: Rainbow, Mini: Classic) —
+    // see PuzzleFormat.defaultBuilderStyle. Only blankState() sets this;
+    // load() never does, so an existing puzzle keeps its stored style.
+    style: format.hasRainbow ? format.defaultBuilderStyle : "classic",
     // Every board position already exists the instant a blank form is
     // created (emptyGroup gives each category its real, stable ids up front,
     // even blank) — so the random opening arrangement is generated right

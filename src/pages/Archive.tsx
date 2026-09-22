@@ -461,18 +461,25 @@ export default function Archive() {
   // Free puzzles + total published count (public, no auth)
   useEffect(() => {
     async function loadFree() {
+      // FULL-scoped, like the calendar above. Free Puzzles is a Full-archive
+      // collection whose cards link to /archive/:id, so a Mini appearing here
+      // would open on the Full route and refuse to load (getPuzzleById is
+      // format-filtered) — a dead card. The count beside it describes this
+      // archive, so it counts this archive's puzzles.
       const [{ data: freeData }, { count }] = await Promise.all([
         supabase
           .from("puzzles")
           .select("id, free_puzzle_order")
           .eq("is_free_puzzle", true)
           .eq("is_published", true)
+          .eq("format", FULL_FORMAT.id)
           .order("free_puzzle_order", { ascending: true })
           .limit(10),
         supabase
           .from("puzzles")
           .select("id", { count: "exact", head: true })
-          .eq("is_published", true),
+          .eq("is_published", true)
+          .eq("format", FULL_FORMAT.id),
       ]);
       setFreePuzzles((freeData as FreePuzzleItem[]) || []);
       setTotalPuzzleCount(count ?? 0);
@@ -483,11 +490,14 @@ export default function Archive() {
   // Emoji puzzles (public, no auth) — most recent first, same as the calendar.
   useEffect(() => {
     async function loadEmoji() {
+      // FULL-scoped for the same reason as Free Puzzles above: these cards
+      // link to /archive/:id.
       const { data } = await supabase
         .from("puzzles")
         .select("id, rainbow_category_name, emoji_puzzle_icon")
         .eq("is_emoji_puzzle", true)
         .eq("is_published", true)
+        .eq("format", FULL_FORMAT.id)
         .order("date", { ascending: false })
         .limit(24);
       setEmojiPuzzles((data as EmojiPuzzleItem[]) || []);

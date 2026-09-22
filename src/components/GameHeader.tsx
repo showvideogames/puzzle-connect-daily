@@ -2,6 +2,7 @@ import { BarChart3, Lightbulb, BookOpen, Archive, Calendar, Settings } from "luc
 import { Link } from "react-router-dom";
 import { PlayerAuth } from "./PlayerAuth";
 import { todaysLogo, isJuly4 } from "@/lib/themes";
+import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 import type { User as AuthUser } from "@supabase/supabase-js";
 
 const STACKED_LOGO = "/rainbow-connect-logo-stacked.png";
@@ -32,6 +33,16 @@ interface GameHeaderProps {
   // duplicate the page's own "← Archive" nav button just below. Pair with
   // simplifiedIcons there to widen without adding that icon.
   wideHeader?: boolean;
+  /**
+   * Which game this header belongs to. Its only effect is WHERE the calendar
+   * icon and the Settings menu's archive link point — a header on a Mini page
+   * must lead to the Mini archive, not the Full one.
+   *
+   * Defaults to Full, so every existing call site is unchanged. Nothing about
+   * the layout, icon count, sizing or tap targets varies by format: this adds
+   * no control and removes none.
+   */
+  format?: PuzzleFormat;
 }
 
 export function GameHeader({
@@ -45,6 +56,7 @@ export function GameHeader({
   variant = "default",
   simplifiedIcons = false,
   wideHeader = false,
+  format = FULL_FORMAT,
 }: GameHeaderProps) {
   const isMinimal = variant === "minimal";
   const hideExtraIcons = isMinimal || simplifiedIcons;
@@ -143,9 +155,9 @@ export function GameHeader({
             flag, to avoid a redundant/self-linking icon on those pages. */}
         {isMinimal && (
           <Link
-            to="/archive"
+            to={format.archivePath}
             className={`${iconButtonClass} max-[429px]:hidden`}
-            aria-label="Puzzle archive"
+            aria-label={format.id === "full" ? "Puzzle archive" : `${format.name} puzzle archive`}
           >
             <Calendar className={iconGlyphClass} strokeWidth={iconStrokeWidth} />
           </Link>
@@ -161,9 +173,9 @@ export function GameHeader({
         )}
         {!hideExtraIcons && (
           <Link
-            to="/archive"
+            to={format.archivePath}
             className="p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95"
-            aria-label="Puzzle archive"
+            aria-label={format.id === "full" ? "Puzzle archive" : `${format.name} puzzle archive`}
           >
             <Archive className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
           </Link>

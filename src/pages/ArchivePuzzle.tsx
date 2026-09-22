@@ -169,6 +169,7 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
         />
       )}
       <GameHeader
+        format={format}
         onStatsClick={() => setActiveModal("stats")}
         onHowToPlayClick={() => setActiveModal("help")}
         onSettingsClick={() => setActiveModal("settings")}
@@ -316,6 +317,7 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
       <StatsModal open={activeModal === "stats"} onClose={() => setActiveModal(null)} format={format} />
       <TutorialModal open={activeModal === "help"} onClose={() => setActiveModal(null)} />
       <SettingsModal
+        format={format}
         open={activeModal === "settings"}
         onClose={() => setActiveModal(null)}
         settings={settings}

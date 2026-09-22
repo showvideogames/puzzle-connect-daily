@@ -33,7 +33,11 @@ export interface ResolvedTheme extends PuzzleTheme {
   spottedMessage: string;
   /** Near-miss pill copy (e.g. "Almost 🌈"). */
   almostMessage: string;
-  /** One share-grid row when the bonus was found (e.g. "🌈🌈🌈🌈"). */
+  /**
+   * One share-grid row when the bonus was found — as wide as the board it was
+   * found on: "🌈🌈🌈🌈" on a Full, "🌈🌈🌈" on a Mini. See
+   * {@link resolveTheme}'s `categoryCount`.
+   */
   shareRow: string;
 }
 
@@ -57,7 +61,15 @@ const THEMES: Record<string, PuzzleTheme> = {
   },
 };
 
-export function resolveTheme(theme: string | null | undefined): ResolvedTheme {
+/**
+ * @param categoryCount How many categories the board has, which is also how
+ *   many answers its Rainbow holds and therefore how wide its share row is.
+ *   Defaults to 4 so every existing Full call site is unchanged.
+ */
+export function resolveTheme(
+  theme: string | null | undefined,
+  categoryCount = 4
+): ResolvedTheme {
   const match = theme ? THEMES[theme] : undefined;
   const base = match ?? DEFAULT_THEME;
   return {
@@ -67,7 +79,7 @@ export function resolveTheme(theme: string | null | undefined): ResolvedTheme {
     spotPrompt: `Spot the ${base.label}? ${base.emoji}`,
     spottedMessage: `${base.emoji} ${base.label} Spotted!`,
     almostMessage: `Almost ${base.emoji}`,
-    shareRow: base.emoji.repeat(4),
+    shareRow: base.emoji.repeat(Math.max(1, categoryCount)),
   };
 }
 

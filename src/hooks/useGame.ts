@@ -19,6 +19,7 @@ import {
   type SavedProgress,
 } from "@/lib/gameProgress";
 import { pinnedContentFrom } from "@/lib/puzzleVersion";
+import { createActiveTimer, type ActiveTimer } from "@/lib/activeTimer";
 import {
   SOLVE_ORDER_NAME,
   formatOf,
@@ -119,6 +120,12 @@ export function useGame(
     // all, and completion writes one lightweight result row through
     // lib/customPuzzles.ts instead of finalize_game_session.
     mode = "official",
+    // Whether the PLAYABLE board is on screen yet. The only thing it governs
+    // is when the active-play timer starts: GameBoard shows a spinner in
+    // place of the board while custom-emoji images preload, and that load is
+    // not solving time. Defaults to true so every caller that doesn't
+    // distinguish the two behaves exactly as before.
+    boardReady = true,
   }: {
     isArchive?: boolean;
     smallHintUsed?: boolean;
@@ -126,6 +133,7 @@ export function useGame(
     rainbowResolved?: boolean;
     entryContext?: EntryContext;
     mode?: "official" | "beta" | "custom";
+    boardReady?: boolean;
   } = {}
 ) {
   /**
@@ -319,68 +327,147 @@ export function useGame(
   const [matchedWords, setMatchedWords] = useState<string[]>([]);
   const [draggedWord, setDraggedWord] = useState<string | null>(null);
 
-  // Seeded from the restored progress blob (0 for a brand-new puzzle, or a
-  // legacy blob saved before activeTimeSeconds existed — never guessed at,
-  // never reconstructed). Every subsequent active second, in every mount,
-  // adds onto this same ref, so the final value sent to finalizeGameSession is
-  // genuinely cumulative across refresh/resume rather than resetting per
-  // mount. This is the single timer for the puzzle attempt — nothing below
-  // introduces a second one.
-  const activeSecondsRef = useRef<number>(saved?.activeTimeSeconds ?? 0);
-  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isVisibleRef = useRef<boolean>(true);
+  /**
+   * The ONE active-play timer for this puzzle attempt.
+   *
+   * Seeded from the restored progress blob (0 for a brand-new puzzle, or a
+   * legacy blob saved before activeTimeSeconds existed — never guessed at,
+   * never reconstructed), then banked onto across every subsequent mount, so
+   * the value sent to finalizeGameSession is genuinely cumulative across
+   * refresh and resume rather than resetting per mount.
+   *
+   * Created lazily, ONCE per mount-lifetime of this hook, and stored in a ref
+   * — so a re-render cannot build a second one and start it counting
+   * alongside the first. A REPLAY is a cleared progress blob plus a remount
+   * (see CustomPuzzle's handleReplay), which therefore reads no banked
+   * seconds and legitimately starts a fresh timer at zero.
+   *
+   * See lib/activeTimer.ts for why this banks stretches off a monotonic
+   * clock rather than subtracting a start time from `Date.now()`.
+   */
+  const timerRef = useRef<ActiveTimer | null>(null);
+  if (timerRef.current === null) {
+    timerRef.current = createActiveTimer(saved?.activeTimeSeconds ?? 0);
+  }
+  const timer = timerRef.current;
 
+  /**
+   * A ref-SHAPED live view of the timer.
+   *
+   * Every existing `activeSecondsRef.current` read — the progress saves
+   * below, the durable event snapshots, GameBoard's bonus-Rainbow write —
+   * keeps working untouched, and now reads the exact current total instead of
+   * a value that was only as fresh as the last one-second tick.
+   */
+  const activeSecondsRef = useMemo(
+    () => ({
+      get current() {
+        return timer.seconds();
+      },
+    }),
+    [timer]
+  );
+
+  /**
+   * The same number, as RENDER state, for formats that show a clock.
+   *
+   * Kept separate from the ref on purpose: a ref read is what persistence
+   * wants (always live, never a re-render), and a state value is what the
+   * display wants (re-renders once a second). One timer feeds both, so the
+   * shown time and the saved time can never disagree.
+   */
+  const [activeSeconds, setActiveSeconds] = useState(() => timer.seconds());
+
+  /**
+   * Is the board actually on screen and playable right now?
+   *
+   * `boardReady` is the caller's answer to "has the playable board finished
+   * loading and rendered" (GameBoard passes its image-preload gate, which
+   * shows a spinner in place of the board). Counting during that spinner
+   * would charge the player for a load. Visibility is the browser's answer to
+   * "is this document on screen at all".
+   *
+   * Note what is deliberately NOT required: a first tile click. Time spent
+   * staring at a freshly loaded board, working it out before touching
+   * anything, is real solving time and counts.
+   */
   useEffect(() => {
+    // Completed or lost: bank whatever is open and stop for good. A frozen
+    // timer ignores every later resume, so reopening a finished puzzle — or
+    // sitting on the result screen, or playing the Rainbow bonus round —
+    // cannot add to a solve time that is already final.
     if (state.isComplete) {
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      timer.freeze();
+      setActiveSeconds(timer.seconds());
+      checkpointActiveTime(storageId, timer.seconds());
       return;
     }
+    if (!boardReady) return;
 
-    // How often (in active seconds) the running total below is checkpointed
-    // into localStorage, independent of the full saveProgress() writes that
-    // already fire on every real state change (guess/hint/tile color — see
-    // those call sites' own activeTimeSeconds field). Those cover most
-    // cases; this only fills the gap where a player spends a long stretch
-    // purely thinking — no guess, no hint — and then refreshes or closes
-    // before any of those fire. Cheap (localStorage only, no network) and
-    // infrequent enough not to be "excessive writes" even during a long
-    // idle-but-focused stretch.
+    // How often the running total is checkpointed into localStorage,
+    // independent of the full saveProgress() writes that already fire on
+    // every real state change (guess/hint/tile color — see those call sites'
+    // own activeTimeSeconds field). Those cover most cases; this only fills
+    // the gap where a player spends a long stretch purely thinking — no
+    // guess, no hint — and then refreshes or closes before any of those
+    // fire. Cheap (localStorage only, no network) and infrequent enough not
+    // to be "excessive writes" even during a long idle-but-focused stretch.
     const CHECKPOINT_INTERVAL_SECONDS = 10;
     let ticksSinceCheckpoint = 0;
 
-    const handleVisibilityChange = () => {
-      isVisibleRef.current = !document.hidden;
-      // Checkpoint the instant the tab backgrounds — the moment most likely
-      // to precede a refresh/close, and visibilitychange fires reliably for
-      // that even when beforeunload/unload do not.
-      if (document.hidden) {
-        checkpointActiveTime(storageId, activeSecondsRef.current);
+    // Read the REAL current visibility rather than assuming visible: a board
+    // that mounts in an already-backgrounded tab (a restored session, a
+    // background reload) must not start counting.
+    const isHidden = () => {
+      try {
+        return typeof document !== "undefined" && document.hidden;
+      } catch {
+        return false;
       }
+    };
+
+    if (!isHidden()) timer.resume();
+
+    const handleVisibilityChange = () => {
+      if (isHidden()) {
+        timer.pause();
+        // Checkpoint the instant the tab backgrounds — the moment most
+        // likely to precede a refresh or close, and visibilitychange fires
+        // reliably for that even when beforeunload/unload do not.
+        checkpointActiveTime(storageId, timer.seconds());
+      } else {
+        timer.resume();
+      }
+      setActiveSeconds(timer.seconds());
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    timerIntervalRef.current = setInterval(() => {
-      if (isVisibleRef.current) {
-        activeSecondsRef.current += 1;
-        ticksSinceCheckpoint += 1;
-        if (ticksSinceCheckpoint >= CHECKPOINT_INTERVAL_SECONDS) {
-          ticksSinceCheckpoint = 0;
-          checkpointActiveTime(storageId, activeSecondsRef.current);
-        }
+    // Drives the DISPLAY and the periodic checkpoint. It no longer drives the
+    // COUNT — the elapsed time is measured from the clock, so a throttled,
+    // delayed or dropped tick changes how often the number is repainted and
+    // nothing about how much time it reports.
+    const interval = setInterval(() => {
+      setActiveSeconds(timer.seconds());
+      if (!timer.running) return;
+      ticksSinceCheckpoint += 1;
+      if (ticksSinceCheckpoint >= CHECKPOINT_INTERVAL_SECONDS) {
+        ticksSinceCheckpoint = 0;
+        checkpointActiveTime(storageId, timer.seconds());
       }
     }, 1000);
 
     return () => {
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      // Final checkpoint so the seconds since the last periodic/visibility
-      // checkpoint aren't lost to a React-level unmount (e.g. SPA navigation
-      // away) that never fires visibilitychange, and so a live completion
-      // (isComplete just flipped true, tearing this effect down) leaves the
-      // exact final total behind too.
-      checkpointActiveTime(storageId, activeSecondsRef.current);
+      // Bank the open stretch and checkpoint it, so the seconds since the
+      // last periodic/visibility checkpoint aren't lost to a React-level
+      // unmount (e.g. SPA navigation away). Pausing here is also what makes a
+      // remount safe: the next mount's resume() opens exactly one new
+      // stretch rather than leaving two running at once.
+      timer.pause();
+      checkpointActiveTime(storageId, timer.seconds());
     };
-  }, [state.isComplete, storageId]);
+  }, [state.isComplete, storageId, boardReady, timer]);
 
   // --- Durable session + live gameplay events ---
   // The session this attempt writes to. Resumed from the local progress blob
@@ -424,7 +511,11 @@ export function useGame(
       mistakes: state.mistakes,
       ...overrides,
     }),
-    [state.solvedGroups.length, state.mistakes]
+    // activeSecondsRef is referentially stable for this hook's whole life
+    // (a useMemo over the equally stable timer), so listing it changes
+    // nothing about when this callback is rebuilt — it just says out loud
+    // that the snapshot reads from it.
+    [state.solvedGroups.length, state.mistakes, activeSecondsRef]
   );
 
   /**
@@ -1325,10 +1416,20 @@ export function useGame(
      * same active-time basis as every other event.
      *
      * Reading it after completion yields the FINAL solve time: the timer
-     * effect tears down the moment isComplete flips, so time spent in the
-     * bonus round is deliberately never added to it.
+     * freezes the moment isComplete flips, so time spent in the bonus round
+     * is deliberately never added to it.
      */
     activeSecondsRef,
+    /**
+     * The same active-play total as RENDER state, updated about once a
+     * second while the board is visible and unfinished, and frozen at the
+     * final solve time afterwards.
+     *
+     * Exposed for formats that display a clock (format.showsTimer — Mini
+     * today). A format that doesn't simply never reads it; nothing about the
+     * measuring or recording differs between the two.
+     */
+    activeSeconds,
     /**
      * The guess number the next durable guess event should use, shared with
      * the bonus Rainbow path so it participates in the same

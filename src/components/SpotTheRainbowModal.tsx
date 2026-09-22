@@ -30,7 +30,9 @@ export function SpotTheRainbowModal({ open, puzzle, onResult, onClose }: SpotThe
   if (!puzzle.rainbowHerring) return null;
   const rainbowHerring = puzzle.rainbowHerring;
 
-  const theme = resolveTheme(puzzle.theme);
+  // groups.length is this board’s category count — keeps the bonus copy and
+  // share row sized to the board on either format.
+  const theme = resolveTheme(puzzle.theme, puzzle.groups.length);
 
   const handleSelect = (groupIdx: number, word: string) => {
     setSelected(prev => ({ ...prev, [groupIdx]: word }));
@@ -119,7 +121,13 @@ export function SpotTheRainbowModal({ open, puzzle, onResult, onClose }: SpotThe
                         {group.category}
                       </span>
                     </div>
-                    <div className="grid grid-cols-4 gap-1 p-1.5 bg-secondary/20">
+                    {/* One column per answer in the category — four on a
+                        Full, three on a Mini — so a Mini's three words fill
+                        the row instead of leaving a fourth column empty. */}
+                    <div
+                      className="grid gap-1 p-1.5 bg-secondary/20"
+                      style={{ gridTemplateColumns: `repeat(${group.words.length}, minmax(0, 1fr))` }}
+                    >
                       {group.words.map(word => {
                         const isChosen = chosenWord === word;
                         return (

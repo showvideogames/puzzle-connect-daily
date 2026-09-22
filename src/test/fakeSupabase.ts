@@ -50,9 +50,13 @@ const UNIQUE_KEYS: Record<string, string[]> = {
 function formatRules(raw: unknown) {
   const format = typeof raw === "string" && raw.trim() !== "" ? raw.trim() : "full";
   if (format !== "full" && format !== "mini") throw new Error(`unknown puzzle format "${format}"`);
+  // Both formats can carry a Rainbow. Only Mini requires it to take exactly
+  // one answer per category — Full keeps its original looser rule, so an
+  // existing Full puzzle can never be invalidated. See migration
+  // 20260924000000.
   return format === "mini"
-    ? { format, cats: 3, per: 3, tiles: 9, firstDiff: 2, hasRainbow: false }
-    : { format, cats: 4, per: 4, tiles: 16, firstDiff: 1, hasRainbow: true };
+    ? { format, cats: 3, per: 3, tiles: 9, firstDiff: 2, hasRainbow: true, rainbowOnePerCategory: true }
+    : { format, cats: 4, per: 4, tiles: 16, firstDiff: 1, hasRainbow: true, rainbowOnePerCategory: false };
 }
 
 export function canonicalizePuzzleContent(raw: unknown): FakeRow {
@@ -127,6 +131,18 @@ export function canonicalizePuzzleContent(raw: unknown): FakeRow {
     for (const w of herringRaw) {
       if (!all.includes(w as string)) {
         throw new Error(`rainbow_herring word "${w}" is not one of this puzzle's ${f.tiles} words`);
+      }
+    }
+    // One answer per category, where the format requires it (Mini). The
+    // length check above only proves the Rainbow is the right SIZE; without
+    // this, three answers all from the Red category would pass.
+    if (f.rainbowOnePerCategory) {
+      for (let i = 0; i < f.cats; i++) {
+        const groupWords = ((groups[i] as Record<string, unknown>).words ?? []) as string[];
+        const hits = (herringRaw as string[]).filter((w) => groupWords.includes(w)).length;
+        if (hits !== 1) {
+          throw new Error(`group ${i + 1} must contribute exactly one Rainbow answer (got ${hits})`);
+        }
       }
     }
     herring = [...(herringRaw as string[])];
@@ -240,7 +256,13 @@ export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
   if (mode !== "classic" && mode !== "rainbow") {
     throw new Error("mode must be classic or rainbow");
   }
-  if (mode === "rainbow" && !f.hasRainbow) {
+  // CUSTOM puzzles keep their own rule, independent of the official one: a
+  // custom Mini cannot be a Rainbow. validate_custom_puzzle_content computes
+  // its OWN _has_rainbow (see 20260923000000) and migration 20260924000000
+  // deliberately did not touch it, because Custom Mini creation is still
+  // switched off. Mirroring f.hasRainbow here instead would make this fake
+  // accept a payload the real database rejects.
+  if (mode === "rainbow" && f.format === "mini") {
     throw new Error(`a ${f.format} puzzle cannot be a Rainbow puzzle`);
   }
 
@@ -560,9 +582,19 @@ export class FakeSupabase {
    */
   /** Every RPC call, read-only ones included. */
   rpcLog: string[] = [];
+  /**
+   * The same calls WITH their arguments.
+   *
+   * Kept beside rpcLog rather than replacing it: many suites assert on
+   * rpcLog as a plain list of names. This one exists so a test can check
+   * what a call actually ASKED FOR — e.g. that the Mini archive requests
+   * `_format: "mini"` sessions and the Full archive does not.
+   */
+  rpcCallLog: { name: string; args: Record<string, unknown> }[] = [];
 
   rpc = async (name: string, args: Record<string, unknown> = {}) => {
     this.rpcLog.push(name);
+    this.rpcCallLog.push({ name, args });
     if (this.rpcUnavailable) {
       return {
         data: null,
@@ -1734,6 +1766,33 @@ export class FakeSupabase {
   _log(table: string, op: "insert" | "update" | "upsert") {
     this.writeLog.push({ table, op });
   }
+
+  /**
+   * Every SELECT: which table, the equality filters it carried, and the rows
+   * it returned.
+   *
+   * Exists so a test can assert what a page ASKED FOR, not merely what it
+   * happened to render. The archive-isolation suite needs exactly that: a
+   * page that renders no Mini puzzles because none matched is not the same
+   * guarantee as a page that never asks for a Mini at all, and only the
+   * second one stays correct as data changes.
+   */
+  readLog: {
+    table: string;
+    filters: Record<string, unknown>;
+    rows: FakeRow[];
+    isCount: boolean;
+  }[] = [];
+
+  _logRead(table: string, filters: Filter[], rows: FakeRow[], isCount: boolean) {
+    const eq: Record<string, unknown> = {};
+    for (const f of filters) {
+      // Equality filters only — those are what "scoped to this format" means,
+      // and the shape a test can assert against readably.
+      if (f.kind === "eq") eq[f.column] = f.value;
+    }
+    this.readLog.push({ table, filters: eq, rows: rows.map((r) => ({ ...r })), isCount });
+  }
   _newId() {
     return this.nextId();
   }
@@ -2136,6 +2195,7 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: unknown }> {
       });
     }
     if (this.limitCount !== null) out = out.slice(0, this.limitCount);
+    this.db._logRead(this.table, this.filters, out, this.headCount);
     if (this.headCount) return { data: null, error: null, count: out.length };
     return this.shape(this.withEmbeds(out));
   }
