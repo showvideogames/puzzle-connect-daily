@@ -3,8 +3,9 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Switch } from "@/components/ui/switch";
 import { GameSettings } from "@/lib/settings";
 import { Link } from "react-router-dom";
-import { BookOpen, Archive as ArchiveIcon, Star, X } from "lucide-react";
+import { BookOpen, Archive as ArchiveIcon, Grid2x2, Star, X } from "lucide-react";
 import { PlayerAuth } from "./PlayerAuth";
+import { FULL_FORMAT, MINI_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 import type { User as AuthUser } from "@supabase/supabase-js";
 
 interface SettingsModalProps {
@@ -21,9 +22,18 @@ interface SettingsModalProps {
   onHowToPlayClick?: () => void;
   user?: AuthUser | null;
   onSignOut?: () => void;
+  /**
+   * Which game the page showing this modal belongs to.
+   *
+   * Governs two things in the Menu section: the archive link points at THIS
+   * format's archive, and the cross-link offers the OTHER game. Defaults to
+   * Full, so every existing call site keeps its current behaviour.
+   */
+  format?: PuzzleFormat;
 }
 
-export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback, showMenuLinks = false, onHowToPlayClick, user = null, onSignOut }: SettingsModalProps) {
+export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback, showMenuLinks = false, onHowToPlayClick, user = null, onSignOut, format = FULL_FORMAT }: SettingsModalProps) {
+  const isMini = format.id === MINI_FORMAT.id;
   // Drives PlayerAuth's forceOpen below, so the "Sign In"/"Account" TEXT
   // (not just PlayerAuth's own icon button) opens the sign-in modal or
   // account dropdown — matching How to Play/Puzzle Archive above it, which
@@ -137,14 +147,33 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                       <BookOpen className="w-4 h-4 text-slate" />
                       How to Play
                     </button>
+                    {/* THIS game's archive. On a Mini page it is the Mini
+                        archive, and it says so, so the two are never
+                        ambiguous when both games are one tap apart. */}
                     <Link
-                      to="/archive"
+                      to={format.archivePath}
                       onClick={onClose}
                       className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
                         hover:bg-secondary transition-colors active:scale-95"
                     >
                       <ArchiveIcon className="w-4 h-4 text-slate" />
-                      Puzzle Archive
+                      {isMini ? `${format.name} Archive` : "Puzzle Archive"}
+                    </Link>
+                    {/* The cross-link to the sibling game — the one
+                        discoverable route into Mini, since the mobile header
+                        has no room for another control and the homepage is
+                        deliberately not being given a promotion. Always
+                        offers the game you are NOT currently playing. */}
+                    <Link
+                      to={isMini ? FULL_FORMAT.dailyPath : MINI_FORMAT.dailyPath}
+                      onClick={onClose}
+                      className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
+                        hover:bg-secondary transition-colors active:scale-95"
+                    >
+                      <Grid2x2 className="w-4 h-4 text-slate" />
+                      {isMini
+                        ? `Rainbow Categories ${FULL_FORMAT.sizeLabel}`
+                        : `${MINI_FORMAT.name} Categories ${MINI_FORMAT.sizeLabel}`}
                     </Link>
                     {user && (
                       <Link

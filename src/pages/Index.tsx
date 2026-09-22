@@ -268,6 +268,7 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
       )}
       <SEO title={seo.title} description={seo.description} path={format.dailyPath} />
       <GameHeader
+        format={format}
         onStatsClick={() => openModal("stats")}
         onHowToPlayClick={() => openModal("help")}
         onSettingsClick={() => openModal("settings")}
@@ -351,6 +352,7 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
         onClose={handleTutorialClose}
       />
       <SettingsModal
+        format={format}
         open={activeModal === "settings"}
         onClose={closeModal}
         settings={settings}

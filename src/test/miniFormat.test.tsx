@@ -194,7 +194,11 @@ describe("the format definition", () => {
     expect(MINI_FORMAT.maxMistakes).toBe(4);
     expect(MINI_FORMAT.colorOrder).toEqual(["green", "blue", "red"]);
     expect(MINI_FORMAT.difficultyOrder).toEqual([2, 3, 4]);
-    expect(MINI_FORMAT.hasRainbow).toBe(false);
+    // A Mini CAN carry a Rainbow. Whether a given Mini does is a property of
+    // that puzzle's content, not of the format — see rainbowHerringFor.
+    expect(MINI_FORMAT.hasRainbow).toBe(true);
+    // ...but a NEW Mini starts Classic, so Rainbow stays opt-in per puzzle.
+    expect(MINI_FORMAT.defaultBuilderStyle).toBe("classic");
   });
 
   it("leaves the Full 4x4 exactly as it was", () => {
@@ -204,6 +208,10 @@ describe("the format definition", () => {
     expect(FULL_FORMAT.maxMistakes).toBe(4);
     expect(FULL_FORMAT.colorOrder).toEqual(["yellow", "green", "blue", "red"]);
     expect(FULL_FORMAT.hasRainbow).toBe(true);
+    // A new Full still starts on Rainbow, as it always has.
+    expect(FULL_FORMAT.defaultBuilderStyle).toBe("rainbow");
+    // Full shows no clock — the timer is a Mini feature.
+    expect(FULL_FORMAT.showsTimer).toBe(false);
     // The Full progress namespace is empty on purpose: every already-saved
     // board is stored un-prefixed and must keep resuming.
     expect(FULL_FORMAT.progressNamespace).toBe("");
@@ -222,11 +230,21 @@ describe("the format definition", () => {
     expect(oneAwayThreshold(MINI_FORMAT)).toBe(2);
   });
 
-  it("refuses a Rainbow on a format that has none", () => {
+  it("answers the Rainbow question PER PUZZLE, sized to the format", () => {
+    // A Classic Mini — no herring stored — has no Rainbow.
     expect(rainbowHerringFor(miniPuzzle)).toBeNull();
-    // Even if a row somehow carried herring data, the format gate wins.
-    expect(rainbowHerringFor({ ...miniPuzzle, rainbowHerring: ["g1", "b1", "r1"] })).toBeNull();
+    // A Rainbow Mini is THREE answers, one per category.
+    expect(rainbowHerringFor({ ...miniPuzzle, rainbowHerring: ["g1", "b1", "r1"] })).toEqual([
+      "g1", "b1", "r1",
+    ]);
+    // A Full Rainbow is four. The length is checked against the format's own
+    // category count, so a four-answer herring on a Mini is not a Rainbow at
+    // all rather than a mis-sized one.
     expect(rainbowHerringFor(fullPuzzle)).toEqual(["y1", "gg1", "bb1", "rr1"]);
+    expect(
+      rainbowHerringFor({ ...miniPuzzle, rainbowHerring: ["g1", "b1", "r1", "g2"] })
+    ).toBeNull();
+    expect(rainbowHerringFor({ ...fullPuzzle, rainbowHerring: ["y1", "gg1", "bb1"] })).toBeNull();
   });
 });
 
@@ -301,13 +319,16 @@ describe("Mini guess resolution", () => {
     expect(view.result.current.state.guessHistory[0].isOneAway).toBe(false);
   });
 
-  it("never marks a Mini guess as a Rainbow attempt", async () => {
+  it("a CLASSIC Mini has no Rainbow to find", async () => {
     const view = mount(miniPuzzle);
-    // One word from each of the 3 categories would be the Rainbow SHAPE on a
-    // format that had one. Mini has none, so this must not be flagged.
+    // One word from each of the 3 categories is the Rainbow SHAPE, and on a
+    // Rainbow Mini it would be the winning guess. This puzzle is Classic, so
+    // there is nothing to find: the guess is an ordinary miss.
     await guess(view, ["g1", "b1", "r1"]);
-    expect(view.result.current.state.guessHistory[0].isRainbowAttempt).toBe(false);
     expect(view.result.current.rainbowHerring).toBeNull();
+    expect(view.result.current.state.gotRainbow).toBe(false);
+    expect(view.result.current.state.guessHistory[0].isRainbow).toBeFalsy();
+    expect(view.result.current.state.mistakes).toBe(1);
   });
 
   it("7. four Mini mistakes end the game as a loss", async () => {
@@ -566,10 +587,11 @@ describe("share output", () => {
     expect(grid).not.toContain("🟨");
   });
 
-  it("14. the Mini share text names the Mini and links the Mini Daily", () => {
-    const text = buildOfficialShareText("M1", ["🟩🟩🟩", "🟦🟦🟦", "🟥🟥🟥"], MINI_FORMAT);
-    expect(text.split("\n")[0]).toBe("Rainbow Categories Mini");
-    expect(text).toContain("Puzzle M1");
+  it("14. the Mini share text leads with the puzzle's own title and links the Mini Daily", () => {
+    const text = buildOfficialShareText("Mini #1", ["🟩🟩🟩", "🟦🟦🟦", "🟥🟥🟥"], MINI_FORMAT);
+    // The admin's title verbatim — NOT "Puzzle Mini #1".
+    expect(text.split("\n")[0]).toBe("Mini #1");
+    expect(text).not.toContain("Puzzle Mini #1");
     expect(text.trim().split("\n").pop()).toBe("rainbowcategories.com/mini");
   });
 
@@ -767,6 +789,9 @@ describe("16/17. the shared builder runs both formats", () => {
         rainbowHintWord: "",
         theme: "",
         alphabetizeCompleted: true,
+        // What Admin passes for a stored puzzle with no Rainbow — see its
+        // hasStoredRainbow.
+        style: "classic",
       });
     });
     expect(result.current.format.id).toBe("mini");
@@ -777,6 +802,42 @@ describe("16/17. the shared builder runs both formats", () => {
       "r1", "g1", "b1", "g2", "b2", "r2", "g3", "b3", "r3",
     ]);
     expect(result.current.style).toBe("classic");
+    expect(result.current.rainbowComplete).toBe(false);
+  });
+
+  it("loads a saved RAINBOW Mini back with its three selections intact", () => {
+    const { result } = renderHook(() => useBuilderForm());
+    act(() => {
+      result.current.load({
+        format: "mini",
+        groups: miniPuzzle.groups.map((g) => ({
+          category: g.category, words: g.words, difficulty: g.difficulty, hintWord: null,
+        })),
+        wordOrder: ["r1", "g1", "b1", "g2", "b2", "r2", "g3", "b3", "r3"],
+        // Stored in DISPLAY order, which is not group order — the builder has
+        // to match each answer to the group that actually contains it.
+        rainbowHerring: ["r2", "g3", "b1"],
+        rainbowCategoryName: "Hidden Trio",
+        rainbowHintWord: "clue",
+        rainbowCategoryEmoji: "🌈",
+        theme: "",
+        alphabetizeCompleted: true,
+        style: "rainbow",
+      });
+    });
+    expect(result.current.format.id).toBe("mini");
+    expect(result.current.style).toBe("rainbow");
+    // One selection per category, each resolved back to the RIGHT group.
+    expect(result.current.rainbowHerringIds).toHaveLength(3);
+    expect(result.current.rainbowComplete).toBe(true);
+    expect(result.current.textsFor(result.current.rainbowHerringIds as string[])).toEqual([
+      "g3", "b1", "r2",
+    ]);
+    // The saved display order is preserved as saved.
+    expect(result.current.textsFor(result.current.rainbowWordOrderIds)).toEqual(["r2", "g3", "b1"]);
+    expect(result.current.rainbowCategoryName).toBe("Hidden Trio");
+    expect(result.current.rainbowHintWord).toBe("clue");
+    expect(result.current.rainbowCategoryEmoji).toBe("🌈");
   });
 });
 
@@ -932,15 +993,47 @@ describe("18. database validation accepts Mini and rejects mismatches", () => {
     expect(error?.message).toMatch(/difficulties between 2 and 4/);
   });
 
-  it("rejects a Rainbow on a Mini", async () => {
+  it("ACCEPTS a Rainbow Mini of one answer per category", async () => {
     const content = miniContentPayload();
-    const rainbow = { ...content, rainbow_herring: ["Hood", "Mars", "Bird"] };
-    const { error } = await db.rpc("admin_save_puzzle", {
+    // One from Green, one from Blue, one from Red — stored uppercase, as the
+    // builder normalises every word (see wordNormalization.ts).
+    const rainbow = {
+      ...content,
+      rainbow_herring: ["HOOD", "MARS", "BIRD"],
+      rainbow_category_name: "Hidden Trio",
+      rainbow_hint_word: "clue",
+      rainbow_category_emoji: "🌈",
+    };
+    const { data, error } = await db.rpc("admin_save_puzzle", {
       _puzzle_id: null,
       _metadata: { date: "2026-10-07" },
       _content: rainbow,
     });
-    expect(error?.message).toMatch(/cannot have a Rainbow category/);
+    expect(error).toBeNull();
+    expect((data as { puzzle_id?: string } | null)?.puzzle_id).toBeTruthy();
+  });
+
+  it("rejects a Mini Rainbow taking two answers from the same category", async () => {
+    const content = miniContentPayload();
+    // HOOD and TIRE are both in the Green category; nothing from Red.
+    const bad = { ...content, rainbow_herring: ["HOOD", "TIRE", "MARS"] };
+    const { error } = await db.rpc("admin_save_puzzle", {
+      _puzzle_id: null,
+      _metadata: { date: "2026-10-21" },
+      _content: bad,
+    });
+    expect(error?.message).toMatch(/exactly one Rainbow answer/);
+  });
+
+  it("rejects a Mini Rainbow of four answers", async () => {
+    const content = miniContentPayload();
+    const bad = { ...content, rainbow_herring: ["HOOD", "MARS", "BIRD", "DOG"] };
+    const { error } = await db.rpc("admin_save_puzzle", {
+      _puzzle_id: null,
+      _metadata: { date: "2026-10-22" },
+      _content: bad,
+    });
+    expect(error?.message).toMatch(/exactly 3 words/);
   });
 
   it("rejects a word_order that is not the whole Mini board", async () => {
@@ -1028,7 +1121,11 @@ describe("18. custom-puzzle validation is format-aware", () => {
     });
     expect(rejected.error?.message).toMatch(/exactly 3 groups/);
 
-    // Rainbow mode is refused on a format with no Rainbow.
+    // A CUSTOM Mini still cannot be a Rainbow. Official Minis gained an
+    // optional Rainbow (migration 20260924000000), but Custom Mini creation
+    // is deliberately still switched off, and
+    // validate_custom_puzzle_content keeps its own rule — so this refusal is
+    // unchanged on purpose, not an oversight.
     const rainbow = { ...good, mode: "rainbow", rainbow_herring: ["Hood", "Mars", "Bird"] };
     const refusedRainbow = await db.rpc("create_custom_puzzle", {
       _creator_name: "Tester",

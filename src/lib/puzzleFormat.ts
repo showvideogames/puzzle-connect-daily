@@ -6,7 +6,7 @@
  *   Full  4×4 — 4 categories × 4 answers = 16 tiles, Yellow/Green/Blue/Red,
  *               optionally carrying the hidden Rainbow bonus category.
  *   Mini  3×3 — 3 categories × 3 answers =  9 tiles, Green/Blue/Red,
- *               no Rainbow today.
+ *               optionally carrying the hidden Rainbow bonus category.
  *
  * They are NOT two implementations. Everything that used to hardcode "4",
  * "16", "four colours" or "three selected means one away" now reads it from
@@ -30,13 +30,21 @@
  * "difficulty between 1 and 4" rule and the `1 | 2 | 3 | 4` TypeScript type
  * valid for both formats.
  *
- * ── hasRainbow is a capability, not a permanent verdict ────────────────────
+ * ── hasRainbow is a CAPABILITY; the puzzle decides ─────────────────────────
  *
- * Mini has no Rainbow today. That is expressed as `hasRainbow: false` on the
- * Mini format and read through `formatOf(puzzle).hasRainbow` at every
- * decision point, rather than as `if (isMini) …` scattered around. Giving
- * Mini a bonus category later is a change to this file plus content, not a
- * re-plumbing of the game.
+ * `hasRainbow` answers "can a puzzle of this shape carry a bonus category at
+ * all", NOT "does this puzzle have one". Both formats now answer yes, and
+ * whether any individual board actually has a Rainbow is a property of its
+ * CONTENT — see {@link rainbowHerringFor}, the single gate every Rainbow
+ * decision reads.
+ *
+ * That split is what makes Rainbow optional per puzzle on both sizes: a Full
+ * has always been able to be a plain 4-groups-only puzzle, and a Mini is
+ * Classic or Rainbow the same way, with the same engine, the same builder and
+ * the same share/stat semantics. Mini's Rainbow is three answers rather than
+ * four for exactly one reason — it is one per category, and Mini has three
+ * categories — so every "how many Rainbow answers" question reads
+ * `categoryCount` and neither size is special-cased.
  */
 
 /** The difficulty/colour slot a category occupies. Shared by both formats. */
@@ -91,10 +99,37 @@ export interface PuzzleFormat {
   colorOrder: readonly CategoryColor[];
   maxMistakes: number;
   /**
-   * Whether this format can carry a Rainbow/bonus category AT ALL. False for
-   * Mini today; see the module comment on why this is a capability flag.
+   * Whether this format can carry a Rainbow/bonus category AT ALL.
+   *
+   * True for both sizes. It is a CAPABILITY, not a verdict on any given
+   * board — see the module comment, and {@link rainbowHerringFor} for the
+   * per-puzzle answer. A format answering false would switch off the Rainbow
+   * builder panel, the bonus prompt, the near-miss and the share row for
+   * every puzzle of that shape; neither format does today.
    */
   hasRainbow: boolean;
+  /**
+   * The style a BRAND-NEW puzzle of this format starts on in the builder.
+   *
+   * Stated per format rather than derived from `hasRainbow`, because "this
+   * size can have a Rainbow" and "a new puzzle of this size should default to
+   * having one" are different editorial questions. Full keeps its existing
+   * Rainbow-by-default behaviour. Mini defaults to Classic: the Rainbow is
+   * the optional extra on a quick 3×3, and defaulting it on would quietly
+   * make every Mini a Rainbow puzzle.
+   */
+  defaultBuilderStyle: "rainbow" | "classic";
+  /**
+   * Whether a completed run of this format shows and shares a solve time.
+   *
+   * Mini is the quick, casual format where "how fast was that?" is part of
+   * the fun. Full deliberately does not display one: it is a think-about-it
+   * puzzle, and putting a clock on it changes how it is played. The ACTIVE
+   * TIME ITSELF has always been measured on both (game_sessions
+   * .active_time_seconds) — this flag governs only whether a player is shown
+   * it, so nothing about Full's recorded data changes either way.
+   */
+  showsTimer: boolean;
   /**
    * localStorage progress-key namespace. EMPTY for Full, deliberately: every
    * existing player's in-progress Full game is stored un-prefixed, and
@@ -131,6 +166,9 @@ export const FULL_FORMAT: PuzzleFormat = {
   colorOrder: ["yellow", "green", "blue", "red"],
   maxMistakes: 4,
   hasRainbow: true,
+  defaultBuilderStyle: "rainbow",
+  // Unchanged: the Full game has never shown a clock and does not start now.
+  showsTimer: false,
   progressNamespace: "",
   statsNamespace: "full",
   dailyPath: "/",
@@ -154,7 +192,14 @@ export const MINI_FORMAT: PuzzleFormat = {
   // Four, same as Full. This is a product decision, not an inherited default:
   // it is stated here so changing it is a one-line change in one place.
   maxMistakes: 4,
-  hasRainbow: false,
+  // A Mini CAN carry a Rainbow. Whether a given Mini does is decided by its
+  // own content — see rainbowHerringFor. A Mini Rainbow is three answers,
+  // one per category, because categoryCount is 3.
+  hasRainbow: true,
+  // Classic unless the creator opts in — a Mini is not a Rainbow puzzle by
+  // default. See PuzzleFormat.defaultBuilderStyle.
+  defaultBuilderStyle: "classic",
+  showsTimer: true,
   progressNamespace: "mini",
   statsNamespace: "mini",
   dailyPath: "/mini",
@@ -246,11 +291,18 @@ export function difficultyLabels(format: PuzzleFormat): string[] {
 /**
  * This puzzle's Rainbow answer set, or null when it has none.
  *
- * The single gate on Rainbow behaviour. It answers null for a format whose
+ * The single gate on Rainbow behaviour, and the ONLY place "does this puzzle
+ * have a Rainbow?" is answered. It answers null for a format whose
  * `hasRainbow` is false even if a row somehow carried herring data, and for a
  * herring whose length does not match the format's category count — so the
  * board, the share grid, the hint list, the "Almost Rainbow" near-miss and
  * the bonus prompt all agree, from one rule, about whether a Rainbow exists.
+ *
+ * Because the length is checked against `categoryCount`, this is also what
+ * makes a Rainbow the right SIZE per format with no branching: four answers
+ * on a Full, three on a Mini. A Classic puzzle of either size simply has no
+ * herring and gets null here, which is how Rainbow stays optional per puzzle
+ * rather than per format.
  */
 export function rainbowHerringFor(
   puzzle: { format?: PuzzleFormatId | null; rainbowHerring?: string[] | null } | null | undefined

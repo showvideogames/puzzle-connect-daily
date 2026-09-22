@@ -66,7 +66,31 @@ export async function getTodaysPuzzle(format: PuzzleFormatId = "full"): Promise<
   return mapPuzzle(data);
 }
 
+/**
+ * Does this look like a puzzle id at all?
+ *
+ * Puzzle ids are database uuids, and every route that carries one takes it
+ * straight from the URL — so `/mini/archive/banana` reaches the loader as a
+ * perfectly ordinary string. Sending that to Postgres is not merely useless:
+ * comparing a uuid column against unparseable text is an ERROR (22P02), which
+ * arrives as a failed request rather than "no such puzzle", and shows up as
+ * noise in the logs for what is really just a mistyped link.
+ *
+ * Checking the shape first turns that into an immediate, local "not found",
+ * which is what the page already knows how to show.
+ */
+export function isPuzzleId(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim())
+  );
+}
+
 export async function getPuzzleById(id: string, format: PuzzleFormatId = "full"): Promise<Puzzle | null> {
+  // A malformed id is "no such puzzle", answered here rather than by a query
+  // that could only ever fail. See isPuzzleId.
+  if (!isPuzzleId(id)) return null;
+
   const { data, error } = await supabase
     .from("puzzles")
     .select(PUZZLE_SELECT)

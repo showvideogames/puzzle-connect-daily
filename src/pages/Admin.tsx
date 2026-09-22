@@ -645,6 +645,19 @@ export default function Admin() {
       return;
     }
 
+    // A Rainbow puzzle needs one answer picked from EVERY category. Without
+    // this, builderContentInput sends rainbow_herring: null for a partly
+    // filled selection (see contentPayload.ts) and the save silently lands as
+    // a Classic puzzle — discarding the Rainbow name, hint, emoji and
+    // whichever answers WERE chosen, with a success toast. The count comes
+    // from the format, so a Mini needs three and a Full four.
+    if (builder.style === "rainbow" && !builder.rainbowComplete) {
+      toast.error(
+        `A Rainbow ${builderFormat.name} needs one Rainbow answer from each of its ${builderFormat.categoryCount} categories. Pick the missing one, or switch the Style to Classic.`
+      );
+      return;
+    }
+
     // One puzzle per date PER FORMAT: Full and Mini are sibling Dailies, so
     // the same date legitimately holds one of each.
     const existingPuzzleForDate = puzzles.find(
@@ -800,19 +813,25 @@ export default function Admin() {
     // on. A row with no format column (pre-migration) or a null value is a
     // Full puzzle and loads back as one — opening an existing puzzle can
     // never silently change its size.
-    const loadedFormat = getFormat(p.format).id;
+    const loadedFormat = getFormat(p.format);
+    // A stored Rainbow is one answer per category, so a COMPLETE one is
+    // exactly categoryCount long — four on a Full, three on a Mini. This was
+    // a literal 4, which silently loaded every Mini Rainbow back as Classic
+    // and would have dropped its selections on the next save.
+    const hasStoredRainbow =
+      !!p.rainbow_herring && p.rainbow_herring.length === loadedFormat.categoryCount;
     const loadInput: LoadBuilderInput = {
-      format: loadedFormat,
+      format: loadedFormat.id,
       groups: loadedGroups,
       wordOrder: p.word_order ?? null,
-      rainbowHerring: p.rainbow_herring && p.rainbow_herring.length === 4 ? p.rainbow_herring : null,
+      rainbowHerring: hasStoredRainbow ? p.rainbow_herring : null,
       rainbowCategoryName: p.rainbow_category_name || "",
       rainbowHintWord: p.rainbow_hint_word || "",
       rainbowCategoryEmoji: p.rainbow_category_emoji || "",
       theme: p.theme || "",
       alphabetizeCompleted: p.alphabetize_completed ?? true,
       // An existing puzzle keeps the style it was saved with.
-      style: p.rainbow_herring && p.rainbow_herring.length === 4 ? "rainbow" : "classic",
+      style: hasStoredRainbow ? "rainbow" : "classic",
     };
     builder.load(loadInput);
     setIsEmojiPuzzle(p.is_emoji_puzzle ?? false);
@@ -824,7 +843,7 @@ export default function Admin() {
     setLoadedContent(
       JSON.stringify(
         buildContentPayload({
-          format: loadedFormat,
+          format: loadedFormat.id,
           groups: loadedGroups,
           wordOrder: p.word_order ?? null,
           rainbowHerring: p.rainbow_herring ?? null,
@@ -1008,8 +1027,10 @@ export default function Admin() {
                   // all three. Create a new puzzle instead.
                   lockedReason={editingId ? "An existing puzzle keeps the size it was saved with. Start a new puzzle to build the other size." : undefined}
                 />
-                {/* Rainbow is a Full-only capability today (format.hasRainbow),
-                    so the Classic/Rainbow selector only makes sense there. */}
+                {/* Offered on any format that CAN carry a bonus category —
+                    both sizes today. A new Full starts on Rainbow and a new
+                    Mini on Classic (format.defaultBuilderStyle); either can
+                    be switched here, per puzzle. */}
                 {builderFormat.hasRainbow && (
                   <StyleSelector value={builder.style} onChange={builder.setStyle} />
                 )}

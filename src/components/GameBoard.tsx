@@ -29,7 +29,8 @@ import { loadPlayedDifficulties } from "@/lib/puzzleVersion";
 import { buildCustomShareText, buildOfficialShareText } from "@/lib/shareText";
 import { customPuzzlePath } from "@/lib/customPuzzles";
 import { resolveCategoryVisual, splitCategoryVisual } from "@/lib/categoryVisual";
-import { DIFFICULTY_COLOR_NAME, type CategoryColor } from "@/lib/puzzleFormat";
+import { DIFFICULTY_COLOR_NAME, rainbowHerringFor, type CategoryColor } from "@/lib/puzzleFormat";
+import { formatActiveTime } from "@/lib/activeTimer";
 
 const DIFFICULTY_SQUARE: Record<number, string> = {
   1: "🟨",
@@ -281,6 +282,22 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // the hook's "puzzle fully resolved" (view-only hints) decision.
   const [bonusRainbowCorrect, setBonusRainbowCorrect] = useState<boolean | null>(null);
 
+  // Preload custom emoji images so they don't pop in after the board renders.
+  //
+  // Resolved from the PUZZLE rather than from useGame's `rainbowHerring`
+  // below, even though the two are the same value (both come from
+  // rainbowHerringFor) — the preload gate has to be known BEFORE useGame
+  // runs, because it is what tells the active-play timer whether the
+  // playable board is actually on screen yet.
+  const imagesToPreload = useMemo(() => {
+    const words = [
+      ...puzzle.groups.flatMap((g) => g.words),
+      ...(rainbowHerringFor(puzzle) ?? []),
+    ];
+    return words.filter(isCustomEmoji).map((w) => customEmojiUrl(w));
+  }, [puzzle]);
+  const imagesReady = useImagePreload(imagesToPreload);
+
   const {
     format,
     rainbowHerring,
@@ -320,18 +337,19 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     isOfficialAttemptRef,
     sessionIdRef,
     activeSecondsRef,
+    activeSeconds,
     nextGuessNumber,
-  } = useGame(puzzle, { isArchive, smallHintUsed, fullHintUsed, rainbowResolved: bonusRainbowCorrect !== null, entryContext, mode: customMode ? "custom" : betaMode ? "beta" : "official" });
-
-  // Preload custom emoji images so they don't pop in after the board renders
-  const imagesToPreload = useMemo(() => {
-    const words = [
-      ...puzzle.groups.flatMap((g) => g.words),
-      ...(rainbowHerring ?? []),
-    ];
-    return words.filter(isCustomEmoji).map((w) => customEmojiUrl(w));
-  }, [puzzle, rainbowHerring]);
-  const imagesReady = useImagePreload(imagesToPreload);
+  } = useGame(puzzle, {
+    isArchive,
+    smallHintUsed,
+    fullHintUsed,
+    rainbowResolved: bonusRainbowCorrect !== null,
+    entryContext,
+    mode: customMode ? "custom" : betaMode ? "beta" : "official",
+    // The timer starts when the board is genuinely on screen, not while the
+    // preload spinner is up — a slow image load is not solving time.
+    boardReady: imagesReady,
+  });
 
   const [historyExpanded, setHistoryExpanded] = useState(true);
   const incorrectGuesses = useMemo(
@@ -341,7 +359,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   // Visual theme for the bonus category (gradient/emoji/copy). Defaults to the
   // classic rainbow when the puzzle has no theme set.
-  const theme = useMemo(() => resolveTheme(puzzle.theme), [puzzle.theme]);
+  // The board's own category count makes the bonus share row as wide as the
+  // board — four 🌈 on a Full, three on a Mini.
+  const theme = useMemo(
+    () => resolveTheme(puzzle.theme, format.categoryCount),
+    [puzzle.theme, format.categoryCount]
+  );
 
   // Renders solved groups and the rainbow reveal in actual solve order,
   // instead of always pinning the rainbow to the top of the list.
@@ -888,16 +911,53 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     [playedDifficulties, puzzle]
   );
 
+  /**
+   * How a hint reveal is drawn in the share grid.
+   *
+   * FULL keeps exactly what it has always produced: a bare "💡"/"🔦", and two
+   * hints that happened back to back merged onto one line ("💡🔦"). Changing
+   * that would rewrite the look of every Full result.
+   *
+   * MINI draws each hint as its own row, padded to the board's width with ✨
+   * ("✨💡✨"), and never merges two hints onto one line. Two reasons:
+   *
+   *   - A Mini result is a tidy block of three-wide rows, and a one-emoji row
+   *     sitting in the middle of it reads as a rendering fault. Padding with
+   *     ordinary SPACES — the obvious fix — does not survive the trip: chat
+   *     apps variously trim leading whitespace, collapse runs of it, or
+   *     render it at a different width to an emoji, so the row lands ragged
+   *     somewhere. A visible glyph cannot be trimmed.
+   *   - Merging would produce a six-symbol row, breaking the "every row is
+   *     exactly three symbols" rule that makes the block read as a grid.
+   *
+   * Each hint type still appears AT MOST ONCE, on either format:
+   * dedupeHintMarkers is the single guarantee, and it is applied here and in
+   * resultRows from the same guess history, so a restored, refreshed or
+   * double-fired reveal cannot add a second row.
+   */
+  const hintShareRow = useCallback(
+    (hintType: "small" | "full" | undefined): string => {
+      const emoji = hintType === "small" ? "💡" : "🔦";
+      if (format.id === "full") return emoji;
+      const pad = Math.max(0, format.categoryCount - 1);
+      const left = Math.floor(pad / 2);
+      return "✨".repeat(left) + emoji + "✨".repeat(pad - left);
+    },
+    [format.id, format.categoryCount]
+  );
+
   const generateShareLines = useCallback((): string[] => {
     const lines: string[] = [];
     for (const attempt of dedupeHintMarkers(state.guessHistory)) {
       if (attempt.isHintMarker) {
-        const emoji = attempt.hintType === "small" ? "💡" : "🔦";
+        const row = hintShareRow(attempt.hintType);
+        // Full's historical merge of two adjacent hint markers onto one line.
+        // Mini never merges — see hintShareRow.
         const last = lines[lines.length - 1];
-        if (last === "💡" || last === "🔦" || last === "💡🔦" || last === "🔦💡") {
-          lines[lines.length - 1] = last + emoji;
+        if (format.id === "full" && (last === "💡" || last === "🔦" || last === "💡🔦" || last === "🔦💡")) {
+          lines[lines.length - 1] = last + row;
         } else {
-          lines.push(emoji);
+          lines.push(row);
         }
       } else if (attempt.isRainbow) {
         lines.push(theme.shareRow);
@@ -912,7 +972,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       }
     }
     return lines;
-  }, [state.guessHistory, playedDifficultyAt, theme]);
+  }, [state.guessHistory, playedDifficultyAt, theme, hintShareRow, format.id]);
 
   // Same source of truth as generateShareLines above (state.guessHistory) —
   // guessHistory is already the real chronological event log (guesses AND
@@ -960,8 +1020,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         format,
       });
     }
-    return buildOfficialShareText(puzzle.title, lines, format);
-  }, [puzzle, generateShareLines, customMode, format]);
+    // activeSecondsRef, not the rendered `activeSeconds`: the ref is always
+    // the live total, and at share time (post-completion) it is the frozen
+    // final solve time. A format that doesn't show a timer ignores it.
+    return buildOfficialShareText(puzzle.title, lines, format, {
+      activeSeconds: activeSecondsRef.current,
+    });
+  }, [puzzle, generateShareLines, customMode, format, activeSecondsRef]);
 
   const handleShare = useCallback(async () => {
     trackEvent("share_clicked");
@@ -1327,10 +1392,31 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* Mistakes dots — hidden when viewing an already-completed puzzle */}
+      {/* Mistakes dots — hidden when viewing an already-completed puzzle.
+          On a timed format (Mini) the running solve time sits beside the
+          pill, so it normally costs no vertical space and never pushes the
+          board around.
+          WRAPPING, not absolutely positioned: the pill is as wide as its own
+          content ("Mistakes remaining:" plus four dots), which at 320px
+          leaves no room beside it — an absolutely-placed clock printed
+          straight over the last dot. Letting the row wrap puts the clock on
+          its own centred line on the narrowest phones and keeps it inline
+          everywhere else. */}
       {!wasAlreadyComplete.current && (
-        <div className="mt-4">
+        <div className="mt-4 w-full flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
           <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} />
+          {format.showsTimer && !state.isComplete && (
+            <span
+              className="text-xs sm:text-sm font-semibold tabular-nums text-muted-foreground select-none"
+              // Not announced on every tick: a clock that re-read itself
+              // once a second would make the board unusable with a screen
+              // reader. It stays readable on demand.
+              aria-live="off"
+              aria-label={`Time: ${formatActiveTime(activeSeconds)}`}
+            >
+              ⏳ {formatActiveTime(activeSeconds)}
+            </span>
+          )}
         </div>
       )}
 
@@ -1610,6 +1696,18 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 {getResultSubtitle(state.isWon, state.mistakes)}
               </p>
             </>
+          )}
+
+          {/* The frozen solve time. Shown on a timed format for any finished
+              run — including one being revisited later, where the headline
+              above is suppressed — because "how long did that take me?" is
+              exactly what someone reopening a finished Mini wants to see.
+              Zero seconds is not rendered: a restored legacy run that never
+              recorded a time should say nothing rather than claim "0s". */}
+          {format.showsTimer && activeSeconds > 0 && (
+            <p className="text-sm font-semibold tabular-nums mt-2">
+              ⏳ {formatActiveTime(activeSeconds)}
+            </p>
           )}
 
           {state.guessHistory.length > 0 && (
