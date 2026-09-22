@@ -26,7 +26,7 @@ npm run e2e:test        # run the suite
 
 | What | Why | Notes |
 | --- | --- | --- |
-| Node 20+ | everything | the repo is already on it |
+| **Node 22+** | `@supabase/supabase-js` needs a built-in WebSocket, which Node gained in 22 | the seeder fails on Node 20 with "Node.js 20 detected without native WebSocket support" |
 | **Docker Desktop** (or Podman) | the local Supabase stack runs in containers | **required for the browser suite** |
 | ~2 GB disk | Supabase images + a Chromium build | one-off |
 
@@ -425,6 +425,11 @@ stack was recreated on different ports since the last seed. `npm run e2e:reset`.
 
 **Ports already in use (54421-54424)** — another E2E stack is still up.
 `npm run e2e:down`.
+
+**`Node.js 20 detected without native WebSocket support`** — the seeder builds a
+Supabase client, and `@supabase/supabase-js` requires a global `WebSocket`,
+which Node only has natively from version 22. Use Node 22 or newer (see the
+`engines` field in package.json, and the version the CI workflow pins).
 
 **Windows: "No container runtime found on PATH" but Docker Desktop is
 running** — Docker Desktop adds itself to your USER Path, which a terminal
