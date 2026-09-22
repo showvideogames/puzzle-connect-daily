@@ -64,15 +64,34 @@ export function RainbowPanel({
       </div>
       <div className="p-4 space-y-3">
         <div>
-          <Label className="text-xs">Category Name</Label>
-          <input
-            type="text"
-            value={categoryName}
-            onChange={(e) => onCategoryNameChange(e.target.value)}
-            onBlur={onFieldBlur}
-            placeholder="e.g. Mixed Bag 🌈"
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
-          />
+          {/* Name gets the lion's share of the row (70/30 on narrow phones,
+              80/20 from md up) so the Emoji input stays usable without
+              crushing the Name field, which is edited far more often. */}
+          <div className="grid grid-cols-[minmax(0,7fr)_minmax(88px,3fr)] md:grid-cols-[minmax(0,4fr)_minmax(96px,1fr)] gap-2 md:gap-3 items-end">
+            <div>
+              <Label className="text-xs">Category Name</Label>
+              <input
+                type="text"
+                value={categoryName}
+                onChange={(e) => onCategoryNameChange(e.target.value)}
+                onBlur={onFieldBlur}
+                placeholder="e.g. Mixed Bag 🌈"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Category Emoji (optional)</Label>
+              <input
+                type="text"
+                value={categoryEmoji}
+                onChange={(e) => onCategoryEmojiChange(e.target.value)}
+                onBlur={onFieldBlur}
+                placeholder="🌈"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Add an emoji or short visual, such as 🎵 or ___ 💬.</p>
         </div>
 
         <p className="text-xs text-muted-foreground">Choose one answer from each category.</p>
@@ -122,19 +141,6 @@ export function RainbowPanel({
             <DraggableTileGrid tiles={displayOrderTiles} onReorder={onReorderDisplay} />
           </div>
         )}
-
-        <div>
-          <Label className="text-xs">Category Emoji (optional)</Label>
-          <input
-            type="text"
-            value={categoryEmoji}
-            onChange={(e) => onCategoryEmojiChange(e.target.value)}
-            onBlur={onFieldBlur}
-            placeholder="🌈"
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm mt-1"
-          />
-          <p className="text-xs text-muted-foreground mt-1">Add an emoji or short visual, such as 🎵 or ___ 💬.</p>
-        </div>
 
         <div>
           <Label className="text-xs">Small Hint word (optional)</Label>

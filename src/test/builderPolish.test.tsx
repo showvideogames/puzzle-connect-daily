@@ -335,7 +335,7 @@ describe("/create builder page", () => {
     fireEvent.change(screen.getByLabelText("Puzzle Title"), { target: { value: "Golf Words" } });
     fireEvent.change(screen.getByLabelText(/Your Name/), { target: { value: "Sam West" } });
     fireEvent.click(within(screen.getByRole("group", { name: "Puzzle style" })).getByRole("button", { name: "Classic" }));
-    fireEvent.click(screen.getByLabelText(/Alphabetize answers/));
+    fireEvent.click(screen.getByLabelText(/alphabetize answers/i));
 
     fireEvent.click(screen.getByRole("button", { name: "Start Over" }));
     // Confirmation shown; nothing cleared yet.
@@ -360,6 +360,6 @@ describe("/create builder page", () => {
     expect(
       within(screen.getByRole("group", { name: "Puzzle style" })).getByRole("button", { name: "Rainbow" }).getAttribute("aria-pressed")
     ).toBe("true");
-    expect((screen.getByLabelText(/Alphabetize answers/) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(/alphabetize answers/i) as HTMLInputElement).checked).toBe(true);
   });
 });

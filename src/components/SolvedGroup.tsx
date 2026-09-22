@@ -1,6 +1,7 @@
 import { forwardRef } from "react";
 import { PuzzleGroup } from "@/lib/types";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
+import { CategoryEmojiInline } from "./CategoryEmojiInline";
 
 const groupColors: Record<number, { bg: string; text: string }> = {
   1: { bg: "bg-group-1", text: "text-group-1-fg" },
@@ -39,6 +40,11 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
   const displayWords = alphabetizeCompleted
     ? [...group.words].sort((a, b) => a.localeCompare(b))
     : group.words;
+  // Only the EXPLICIT Category Emoji is appended here. Older puzzles with no
+  // explicit value rely on the legacy fallback (an emoji typed into the end
+  // of the category title itself), which the plain title text below already
+  // shows — appending it a second time would duplicate it.
+  const explicitEmoji = (group.categoryEmoji ?? "").trim();
   return (
     <div
       ref={ref}
@@ -58,6 +64,12 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
           tile's typeface (Inter Tight) to visually connect the two. */}
       <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
         {group.category}
+        {explicitEmoji && (
+          <>
+            {" "}
+            <CategoryEmojiInline value={explicitEmoji} />
+          </>
+        )}
       </div>
       {/* Answers stay clearly secondary: smaller, lighter weight, and a
           touch more breathing room below the title (~4px via mt-1). */}
