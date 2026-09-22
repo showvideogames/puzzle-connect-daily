@@ -330,6 +330,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     boardReady: imagesReady,
   });
 
+  // Mini's tile grid, solved bars and Rainbow reveal bar are capped to a
+  // compact, near-square-tile width regardless of useWideBoard — a Mini is
+  // a quick 3x3, not a scaled-down Full, so it never grows into the same
+  // desktop board width a Full/wideBoard context gets. Nothing else reads
+  // this: the surrounding page container, the instruction line and the
+  // Shuffle/Deselect/Submit controls keep whatever width useWideBoard
+  // already gave them, so those controls stay their current comfortable
+  // width instead of shrinking down with the board.
+  const isMiniBoard = format.id === "mini";
+
   const [historyExpanded, setHistoryExpanded] = useState(true);
   const incorrectGuesses = useMemo(
     () => state.guessHistory.filter((a) => !a.isCorrect && !a.isRainbow && !a.isHintMarker),
@@ -1139,6 +1149,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
+      {/* Compact board wrapper — Mini only (see isMiniBoard above). Caps the
+          solved bars, Rainbow reveal bar and tile grid together at ~390px so
+          they all share one width and stop growing past it, while every
+          other element on the page (instruction, controls, mistakes/timer
+          row) is unaffected because it lives outside this div. */}
+      <div className={isMiniBoard ? "w-full max-w-[390px] mx-auto" : undefined}>
       {/* Solved groups — rainbow is interleaved at the position it was actually
           found (boardSlots), not always pinned to the top */}
       <div className="space-y-2 mb-2">
@@ -1215,7 +1231,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               only emits the classes it can see in the source and a computed
               class name would be purged from the production build. */}
           <div
-            className={`grid gap-1.5 ${useWideBoard ? "md:gap-3" : ""} ${shaking || spotShaking ? "animate-shake" : ""}`}
+            className={`grid ${isMiniBoard ? "gap-2" : `gap-1.5 ${useWideBoard ? "md:gap-3" : ""}`} ${shaking || spotShaking ? "animate-shake" : ""}`}
             style={{ gridTemplateColumns: `repeat(${format.columns}, minmax(0, 1fr))` }}
           >
           {remainingWords.map((word, index) => {
@@ -1254,6 +1270,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 isEmojiPuzzle={puzzle.isEmojiPuzzle ?? false}
                 colorPaletteMode={colorPaletteMode}
                 isPaintMode={colorPaletteMode && paletteMode !== "select"}
+                squareTiles={isMiniBoard}
                 data-word={word}
               />
             );
@@ -1261,6 +1278,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           </div>
         </div>
       )}
+      </div>
 
       {/* Correct-guess reveal overlay: clones portaled to document.body so
           every measurement here is viewport-relative, with no risk of a
