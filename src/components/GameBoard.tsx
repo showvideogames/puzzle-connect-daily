@@ -160,7 +160,10 @@ function StreakCelebration({ streak }: { streak: number }) {
   );
 }
 
-type PaletteMode = "select" | CategoryColor | "eraser";
+// "rainbow" paints/erases the player's own Rainbow annotation (tileRainbowMarks
+// in useGame) — independent of the CategoryColor paint below, so a tile can
+// carry both at once. See WordTile.tsx's tileRainbow prop.
+type PaletteMode = "select" | CategoryColor | "rainbow" | "eraser";
 
 // The paint-palette swatch for one category colour. bg-group-N is the exact
 // same CSS custom property the SOLVED category bars use (SolvedGroup.tsx), not
@@ -301,6 +304,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     matchedWords,
     tileColors,
     setTileColor,
+    tileRainbowMarks,
+    setTileRainbow,
     clearAllColors,
     hasAnyColor,
     smallHintVisible,
@@ -1051,7 +1056,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     if (!colorPaletteMode || paletteMode === "select") {
       toggleWord(word);
     } else if (paletteMode === "eraser") {
+      // Erases BOTH annotations — they're independent state, but the eraser
+      // is a single "clean this tile" action from the player's perspective.
       setTileColor(word, null);
+      setTileRainbow(word, false);
+    } else if (paletteMode === "rainbow") {
+      // Toggle, same as a regular color swatch below — never touches
+      // tileColor, so an existing category color survives.
+      setTileRainbow(word, !tileRainbowMarks[word]);
     } else {
       // Painting mode: yellow, green, blue, red
       // Clicking the same color twice clears the tile (toggle off)
@@ -1061,7 +1073,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         setTileColor(word, paletteMode);
       }
     }
-  }, [colorPaletteMode, paletteMode, toggleWord, setTileColor, tileColors]);
+  }, [colorPaletteMode, paletteMode, toggleWord, setTileColor, tileColors, setTileRainbow, tileRainbowMarks]);
 
   const streakToShow = streakBefore != null ? streakBefore + 1 : 1;
 
@@ -1135,6 +1147,19 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               />
             );
           })}
+          {/* Rainbow paint — the player's own "I think this is the Rainbow
+              answer" annotation. Independent of the category swatches above:
+              painting Rainbow onto a tile that already carries a category
+              color keeps that color (shown as an inset ring — see
+              WordTile.tsx), it doesn't replace it. rainbow-tile-static (not
+              the animated gradient) so this small swatch reads as a stable
+              icon rather than a distracting shimmer in the button row. */}
+          <button
+            onClick={() => setPaletteMode("rainbow")}
+            className={`w-10 h-10 rounded-lg rainbow-tile-static hover:scale-110 transition-all
+              ${paletteMode === "rainbow" ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+            aria-label="Rainbow paint"
+          />
           <button
             onClick={() => setPaletteMode("eraser")}
             className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
@@ -1259,6 +1284,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 colorCodeTiles={colorCodeTiles}
                 tileColor={tileColors[word] ?? null}
                 onColorChange={setTileColor}
+                tileRainbow={tileRainbowMarks[word] ?? false}
                 draggable={arrangeTiles}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
