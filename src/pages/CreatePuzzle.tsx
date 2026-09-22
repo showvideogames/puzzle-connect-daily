@@ -191,7 +191,7 @@ export default function CreatePuzzle() {
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
             <Check className="w-7 h-7 text-primary" />
           </div>
-          <h1 className="text-2xl font-tile font-extrabold">Puzzle Created!</h1>
+          <h1 className="text-2xl font-tile font-bold">Puzzle Created!</h1>
           <p className="text-sm text-muted-foreground">
             <span className="font-semibold text-foreground">{puzzleTitle.trim()}</span> — {visibility === "public" ? "Public" : "Private"}
           </p>

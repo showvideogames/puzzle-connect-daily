@@ -55,7 +55,7 @@ export default function BetaLibrary() {
       <div className="w-full max-w-[840px] px-4 mb-6 text-center">
         <div className="inline-flex items-center gap-2 mb-2">
           <FlaskConical className="w-6 h-6 text-primary" />
-          <h1 className="font-tile font-extrabold tracking-tight text-foreground text-3xl sm:text-4xl">
+          <h1 className="font-tile font-bold tracking-tight text-foreground text-3xl sm:text-4xl">
             Beta Playtesting
           </h1>
         </div>
@@ -85,7 +85,7 @@ export default function BetaLibrary() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-tile font-bold text-lg text-foreground truncate">
+                    <p className="font-tile font-semibold text-lg text-foreground truncate">
                       {p.title?.trim() || formatDate(p.date)}
                     </p>
                     <p className="text-xs text-muted-foreground">by {p.designerName}</p>

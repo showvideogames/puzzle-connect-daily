@@ -115,7 +115,7 @@ export function DraggableTileGrid({ tiles, onReorder, columns = 4, emptyLabel }:
             onTouchStart={() => setDraggedId(tile.id)}
             className={`${isBlank ? "border-2 border-dashed border-tile-border bg-transparent" : COLOR_CLASSES[tile.colorIndex]}
               select-none cursor-grab active:cursor-grabbing
-              rounded-lg px-2 py-3 min-h-[44px] flex items-center justify-center text-center font-tile font-[800] text-xs uppercase tracking-wide
+              rounded-lg px-2 py-3 min-h-[44px] flex items-center justify-center text-center font-tile font-[700] text-xs uppercase tracking-wide
               transition-transform duration-100
               ${draggedId === tile.id ? "opacity-60 scale-95" : ""}`}
             style={{ touchAction: "none" }}

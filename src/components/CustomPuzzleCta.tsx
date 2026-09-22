@@ -19,7 +19,7 @@ export function CustomPuzzleCta({ supportUrl }: CustomPuzzleCtaProps) {
       className="w-full max-w-[840px] mt-8 px-4"
     >
       <div className="rounded-2xl border border-border bg-card shadow-sm px-5 py-6 text-center">
-        <h2 id="custom-cta-heading" className="font-tile font-extrabold tracking-tight text-foreground text-2xl">
+        <h2 id="custom-cta-heading" className="font-tile font-bold tracking-tight text-foreground text-2xl">
           Enjoyed this puzzle?
         </h2>
         <p className="mt-1 text-foreground text-base">Make your own and challenge your friends.</p>

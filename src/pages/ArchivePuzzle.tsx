@@ -231,7 +231,7 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
               text-ellipsis below would never kick in and this column would
               just push the row (and the right-hand button) wider instead. */}
           <h1 className="min-w-0 text-center overflow-hidden whitespace-nowrap text-ellipsis
-            font-tile font-extrabold tracking-tight text-foreground text-[clamp(1.75rem,9vw,2.25rem)] sm:text-4xl md:text-5xl">
+            font-tile font-bold tracking-tight text-foreground text-[clamp(1.75rem,9vw,2.25rem)] sm:text-4xl md:text-5xl">
             {heroLabel}
           </h1>
 

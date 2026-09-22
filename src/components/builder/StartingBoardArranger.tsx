@@ -35,7 +35,7 @@ export function StartingBoardArranger({ tiles, onReorder, onRandomize, title, de
   return (
     <div className="space-y-3">
       <div data-testid="preview-header" className="text-center space-y-1">
-        <h2 data-testid="preview-title" className="font-tile font-extrabold text-xl leading-tight break-words">
+        <h2 data-testid="preview-title" className="font-tile font-bold text-xl leading-tight break-words">
           {title.trim() || DEFAULT_PREVIEW_TITLE}
         </h2>
         <p data-testid="preview-byline" className="text-xs text-muted-foreground break-words">

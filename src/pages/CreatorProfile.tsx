@@ -35,7 +35,7 @@ export function CreatorProfileView({ profile, loading, notFound, sort, onSort }:
           </div>
         ) : (
           <>
-            <h1 className="font-tile font-extrabold tracking-tight text-foreground text-3xl break-words">
+            <h1 className="font-tile font-bold tracking-tight text-foreground text-3xl break-words">
               {profile.displayName}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">Puzzle creator</p>

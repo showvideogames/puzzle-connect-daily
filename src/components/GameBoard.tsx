@@ -1188,7 +1188,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 animate-rainbow-breathe animate-rainbow-shimmer"
               style={{ background: theme.gradient, textShadow: theme.textShadow }}
             >
-              <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">{theme.spotPrompt}</div>
+              <div className="font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">{theme.spotPrompt}</div>
               <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-0.5">Find one word from each group</div>
             </button>
           ) : (
