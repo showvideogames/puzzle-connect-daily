@@ -35,6 +35,12 @@ import { applyPinnedContent, pinnedContentFrom } from "@/lib/puzzleVersion";
 import { createCustomPuzzle, getCustomPuzzleByShareId } from "@/lib/customPuzzles";
 import { GameBoard } from "@/components/GameBoard";
 import CreatePuzzle from "@/pages/CreatePuzzle";
+import { SolvedGroup } from "@/components/SolvedGroup";
+import { RainbowRevealBar } from "@/components/RainbowRevealBar";
+import { resolveTheme } from "@/lib/themes";
+import type { PuzzleGroup } from "@/lib/types";
+import { CategoryEditor } from "@/components/builder/CategoryEditor";
+import { RainbowPanel } from "@/components/builder/RainbowPanel";
 
 const LABEL = "Category Emoji (optional)";
 const HELPER = "Add an emoji or short visual, such as 🎵 or ___ 💬.";
@@ -424,5 +430,256 @@ describe("/create builder page", () => {
       (within(card).getAllByRole("textbox") as HTMLInputElement[]).forEach((i) => expect(i.value).toBe(""));
     }
     expect(screen.getAllByText(LABEL)).toHaveLength(4); // Rainbow panel hides again until 16 answers exist
+  });
+});
+
+describe("Solved bar rendering (the production bug: normal categories showed no emoji)", () => {
+  const group = (over: Partial<PuzzleGroup> = {}): PuzzleGroup => ({
+    category: "Cherry ___",
+    words: ["PIE", "BOMB", "PICKER", "BLOSSOM"],
+    difficulty: 1,
+    ...over,
+  });
+
+  it("shows the explicit Category Emoji immediately after the category name, exactly once", () => {
+    const { container } = render(<SolvedGroup group={group({ categoryEmoji: "🍒" })} />);
+    expect(container.textContent).toContain("Cherry ___");
+    expect(container.textContent!.match(/🍒/g)).toHaveLength(1);
+  });
+
+  it("older puzzles with no explicit emoji keep showing the title's own trailing emoji, never duplicated", () => {
+    const { container } = render(<SolvedGroup group={group({ category: "Parts of a Car 🚘", categoryEmoji: null })} />);
+    expect(container.textContent!.match(/🚘/g)).toHaveLength(1);
+  });
+
+  it("a blank (whitespace-only) explicit emoji is treated the same as unset", () => {
+    const { container } = render(<SolvedGroup group={group({ category: "Parts of a Car 🚘", categoryEmoji: "   " })} />);
+    expect(container.textContent!.match(/🚘/g)).toHaveLength(1);
+  });
+
+  it("renders a custom emoji code via the custom-emoji renderer, not as literal text", () => {
+    render(<SolvedGroup group={group({ categoryEmoji: ":caveman:" })} />);
+    const img = screen.getByRole("img") as HTMLImageElement;
+    expect(img.alt).toBe("caveman");
+    expect(img.src).toContain("caveman");
+    expect(screen.queryByText(/:caveman:/)).toBeNull();
+  });
+
+  it("restoring a solved game (pinned/versioned snapshot round-trip) still renders the emoji", () => {
+    const puzzle: Puzzle = {
+      id: "p", date: "", designerName: "d", versionId: "v1", alphabetizeCompleted: true,
+      groups: [group({ categoryEmoji: "🍒" }), ...Array.from({ length: 3 }, (_, i) => group({ category: `G${i}`, difficulty: (i + 2) as 2 | 3 | 4 }))],
+      rainbowHerring: null,
+    };
+    const pinned = pinnedContentFrom(puzzle)!;
+    const restored = applyPinnedContent({ ...puzzle, versionId: "v2" }, pinned);
+    const { container } = render(<SolvedGroup group={restored.groups[0]} />);
+    expect(container.textContent!.match(/🍒/g)).toHaveLength(1);
+  });
+});
+
+describe("Rainbow solved bar rendering", () => {
+  const theme = resolveTheme(null);
+  const bar = (props: Partial<Parameters<typeof RainbowRevealBar>[0]> = {}) =>
+    render(
+      <RainbowRevealBar
+        categoryName={null}
+        categoryEmoji={null}
+        theme={theme}
+        words={["A", "B", "C", "D"]}
+        textClass="text-white"
+        background="linear-gradient(to right, red, blue)"
+        curtain
+        {...props}
+      />
+    );
+
+  it("shows the explicit Category Emoji immediately after the Rainbow's title, exactly once", () => {
+    const { container } = bar({ categoryName: "Mixed Bag", categoryEmoji: "🎁" });
+    expect(container.textContent).toContain("Mixed Bag");
+    expect(container.textContent!.match(/🎁/g)).toHaveLength(1);
+  });
+
+  it("falls back to the theme's default title+emoji when nothing is customized", () => {
+    const { container } = bar();
+    expect(container.textContent).toContain(theme.label);
+    expect(container.textContent!.match(new RegExp(theme.emoji, "g"))).toHaveLength(1);
+  });
+
+  it("a custom name with its own baked-in emoji is not duplicated", () => {
+    const { container } = bar({ categoryName: "Mixed Bag 🌈", categoryEmoji: null });
+    expect(container.textContent!.match(/🌈/g)).toHaveLength(1);
+  });
+
+  it("renders a custom emoji code via the custom-emoji renderer", () => {
+    bar({ categoryName: "Mixed", categoryEmoji: ":caveman:" });
+    const img = screen.getByRole("img") as HTMLImageElement;
+    expect(img.alt).toBe("caveman");
+  });
+
+  it("alphabetizes the Rainbow's own answers when alphabetizeCompleted is true, keeps authored order when false", () => {
+    const { container: alphabetized } = bar({ words: ["Zebra", "Apple", "Mango"], alphabetizeCompleted: true });
+    const { container: authored } = bar({ words: ["Zebra", "Apple", "Mango"], alphabetizeCompleted: false });
+    const order = (c: HTMLElement) => ["Zebra", "Apple", "Mango"].filter((w) => c.textContent!.indexOf(w) >= 0).sort((a, b) => c.textContent!.indexOf(a) - c.textContent!.indexOf(b));
+    expect(order(alphabetized)).toEqual(["Apple", "Mango", "Zebra"]);
+    expect(order(authored)).toEqual(["Zebra", "Apple", "Mango"]);
+  });
+});
+
+describe("Regression fixture: every solved bar on a real board shows its Category Emoji", () => {
+  // Mirrors the reported production bug: Rainbow showed its emoji, the four
+  // standard categories did not.
+  const FULL_GROUPS: PuzzleGroup[] = [
+    { category: "Cherry ___", words: ["PIE", "BOMB", "PICKER", "BLOSSOM"], difficulty: 1, categoryEmoji: "🍒" },
+    { category: "Things You Blow", words: ["BUBBLE", "WHISTLE", "KISS", "FUSE"], difficulty: 2, categoryEmoji: "💨" },
+    { category: "Terms of Endearment", words: ["HONEY", "SWEETIE", "DARLING", "DEAR"], difficulty: 3, categoryEmoji: "🥰" },
+    { category: "Card Games", words: ["POKER", "BRIDGE", "HEARTS", "SPADES"], difficulty: 4, categoryEmoji: ":caveman:" },
+  ];
+  const theme = resolveTheme(null);
+
+  it("Full: all four normal bars and the Rainbow bar each show their own emoji exactly once", () => {
+    render(
+      <>
+        {FULL_GROUPS.map((g) => (
+          <SolvedGroup key={g.category} group={g} />
+        ))}
+        <RainbowRevealBar
+          categoryName="Mixed Bag"
+          categoryEmoji="🌈"
+          theme={theme}
+          words={["PIE", "BUBBLE", "HONEY", "POKER"]}
+          textClass="text-white"
+          background={theme.gradient}
+          curtain
+        />
+      </>
+    );
+    expect(screen.getByText("Cherry ___").closest("div")!.textContent).toMatch(/🍒/);
+    expect(screen.getByText("Things You Blow").closest("div")!.textContent).toMatch(/💨/);
+    expect(screen.getByText("Terms of Endearment").closest("div")!.textContent).toMatch(/🥰/);
+    // The fourth group's emoji is a custom code, rendered as an image.
+    const cardGamesImg = screen.getByText("Card Games").closest("div")!.querySelector("img") as HTMLImageElement;
+    expect(cardGamesImg.alt).toBe("caveman");
+    expect(screen.getByText("Mixed Bag").closest("div")!.textContent).toMatch(/🌈/);
+    // Every emoji appears exactly once across the whole board.
+    for (const emoji of ["🍒", "💨", "🥰", "🌈"]) {
+      expect(document.body.textContent!.match(new RegExp(emoji, "g"))).toHaveLength(1);
+    }
+  });
+
+  it("Mini: all three normal bars and the Rainbow bar each show their own emoji exactly once", () => {
+    // A Mini uses difficulty 2, 3 and 4 (Green/Blue/Red) — see PuzzleGroup.difficulty.
+    const MINI_GROUPS: PuzzleGroup[] = [
+      { category: "Cherry ___", words: ["PIE", "BOMB", "PICKER"], difficulty: 2, categoryEmoji: "🍒" },
+      { category: "Things You Blow", words: ["BUBBLE", "WHISTLE", "KISS"], difficulty: 3, categoryEmoji: "💨" },
+      { category: "Terms of Endearment", words: ["HONEY", "SWEETIE", "DARLING"], difficulty: 4, categoryEmoji: "🥰" },
+    ];
+    render(
+      <>
+        {MINI_GROUPS.map((g) => (
+          <SolvedGroup key={g.category} group={g} />
+        ))}
+        <RainbowRevealBar
+          categoryName="Mixed Bag"
+          categoryEmoji="🌈"
+          theme={theme}
+          words={["PIE", "BUBBLE", "HONEY"]}
+          textClass="text-white"
+          background={theme.gradient}
+          curtain
+        />
+      </>
+    );
+    for (const [name, emoji] of [["Cherry ___", "🍒"], ["Things You Blow", "💨"], ["Terms of Endearment", "🥰"], ["Mixed Bag", "🌈"]] as const) {
+      expect(screen.getByText(name).closest("div")!.textContent).toMatch(new RegExp(emoji));
+    }
+    for (const emoji of ["🍒", "💨", "🥰", "🌈"]) {
+      expect(document.body.textContent!.match(new RegExp(emoji, "g"))).toHaveLength(1);
+    }
+  });
+});
+
+describe("Category editor layout: Name and Emoji share one row", () => {
+  // CategoryEditor is the ONE component Admin.tsx and CreatePuzzle.tsx both
+  // import (@/components/builder/CategoryEditor) — no admin-only or
+  // public-only fork — so exercising it directly here covers both callers.
+  // (The existing "/create builder page" tests above already render it
+  // through the real CreatePuzzle page and confirm Name still comes before
+  // Emoji in DOM order, which the layout below preserves.)
+  function editor() {
+    return render(
+      <CategoryEditor
+        colorIndex={1}
+        label="Yellow"
+        difficultyLabel="Easiest"
+        category="Songs"
+        onCategoryChange={() => {}}
+        categoryEmoji="🎵"
+        onCategoryEmojiChange={() => {}}
+        categoryPlaceholder="e.g. Songs"
+        answersRaw="A, B, C, D"
+        onAnswersRawChange={() => {}}
+        answersPlaceholder="Comma-separated"
+        answersLabel="Answers"
+        hintWord=""
+        onHintWordChange={() => {}}
+        hintPlaceholder="Optional"
+      />
+    );
+  }
+
+  it("places Category Name and Category Emoji as the two columns of one grid row", () => {
+    editor();
+    const nameInput = screen.getByDisplayValue("Songs");
+    const emojiInput = screen.getByDisplayValue("🎵");
+    const row = nameInput.closest("div")!.parentElement!;
+    expect(row.className).toMatch(/grid-cols-\[minmax\(0,7fr\)_minmax\(88px,3fr\)\]/);
+    expect(row.className).toMatch(/md:grid-cols-\[minmax\(0,4fr\)_minmax\(96px,1fr\)\]/);
+    // Both inputs are direct children of the same row, Name first.
+    expect(Array.from(row.children)).toEqual([nameInput.closest("div"), emojiInput.closest("div")]);
+  });
+
+  it("puts the Category Emoji helper text below the row, spanning full width (not inside either column)", () => {
+    editor();
+    const nameInput = screen.getByDisplayValue("Songs");
+    const row = nameInput.closest("div")!.parentElement!;
+    const helper = screen.getByText(/Add an emoji or short visual/);
+    expect(helper.parentElement).toBe(row.parentElement); // sibling of the row, not a child of it
+    expect(row.contains(helper)).toBe(false);
+  });
+
+  it("keeps Category Name before Category Emoji in DOM order (existing tests rely on this)", () => {
+    editor();
+    const textboxes = screen.getAllByRole("textbox") as HTMLInputElement[];
+    expect(textboxes[0].value).toBe("Songs");
+    expect(textboxes[1].value).toBe("🎵");
+  });
+
+  it("the Rainbow panel uses the same Name+Emoji row layout", () => {
+    render(
+      <RainbowPanel
+        groups={[1, 2, 3, 4].map((colorIndex) => ({ colorIndex: colorIndex as 1 | 2 | 3 | 4, label: `Group ${colorIndex}`, answers: [], selectedId: null }))}
+        onSelect={() => {}}
+        categoryName="Mixed Bag"
+        onCategoryNameChange={() => {}}
+        categoryEmoji="🌈"
+        onCategoryEmojiChange={() => {}}
+        hintWord=""
+        onHintWordChange={() => {}}
+        theme=""
+        onThemeChange={() => {}}
+        displayOrderTiles={[]}
+        onReorderDisplay={() => {}}
+      />
+    );
+    const nameInput = screen.getByDisplayValue("Mixed Bag");
+    const emojiInput = screen.getByDisplayValue("🌈");
+    const row = nameInput.closest("div")!.parentElement!;
+    expect(row.className).toMatch(/grid-cols-\[minmax\(0,7fr\)_minmax\(88px,3fr\)\]/);
+    expect(row.className).toMatch(/md:grid-cols-\[minmax\(0,4fr\)_minmax\(96px,1fr\)\]/);
+    expect(Array.from(row.children)).toEqual([nameInput.closest("div"), emojiInput.closest("div")]);
+    // Exactly one Category Emoji field for the Rainbow (the old, second copy
+    // further down the panel was removed when it moved next to the name).
+    expect(screen.getAllByText(LABEL)).toHaveLength(1);
   });
 });

@@ -1048,7 +1048,7 @@ export default function Admin() {
                   }}
                   className="rounded border-border"
                 />
-                <span className="text-sm font-medium text-ink">Alphabetize answers in completed categories</span>
+                <span className="text-sm font-medium text-ink">Automatically alphabetize answers in completed categories</span>
               </label>
 
               <CategoryList

@@ -77,24 +77,31 @@ export function CategoryEditor({
       </div>
       <div className="px-4 pb-4 pt-1 space-y-3">
         <div>
-          <Label className={`text-xs ${INK}`}>Category Name</Label>
-          <Input
-            value={category}
-            onChange={(e) => onCategoryChange(e.target.value)}
-            onBlur={onFieldBlur}
-            placeholder={categoryPlaceholder}
-            className={INPUT_CLASSES}
-          />
-        </div>
-        <div>
-          <Label className={`text-xs ${INK}`}>Category Emoji (optional)</Label>
-          <Input
-            value={categoryEmoji}
-            onChange={(e) => onCategoryEmojiChange(e.target.value)}
-            onBlur={onFieldBlur}
-            placeholder="🎵"
-            className={INPUT_CLASSES}
-          />
+          {/* Name gets the lion's share of the row (70/30 on narrow phones,
+              80/20 from md up) so the Emoji input stays usable without
+              crushing the Name field, which is edited far more often. */}
+          <div className="grid grid-cols-[minmax(0,7fr)_minmax(88px,3fr)] md:grid-cols-[minmax(0,4fr)_minmax(96px,1fr)] gap-2 md:gap-3 items-end">
+            <div>
+              <Label className={`text-xs ${INK}`}>Category Name</Label>
+              <Input
+                value={category}
+                onChange={(e) => onCategoryChange(e.target.value)}
+                onBlur={onFieldBlur}
+                placeholder={categoryPlaceholder}
+                className={INPUT_CLASSES}
+              />
+            </div>
+            <div>
+              <Label className={`text-xs ${INK}`}>Category Emoji (optional)</Label>
+              <Input
+                value={categoryEmoji}
+                onChange={(e) => onCategoryEmojiChange(e.target.value)}
+                onBlur={onFieldBlur}
+                placeholder="🎵"
+                className={INPUT_CLASSES}
+              />
+            </div>
+          </div>
           <p className={`text-[11px] mt-1 ${INK}`}>Add an emoji or short visual, such as 🎵 or ___ 💬.</p>
         </div>
         <div>

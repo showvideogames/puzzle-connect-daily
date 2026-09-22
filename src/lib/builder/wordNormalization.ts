@@ -7,5 +7,9 @@
  */
 export function normalizeWord(w: string): string {
   const trimmed = w.trim();
+  // toUpperCase, not toLocaleUpperCase: canonical stored answers must not
+  // vary by the admin device's locale. toUpperCase() already applies
+  // Unicode's locale-independent default case mapping (café -> CAFÉ,
+  // straße -> STRASSE), which is what we want deterministically.
   return /^img:/i.test(trimmed) ? trimmed.toLowerCase() : trimmed.toUpperCase();
 }

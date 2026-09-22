@@ -3,6 +3,7 @@ import { GameSettings } from "@/lib/settings";
 import { useGame } from "@/hooks/useGame";
 import { WordTile } from "./WordTile";
 import { SolvedGroup } from "./SolvedGroup";
+import { RainbowRevealBar } from "./RainbowRevealBar";
 import { dedupeHintMarkers } from "@/lib/hints";
 import { MistakeDots } from "./MistakeDots";
 import { DailyStatsModal } from "./DailyStatsModal";
@@ -115,28 +116,6 @@ function getResultHeadline(isWon: boolean, mistakes: number): string {
 // Same typography/spacing/separator treatment as SolvedGroup's answer line
 // — the completed Rainbow category should read as the same component
 // family as the four main categories, differing only in background.
-function RainbowWordsRow({ words }: { words: string[] }) {
-  return (
-    <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-1 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
-      {words.map((w, i) => (
-        <span key={`${w}-${i}`} className="inline-flex items-center gap-x-1">
-          {i > 0 && <span aria-hidden="true">·</span>}
-          {isCustomEmoji(w) ? (
-            <img
-              src={customEmojiUrl(w)}
-              alt={customEmojiName(w) ?? ""}
-              draggable={false}
-              style={{ height: "28px", width: "auto", objectFit: "contain" }}
-            />
-          ) : (
-            <span>{w}</span>
-          )}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 function getResultSubtitle(isWon: boolean, mistakes: number): string {
   if (isWon && mistakes === 0) return "No mistakes — impressive. Come back tomorrow!";
   if (isWon && mistakes === 1) return "Well done. Come back tomorrow!";
@@ -1165,22 +1144,18 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       <div className="space-y-2 mb-2">
         {boardSlots.map((slot) =>
           slot.kind === "rainbow" ? (
-            <div
+            <RainbowRevealBar
               key="rainbow-reveal"
-              className={`w-full rounded-lg py-3 px-4 text-center ${rainbowCardTextClass} ${
-                rainbowVisible ? "animate-rainbow-curtain" : ""
-              }`}
-              style={{
-                background: rainbowCardBg,
-                textShadow: rainbowCardTextShadow,
-                clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
-              }}
-            >
-              <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
-                {puzzle.rainbowCategoryName || theme.defaultCategoryName}
-              </div>
-              <RainbowWordsRow words={rainbowHerring!} />
-            </div>
+              categoryName={puzzle.rainbowCategoryName}
+              categoryEmoji={puzzle.rainbowCategoryEmoji}
+              theme={theme}
+              words={rainbowHerring!}
+              alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
+              textClass={rainbowCardTextClass}
+              background={rainbowCardBg}
+              textShadow={rainbowCardTextShadow}
+              curtain={rainbowVisible}
+            />
           ) : (
             <SolvedGroup
               key={slot.groupIdx}
@@ -1217,21 +1192,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-0.5">Find one word from each group</div>
             </button>
           ) : (
-            <div
-              className={`w-full rounded-lg py-3 px-4 text-center ${rainbowCardTextClass} ${
-                rainbowVisible ? "animate-rainbow-curtain" : ""
-              }`}
-              style={{
-                background: rainbowCardBg,
-                textShadow: rainbowCardTextShadow,
-                clipPath: rainbowVisible ? undefined : "inset(0 100% 0 0)",
-              }}
-            >
-              <div className="font-tile font-extrabold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
-                {puzzle.rainbowCategoryName || theme.defaultCategoryName}
-              </div>
-              <RainbowWordsRow words={rainbowHerring} />
-            </div>
+            <RainbowRevealBar
+              categoryName={puzzle.rainbowCategoryName}
+              categoryEmoji={puzzle.rainbowCategoryEmoji}
+              theme={theme}
+              words={rainbowHerring}
+              alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
+              textClass={rainbowCardTextClass}
+              background={rainbowCardBg}
+              textShadow={rainbowCardTextShadow}
+              curtain={rainbowVisible}
+            />
           )
         )}
       </div>
