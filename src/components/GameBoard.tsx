@@ -1150,11 +1150,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       )}
 
       {/* Compact board wrapper — Mini only (see isMiniBoard above). Caps the
-          solved bars, Rainbow reveal bar and tile grid together at ~390px so
+          solved bars, Rainbow reveal bar and tile grid together at ~330px so
           they all share one width and stop growing past it, while every
           other element on the page (instruction, controls, mistakes/timer
           row) is unaffected because it lives outside this div. */}
-      <div className={isMiniBoard ? "w-full max-w-[390px] mx-auto" : undefined}>
+      <div className={isMiniBoard ? "w-full max-w-[330px] mx-auto" : undefined}>
       {/* Solved groups — rainbow is interleaved at the position it was actually
           found (boardSlots), not always pinned to the top */}
       <div className="space-y-2 mb-2">
