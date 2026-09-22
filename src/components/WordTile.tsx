@@ -153,6 +153,11 @@ interface WordTileProps {
   // phase — plays a staggered bounce (checkingIndex sets the stagger order).
   isChecking?: boolean;
   checkingIndex?: number;
+  // Mini's compact board wants square (not 11:10) tiles at every width,
+  // including desktop — Mini's grid is capped at ~390px so it never reaches
+  // the flat 110px height Full/wideBoard tiles get there. Defaults to false
+  // so Full's existing aspect ratio is untouched.
+  squareTiles?: boolean;
 }
 
 export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordTile({
@@ -183,6 +188,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   hiddenForReveal = false,
   isChecking = false,
   checkingIndex = 0,
+  squareTiles = false,
 }, forwardedRef) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   // Timestamp of this tile's own last tap — each WordTile instance gets its
@@ -346,7 +352,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // desktop (md:768px+) keep the previously-approved flat 110px height,
   // unchanged from before this pass (md:aspect-auto hands sizing back to
   // that explicit height there).
-  const baseClasses = `tile-base font-tile aspect-[11/10] md:aspect-auto md:h-[110px] font-[700] transition-all duration-150 ease-out relative
+  const baseClasses = `tile-base font-tile ${squareTiles ? "aspect-square" : "aspect-[11/10] md:aspect-auto md:h-[110px]"} font-[700] transition-all duration-150 ease-out relative
     ${disabled ? (tileColor || isRainbow ? "cursor-default" : "opacity-50 cursor-default") : ""}
   `;
 
