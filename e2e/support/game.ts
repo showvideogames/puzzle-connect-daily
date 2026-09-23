@@ -71,6 +71,64 @@ export async function boardColumnCount(page: Page): Promise<number> {
   return template.trim().split(/\s+/).length;
 }
 
+/**
+ * Double-taps a tile the way a player does, opening its colour picker.
+ *
+ * Real taps on the touch device the 375px project emulates, real clicks on
+ * desktop; either way the browser delivers the two clicks WordTile listens
+ * for, and they have to land inside its 250ms double-tap window. Both
+ * branches therefore address the tile's centre point DIRECTLY — the box is
+ * measured once up front — rather than issuing two full Locator actions,
+ * whose per-action actionability checks would put an unbounded gap between
+ * the taps on a loaded CI runner.
+ *
+ * Requires the "Color-Code Tiles" setting; with Color Palette Mode on
+ * instead, a tap paints directly and no picker opens.
+ */
+export async function doubleTapTile(page: Page, word: string): Promise<Locator> {
+  const target = tile(page, word);
+  await expect(target).toBeVisible();
+  const box = await target.boundingBox();
+  if (!box) throw new Error(`tile "${word}" has no box to tap`);
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+
+  const hasTouch = await page.evaluate(() => navigator.maxTouchPoints > 0);
+  if (hasTouch) {
+    await page.touchscreen.tap(x, y);
+    await page.touchscreen.tap(x, y);
+  } else {
+    await page.mouse.click(x, y);
+    await page.mouse.click(x, y);
+  }
+
+  const picker = colorPicker(page, word);
+  await expect(picker).toBeVisible();
+  return picker;
+}
+
+/** The colour-picker popover belonging to one tile. */
+export function colorPicker(page: Page, word: string): Locator {
+  return page.locator(`[data-word="${word}"] .animate-fade-up`);
+}
+
+/**
+ * The colour names one interface offers, in rendered order. Reads accessible
+ * names, so it sees exactly what the player is offered — a swatch row's
+ * "Green paint" or a picker's "Green tile color".
+ */
+export async function offeredColors(scope: Locator | Page, suffix: string): Promise<string[]> {
+  const names = await scope.getByRole("button").evaluateAll(
+    (els, s) =>
+      els
+        .map((el) => el.getAttribute("aria-label") ?? "")
+        .filter((label) => label.endsWith(s))
+        .map((label) => label.slice(0, -s.length).trim()),
+    ` ${suffix}`
+  );
+  return names;
+}
+
 /** Selects a set of answers, asserting each one really became selected. */
 export async function selectWords(page: Page, words: string[]): Promise<void> {
   for (const word of words) {
