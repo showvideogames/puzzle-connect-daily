@@ -42,6 +42,14 @@ const COLOR_RING_BORDER_CLASS: Record<string, string> = {
   red: "border-group-4",
 };
 
+// The white gap that separates that ring from the rainbow gradient on BOTH
+// sides, so the category color never sits directly against a hue the
+// animation is also cycling through. See the long note at the ring's JSX for
+// the geometry and for why this is a literal white in both themes rather
+// than a theme token.
+const RAINBOW_RING_GAP_PX = 2;
+const RAINBOW_RING_GAP_COLOR = "#ffffff";
+
 // Count visible characters/emojis using Intl.Segmenter
 // Handles multi-codepoint emojis correctly (e.g. 👨‍👩‍👧‍👦 = 1)
 function countVisibleChars(str: string): number {
@@ -493,22 +501,57 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
             The animated rainbow gradient cycles through every hue, including
             each category color itself — so on some frames a same-hue ring
             (Yellow against the gradient's own yellow band, Green against its
-            green band, etc.) can get hard to place. The 1px inset separator
-            below fixes that: hsl(var(--ink)) is the theme's own foreground/
-            Ink token (dark in light mode, light in dark mode — see
-            index.css), so it adapts with the theme instead of being a fixed
-            color, and reads reliably against every band of the gradient.
-            Kept subtle (~40% opacity) so it trims the ring rather than
-            reading as its own second colored ring — raise the opacity only
-            if a specific color still gets lost against the gradient. Drawn
-            on the ring's INNER edge (a second inset box-shadow, not a second
-            border) so it never changes the 4px ring's own thickness or
-            color. */}
+            green band, etc.) can get hard to place. A thin band of white on
+            BOTH sides of the ring fixes that: the ring never touches the
+            gradient, so the only thing bordering the category color is a
+            neutral the gradient never contains, and "is this tile marked
+            blue or green?" stops depending on which frame of the animation
+            you happen to be looking at.
+
+            This replaces an earlier 1px hsl(var(--ink)/0.4) separator on the
+            ring's INNER edge only. That one adapted to the theme (a dark
+            hairline in light mode, a light one in dark mode), which sounds
+            tidier but is the wrong tool here: it only ever separated the
+            ring from the gradient on one side, and in dark mode it was
+            itself pale. The gap is deliberately a LITERAL white in both
+            themes rather than a theme token — its job is to be a constant,
+            gradient-free reference the eye reads the category color against,
+            and a token that went near-black in dark mode would put the ring
+            straight back against a moving background.
+
+            Geometry, and why it is drawn this way: the span is inset BY the
+            gap rather than sitting at inset-0, and the outer gap is an
+            OUTSET box-shadow filling exactly that inset band. That keeps the
+            whole treatment inside the button's padding box, so it can never
+            paint over the button's own 3px/4px selection border — an outset
+            shadow from inset-0 would have covered 2 of those 3px on mobile,
+            the same "something else eats the selection border" problem that
+            moved selection off ring/ring-offset in the first place. The
+            inner gap is an INSET box-shadow. So neither gap changes the 4px
+            ring's own thickness or color, and the ring itself stays a plain
+            border-group-N class. The radius is the tile's own minus the
+            inset, so the outset shadow's outer edge lands back exactly on
+            the tile's curve. */}
         {isRainbow && colorStyle && (
           <span
             aria-hidden="true"
-            className={`pointer-events-none absolute inset-0 rounded-[clamp(11px,1.2vw,14px)] border-[4px] ${COLOR_RING_BORDER_CLASS[tileColor as string]}`}
-            style={{ boxShadow: "inset 0 0 0 1px hsl(var(--ink) / 0.4)" }}
+            className={`pointer-events-none absolute border-[4px] ${COLOR_RING_BORDER_CLASS[tileColor as string]}`}
+            style={{
+              // Inset/radius/gap live here rather than in arbitrary Tailwind
+              // classes on purpose: Tailwind only emits classes it can see
+              // literally in the source, so an interpolated inset-[${...}]
+              // would be purged from the production build (the same trap
+              // GameBoard's grid-template-columns note describes). Inline
+              // style has no such constraint, which also lets all three
+              // derive from the one RAINBOW_RING_GAP_PX above. Units are
+              // written out rather than left to React's numeric-value px
+              // defaulting, so the three uses read identically.
+              inset: `${RAINBOW_RING_GAP_PX}px`,
+              borderRadius: `calc(clamp(11px,1.2vw,14px) - ${RAINBOW_RING_GAP_PX}px)`,
+              boxShadow:
+                `0 0 0 ${RAINBOW_RING_GAP_PX}px ${RAINBOW_RING_GAP_COLOR}, ` +
+                `inset 0 0 0 ${RAINBOW_RING_GAP_PX}px ${RAINBOW_RING_GAP_COLOR}`,
+            }}
           />
         )}
         {isImage ? (
