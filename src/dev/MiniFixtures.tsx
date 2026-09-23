@@ -14,9 +14,17 @@
  *   /__fixtures/mini?rainbow=1   a Rainbow Mini — one answer per category
  *   /__fixtures/mini?format=full the same fixture as a Full 4×4, for comparison
  *   /__fixtures/mini?long=1      the longest answers the tiles must survive
+ *   /__fixtures/mini?emoji=1     every category carries a Category Emoji
+ *   /__fixtures/mini?hintonly=1  the same, but the last category's visual is
+ *                                Hint Only: shown in the Full Hint, withheld
+ *                                from its solved bar (implies ?emoji=1)
+ *   /__fixtures/mini?hint=1      opens the Full Hint straight away, so the
+ *                                two places a visual can appear are visible
+ *                                on one screen
  *
  * Combinable: ?rainbow=1&long=1 is the worst case for the bonus card, whose
- * solved-answers row has to hold three long words on a 320px screen.
+ * solved-answers row has to hold three long words on a 320px screen, and
+ * ?rainbow=1&hintonly=1 shows Hint Only on both kinds of solved bar at once.
  */
 import { useSearchParams } from "react-router-dom";
 import { GameBoard } from "@/components/GameBoard";
@@ -46,7 +54,19 @@ const FULL_WORDS = [
 
 const CATEGORIES = ["Car Parts", "Singers", "___ House"];
 
-function fixturePuzzle(formatId: "full" | "mini", long: boolean, rainbow: boolean): Puzzle {
+// One visual per category, in the same order as CATEGORIES. The last is the
+// case Hint Only exists for: "___ 💬" reads as a clue to "___ House" but as
+// noise appended to the solved answer.
+const MINI_EMOJI = ["🚘", "🎤", "___ 💬"];
+const FULL_EMOJI = ["🎨", "🚘", "🎤", "___ 💬"];
+
+function fixturePuzzle(
+  formatId: "full" | "mini",
+  long: boolean,
+  rainbow: boolean,
+  emoji: boolean,
+  hintOnly: boolean
+): Puzzle {
   const format = getFormat(formatId);
   const words = formatId === "mini" ? (long ? MINI_WORDS_LONG : MINI_WORDS) : FULL_WORDS;
   const categories = formatId === "mini" ? CATEGORIES : ["Colors", "Car Parts", "Singers", "___ House"];
@@ -54,10 +74,11 @@ function fixturePuzzle(formatId: "full" | "mini", long: boolean, rainbow: boolea
   // what a Rainbow is on either format. Built from the same `words` the board
   // is, so it can never name a tile the board does not have.
   const herring = rainbow ? words.map((w) => w[0]) : null;
+  const emojis = formatId === "mini" ? MINI_EMOJI : FULL_EMOJI;
   return {
     // Distinct per variant: the fixtures share the real progress layer, so
     // two different boards under one id would resume each other's saved game.
-    id: `fixture-${formatId}${long ? "-long" : ""}${rainbow ? "-rainbow" : ""}`,
+    id: `fixture-${formatId}${long ? "-long" : ""}${rainbow ? "-rainbow" : ""}${emoji ? "-emoji" : ""}${hintOnly ? "-hintonly" : ""}`,
     format: formatId,
     date: "2026-09-21",
     title: "#1",
@@ -69,12 +90,17 @@ function fixturePuzzle(formatId: "full" | "mini", long: boolean, rainbow: boolea
       // colour ladder.
       difficulty: format.difficultyOrder[i],
       hintWord: null,
-      categoryEmoji: null,
+      categoryEmoji: emoji ? emojis[i] : null,
+      // Only the last category — so one board shows both behaviours side by
+      // side: the others append their visual, this one does not.
+      categoryEmojiHintOnly: hintOnly && i === words.length - 1,
     })),
     wordOrder: words.flat(),
     rainbowHerring: herring,
     rainbowCategoryName: rainbow ? "Hidden Trio" : null,
     rainbowHintWord: rainbow ? "SECRET" : null,
+    rainbowCategoryEmoji: rainbow && emoji ? "___ 💬" : null,
+    rainbowCategoryEmojiHintOnly: rainbow && hintOnly,
     isEmojiPuzzle: false,
     theme: null,
     alphabetizeCompleted: true,
@@ -87,7 +113,11 @@ export default function MiniFixtures() {
   const formatId = params.get("format") === "full" ? "full" : "mini";
   const long = params.get("long") === "1";
   const rainbow = params.get("rainbow") === "1";
-  const puzzle = fixturePuzzle(formatId, long, rainbow);
+  // Hint Only needs a visual to withhold, so it implies ?emoji=1.
+  const hintOnly = params.get("hintonly") === "1";
+  const emoji = hintOnly || params.get("emoji") === "1";
+  const hint = params.get("hint") === "1";
+  const puzzle = fixturePuzzle(formatId, long, rainbow, emoji, hintOnly);
   const format = getFormat(formatId);
 
   return (
@@ -98,13 +128,15 @@ export default function MiniFixtures() {
         DEV FIXTURE — {format.name} {format.sizeLabel}
         {rainbow ? " Rainbow" : " Classic"}
         {long ? " (long answers)" : ""}
+        {emoji ? (hintOnly ? " · Category Emoji, last one Hint Only" : " · Category Emoji") : ""}
       </p>
       <GameBoard
-        key={`${formatId}-${long}-${rainbow}`}
+        key={`${formatId}-${long}-${rainbow}-${emoji}-${hintOnly}-${hint}`}
         puzzle={puzzle}
         settings={loadSettings()}
         variant="dailyHomepage"
         showModeBadge={false}
+        fullHintUsed={hint}
       />
       <SiteFooter />
     </div>

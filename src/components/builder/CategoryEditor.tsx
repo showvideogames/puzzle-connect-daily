@@ -24,6 +24,9 @@ export interface CategoryEditorProps {
   onCategoryChange: (value: string) => void;
   categoryEmoji: string;
   onCategoryEmojiChange: (value: string) => void;
+  /** Hint Only: the emoji stays in the Full Hint but is kept off the solved bar. */
+  categoryEmojiHintOnly: boolean;
+  onCategoryEmojiHintOnlyChange: (value: boolean) => void;
   categoryPlaceholder: string;
   answersRaw: string;
   onAnswersRawChange: (value: string) => void;
@@ -51,6 +54,8 @@ export function CategoryEditor({
   onCategoryChange,
   categoryEmoji,
   onCategoryEmojiChange,
+  categoryEmojiHintOnly,
+  onCategoryEmojiHintOnlyChange,
   categoryPlaceholder,
   answersRaw,
   onAnswersRawChange,
@@ -110,7 +115,32 @@ export function CategoryEditor({
               />
             </div>
           </div>
-          <p className={`text-[11px] mt-1 ${INK}`}>Add an emoji or short visual, such as 🎵 or ___ 💬.</p>
+          {/* Helper and the Hint Only box share one line under the row, so
+              the box sits with the Emoji field it belongs to without
+              squeezing the (much narrower) Emoji column itself. */}
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <p className={`text-[11px] ${INK}`}>Add an emoji or short visual, such as 🎵 or ___ 💬.</p>
+            <label
+              htmlFor={fieldId("emoji-hint-only")}
+              className="flex items-center gap-1.5 shrink-0 cursor-pointer"
+              title="Show this visual in the hint only — the solved box keeps just the category name."
+            >
+              <input
+                id={fieldId("emoji-hint-only")}
+                type="checkbox"
+                checked={categoryEmojiHintOnly}
+                onChange={(e) => onCategoryEmojiHintOnlyChange(e.target.checked)}
+                onBlur={onFieldBlur}
+                className="rounded border-[#292825]/40"
+              />
+              <span className={`text-[11px] font-semibold ${INK}`}>Hint Only</span>
+            </label>
+          </div>
+          {categoryEmojiHintOnly && (
+            <p className={`text-[11px] mt-0.5 ${INK} opacity-80`}>
+              The solved box will show the Category Name on its own.
+            </p>
+          )}
         </div>
         <div>
           <Label htmlFor={fieldId("answers")} className={`text-xs ${INK}`}>{answersLabel}</Label>

@@ -17,6 +17,9 @@ interface RainbowPanelProps {
   onCategoryNameChange: (v: string) => void;
   categoryEmoji: string;
   onCategoryEmojiChange: (v: string) => void;
+  /** Hint Only: the emoji stays in the Full Hint but is kept off the Rainbow's solved bar. */
+  categoryEmojiHintOnly: boolean;
+  onCategoryEmojiHintOnlyChange: (v: boolean) => void;
   hintWord: string;
   onHintWordChange: (v: string) => void;
   theme: string;
@@ -44,6 +47,8 @@ export function RainbowPanel({
   onCategoryNameChange,
   categoryEmoji,
   onCategoryEmojiChange,
+  categoryEmojiHintOnly,
+  onCategoryEmojiHintOnlyChange,
   hintWord,
   onHintWordChange,
   theme,
@@ -107,7 +112,31 @@ export function RainbowPanel({
               />
             </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Add an emoji or short visual, such as 🎵 or ___ 💬.</p>
+          {/* Same one-line helper + Hint Only arrangement as the standard
+              category cards — see CategoryEditor. */}
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <p className="text-xs text-muted-foreground">Add an emoji or short visual, such as 🎵 or ___ 💬.</p>
+            <label
+              htmlFor={fieldId("emoji-hint-only")}
+              className="flex items-center gap-1.5 shrink-0 cursor-pointer"
+              title="Show this visual in the hint only — the solved box keeps just the category name."
+            >
+              <input
+                id={fieldId("emoji-hint-only")}
+                type="checkbox"
+                checked={categoryEmojiHintOnly}
+                onChange={(e) => onCategoryEmojiHintOnlyChange(e.target.checked)}
+                onBlur={onFieldBlur}
+                className="rounded border-border"
+              />
+              <span className="text-xs font-semibold text-ink">Hint Only</span>
+            </label>
+          </div>
+          {categoryEmojiHintOnly && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              The solved box will show the Category Name on its own.
+            </p>
+          )}
         </div>
 
         <p className="text-xs text-muted-foreground">Choose one answer from each category.</p>

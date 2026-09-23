@@ -182,6 +182,10 @@ export function canonicalizePuzzleContent(raw: unknown): FakeRow {
       // Emitted ONLY when set, like validate_puzzle_content, so an older puzzle
       // canonicalises unchanged and never mints a spurious version.
       ...(emoji !== null ? { category_emoji: emoji } : {}),
+      // Hint Only rides on the emoji: emitted only when true AND there is an
+      // emoji to withhold, so a puzzle that predates it canonicalises
+      // byte-identically and a stray flag can never be stored on its own.
+      ...(emoji !== null && group.category_emoji_hint_only === true ? { category_emoji_hint_only: true } : {}),
     };
   });
 
@@ -257,7 +261,10 @@ export function canonicalizePuzzleContent(raw: unknown): FakeRow {
     ...(() => {
       const e = blankToNull(content.rainbow_category_emoji);
       if (e !== null && e.length > 40) throw new Error("Rainbow Category Emoji is too long");
-      return e !== null ? { rainbow_category_emoji: e } : {};
+      if (e === null) return {};
+      return content.rainbow_category_emoji_hint_only === true
+        ? { rainbow_category_emoji: e, rainbow_category_emoji_hint_only: true }
+        : { rainbow_category_emoji: e };
     })(),
   };
 }
@@ -377,6 +384,7 @@ export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
       hint_word: hint,
       sort_order: index,
       ...(emoji !== null ? { category_emoji: emoji } : {}),
+      ...(emoji !== null && group.category_emoji_hint_only === true ? { category_emoji_hint_only: true } : {}),
     };
   });
 
@@ -435,7 +443,10 @@ export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
     ...(() => {
       const e = blankToNull(content.rainbow_category_emoji);
       if (e !== null && e.length > 40) throw new Error("Rainbow Category Emoji is too long");
-      return e !== null ? { rainbow_category_emoji: e } : {};
+      if (e === null) return {};
+      return mode === "rainbow" && content.rainbow_category_emoji_hint_only === true
+        ? { rainbow_category_emoji: e, rainbow_category_emoji_hint_only: true }
+        : { rainbow_category_emoji: e };
     })(),
   };
 }
@@ -911,6 +922,7 @@ export class FakeSupabase {
           is_emoji_puzzle: canonical.is_emoji_puzzle,
           alphabetize_completed: canonical.alphabetize_completed,
           rainbow_category_emoji: (canonical.rainbow_category_emoji as string | undefined) ?? null,
+          rainbow_category_emoji_hint_only: canonical.rainbow_category_emoji_hint_only === true,
         };
         // Mirrors admin_save_puzzle's `coalesce(nullif(btrim(...), ''), 'Sam
         // West')`: trimmed, and never blank -- clearing the field in the
@@ -1032,6 +1044,9 @@ export class FakeSupabase {
             sort_order: g.sort_order,
             hint_word: g.hint_word,
             category_emoji: (g.category_emoji as string | undefined) ?? null,
+            // The column is NOT NULL DEFAULT false, so a canonical form that
+            // omits the key reads back as a real false, never undefined.
+            category_emoji_hint_only: g.category_emoji_hint_only === true,
           });
         }
         this._log("puzzle_groups", "upsert");

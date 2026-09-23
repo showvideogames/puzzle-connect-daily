@@ -616,6 +616,8 @@ describe("Category editor layout: Name and Emoji share one row", () => {
         onCategoryChange={() => {}}
         categoryEmoji="🎵"
         onCategoryEmojiChange={() => {}}
+        categoryEmojiHintOnly={false}
+        onCategoryEmojiHintOnlyChange={() => {}}
         categoryPlaceholder="e.g. Songs"
         answersRaw="A, B, C, D"
         onAnswersRawChange={() => {}}
@@ -639,13 +641,16 @@ describe("Category editor layout: Name and Emoji share one row", () => {
     expect(Array.from(row.children)).toEqual([nameInput.closest("div"), emojiInput.closest("div")]);
   });
 
-  it("puts the Category Emoji helper text below the row, spanning full width (not inside either column)", () => {
+  it("puts the Category Emoji helper text below the row, beside the Hint Only box (not inside either column)", () => {
     editor();
     const nameInput = screen.getByDisplayValue("Songs");
     const row = nameInput.closest("div")!.parentElement!;
     const helper = screen.getByText(/Add an emoji or short visual/);
-    expect(helper.parentElement).toBe(row.parentElement); // sibling of the row, not a child of it
+    // The helper now shares one line with the Hint Only checkbox; that line
+    // is a sibling of the Name+Emoji row, never a child of either column.
+    expect(helper.parentElement!.parentElement).toBe(row.parentElement);
     expect(row.contains(helper)).toBe(false);
+    expect(helper.parentElement!.contains(screen.getByLabelText("Hint Only"))).toBe(true);
   });
 
   it("keeps Category Name before Category Emoji in DOM order (existing tests rely on this)", () => {
@@ -664,6 +669,8 @@ describe("Category editor layout: Name and Emoji share one row", () => {
         onCategoryNameChange={() => {}}
         categoryEmoji="🌈"
         onCategoryEmojiChange={() => {}}
+        categoryEmojiHintOnly={false}
+        onCategoryEmojiHintOnlyChange={() => {}}
         hintWord=""
         onHintWordChange={() => {}}
         theme=""

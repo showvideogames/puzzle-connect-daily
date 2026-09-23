@@ -27,6 +27,8 @@ export interface CustomGroupInput {
   words: string[];
   hintWord: string | null;
   categoryEmoji?: string | null;
+  /** Hint Only — see PuzzleGroup.categoryEmojiHintOnly. */
+  categoryEmojiHintOnly?: boolean | null;
 }
 
 export interface CustomPuzzleContentInput {
@@ -44,6 +46,7 @@ export interface CustomPuzzleContentInput {
   rainbowCategoryName: string | null;
   rainbowHintWord: string | null;
   rainbowCategoryEmoji?: string | null;
+  rainbowCategoryEmojiHintOnly?: boolean | null;
   alphabetizeCompleted: boolean;
 }
 
@@ -72,12 +75,21 @@ function contentPayload(content: CustomPuzzleContentInput) {
       words: g.words,
       hint_word: g.hintWord,
       category_emoji: g.categoryEmoji?.trim() || null,
+      // Emitted only when there is an emoji to withhold — see
+      // buildContentPayload's hintOnly, and validate_custom_puzzle_content,
+      // which drops a stray flag the same way.
+      ...(g.categoryEmojiHintOnly && (g.categoryEmoji?.trim() || null) !== null
+        ? { category_emoji_hint_only: true as const }
+        : {}),
     })),
     word_order: content.wordOrder,
     rainbow_herring: content.mode === "rainbow" ? content.rainbowHerring : null,
     rainbow_category_name: content.mode === "rainbow" ? content.rainbowCategoryName : null,
     rainbow_hint_word: content.mode === "rainbow" ? content.rainbowHintWord : null,
     rainbow_category_emoji: content.mode === "rainbow" ? content.rainbowCategoryEmoji?.trim() || null : null,
+    ...(content.mode === "rainbow" && content.rainbowCategoryEmojiHintOnly && (content.rainbowCategoryEmoji?.trim() || null) !== null
+      ? { rainbow_category_emoji_hint_only: true as const }
+      : {}),
     alphabetize_completed: content.alphabetizeCompleted,
   };
 }
@@ -119,12 +131,20 @@ interface CustomPuzzleRow {
   content: {
     format?: PuzzleFormatId;
     mode: CustomPuzzleMode;
-    groups: { category: string; words: string[]; hint_word: string | null; category_emoji?: string | null; sort_order: number }[];
+    groups: {
+      category: string;
+      words: string[];
+      hint_word: string | null;
+      category_emoji?: string | null;
+      category_emoji_hint_only?: boolean | null;
+      sort_order: number;
+    }[];
     word_order: string[] | null;
     rainbow_herring: string[] | null;
     rainbow_category_name: string | null;
     rainbow_hint_word: string | null;
     rainbow_category_emoji?: string | null;
+    rainbow_category_emoji_hint_only?: boolean | null;
     alphabetize_completed: boolean;
   };
 }
@@ -144,6 +164,9 @@ function mapRowToPuzzle(row: CustomPuzzleRow): Puzzle {
       difficulty: (format.difficultyOrder[i] ?? format.difficultyOrder[format.difficultyOrder.length - 1]) as Difficulty,
       hintWord: g.hint_word ?? null,
       categoryEmoji: g.category_emoji ?? null,
+      // Absent on every custom puzzle stored before Hint Only existed, which
+      // means "show it on the solved bar" — exactly how they read today.
+      categoryEmojiHintOnly: g.category_emoji_hint_only ?? false,
     }));
 
   return {
@@ -162,6 +185,8 @@ function mapRowToPuzzle(row: CustomPuzzleRow): Puzzle {
     rainbowCategoryName: row.content.mode === "rainbow" ? row.content.rainbow_category_name : null,
     rainbowHintWord: row.content.mode === "rainbow" ? row.content.rainbow_hint_word : null,
     rainbowCategoryEmoji: row.content.mode === "rainbow" ? row.content.rainbow_category_emoji ?? null : null,
+    rainbowCategoryEmojiHintOnly:
+      row.content.mode === "rainbow" ? row.content.rainbow_category_emoji_hint_only ?? false : false,
     isEmojiPuzzle: false,
     isFreePuzzle: false,
     theme: null,

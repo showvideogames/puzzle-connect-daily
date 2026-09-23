@@ -731,6 +731,7 @@ export type Database = {
         Row: {
           category: string
           category_emoji: string | null
+          category_emoji_hint_only: boolean
           difficulty: number
           hint_word: string | null
           id: string
@@ -741,6 +742,7 @@ export type Database = {
         Insert: {
           category: string
           category_emoji?: string | null
+          category_emoji_hint_only?: boolean
           difficulty: number
           hint_word?: string | null
           id?: string
@@ -751,6 +753,7 @@ export type Database = {
         Update: {
           category?: string
           category_emoji?: string | null
+          category_emoji_hint_only?: boolean
           difficulty?: number
           hint_word?: string | null
           id?: string
@@ -844,6 +847,7 @@ export type Database = {
           is_free_puzzle: boolean | null
           is_published: boolean
           rainbow_category_emoji: string | null
+          rainbow_category_emoji_hint_only: boolean
           rainbow_category_name: string | null
           rainbow_herring: string[] | null
           rainbow_hint_word: string | null
@@ -868,6 +872,7 @@ export type Database = {
           is_free_puzzle?: boolean | null
           is_published?: boolean
           rainbow_category_emoji?: string | null
+          rainbow_category_emoji_hint_only?: boolean
           rainbow_category_name?: string | null
           rainbow_herring?: string[] | null
           rainbow_hint_word?: string | null
@@ -892,6 +897,7 @@ export type Database = {
           is_free_puzzle?: boolean | null
           is_published?: boolean
           rainbow_category_emoji?: string | null
+          rainbow_category_emoji_hint_only?: boolean
           rainbow_category_name?: string | null
           rainbow_herring?: string[] | null
           rainbow_hint_word?: string | null

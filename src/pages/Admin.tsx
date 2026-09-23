@@ -359,6 +359,7 @@ export default function Admin() {
       difficulty: g.difficulty,
       hintWord: g.hintWord,
       categoryEmoji: g.categoryEmoji,
+      categoryEmojiHintOnly: g.categoryEmojiHintOnly,
     })),
     isPublished,
     isBeta,
@@ -367,6 +368,7 @@ export default function Admin() {
     rainbowCategoryName: builder.rainbowCategoryName,
     rainbowHintWord: builder.rainbowHintWord,
     rainbowCategoryEmoji: builder.rainbowCategoryEmoji,
+    rainbowCategoryEmojiHintOnly: builder.rainbowCategoryEmojiHintOnly,
     rainbowWordOrder: builder.textsFor(builder.rainbowWordOrderIds),
     theme: builder.theme,
     isEmojiPuzzle,
@@ -423,6 +425,7 @@ export default function Admin() {
     builder.rainbowCategoryName,
     builder.rainbowHintWord,
     builder.rainbowCategoryEmoji,
+    builder.rainbowCategoryEmojiHintOnly,
     builder.theme,
     builder.alphabetizeCompleted,
     isEmojiPuzzle,
@@ -449,12 +452,14 @@ export default function Admin() {
           difficulty: g.difficulty,
           hintWord: g.hintWord,
           categoryEmoji: g.categoryEmoji ?? "",
+          categoryEmojiHintOnly: g.categoryEmojiHintOnly ?? false,
         })),
         wordOrder: draft.wordOrder,
         rainbowHerring: draft.rainbowHerring.every(Boolean) ? (draft.rainbowHerring as string[]) : null,
         rainbowCategoryName: draft.rainbowCategoryName ?? "",
         rainbowHintWord: draft.rainbowHintWord ?? "",
         rainbowCategoryEmoji: draft.rainbowCategoryEmoji ?? "",
+        rainbowCategoryEmojiHintOnly: draft.rainbowCategoryEmojiHintOnly ?? false,
         theme: draft.theme ?? "",
         alphabetizeCompleted: draft.alphabetizeCompleted ?? true,
         // A draft without a stored style leaves the current style alone.
@@ -808,6 +813,10 @@ export default function Admin() {
       difficulty: g.difficulty as Difficulty,
       hintWord: (g.hint_word ?? null) as string | null,
       categoryEmoji: (g.category_emoji ?? null) as string | null,
+      // Absent on a database without the Hint Only migration applied, and on
+      // every puzzle saved before it — both load back unchecked, so reopening
+      // an existing puzzle never changes how it displays.
+      categoryEmojiHintOnly: (g.category_emoji_hint_only ?? false) as boolean,
     }));
     // The puzzle's OWN stored format, never the one the form happened to be
     // on. A row with no format column (pre-migration) or a null value is a
@@ -828,6 +837,7 @@ export default function Admin() {
       rainbowCategoryName: p.rainbow_category_name || "",
       rainbowHintWord: p.rainbow_hint_word || "",
       rainbowCategoryEmoji: p.rainbow_category_emoji || "",
+      rainbowCategoryEmojiHintOnly: p.rainbow_category_emoji_hint_only ?? false,
       theme: p.theme || "",
       alphabetizeCompleted: p.alphabetize_completed ?? true,
       // An existing puzzle keeps the style it was saved with.
@@ -850,6 +860,7 @@ export default function Admin() {
           rainbowCategoryName: p.rainbow_category_name ?? null,
           rainbowHintWord: p.rainbow_hint_word ?? null,
           rainbowCategoryEmoji: p.rainbow_category_emoji ?? null,
+          rainbowCategoryEmojiHintOnly: p.rainbow_category_emoji_hint_only ?? false,
           theme: p.theme ?? null,
           isEmojiPuzzle: p.is_emoji_puzzle ?? false,
           alphabetizeCompleted: p.alphabetize_completed ?? true,
@@ -1066,6 +1077,8 @@ export default function Admin() {
                       onCategoryChange={(v) => builder.updateCategoryName(i, v)}
                       categoryEmoji={g.categoryEmoji}
                       onCategoryEmojiChange={(v) => builder.updateCategoryEmoji(i, v)}
+                      categoryEmojiHintOnly={g.categoryEmojiHintOnly}
+                      onCategoryEmojiHintOnlyChange={(v) => builder.updateCategoryEmojiHintOnly(i, v)}
                       categoryPlaceholder={placeholders.category[i]}
                       answersRaw={g.answersRaw}
                       onAnswersRawChange={(v) => builder.updateAnswersRaw(i, v)}
@@ -1095,6 +1108,8 @@ export default function Admin() {
                   onCategoryNameChange={builder.setRainbowCategoryName}
                   categoryEmoji={builder.rainbowCategoryEmoji}
                   onCategoryEmojiChange={builder.setRainbowCategoryEmoji}
+                  categoryEmojiHintOnly={builder.rainbowCategoryEmojiHintOnly}
+                  onCategoryEmojiHintOnlyChange={builder.setRainbowCategoryEmojiHintOnly}
                   hintWord={builder.rainbowHintWord}
                   onHintWordChange={builder.setRainbowHintWord}
                   theme={builder.theme}

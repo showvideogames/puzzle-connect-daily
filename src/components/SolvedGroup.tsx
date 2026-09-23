@@ -44,7 +44,12 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
   // explicit value rely on the legacy fallback (an emoji typed into the end
   // of the category title itself), which the plain title text below already
   // shows — appending it a second time would duplicate it.
-  const explicitEmoji = (group.categoryEmoji ?? "").trim();
+  //
+  // "Hint Only" withholds it from THIS bar while the Full Hint still shows it
+  // (see GameBoard's hintItems) — for a visual that reads as a clue but not
+  // as part of the answer, e.g. "___ 💬" on a "HIGH ___" category. It never
+  // touches the category NAME, so an emoji typed into the name still shows.
+  const explicitEmoji = group.categoryEmojiHintOnly ? "" : (group.categoryEmoji ?? "").trim();
   return (
     <div
       ref={ref}
