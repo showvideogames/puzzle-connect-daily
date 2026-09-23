@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
-import { FakeSupabase } from "./fakeSupabase";
+import { FakeSupabase, rowId } from "./fakeSupabase";
 
 const db = new FakeSupabase();
 
@@ -501,7 +501,7 @@ describe("creator profiles", () => {
     db.tables.custom_puzzles.find((p) => p.share_id === hidden.shareId)!.moderation_status = "hidden";
     // plays: Oldest 3, Middle 1;  favorites: Middle 2, Newest 1
     const play = (shareId: string, n: number) => {
-      const pid = db.tables.custom_puzzles.find((p) => p.share_id === shareId)!.id;
+      const pid = rowId(db.tables.custom_puzzles.find((p) => p.share_id === shareId)!.id);
       db.tables.custom_puzzle_stats.push({
         custom_puzzle_id: pid, wins: n, losses: 0,
         guesses_4: n, guesses_5: 0, guesses_6: 0, guesses_7: 0, guesses_8_plus: 0, win_guess_total: n * 4,

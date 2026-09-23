@@ -11,7 +11,8 @@ TODO: Document your project here
 | Command | What it runs |
 | --- | --- |
 | `npm test` | the component/unit suite (Vitest, jsdom) |
-| `npm run typecheck` | TypeScript for the app and the E2E harness |
+| `npm run typecheck` | TypeScript for the app and the E2E harness — CI's first gate |
+| `npm run typecheck:app` / `:e2e` | one project at a time, when you want the other's result too |
 | `npm run lint` | ESLint |
 | `npm run e2e:db:verify` | every migration on a clean in-process Postgres, plus the full fixture seed — no Docker needed |
 | `npm run e2e:test` | the browser end-to-end suite against a disposable local Supabase stack |

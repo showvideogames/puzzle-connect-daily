@@ -4,6 +4,10 @@ name: End-to-end tests
 # main: the point is to review a change before it lands, and a second
 # identical run after the merge costs minutes without answering a new
 # question.
+#
+# Three gates, cheapest first, each waiting on the one before it:
+#   TypeScript  →  Schema and fixtures (PGlite)  →  Browser suite
+# A pull request that does not compile stops at the first one.
 on:
   pull_request:
   workflow_dispatch:
@@ -27,14 +31,50 @@ permissions:
   contents: read
 
 jobs:
-  # Fast gate. Applies the pre-git baseline plus every migration to a clean
-  # in-process Postgres and runs the whole seed through the app's own RPCs.
-  # No Docker, no browser — about ten seconds, and it catches a broken
-  # migration or an invalid fixture before anything slower starts.
+  # The first gate, and the cheapest: no database, no browser, under a
+  # minute. TypeScript errors used to reach main unnoticed because nothing
+  # ran the compiler — `vite build` strips types without checking them, so a
+  # green deploy said nothing about them. This job is what makes that
+  # impossible: everything below waits on it, so a pull request carrying a
+  # type error fails here and never spends the minutes the browser suite
+  # costs.
+  #
+  # The two projects run as SEPARATE steps on purpose. Chained with &&, a
+  # failure in the app project would stop the e2e project from running at
+  # all, and its result would silently be missing rather than reported.
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck the app and its unit tests
+        run: npm run typecheck:app
+
+      # `if: always()` so this still reports when the app project failed —
+      # one run, both answers.
+      - name: Typecheck the end-to-end project
+        if: always()
+        run: npm run typecheck:e2e
+
+  # Applies the pre-git baseline plus every migration to a clean in-process
+  # Postgres and runs the whole seed through the app's own RPCs. No Docker,
+  # no browser — about ten seconds, and it catches a broken migration or an
+  # invalid fixture before anything slower starts.
   schema:
     name: Schema and fixtures (PGlite)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: typecheck
     steps:
       - uses: actions/checkout@v4
 

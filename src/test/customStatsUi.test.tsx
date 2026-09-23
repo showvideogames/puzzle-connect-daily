@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
-import { FakeSupabase } from "./fakeSupabase";
+import { FakeSupabase, rowId } from "./fakeSupabase";
 
 vi.setConfig({ testTimeout: 30000 });
 
@@ -246,7 +246,7 @@ describe("Replay", () => {
 describe("CustomStatsModal numbers", () => {
   const seed = async (over: Record<string, number>) => {
     const { shareId } = await createCustomPuzzle(INPUT);
-    const pid = db.tables.custom_puzzles.find((p) => p.share_id === shareId)!.id;
+    const pid = rowId(db.tables.custom_puzzles.find((p) => p.share_id === shareId)!.id);
     db.tables.custom_puzzle_stats.push({
       custom_puzzle_id: pid, wins: 0, losses: 0, guesses_4: 0, guesses_5: 0, guesses_6: 0,
       guesses_7: 0, guesses_8_plus: 0, win_guess_total: 0, ...over,

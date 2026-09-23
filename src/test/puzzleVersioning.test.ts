@@ -143,6 +143,9 @@ function currentPuzzle(puzzleId: string): Puzzle {
     rainbowCategoryName: (row.rainbow_category_name as string) ?? null,
     rainbowHintWord: (row.rainbow_hint_word as string) ?? null,
     isEmojiPuzzle: (row.is_emoji_puzzle as boolean) ?? false,
+    // Same read as the real loader (src/lib/puzzles.ts): the column decides,
+    // and a row that predates it defaults to sorted.
+    alphabetizeCompleted: (row.alphabetize_completed as boolean) ?? true,
     theme: (row.theme as string) ?? null,
     versionId: (row.current_version_id as string) ?? null,
   };
