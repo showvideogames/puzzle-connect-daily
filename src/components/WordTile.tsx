@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect, forwardRef } from "react";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
+import { categorySwatches } from "@/lib/categoryPalette";
+import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 
 const DOUBLE_TAP_DELAY_MS = 250;
 
@@ -39,13 +41,6 @@ const COLOR_RING_BORDER_CLASS: Record<string, string> = {
   blue: "border-group-3",
   red: "border-group-4",
 };
-
-const COLOR_CIRCLES: { key: string; circle: string }[] = [
-  { key: "yellow", circle: "bg-group-1" },
-  { key: "green",  circle: "bg-group-2" },
-  { key: "blue",   circle: "bg-group-3" },
-  { key: "red",    circle: "bg-group-4" },
-];
 
 // Count visible characters/emojis using Intl.Segmenter
 // Handles multi-codepoint emojis correctly (e.g. 👨‍👩‍👧‍👦 = 1)
@@ -138,10 +133,18 @@ interface WordTileProps {
   onTouchDragEnd?: () => void;
   column?: number;
   /**
-   * How many columns the board has, so the colour-picker popover's
-   * right-edge flip works on any grid width (4 on Full, 3 on Mini).
+   * The format of the board this tile sits on. Single source of truth for
+   * two things the picker needs:
+   *   • WHICH colours it offers — Full: Yellow/Green/Blue/Red, Mini:
+   *     Green/Blue/Red — via categorySwatches(), the exact same list Color
+   *     Palette Mode renders, so the two interfaces cannot disagree about
+   *     whether this board has a Yellow category.
+   *   • how many columns the board has, so the popover's right-edge flip
+   *     works on any grid width (4 on Full, 3 on Mini).
+   * Defaults to Full, which is what a tile rendered outside a real board
+   * (e.g. the tutorial) is.
    */
-  columnCount?: number;
+  format?: PuzzleFormat;
   isEmojiPuzzle?: boolean;
   // When set, "rainbow" tiles use this themed gradient (e.g. flag colors) instead
   // of the animated rainbow. rainbowTextShadow keeps the word legible over it.
@@ -192,7 +195,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   onTouchDragMove,
   onTouchDragEnd,
   column = 1,
-  columnCount = 4,
+  format = FULL_FORMAT,
   isEmojiPuzzle = false,
   rainbowGradient,
   rainbowTextShadow,
@@ -353,7 +356,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
 
   // The colour-picker popover flips to the right edge on the LAST column,
   // whichever column that is for this board's width.
-  const isRightEdge = column === columnCount;
+  const isRightEdge = column === format.columns;
 
   // Mobile height is DERIVED from width via aspect-ratio (11:10, i.e. tiles
   // are ~10% wider than tall) rather than an independently-tuned vw clamp —
@@ -563,18 +566,25 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
               flex items-center gap-1.5 animate-fade-up
               ${isRightEdge ? "right-0" : "left-0"}`}
           >
-            {COLOR_CIRCLES.map(({ key, circle }) => (
+            {/* One circle per colour THIS FORMAT uses, in difficulty order.
+                Shares categorySwatches() with Color Palette Mode's swatch row
+                (GameBoard.tsx) — that shared list is why a Mini, whose
+                categories are difficulties 2-4, offers Green/Blue/Red here
+                and never a Yellow it has no category for. */}
+            {categorySwatches(format).map(({ color, label, swatchClass }) => (
               <button
-                key={key}
-                onClick={(e) => { e.stopPropagation(); handleColorSelect(key); }}
-                className={`w-5 h-5 rounded-full ${circle} hover:scale-125 transition-transform
-                  ${tileColor === key ? "ring-2 ring-offset-1 ring-foreground" : ""}
+                key={color}
+                onClick={(e) => { e.stopPropagation(); handleColorSelect(color); }}
+                aria-label={`${label} tile color`}
+                className={`w-5 h-5 rounded-full ${swatchClass} hover:scale-125 transition-transform
+                  ${tileColor === color ? "ring-2 ring-offset-1 ring-foreground" : ""}
                 `}
               />
             ))}
             {tileColor && (
               <button
                 onClick={(e) => { e.stopPropagation(); handleColorSelect(null); }}
+                aria-label="Remove tile color"
                 className="w-5 h-5 rounded-full bg-muted border border-border text-muted-foreground
                   text-[10px] flex items-center justify-center hover:scale-125 transition-transform"
               >

@@ -30,7 +30,8 @@ import { loadPlayedDifficulties } from "@/lib/puzzleVersion";
 import { buildCustomShareText, buildOfficialShareText } from "@/lib/shareText";
 import { customPuzzlePath } from "@/lib/customPuzzles";
 import { resolveCategoryVisual, splitCategoryVisual } from "@/lib/categoryVisual";
-import { DIFFICULTY_COLOR_NAME, rainbowHerringFor, type CategoryColor } from "@/lib/puzzleFormat";
+import { rainbowHerringFor, type CategoryColor } from "@/lib/puzzleFormat";
+import { categorySwatches } from "@/lib/categoryPalette";
 import { formatActiveTime } from "@/lib/activeTimer";
 
 const DIFFICULTY_SQUARE: Record<number, string> = {
@@ -162,24 +163,9 @@ function StreakCelebration({ streak }: { streak: number }) {
 
 type PaletteMode = "select" | CategoryColor | "eraser";
 
-// The paint-palette swatch for one category colour. bg-group-N is the exact
-// same CSS custom property the SOLVED category bars use (SolvedGroup.tsx), not
-// a separately hardcoded hex — see WordTile.tsx's COLOR_STYLES/COLOR_CIRCLES
-// for the matching painted-tile fill and per-tile picker, which read the
-// identical classes. Since --group-1..4 has no .dark override (index.css),
-// these are automatically the same colour in both themes with no dark:
-// variant needed. Keyed by difficulty, so a format that uses difficulties
-// 2-4 (Mini: Green/Blue/Red) picks up exactly its own three swatches.
 // The board instruction reads as prose, so the count is spelled out. Falls
 // back to the digit for any size not listed, rather than printing nothing.
 const SELECTION_COUNT_WORD: Record<number, string> = { 3: "three", 4: "four" };
-
-const PALETTE_SWATCH_CLASS: Record<1 | 2 | 3 | 4, string> = {
-  1: "bg-group-1",
-  2: "bg-group-2",
-  3: "bg-group-3",
-  4: "bg-group-4",
-};
 
 interface GameBoardProps {
   puzzle: Puzzle;
@@ -1119,22 +1105,20 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <MousePointer2 className="w-5 h-5" />
           </button>
           {/* One swatch per colour THIS FORMAT uses, in difficulty order —
-              Full gets Yellow/Green/Blue/Red, Mini gets Green/Blue/Red. See
-              PALETTE_SWATCH_CLASS for why these are the solved-bar variables
-              rather than hardcoded hexes. */}
-          {format.difficultyOrder.map((difficulty) => {
-            const color = DIFFICULTY_COLOR_NAME[difficulty];
-            const label = color.charAt(0).toUpperCase() + color.slice(1);
-            return (
-              <button
-                key={color}
-                onClick={() => setPaletteMode(color)}
-                className={`w-10 h-10 rounded-lg ${PALETTE_SWATCH_CLASS[difficulty]} hover:scale-110 transition-all
-                  ${paletteMode === color ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
-                aria-label={`${label} paint`}
-              />
-            );
-          })}
+              Full gets Yellow/Green/Blue/Red, Mini gets Green/Blue/Red.
+              categorySwatches() is the shared list WordTile's double-tap
+              picker also renders, so the two colouring interfaces can never
+              drift apart; see categoryPalette.ts for why the fills are the
+              solved-bar CSS variables rather than hardcoded hexes. */}
+          {categorySwatches(format).map(({ color, label, swatchClass }) => (
+            <button
+              key={color}
+              onClick={() => setPaletteMode(color)}
+              className={`w-10 h-10 rounded-lg ${swatchClass} hover:scale-110 transition-all
+                ${paletteMode === color ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+              aria-label={`${label} paint`}
+            />
+          ))}
           <button
             onClick={() => setPaletteMode("eraser")}
             className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
@@ -1265,7 +1249,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 onDrop={handleDrop}
                 onTouchDragMove={handleTouchDragMove}
                 column={(index % format.columns) + 1}
-                columnCount={format.columns}
+                format={format}
                 onTouchDragEnd={handleTouchDragEnd}
                 isEmojiPuzzle={puzzle.isEmojiPuzzle ?? false}
                 colorPaletteMode={colorPaletteMode}
