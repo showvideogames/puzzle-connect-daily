@@ -128,14 +128,71 @@ describe("WordTile genuine-Rainbow + category-color ring", () => {
     expect(getRing(container)).toBeNull();
   });
 
-  it("the ring separator uses the theme's --ink token at reduced opacity, not a hardcoded color", () => {
+  /**
+   * The white gap.
+   *
+   * Replaces an earlier 1px hsl(var(--ink)/0.4) separator that sat on the
+   * ring's inner edge only. Three things are pinned here, because each one
+   * is a way the gap could regress into not doing its job:
+   *
+   *   1. There is a gap on BOTH sides of the ring (an outset shadow and an
+   *      inset one). Inner-only leaves the ring touching the gradient at the
+   *      tile's rim, which is the case this change exists to fix.
+   *   2. It is a LITERAL white, not a theme token. A token would flip to
+   *      near-black in dark mode and put the category color straight back
+   *      against a moving multicolor background.
+   *   3. The span is inset by the gap rather than sitting at inset-0, which
+   *      is what keeps the outset shadow inside the button's padding box
+   *      instead of painting over the 3px mobile selection border.
+   */
+  it.each(["yellow", "green", "blue", "red"] as const)(
+    "the %s ring is separated from the gradient by white on BOTH sides",
+    (color) => {
+      const { container } = render(
+        <WordTile word="PIE" isSelected={false} onClick={() => {}} isRainbow tileColor={color} />
+      );
+      const ring = getRing(container) as HTMLElement;
+      const shadow = ring.style.boxShadow.toLowerCase();
+      // Exactly one INSET layer (the inner gap) and, since the string does
+      // not begin with it, exactly one OUTSET layer before it (the outer
+      // gap). Asserted this way rather than by splitting on commas because
+      // jsdom rewrites #ffffff as rgb(255, 255, 255), whose own commas would
+      // break a naive split.
+      expect(shadow.split("inset").length - 1).toBe(1);
+      expect(shadow.startsWith("inset")).toBe(false);
+      // Both gaps are white, and neither is a theme token that would flip
+      // to a dark color in dark mode.
+      const white = shadow.includes("#ffffff") || shadow.includes("rgb(255, 255, 255)");
+      expect(white).toBe(true);
+      expect(shadow).not.toContain("var(--");
+      // The ring itself is still the plain category-color border class, so
+      // the gap never became the thing drawing the color.
+      expect(ring.className).toContain("border-[4px]");
+      expect(ring.style.boxShadow).not.toContain("hsl(var(--group");
+    }
+  );
+
+  it("the ring is inset by the gap, so the outer gap cannot eat the selection border", () => {
     const { container } = render(
-      <WordTile word="PIE" isSelected={false} onClick={() => {}} isRainbow tileColor="red" />
+      <WordTile word="PIE" isSelected onClick={() => {}} isRainbow tileColor="blue" />
     );
     const ring = getRing(container) as HTMLElement;
-    const style = ring.getAttribute("style") ?? "";
-    expect(style).toContain("var(--ink)");
-    expect(style).not.toMatch(/#[0-9a-fA-F]{3,6}/);
+    // inset-0 would let the outset shadow paint over the button's own
+    // 3px/4px border; a non-zero inset keeps it inside the padding box.
+    expect(ring.style.inset).toBe("2px");
+    expect(ring.className).not.toContain("inset-0");
+    // and the selection border is still fully the button's own.
+    expect(getButton(container).className).toContain("border-foreground");
+    expect(getButton(container).className).toContain("border-[3px]");
+  });
+
+  it("the gap does not change the ring's own 4px thickness", () => {
+    const { container } = render(
+      <WordTile word="PIE" isSelected={false} onClick={() => {}} isRainbow tileColor="green" />
+    );
+    const ring = getRing(container) as HTMLElement;
+    expect(ring.className).toContain("border-[4px]");
+    expect(ring.className).toContain("border-group-2");
   });
 });
 
