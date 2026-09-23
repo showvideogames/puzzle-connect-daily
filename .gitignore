@@ -33,3 +33,16 @@ dist-ssr
 # clone one machine's link, which is how a stale ref pointing at the wrong
 # project survived here in the first place.
 supabase/.temp/
+
+# End-to-end testing (see e2e/README.md)
+# .env.e2e is GENERATED from the local Supabase stack's own demo keys by
+# `npm run e2e:up`. The ! rule below keeps the committed example file, which
+# documents the shape and carries no keys at all.
+!.env.e2e.example
+dist-e2e
+e2e/.artifacts/
+e2e/supabase/.temp/
+e2e/supabase/.branches/
+playwright-report/
+test-results/
+e2e/supabase/snippets/

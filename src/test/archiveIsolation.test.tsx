@@ -66,7 +66,17 @@ const TWO_DAYS_AGO = daysAgo(2);
  * day locally, so the test would click the wrong cell. The calendar itself
  * builds its cells from local date parts, which is what this matches.
  */
-const dayOf = (isoDate: string) => Number(isoDate.slice(8, 10));
+/**
+ * A calendar cell's accessible name.
+ *
+ * The cell SHOWS a bare day number, which is all it has room for, but its
+ * accessible name is the full date plus its status — a bare "12" says
+ * nothing about which month, and nothing about the state the cell's colour
+ * is communicating. Matching on the date prefix is also what keeps these
+ * queries unambiguous when a month happens to render two cells whose
+ * numbers would otherwise collide with something else on the page.
+ */
+const cellNamed = (isoDate: string) => new RegExp(`^${isoDate}\\b`);
 
 /**
  * Is this calendar cell showing the Rainbow treatment?
@@ -79,8 +89,8 @@ const dayOf = (isoDate: string) => Number(isoDate.slice(8, 10));
  * ArchiveCalendar renders only for a Rainbow cell (and which carries the
  * `border-border`-only cell class, no bg-* tint).
  */
-function isRainbowCell(day: number): boolean {
-  const cell = screen.getByRole("button", { name: String(day) });
+function isRainbowCell(isoDate: string): boolean {
+  const cell = screen.getByRole("button", { name: cellNamed(isoDate) });
   return cell.querySelector('span[aria-hidden="true"]') !== null;
 }
 
@@ -263,8 +273,7 @@ describe("archive navigation stays inside its own format", () => {
     );
     await screen.findByText(/Mini Archive/i);
 
-    const day = dayOf(YESTERDAY);
-    const cell = await screen.findByRole("button", { name: String(day) });
+    const cell = await screen.findByRole("button", { name: cellNamed(YESTERDAY) });
     fireEvent.click(cell);
 
     await waitFor(() =>
@@ -308,8 +317,7 @@ describe("archive navigation stays inside its own format", () => {
       </>
     );
     await waitFor(() => expect(db.readLog.some((r) => r.table === "puzzles")).toBe(true));
-    const day = dayOf(YESTERDAY);
-    const cell = await screen.findByRole("button", { name: String(day) });
+    const cell = await screen.findByRole("button", { name: cellNamed(YESTERDAY) });
     fireEvent.click(cell);
     await waitFor(() =>
       expect(screen.getByTestId("path").textContent).toBe(`/archive/${FULL_ID}`)
@@ -357,8 +365,7 @@ describe("the Rainbow indicator on the Mini calendar", () => {
     renderAt("/mini/archive", <Route path="/mini/archive" element={<MiniArchive />} />);
     await screen.findByText(/Mini Archive/i);
 
-    const day = dayOf(TWO_DAYS_AGO);
-    await waitFor(() => expect(isRainbowCell(day)).toBe(true));
+    await waitFor(() => expect(isRainbowCell(TWO_DAYS_AGO)).toBe(true));
   });
 
   it("never marks a CLASSIC Mini, even if a session somehow claims a Rainbow", async () => {
@@ -377,10 +384,9 @@ describe("the Rainbow indicator on the Mini calendar", () => {
     renderAt("/mini/archive", <Route path="/mini/archive" element={<MiniArchive />} />);
     await screen.findByText(/Mini Archive/i);
 
-    const day = dayOf(YESTERDAY);
-    await screen.findByRole("button", { name: String(day) });
+    await screen.findByRole("button", { name: cellNamed(YESTERDAY) });
     // Won, yes — but this Mini is Classic, so no Rainbow treatment.
-    expect(isRainbowCell(day)).toBe(false);
+    expect(isRainbowCell(YESTERDAY)).toBe(false);
   });
 });
 
@@ -398,8 +404,7 @@ describe("in-progress state is per format", () => {
 
     renderAt("/mini/archive", <Route path="/mini/archive" element={<MiniArchive />} />);
     await screen.findByText(/Mini Archive/i);
-    const day = dayOf(YESTERDAY);
-    const cell = await screen.findByRole("button", { name: String(day) });
+    const cell = await screen.findByRole("button", { name: cellNamed(YESTERDAY) });
     // The in-progress tint is a yellow background class; the Mini cell must
     // not have it.
     expect(cell.className).not.toMatch(/48_89%_60%/);
@@ -413,8 +418,7 @@ describe("in-progress state is per format", () => {
 
     renderAt("/mini/archive", <Route path="/mini/archive" element={<MiniArchive />} />);
     await screen.findByText(/Mini Archive/i);
-    const day = dayOf(YESTERDAY);
-    const cell = await screen.findByRole("button", { name: String(day) });
+    const cell = await screen.findByRole("button", { name: cellNamed(YESTERDAY) });
     expect(cell.className).toMatch(/48_89%_60%/);
   });
 });
@@ -428,8 +432,7 @@ describe("missing dates and invalid ids", () => {
     renderAt("/mini/archive", <Route path="/mini/archive" element={<MiniArchive />} />);
     await screen.findByText(/Mini Archive/i);
     // Three days ago has no puzzle of any format.
-    const day = dayOf(daysAgo(3));
-    const cell = screen.getByRole("button", { name: String(day) });
+    const cell = screen.getByRole("button", { name: cellNamed(daysAgo(3)) });
     expect(cell).toHaveProperty("disabled", true);
   });
 

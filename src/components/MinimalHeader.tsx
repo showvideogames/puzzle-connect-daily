@@ -10,6 +10,9 @@ import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { todaysLogo } from "@/lib/themes";
 import type { User as AuthUser } from "@supabase/supabase-js";
 
+/** The compact wordmark phones get — the same asset GameHeader uses. */
+const STACKED_LOGO = "/rainbow-connect-logo-stacked.png";
+
 type ModalName = "stats" | "settings" | "feedback" | null;
 
 export function MinimalHeader() {
@@ -38,10 +41,24 @@ export function MinimalHeader() {
   return (
     <>
       <header className="flex items-center w-full max-w-lg mx-auto py-3 px-2 gap-2">
+        {/* Logo sizing, same rule GameHeader already follows: the one-line
+            wordmark is ~8.4:1, so at any legible height it is wider than a
+            phone header can spare once the five utility controls to its right
+            are counted. It was ~235px next to ~196px of icons in a 375px
+            viewport, which pushed every page using this header (How to Play,
+            Privacy, Terms) into scrolling sideways on a phone. Below md the
+            compact stacked wordmark (~2.4:1) is used instead; md and up keeps
+            the one-line mark exactly as before. */}
         <Link to="/" className="active:scale-95 transition-transform shrink-0" aria-label="Home">
+          <img
+            src={STACKED_LOGO}
+            alt="Rainbow Categories"
+            className="block md:hidden w-[96px] max-w-none h-auto"
+          />
           <img
             src={todaysLogo()}
             alt="Rainbow Categories"
+            className="hidden md:block"
             style={{ maxHeight: "28px", width: "auto" }}
           />
         </Link>
