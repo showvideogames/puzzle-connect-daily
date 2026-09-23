@@ -16,6 +16,76 @@ export interface FakeRow {
   [key: string]: unknown;
 }
 
+/**
+ * The counter row behind a custom puzzle's stats (20260921000000).
+ *
+ * Spelled out rather than left to FakeRow's `unknown` index signature,
+ * because every column on it is arithmetic: the RPCs increment them and the
+ * tests add them up. Under `unknown`, `wins + losses` is a type error, and
+ * the only ways out are a cast at every use or an assertion that the sum is
+ * a number — neither of which would catch the fake storing something that is
+ * not a number here. Declaring the shape once does.
+ *
+ * It still extends FakeRow, so the generic query surface treats it like any
+ * other row.
+ */
+export interface CustomPuzzleStatsRow extends FakeRow {
+  custom_puzzle_id: string;
+  wins: number;
+  losses: number;
+  guesses_4: number;
+  guesses_5: number;
+  guesses_6: number;
+  guesses_7: number;
+  guesses_8_plus: number;
+  win_guess_total: number;
+}
+
+/** The winning-guess-count buckets a stats row counts into. */
+type GuessBucket = "guesses_4" | "guesses_5" | "guesses_6" | "guesses_7" | "guesses_8_plus";
+
+/** Every numeric column on a stats row. */
+type StatsCounter = GuessBucket | "wins" | "losses" | "win_guess_total";
+
+/**
+ * Which bucket a winning game's guess count belongs to — 8 or more share the
+ * top bucket, and anything below 4 counts as 4. Callers have already
+ * validated `totalGuesses` as an integer in 0..60.
+ */
+function guessBucket(totalGuesses: number): GuessBucket {
+  if (totalGuesses >= 8) return "guesses_8_plus";
+  if (totalGuesses <= 4) return "guesses_4";
+  if (totalGuesses === 5) return "guesses_5";
+  if (totalGuesses === 6) return "guesses_6";
+  return "guesses_7";
+}
+
+/**
+ * Reads a row's id, proving it really is one.
+ *
+ * Most tables keep FakeRow's `unknown` index signature, so `row.id` is
+ * `unknown` and cannot be passed where a string id is wanted. This checks
+ * instead of asserting: a fake that ever stopped putting a string id on a
+ * row would fail the test that relies on it, loudly and at the right line,
+ * rather than carrying undefined into a foreign key.
+ */
+export function rowId(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new Error(`expected a row id string, got ${value === null ? "null" : typeof value}`);
+  }
+  return value;
+}
+
+/**
+ * Every table the fake holds. The string index keeps the generic query
+ * surface (and tests that clear tables by name) working, while a table whose
+ * columns are read as numbers is declared with its real shape.
+ */
+export interface FakeTables {
+  custom_puzzle_stats: CustomPuzzleStatsRow[];
+  [table: string]: FakeRow[];
+}
+
 type Filter =
   | { kind: "eq"; column: string; value: unknown }
   | { kind: "cmp"; column: string; op: "lte" | "gte" | "lt" | "gt"; value: unknown }
@@ -387,7 +457,7 @@ function argFormat(args: Record<string, unknown>): string {
 }
 
 export class FakeSupabase {
-  tables: Record<string, FakeRow[]> = {
+  tables: FakeTables = {
     game_sessions: [],
     guess_events: [],
     hint_events: [],
@@ -1652,19 +1722,19 @@ export class FakeSupabase {
           let st = this.tables.custom_puzzle_stats.find((x) => x.custom_puzzle_id === puzzle.id);
           if (!st) {
             st = {
-              custom_puzzle_id: puzzle.id, wins: 0, losses: 0,
+              custom_puzzle_id: rowId(puzzle.id), wins: 0, losses: 0,
               guesses_4: 0, guesses_5: 0, guesses_6: 0, guesses_7: 0, guesses_8_plus: 0, win_guess_total: 0,
             };
             this.tables.custom_puzzle_stats.push(st);
           }
           this._log("custom_puzzle_stats", "update");
           if (args._won) {
-            st.wins = (st.wins as number) + 1;
-            const key = totalGuesses >= 8 ? "guesses_8_plus" : `guesses_${Math.max(4, totalGuesses)}`;
-            st[key] = (st[key] as number) + 1;
-            st.win_guess_total = (st.win_guess_total as number) + totalGuesses;
+            st.wins = st.wins + 1;
+            const bucket = guessBucket(totalGuesses);
+            st[bucket] = st[bucket] + 1;
+            st.win_guess_total = st.win_guess_total + totalGuesses;
           } else {
-            st.losses = (st.losses as number) + 1;
+            st.losses = st.losses + 1;
           }
         }
         return { data: true, error: null };
@@ -1675,7 +1745,7 @@ export class FakeSupabase {
         );
         if (!puzzle) return { data: null, error: null };
         const st = this.tables.custom_puzzle_stats.find((x) => x.custom_puzzle_id === puzzle.id);
-        const n = (k: string) => (st ? (st[k] as number) : 0);
+        const n = (k: StatsCounter) => (st ? st[k] : 0);
         const plays = n("wins") + n("losses");
         return {
           data: {
@@ -1760,7 +1830,7 @@ export class FakeSupabase {
   /** Completed plays (wins + losses) for a custom puzzle, from its counter row. */
   _customPlays(puzzleId: string): number {
     const st = this.tables.custom_puzzle_stats.find((x) => x.custom_puzzle_id === puzzleId);
-    return st ? (st.wins as number) + (st.losses as number) : 0;
+    return st ? st.wins + st.losses : 0;
   }
 
   _log(table: string, op: "insert" | "update" | "upsert") {

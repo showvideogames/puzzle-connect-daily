@@ -57,6 +57,9 @@ const puzzle: Puzzle = {
   ],
   rainbowHerring: ["y1", "g1", "b1", "r1"],
   rainbowCategoryName: "Rainbow",
+  // The default every loader applies to a puzzle that does not say otherwise
+  // (src/lib/puzzles.ts) — and what this fixture already behaved as.
+  alphabetizeCompleted: true,
 };
 
 /** Puzzle with no Rainbow, for the "rainbow_found must be null" check. */
