@@ -165,6 +165,10 @@ function mapPuzzle(data: any): Puzzle {
       difficulty: g.difficulty as 1 | 2 | 3 | 4,
       hintWord: g.hint_word ?? null,
       categoryEmoji: g.category_emoji ?? null,
+      // Missing on a database without the Hint Only migration applied, and
+      // on every puzzle saved before it — both mean "show it on the solved
+      // bar", which is how those puzzles have always displayed.
+      categoryEmojiHintOnly: g.category_emoji_hint_only ?? false,
     }));
 
   return {
@@ -182,6 +186,7 @@ function mapPuzzle(data: any): Puzzle {
     rainbowCategoryName: data.rainbow_category_name || null,
     rainbowHintWord: data.rainbow_hint_word ?? null,
     rainbowCategoryEmoji: data.rainbow_category_emoji ?? null,
+    rainbowCategoryEmojiHintOnly: data.rainbow_category_emoji_hint_only ?? false,
     isEmojiPuzzle: data.is_emoji_puzzle ?? false,
     emojiPuzzleIcon: data.emoji_puzzle_icon ?? null,
     isFreePuzzle: data.is_free_puzzle ?? false,

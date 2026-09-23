@@ -85,6 +85,9 @@ export interface PinnedPuzzleContent {
   rainbowHintWord: string | null;
   // Absent in snapshots written before Category Emoji existed.
   rainbowCategoryEmoji?: string | null;
+  // Absent in snapshots written before Hint Only existed; those are all
+  // "show it on the solved bar", which is what an absent value means.
+  rainbowCategoryEmojiHintOnly?: boolean | null;
   theme: string | null;
   isEmojiPuzzle: boolean;
   alphabetizeCompleted: boolean;
@@ -112,12 +115,14 @@ export function pinnedContentFrom(puzzle: Puzzle): PinnedPuzzleContent | null {
       difficulty: g.difficulty,
       hintWord: g.hintWord ?? null,
       categoryEmoji: g.categoryEmoji ?? null,
+      categoryEmojiHintOnly: g.categoryEmojiHintOnly ?? false,
     })),
     wordOrder: puzzle.wordOrder ? [...puzzle.wordOrder] : null,
     rainbowHerring: puzzle.rainbowHerring ? [...puzzle.rainbowHerring] : null,
     rainbowCategoryName: puzzle.rainbowCategoryName ?? null,
     rainbowHintWord: puzzle.rainbowHintWord ?? null,
     rainbowCategoryEmoji: puzzle.rainbowCategoryEmoji ?? null,
+    rainbowCategoryEmojiHintOnly: puzzle.rainbowCategoryEmojiHintOnly ?? false,
     theme: puzzle.theme ?? null,
     isEmojiPuzzle: puzzle.isEmojiPuzzle ?? false,
     alphabetizeCompleted: puzzle.alphabetizeCompleted ?? true,
@@ -171,6 +176,10 @@ export function applyPinnedContent(current: Puzzle, pinned: PinnedPuzzleContent)
     rainbowCategoryName: pinned.rainbowCategoryName,
     rainbowHintWord: pinned.rainbowHintWord,
     rainbowCategoryEmoji: pinned.rainbowCategoryEmoji ?? null,
+    // ?? false, not a bare read: a snapshot written before Hint Only existed
+    // genuinely lacks this, and an absent value means "show it", exactly as
+    // that board behaved when it was started.
+    rainbowCategoryEmojiHintOnly: pinned.rainbowCategoryEmojiHintOnly ?? false,
     theme: pinned.theme,
     isEmojiPuzzle: pinned.isEmojiPuzzle,
     // ?? true (not a bare trust-the-type read like the fields above): unlike

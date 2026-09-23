@@ -5,6 +5,8 @@ import { CategoryEmojiInline } from "./CategoryEmojiInline";
 interface RainbowRevealBarProps {
   categoryName: string | null | undefined;
   categoryEmoji: string | null | undefined;
+  /** Hint Only — keep the emoji in the Full Hint but off this bar. See PuzzleGroup.categoryEmojiHintOnly. */
+  categoryEmojiHintOnly?: boolean | null;
   theme: ResolvedTheme;
   words: string[];
   // Puzzle-level setting — see Puzzle.alphabetizeCompleted. Same default as
@@ -25,6 +27,7 @@ interface RainbowRevealBarProps {
 export function RainbowRevealBar({
   categoryName,
   categoryEmoji,
+  categoryEmojiHintOnly,
   theme,
   words,
   alphabetizeCompleted = true,
@@ -36,11 +39,17 @@ export function RainbowRevealBar({
   const customName = (categoryName ?? "").trim();
   const title = customName || theme.label;
   const explicitEmoji = (categoryEmoji ?? "").trim();
+  // Hint Only: the authored visual stays in the Full Hint but is kept off
+  // this bar. It also suppresses the theme default below, which would
+  // otherwise put an emoji straight back onto a bar the creator asked to
+  // keep clean. With nothing authored there is nothing to withhold, so the
+  // checkbox alone changes nothing.
+  const hideExplicit = !!categoryEmojiHintOnly && explicitEmoji !== "";
   // No explicit emoji and no custom name: fall back to the theme's own
   // default (e.g. "Rainbow 🌈"). A custom name with an emoji typed into it
   // (legacy authoring) is shown exactly as typed, with nothing appended, so
   // it's never duplicated.
-  const emoji = explicitEmoji || (customName ? "" : theme.emoji);
+  const emoji = hideExplicit ? "" : explicitEmoji || (customName ? "" : theme.emoji);
   const displayWords = alphabetizeCompleted ? [...words].sort((a, b) => a.localeCompare(b)) : words;
   return (
     <div

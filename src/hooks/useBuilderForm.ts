@@ -50,6 +50,12 @@ export interface BuilderGroupForm {
   hintWord: string;
   /** Optional Category Emoji, kept exactly as typed (independent of the name and the hint). */
   categoryEmoji: string;
+  /**
+   * Hint Only: keep the Category Emoji in the Full Hint but off the solved
+   * colour bar — see PuzzleGroup.categoryEmojiHintOnly. Never affects the
+   * Category Name, which is always saved and shown exactly as typed.
+   */
+  categoryEmojiHintOnly: boolean;
   difficulty: Difficulty;
   /**
    * This category's board-position ids: exactly the ids that appear in
@@ -63,7 +69,7 @@ export interface BuilderGroupForm {
 
 function emptyGroup(difficulty: Difficulty, answersPerCategory: number): BuilderGroupForm {
   const answers = Array.from({ length: answersPerCategory }, () => ({ id: generateSlotId(), text: "" }));
-  return { category: "", answersRaw: "", answers, tombstones: [], hintWord: "", categoryEmoji: "", difficulty, poolIds: answers.map((a) => a.id) };
+  return { category: "", answersRaw: "", answers, tombstones: [], hintWord: "", categoryEmoji: "", categoryEmojiHintOnly: false, difficulty, poolIds: answers.map((a) => a.id) };
 }
 
 function defaultGroups(format: PuzzleFormat): BuilderGroupForm[] {
@@ -85,6 +91,7 @@ export interface BuilderState {
   rainbowCategoryName: string;
   rainbowHintWord: string;
   rainbowCategoryEmoji: string;
+  rainbowCategoryEmojiHintOnly: boolean;
   theme: string;
   alphabetizeCompleted: boolean;
   wordOrderIds: string[];
@@ -92,13 +99,23 @@ export interface BuilderState {
 }
 
 export interface LoadBuilderInput {
-  groups: { category: string; words: string[]; difficulty: Difficulty; hintWord: string | null; categoryEmoji?: string | null }[];
+  groups: {
+    category: string;
+    words: string[];
+    difficulty: Difficulty;
+    hintWord: string | null;
+    categoryEmoji?: string | null;
+    /** Absent for older sources; treated as false, so they display as they always have. */
+    categoryEmojiHintOnly?: boolean | null;
+  }[];
   wordOrder: string[] | null;
   rainbowHerring: string[] | null;
   rainbowCategoryName: string;
   rainbowHintWord: string;
   /** Absent for older sources; treated as none. */
   rainbowCategoryEmoji?: string;
+  /** Absent for older sources; treated as false. */
+  rainbowCategoryEmojiHintOnly?: boolean | null;
   theme: string;
   alphabetizeCompleted: boolean;
   /**
@@ -132,6 +149,7 @@ function buildStateFromLoad(input: LoadBuilderInput, currentStyle: BuilderStyle)
       tombstones: [],
       hintWord: g.hintWord ?? "",
       categoryEmoji: g.categoryEmoji ?? "",
+      categoryEmojiHintOnly: g.categoryEmojiHintOnly ?? false,
       difficulty: g.difficulty,
       poolIds: answers.map((a) => a.id),
     };
@@ -185,6 +203,7 @@ function buildStateFromLoad(input: LoadBuilderInput, currentStyle: BuilderStyle)
     rainbowCategoryName: format.hasRainbow ? input.rainbowCategoryName : "",
     rainbowHintWord: format.hasRainbow ? input.rainbowHintWord : "",
     rainbowCategoryEmoji: format.hasRainbow ? input.rainbowCategoryEmoji ?? "" : "",
+    rainbowCategoryEmojiHintOnly: format.hasRainbow ? input.rainbowCategoryEmojiHintOnly ?? false : false,
     theme: input.theme,
     alphabetizeCompleted: input.alphabetizeCompleted,
     wordOrderIds,
@@ -204,6 +223,7 @@ function blankState(format: PuzzleFormat): BuilderState {
     rainbowCategoryName: "",
     rainbowHintWord: "",
     rainbowCategoryEmoji: "",
+    rainbowCategoryEmojiHintOnly: false,
     theme: "",
     alphabetizeCompleted: true,
     // The format's own new-puzzle default (Full: Rainbow, Mini: Classic) —
@@ -233,6 +253,7 @@ export function useBuilderForm(initialFormat: PuzzleFormatId = "full") {
   const [rainbowCategoryName, setRainbowCategoryName] = useState(initial.rainbowCategoryName);
   const [rainbowHintWord, setRainbowHintWord] = useState(initial.rainbowHintWord);
   const [rainbowCategoryEmoji, setRainbowCategoryEmoji] = useState(initial.rainbowCategoryEmoji);
+  const [rainbowCategoryEmojiHintOnly, setRainbowCategoryEmojiHintOnly] = useState(initial.rainbowCategoryEmojiHintOnly);
   const [theme, setTheme] = useState(initial.theme);
   const [alphabetizeCompleted, setAlphabetizeCompleted] = useState(initial.alphabetizeCompleted);
   const [wordOrderIds, setWordOrderIds] = useState<string[]>(initial.wordOrderIds);
@@ -247,6 +268,7 @@ export function useBuilderForm(initialFormat: PuzzleFormatId = "full") {
     setRainbowCategoryName(s.rainbowCategoryName);
     setRainbowHintWord(s.rainbowHintWord);
     setRainbowCategoryEmoji(s.rainbowCategoryEmoji);
+    setRainbowCategoryEmojiHintOnly(s.rainbowCategoryEmojiHintOnly);
     setTheme(s.theme);
     setAlphabetizeCompleted(s.alphabetizeCompleted);
     setWordOrderIds(s.wordOrderIds);
@@ -288,6 +310,10 @@ export function useBuilderForm(initialFormat: PuzzleFormatId = "full") {
 
   const updateCategoryEmoji = useCallback((idx: number, categoryEmoji: string) => {
     setGroups((prev) => prev.map((g, i) => (i === idx ? { ...g, categoryEmoji } : g)));
+  }, []);
+
+  const updateCategoryEmojiHintOnly = useCallback((idx: number, categoryEmojiHintOnly: boolean) => {
+    setGroups((prev) => prev.map((g, i) => (i === idx ? { ...g, categoryEmojiHintOnly } : g)));
   }, []);
 
   const updateHintWord = useCallback((idx: number, hintWord: string) => {
@@ -391,16 +417,18 @@ export function useBuilderForm(initialFormat: PuzzleFormatId = "full") {
         g.category.trim() !== "" ||
         g.answersRaw.trim() !== "" ||
         g.hintWord.trim() !== "" ||
-        g.categoryEmoji.trim() !== ""
+        g.categoryEmoji.trim() !== "" ||
+        g.categoryEmojiHintOnly
     );
     return (
       typedInGroups ||
       rainbowCategoryName.trim() !== "" ||
       rainbowHintWord.trim() !== "" ||
       rainbowCategoryEmoji.trim() !== "" ||
+      rainbowCategoryEmojiHintOnly ||
       rainbowHerringIds.some((id) => !!id)
     );
-  }, [groups, rainbowCategoryName, rainbowHintWord, rainbowCategoryEmoji, rainbowHerringIds]);
+  }, [groups, rainbowCategoryName, rainbowHintWord, rainbowCategoryEmoji, rainbowCategoryEmojiHintOnly, rainbowHerringIds]);
 
   const slotById = useMemo(() => {
     const map = new Map<string, AnswerSlot>();
@@ -530,6 +558,7 @@ export function useBuilderForm(initialFormat: PuzzleFormatId = "full") {
     rainbowCategoryName,
     rainbowHintWord,
     rainbowCategoryEmoji,
+    rainbowCategoryEmojiHintOnly,
     theme,
     alphabetizeCompleted,
     wordOrderIds,
@@ -538,6 +567,7 @@ export function useBuilderForm(initialFormat: PuzzleFormatId = "full") {
     setRainbowCategoryName,
     setRainbowHintWord,
     setRainbowCategoryEmoji,
+    setRainbowCategoryEmojiHintOnly,
     setStyle,
     setTheme,
     setAlphabetizeCompleted,
@@ -550,6 +580,7 @@ export function useBuilderForm(initialFormat: PuzzleFormatId = "full") {
     updateCategoryName,
     updateHintWord,
     updateCategoryEmoji,
+    updateCategoryEmojiHintOnly,
     updateAnswersRaw,
     swapGroups,
     moveGroup,

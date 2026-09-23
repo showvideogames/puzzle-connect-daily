@@ -67,6 +67,7 @@ export default function CreatePuzzle() {
         words: parseWords(g.answersRaw),
         hintWord: g.hintWord.trim() || null,
         categoryEmoji: g.categoryEmoji.trim() || null,
+        categoryEmojiHintOnly: g.categoryEmojiHintOnly,
       })),
     [builder.groups]
   );
@@ -130,12 +131,14 @@ export default function CreatePuzzle() {
             words: g.words,
             hintWord: g.hintWord,
             categoryEmoji: g.categoryEmoji,
+            categoryEmojiHintOnly: g.categoryEmojiHintOnly,
           })),
           wordOrder,
           rainbowHerring,
           rainbowCategoryName: styleTab === "rainbow" ? builder.rainbowCategoryName.trim() || null : null,
           rainbowHintWord: styleTab === "rainbow" ? builder.rainbowHintWord.trim() || null : null,
           rainbowCategoryEmoji: styleTab === "rainbow" ? builder.rainbowCategoryEmoji.trim() || null : null,
+          rainbowCategoryEmojiHintOnly: styleTab === "rainbow" ? builder.rainbowCategoryEmojiHintOnly : false,
           alphabetizeCompleted: builder.alphabetizeCompleted,
         },
       });
@@ -320,6 +323,8 @@ export default function CreatePuzzle() {
                     onCategoryChange={(v) => builder.updateCategoryName(i, v)}
                     categoryEmoji={g.categoryEmoji}
                     onCategoryEmojiChange={(v) => builder.updateCategoryEmoji(i, v)}
+                    categoryEmojiHintOnly={g.categoryEmojiHintOnly}
+                    onCategoryEmojiHintOnlyChange={(v) => builder.updateCategoryEmojiHintOnly(i, v)}
                     categoryPlaceholder={CATEGORY_PLACEHOLDERS[i]}
                     answersRaw={g.answersRaw}
                     onAnswersRawChange={(v) => builder.updateAnswersRaw(i, v)}
@@ -348,6 +353,8 @@ export default function CreatePuzzle() {
                 onCategoryNameChange={builder.setRainbowCategoryName}
                 categoryEmoji={builder.rainbowCategoryEmoji}
                 onCategoryEmojiChange={builder.setRainbowCategoryEmoji}
+                categoryEmojiHintOnly={builder.rainbowCategoryEmojiHintOnly}
+                onCategoryEmojiHintOnlyChange={builder.setRainbowCategoryEmojiHintOnly}
                 hintWord={builder.rainbowHintWord}
                 onHintWordChange={builder.setRainbowHintWord}
                 theme={builder.theme}

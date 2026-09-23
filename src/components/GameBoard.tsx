@@ -1148,6 +1148,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               key="rainbow-reveal"
               categoryName={puzzle.rainbowCategoryName}
               categoryEmoji={puzzle.rainbowCategoryEmoji}
+              categoryEmojiHintOnly={puzzle.rainbowCategoryEmojiHintOnly}
               theme={theme}
               words={rainbowHerring!}
               alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
@@ -1195,6 +1196,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <RainbowRevealBar
               categoryName={puzzle.rainbowCategoryName}
               categoryEmoji={puzzle.rainbowCategoryEmoji}
+              categoryEmojiHintOnly={puzzle.rainbowCategoryEmojiHintOnly}
               theme={theme}
               words={rainbowHerring}
               alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}

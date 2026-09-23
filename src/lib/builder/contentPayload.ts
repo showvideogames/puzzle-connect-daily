@@ -19,15 +19,29 @@ export const parseWords = (value: string) =>
  * is: re-saving an untouched Full puzzle must not look like a gameplay change
  * and must not mint a pointless new version. The server canonicalises the
  * same way (an absent format means Full).
+ *
+ * The two `*_hint_only` flags follow the same rule for the same reason: they
+ * are emitted ONLY when true AND accompanied by an emoji to suppress, so a
+ * puzzle that predates Hint Only canonicalises byte-identically and re-saving
+ * it unchanged still mints no new version.
  */
 export interface PuzzleContentPayload {
   format?: PuzzleFormatId;
-  groups: { category: string; words: string[]; difficulty: number; hint_word: string | null; category_emoji: string | null; sort_order: number }[];
+  groups: {
+    category: string;
+    words: string[];
+    difficulty: number;
+    hint_word: string | null;
+    category_emoji: string | null;
+    category_emoji_hint_only?: true;
+    sort_order: number;
+  }[];
   word_order: string[] | null;
   rainbow_herring: string[] | null;
   rainbow_category_name: string | null;
   rainbow_hint_word: string | null;
   rainbow_category_emoji: string | null;
+  rainbow_category_emoji_hint_only?: true;
   theme: string | null;
   is_emoji_puzzle: boolean;
   alphabetize_completed: boolean;
@@ -35,12 +49,20 @@ export interface PuzzleContentPayload {
 
 export interface ContentInput {
   format?: PuzzleFormatId;
-  groups: { category: string; words: string[]; difficulty: number; hintWord: string | null; categoryEmoji?: string | null }[];
+  groups: {
+    category: string;
+    words: string[];
+    difficulty: number;
+    hintWord: string | null;
+    categoryEmoji?: string | null;
+    categoryEmojiHintOnly?: boolean | null;
+  }[];
   wordOrder: string[] | null;
   rainbowHerring: string[] | null;
   rainbowCategoryName: string | null;
   rainbowHintWord: string | null;
   rainbowCategoryEmoji?: string | null;
+  rainbowCategoryEmojiHintOnly?: boolean | null;
   theme: string | null;
   isEmojiPuzzle: boolean;
   alphabetizeCompleted: boolean;
@@ -52,18 +74,28 @@ export function buildContentPayload(input: ContentInput): PuzzleContentPayload {
     const t = (v ?? "").trim();
     return t === "" ? null : t;
   };
+  // Hint Only only means something when there IS an emoji to withhold. A
+  // checked box on a category with no Category Emoji is dropped here rather
+  // than stored, so it can never make an otherwise-unchanged puzzle look
+  // edited, and can never be resurrected by someone later typing an emoji.
+  const hintOnly = (flag: boolean | null | undefined, emoji: string | null) =>
+    flag && emoji !== null ? ({ category_emoji_hint_only: true } as const) : {};
   return {
     // Key order matters for the version-comparison stringify, and Full omits
     // this key entirely — see the interface doc.
     ...(format.id === "full" ? {} : { format: format.id }),
-    groups: input.groups.map((g, index) => ({
-      category: g.category.trim(),
-      words: g.words,
-      difficulty: g.difficulty,
-      hint_word: blankToNull(g.hintWord),
-      category_emoji: blankToNull(g.categoryEmoji),
-      sort_order: index,
-    })),
+    groups: input.groups.map((g, index) => {
+      const category_emoji = blankToNull(g.categoryEmoji);
+      return {
+        category: g.category.trim(),
+        words: g.words,
+        difficulty: g.difficulty,
+        hint_word: blankToNull(g.hintWord),
+        category_emoji,
+        ...hintOnly(g.categoryEmojiHintOnly, category_emoji),
+        sort_order: index,
+      };
+    }),
     word_order: input.wordOrder && input.wordOrder.length === format.tileCount ? input.wordOrder : null,
     // A format with no bonus category never sends Rainbow content, whatever
     // the form happens to be holding.
@@ -74,6 +106,9 @@ export function buildContentPayload(input: ContentInput): PuzzleContentPayload {
     rainbow_category_name: format.hasRainbow ? blankToNull(input.rainbowCategoryName) : null,
     rainbow_hint_word: format.hasRainbow ? blankToNull(input.rainbowHintWord) : null,
     rainbow_category_emoji: format.hasRainbow ? blankToNull(input.rainbowCategoryEmoji) : null,
+    ...(format.hasRainbow && input.rainbowCategoryEmojiHintOnly && blankToNull(input.rainbowCategoryEmoji) !== null
+      ? ({ rainbow_category_emoji_hint_only: true } as const)
+      : {}),
     theme: blankToNull(input.theme),
     is_emoji_puzzle: input.isEmojiPuzzle,
     alphabetize_completed: input.alphabetizeCompleted,
@@ -91,6 +126,7 @@ type BuilderContentSource = Pick<
   | "rainbowCategoryName"
   | "rainbowHintWord"
   | "rainbowCategoryEmoji"
+  | "rainbowCategoryEmojiHintOnly"
   | "theme"
   | "alphabetizeCompleted"
 >;
@@ -118,6 +154,7 @@ export function builderContentInput(builder: BuilderContentSource, isEmojiPuzzle
       difficulty: g.difficulty,
       hintWord: g.hintWord,
       categoryEmoji: g.categoryEmoji,
+      categoryEmojiHintOnly: g.categoryEmojiHintOnly,
     })),
     wordOrder: builder.textsFor(builder.wordOrderIds).map(normalizeWord),
     rainbowHerring: builder.rainbowComplete
@@ -126,6 +163,7 @@ export function builderContentInput(builder: BuilderContentSource, isEmojiPuzzle
     rainbowCategoryName: builder.rainbowCategoryName,
     rainbowHintWord: builder.rainbowHintWord,
     rainbowCategoryEmoji: builder.rainbowCategoryEmoji,
+    rainbowCategoryEmojiHintOnly: builder.rainbowCategoryEmojiHintOnly,
     theme: builder.theme,
     isEmojiPuzzle,
     alphabetizeCompleted: builder.alphabetizeCompleted,

@@ -12,6 +12,21 @@ export interface PuzzleGroup {
   // before the field existed; those fall back to the title's trailing emoji
   // (lib/categoryVisual.ts).
   categoryEmoji?: string | null;
+  /**
+   * Hint Only: show this category's emoji in the Full Hint, but do NOT append
+   * it to the category name on the solved colour bar.
+   *
+   * For a visual that only reads as a clue — "___ 💬" pointing at a
+   * "High ___" category — where the solved bar should simply say "HIGH ___".
+   *
+   * Only ever suppresses the EXPLICIT categoryEmoji above. An emoji typed
+   * into the category NAME is part of the name and is always shown as
+   * written; nothing here edits or strips a name.
+   *
+   * Absent/null (every puzzle saved before this field existed) means false,
+   * so existing puzzles display exactly as they always have.
+   */
+  categoryEmojiHintOnly?: boolean | null;
 }
 
 export interface Puzzle {
@@ -39,6 +54,8 @@ export interface Puzzle {
   rainbowCategoryName?: string | null;
   rainbowHintWord?: string | null;
   rainbowCategoryEmoji?: string | null;
+  /** Hint Only for the Rainbow's emoji — see PuzzleGroup.categoryEmojiHintOnly. */
+  rainbowCategoryEmojiHintOnly?: boolean | null;
   isEmojiPuzzle?: boolean | null;
   // Manually-entered emoji shown on this puzzle's card in the Emoji Puzzles
   // section (admin-editable, only meaningful when isEmojiPuzzle is true).

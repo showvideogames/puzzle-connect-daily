@@ -10,6 +10,8 @@ export interface GroupForm {
   hintWord: string;
   /** Absent in drafts saved before Category Emoji existed. */
   categoryEmoji?: string;
+  /** Absent in drafts saved before Hint Only existed; restores as unchecked. */
+  categoryEmojiHintOnly?: boolean;
 }
 
 export interface DraftData {
@@ -24,6 +26,8 @@ export interface DraftData {
   rainbowCategoryName: string;
   rainbowHintWord: string;
   rainbowCategoryEmoji?: string;
+  /** Absent in drafts saved before Hint Only existed; restores as unchecked. */
+  rainbowCategoryEmojiHintOnly?: boolean;
   rainbowWordOrder: string[];
   theme: string;
   isEmojiPuzzle: boolean;
