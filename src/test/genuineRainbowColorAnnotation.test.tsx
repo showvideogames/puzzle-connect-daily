@@ -261,11 +261,11 @@ describe("genuine Rainbow discovery + category color (Mini)", () => {
 });
 
 describe("existing non-Rainbow palette behavior is unchanged", () => {
-  it("a plain colored tile (never a genuine Rainbow word) still renders the solid category fill, no ring", () => {
+  it("a plain colored tile (never a genuine Rainbow word) still renders the pastel category wash, no ring", () => {
     const { container } = renderBoard(fullPuzzle);
     paint(container, "Green paint", "b2");
     const btn = tileButton(container, "b2");
-    expect(btn.className).toContain("bg-group-2");
+    expect(btn.className).toContain("tile-paint-2");
     expect(btn.className).not.toContain("rainbow-tile");
     expect(ring(container, "b2")).toBeNull();
   });
@@ -273,9 +273,9 @@ describe("existing non-Rainbow palette behavior is unchanged", () => {
   it("Clear Colors still clears an ordinary painted tile", () => {
     const { container } = renderBoard(fullPuzzle);
     paint(container, "Yellow paint", "b2");
-    expect(tileButton(container, "b2").className).toContain("bg-group-1");
+    expect(tileButton(container, "b2").className).toContain("tile-paint-1");
     fireEvent.click(screen.getByRole("button", { name: /clear colors/i }));
-    expect(tileButton(container, "b2").className).not.toContain("bg-group-1");
+    expect(tileButton(container, "b2").className).not.toContain("tile-paint-1");
   });
 });
 

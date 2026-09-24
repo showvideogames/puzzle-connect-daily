@@ -53,6 +53,11 @@ html {
     --group-3-fg: 45 5.128% 15.294%;
     --group-4: 5 74% 67%;
     --group-4-fg: 45 5.128% 15.294%;
+    /* How much of a category color a hand-painted tile shows (see
+       .tile-paint-N below): a soft pastel wash of the color rather than the
+       solved bar's solid fill. Like --group-1..4 it deliberately has no
+       .dark override, so a painted tile is the same pastel in both themes. */
+    --tile-paint-mix: 45%;
 
     /* Tile colors */
     --tile: 36 18% 88%;
@@ -213,6 +218,25 @@ html {
     transform: translateY(1px) scale(0.99);
     box-shadow: 0 5px 12px rgba(0,0,0,0.4), inset 0 2px 5px rgba(0,0,0,0.35);
   }
+
+  /* Background of a tile the player has hand-painted a category color onto
+     (WordTile.tsx's COLOR_STYLES). A soft, "shaded-in" pastel of the
+     category's own --group-N — the same variable the solved bar and the
+     paint swatches use, so the hue is unmistakably that category, just
+     lighter — rather than the bar's solid fill, so a note-to-self color
+     reads as a note and not as an already-solved group.
+
+     Mixed with white, not with the tile's own background: an earlier
+     translucent version (a fixed hex at 35% alpha) let the tile behind show
+     through, which made the same paint a pale wash in light mode and a muddy
+     dark tone in dark mode. Mixing toward white gives one pastel in both
+     themes, on which --group-N-fg's dark ink stays crisp. Only the
+     background changes here; text color, borders and selection are the
+     button's own classes. */
+  .tile-paint-1 { background-color: color-mix(in srgb, hsl(var(--group-1)) var(--tile-paint-mix), white); }
+  .tile-paint-2 { background-color: color-mix(in srgb, hsl(var(--group-2)) var(--tile-paint-mix), white); }
+  .tile-paint-3 { background-color: color-mix(in srgb, hsl(var(--group-3)) var(--tile-paint-mix), white); }
+  .tile-paint-4 { background-color: color-mix(in srgb, hsl(var(--group-4)) var(--tile-paint-mix), white); }
 }
 
 @keyframes shake {
