@@ -85,15 +85,15 @@ test.describe("The double-tap picker offers the same colours as the palette", ()
     const picker = await doubleTapTile(page, miniWord);
     await picker.getByRole("button", { name: "Blue tile color" }).click();
     await expect(colorPicker(page, miniWord)).toHaveCount(0);
-    // Blue's fill is the same CSS variable Blue's solved bar uses.
-    await expect(target).toHaveClass(/bg-group-3/);
+    // Blue's fill is the pastel wash of Blue's solved-bar colour.
+    await expect(target).toHaveClass(/tile-paint-3/);
     // Colouring is selection-neutral: the gesture marks the tile, it does not
     // leave it selected.
     await expect(target).toHaveAttribute("aria-pressed", "false");
 
     const reopened = await doubleTapTile(page, miniWord);
     await reopened.getByRole("button", { name: "Remove tile color" }).click();
-    await expect(target).not.toHaveClass(/bg-group-3/);
+    await expect(target).not.toHaveClass(/tile-paint-3/);
   });
 
   test("double-tapping a regular-game tile still applies Yellow and clears it", async ({ page }) => {
@@ -104,10 +104,10 @@ test.describe("The double-tap picker offers the same colours as the palette", ()
 
     const picker = await doubleTapTile(page, fullWord);
     await picker.getByRole("button", { name: "Yellow tile color" }).click();
-    await expect(target).toHaveClass(/bg-group-1/);
+    await expect(target).toHaveClass(/tile-paint-1/);
 
     const reopened = await doubleTapTile(page, fullWord);
     await reopened.getByRole("button", { name: "Remove tile color" }).click();
-    await expect(target).not.toHaveClass(/bg-group-1/);
+    await expect(target).not.toHaveClass(/tile-paint-1/);
   });
 });

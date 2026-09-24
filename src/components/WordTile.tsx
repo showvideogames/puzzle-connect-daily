@@ -5,29 +5,27 @@ import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 
 const DOUBLE_TAP_DELAY_MS = 250;
 
-// Reuses the exact same CSS custom properties as the SOLVED category bars
-// (SolvedGroup.tsx's bg-group-N/text-group-N-fg, driven by index.css's
-// --group-1..4 / --group-N-fg) instead of a separate hardcoded hex set.
+// bg: a soft pastel wash of the category's color (index.css's .tile-paint-N,
+// which mixes the same --group-N variable the SOLVED category bars use with
+// white) — a hand-painted tile is recognisably that category's color, but
+// lighter and "shaded in" rather than the bar's solid fill, so a
+// note-to-self color doesn't read as an already-solved group.
 //
-// This used to be its own fixed hex per color at 35% opacity
-// (bg-[#F6DA6A]/35, etc). That opacity was the actual bug the fixed hex
-// alone didn't catch: at 35% alpha, most of what a player sees is the TILE'S
-// OWN background showing through, not the paint color — so the same
-// "yellow" rendered as a pale cream wash over light mode's near-white tile
-// and a muddy olive-brown over dark mode's near-black tile. Painting a tile
-// looked like two different colors depending on theme, and neither looked
-// like the solved category's solid, saturated fill.
+// text: the same guaranteed-readable dark ink SolvedGroup.tsx pairs with
+// that color (text-group-N-fg). Fully opaque — the softness lives entirely
+// in the background color, never in an opacity on the tile or its text.
 //
-// Using bg-group-N directly (full opacity, same var SolvedGroup reads) means
-// a hand-painted tile is now pixel-identical to what that group looks like
-// once solved — and since --group-1..4 deliberately has no .dark override
-// (see index.css), that identity holds in both themes automatically, with
-// nothing here needing its own dark: variant.
+// History: this was first a fixed hex at 35% alpha (bg-[#F6DA6A]/35, etc),
+// which let the tile's own background bleed through and so looked pale in
+// light mode and muddy in dark mode; then the solid bg-group-N fill, which
+// was theme-consistent but no longer soft. Mixing toward white keeps the
+// theme-consistency (no dark: variant needed — --group-1..4 and
+// --tile-paint-mix deliberately have no .dark override) and the softness.
 const COLOR_STYLES: Record<string, { bg: string; text: string }> = {
-  yellow: { bg: "bg-group-1", text: "text-group-1-fg" },
-  green:  { bg: "bg-group-2", text: "text-group-2-fg" },
-  blue:   { bg: "bg-group-3", text: "text-group-3-fg" },
-  red:    { bg: "bg-group-4", text: "text-group-4-fg" },
+  yellow: { bg: "tile-paint-1", text: "text-group-1-fg" },
+  green:  { bg: "tile-paint-2", text: "text-group-2-fg" },
+  blue:   { bg: "tile-paint-3", text: "text-group-3-fg" },
+  red:    { bg: "tile-paint-4", text: "text-group-4-fg" },
 };
 
 // The category-color inset ring shown on a genuine Rainbow tile (isRainbow)
@@ -419,12 +417,11 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
           // softer gradient, which this design intentionally avoids.
           : `rainbow-tile-static text-[#292825] shadow-md border ${isSelected ? "border-foreground" : "border-tile-border"}`
       : colorStyle
-        // text-group-N-fg (added alongside the bg fix above): the previous
-        // 35%-opacity fill left this unset, relying on whatever ambient
-        // text color happened to inherit — harmless for emoji tiles (an
-        // <img>, not text) but not a real word/letters, which need the same
-        // guaranteed-readable dark pairing SolvedGroup.tsx uses on the same
-        // background.
+        // text-group-N-fg: the original 35%-opacity fill left this unset,
+        // relying on whatever ambient text color happened to inherit —
+        // harmless for emoji tiles (an <img>, not text) but not a real
+        // word/letters, which need the same guaranteed-readable dark ink
+        // SolvedGroup.tsx uses; it reads just as well on the pastel.
         //
         // border-[3px] md:border-[4px]: width applies to BOTH the selected
         // and unselected states (only border-color differs below) so it

@@ -195,14 +195,14 @@ describe("double-tap colouring still applies and removes a colour", () => {
     act(() => {
       fireEvent.click(within(picker).getByLabelText("Blue tile color"));
     });
-    // The painted fill is the same variable Blue's solved bar uses.
-    expect(btn.className).toContain("bg-group-3");
+    // The painted fill is the pastel wash of Blue's solved-bar colour.
+    expect(btn.className).toContain("tile-paint-3");
 
     const reopened = doubleTap(container, "g1");
     act(() => {
       fireEvent.click(within(reopened).getByLabelText("Remove tile color"));
     });
-    expect(btn.className).not.toContain("bg-group-3");
+    expect(btn.className).not.toContain("tile-paint-3");
   });
 
   it("paints a Full tile Yellow and then clears it", () => {
@@ -213,13 +213,13 @@ describe("double-tap colouring still applies and removes a colour", () => {
     act(() => {
       fireEvent.click(within(picker).getByLabelText("Yellow tile color"));
     });
-    expect(btn.className).toContain("bg-group-1");
+    expect(btn.className).toContain("tile-paint-1");
 
     const reopened = doubleTap(container, "y1");
     act(() => {
       fireEvent.click(within(reopened).getByLabelText("Remove tile color"));
     });
-    expect(btn.className).not.toContain("bg-group-1");
+    expect(btn.className).not.toContain("tile-paint-1");
   });
 
   it("paints a Mini tile from palette mode too", () => {
@@ -228,6 +228,6 @@ describe("double-tap colouring still applies and removes a colour", () => {
     // click reads it, exactly as it is for a player making two taps.
     act(() => { fireEvent.click(screen.getByLabelText("Red paint")); });
     act(() => { fireEvent.click(tileButton(container, "b1")); });
-    expect(tileButton(container, "b1").className).toContain("bg-group-4");
+    expect(tileButton(container, "b1").className).toContain("tile-paint-4");
   });
 });

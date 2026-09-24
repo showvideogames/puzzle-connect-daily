@@ -54,7 +54,7 @@ describe("WordTile genuine-Rainbow + category-color ring", () => {
       <WordTile word="PIE" isSelected={false} onClick={() => {}} tileColor="green" />
     );
     const btn = getButton(container);
-    expect(btn.className).toContain("bg-group-2");
+    expect(btn.className).toContain("tile-paint-2");
     expect(btn.className).not.toContain("rainbow-tile");
     expect(getRing(container)).toBeNull();
   });
@@ -73,7 +73,7 @@ describe("WordTile genuine-Rainbow + category-color ring", () => {
       );
       const btn = getButton(container);
       expect(btn.className).toContain("rainbow-tile");
-      expect(btn.className).not.toMatch(/\bbg-group-\d\b/);
+      expect(btn.className).not.toMatch(/\b(bg-group|tile-paint)-\d\b/);
       const ring = getRing(container);
       expect(ring).not.toBeNull();
       expect(ring!.className).toContain(ringClass[color]);
