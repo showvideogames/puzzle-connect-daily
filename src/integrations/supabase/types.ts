@@ -1304,6 +1304,7 @@ export type Database = {
           longest_streak: number
         }[]
       }
+      get_puzzle_report: { Args: { _puzzle_id: string }; Returns: Json }
       get_puzzle_stats: { Args: { _puzzle_id: string }; Returns: Json }
       get_streak_admin_summary: {
         Args: never
