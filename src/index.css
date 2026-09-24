@@ -287,31 +287,14 @@ html {
 }
 .animate-tile-checking { animation: tile-checking 0.4s ease-in-out both; }
 
-/* ── Correct-guess reveal clones ──
-   Portaled to document.body (see GameBoard.tsx), positioned via inline
-   top/left/width/height computed from getBoundingClientRect() — always
-   viewport-relative since position:fixed here has no reparented/transformed
-   ancestor to be captured by. This class only supplies the transition. */
-.tile-reveal-clone {
-  position: fixed;
-  z-index: 60;
-  transition: top 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-              left 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-              width 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-              height 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.22s ease-in,
-              transform 0.22s ease-in;
-  pointer-events: none;
-}
-
 /* Respect reduced-motion — useGame still runs the state machine (with a 0ms
-   suspense and no clone/FLIP path), so logic is unaffected; this just kills
-   the movement for users who ask for it. The clone reveal + grid FLIP already
-   only run in the non-reduced path, so the bar just appears instantly here. */
+   suspense), so logic is unaffected; this just kills the movement for users
+   who ask for it. GameBoard's solve animation (gather, bar fade, settle)
+   only runs in the non-reduced path, so the bar just appears instantly here. */
 @media (prefers-reduced-motion: reduce) {
   .animate-tile-checking { animation: none; }
   .animate-group-appear { animation: none; }
-  .animate-solved-arrival { animation: none; }
+  .animate-solved-content-land { animation: none; }
   /* Same treatment as .rainbow-tile-static below, applied directly to
      .rainbow-tile since a reduced-motion OS preference should look the
      same as turning the Rainbow Animation setting off. */
@@ -394,20 +377,24 @@ html {
   transform-origin: center;
 }
 
-/* ── Solved category bar "arrival" pop (clone-reveal path, beat 2) ──
-   The bar has already faded in at scale 1 during the clone merge (beat 1);
-   this is a separate, clearly-bigger pop played AFTER the clones are gone
-   (see the "arrived" phase timing in GameBoard) so it reads as a distinct
-   "category locked in" moment, not part of the fade. Scale-only — opacity is
-   already 1 by now. */
-@keyframes solved-category-arrival-pop {
-  0% { transform: scale(0.95); }
-  45% { transform: scale(1.08); }
-  100% { transform: scale(1); }
+/* ── Solved category bar: text "lands" (solve animation, beats 2–3) ──
+   Applied to the bar's two text lines, never to the bar box, so the bar
+   keeps its exact final width and position the whole time it fades in (an
+   earlier scale pop on the whole bar made it visibly shrink, overshoot past
+   the board's edges and settle). The category name rises and pops a touch;
+   the answers line follows a beat behind. 360ms: must match
+   SOLVE_CONTENT_LAND_MS in lib/solveAnimation.ts. */
+@keyframes solved-content-land {
+  0% { opacity: 0; transform: translateY(6px) scale(0.94); }
+  60% { opacity: 1; transform: translateY(0) scale(1.04); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
-.animate-solved-arrival {
-  animation: solved-category-arrival-pop 0.48s ease-in-out both;
+.animate-solved-content-land {
+  animation: solved-content-land 0.36s cubic-bezier(0.2, 0, 0, 1) both;
   transform-origin: center;
+}
+.animate-solved-content-land + .animate-solved-content-land {
+  animation-delay: 60ms;
 }
 
 /* ── Spot the Rainbow button: breathe pulse + shimmer ── */

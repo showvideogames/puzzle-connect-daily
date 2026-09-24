@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useLayoutEffect, forwardRef }
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { categorySwatches } from "@/lib/categoryPalette";
 import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
+import { SOLVE_TILE_FADE_MS } from "@/lib/solveAnimation";
 
 const DOUBLE_TAP_DELAY_MS = 250;
 
@@ -123,6 +124,12 @@ interface WordTileProps {
   isSelected: boolean;
   onClick: () => void;
   disabled?: boolean;
+  // Whether a disabled tile is also dimmed (default true). GameBoard turns
+  // this off for the brief input lock while a guess is checked and a solved
+  // category animates in: nothing is really "unavailable" then, and dimming
+  // the board for that second — then brightening it again — read as a flash,
+  // most visibly on the selected tiles themselves (dark → grey → dark).
+  dimWhenDisabled?: boolean;
   isRainbow?: boolean;
   isMatched?: boolean;
   arrangeTiles?: boolean;
@@ -165,11 +172,10 @@ interface WordTileProps {
   // rainbow gradients, which are already static images regardless of this
   // setting.
   rainbowAnimated?: boolean;
-  // True while this tile's group is mid-reveal-animation: a clone is standing
-  // in for it in a document.body overlay, so the real tile is hidden (but
-  // keeps its layout space — visibility, not display — so the grid doesn't
-  // reflow until the animation finishes and the word is actually removed).
-  hiddenForReveal?: boolean;
+  // True once this tile's category has gathered into the top row and its
+  // solved bar is fading in over it: the tile fades out underneath (keeping
+  // its layout space, so nothing reflows until the row is removed).
+  fadingForReveal?: boolean;
   // True while this tile is part of a guess in the shared "checking" suspense
   // phase — plays a staggered bounce (checkingIndex sets the stagger order).
   isChecking?: boolean;
@@ -186,6 +192,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   isSelected,
   onClick,
   disabled,
+  dimWhenDisabled = true,
   isRainbow,
   isMatched,
   arrangeTiles = false,
@@ -206,7 +213,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   rainbowGradient,
   rainbowTextShadow,
   rainbowAnimated = true,
-  hiddenForReveal = false,
+  fadingForReveal = false,
   isChecking = false,
   checkingIndex = 0,
   squareTiles = false,
@@ -374,7 +381,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // unchanged from before this pass (md:aspect-auto hands sizing back to
   // that explicit height there).
   const baseClasses = `tile-base font-tile ${squareTiles ? "aspect-square" : "aspect-[11/10] md:aspect-auto md:h-[110px]"} font-[700] transition-all duration-150 ease-out relative
-    ${disabled ? (tileColor || isRainbow ? "cursor-default" : "opacity-50 cursor-default") : ""}
+    ${disabled ? (tileColor || isRainbow || !dimWhenDisabled ? "cursor-default" : "opacity-50 cursor-default") : ""}
   `;
 
   // Selection styling:
@@ -447,7 +454,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       className={`relative [container-type:inline-size] ${isChecking ? "animate-tile-checking" : ""}`}
       style={{
         touchAction: arrangeTiles ? "none" : "manipulation",
-        ...(hiddenForReveal ? { visibility: "hidden" as const } : {}),
+        ...(fadingForReveal ? { opacity: 0, transition: `opacity ${SOLVE_TILE_FADE_MS}ms ease-out` } : {}),
         ...(isChecking ? { animationDelay: `${checkingIndex * 0.07}s` } : {}),
       }}
     >
