@@ -1,16 +1,21 @@
 /**
- * The correct-guess solve animation: gather → bar → settle.
+ * The correct-guess solve animation: gather → merge → pop (with settle).
  *
- * What these lock down, from a playtest recording of the previous version:
+ * What these lock down, from playtest recordings and Sam's review:
  *  - the guessed words no longer fly across the board as separate dark
  *    copies — the real tiles swap into the top row, and only the tiles that
  *    have to move do;
- *  - the solved bar appears at its final width and position: it is taken
- *    out of the page flow until the row leaves (so the board doesn't jump
- *    down to make room for it), and the bar box itself is never scaled (the
- *    old "arrival pop" made it shrink, overshoot past the board and settle);
+ *  - the solved bar merges in exactly over that row: it is taken out of the
+ *    page flow until the row leaves (so the board doesn't jump down to make
+ *    room for it), is a one-tile-row .solved-bar, and doesn't scale while
+ *    it merges;
+ *  - once the tiles are gone the bar does its own distinct pop, and only
+ *    then (on the final solve) does the celebration start;
  *  - nothing dims and re-brightens mid-solve;
  *  - reduced motion skips all of it.
+ *
+ * jsdom has no layout, so the exact row-height geometry is checked in a
+ * real browser instead (it was measured on phone widths for Full and Mini).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -45,7 +50,8 @@ import {
   gatherIntoFirstRow,
   SOLVE_BAR_FADE_MS,
   SOLVE_GATHER_MS,
-  SOLVE_SETTLE_MS,
+  SOLVE_POP_MS,
+  SOLVE_POP_PAUSE_MS,
 } from "@/lib/solveAnimation";
 
 // useGame's shared "checking guess" suspense before any outcome shows
@@ -210,8 +216,8 @@ describe("gatherIntoFirstRow", () => {
 describe.each([
   ["Full", fullPuzzle, 4],
   ["Mini", miniPuzzle, 3],
-] as const)("%s board: gather, then the bar, then the settle", (_name, puzzle, columns) => {
-  it("plays the three beats in order, with the bar fixed in place and never scaled", async () => {
+] as const)("%s board: gather, merge, then pop", (_name, puzzle, columns) => {
+  it("plays the beats in order: the bar merges in place, then pops", async () => {
     setReducedMotion(false);
     const { container } = renderBoard(puzzle);
     await act(async () => {});
@@ -235,41 +241,50 @@ describe.each([
     expect(bar(group.category).style.opacity).toBe("0");
     for (const w of gridWords(container)) expect(tileButton(container, w).className).not.toMatch(/(^|\s)opacity-50/);
 
-    // Beat 2 — the bar fades in over the row; the tiles fade out beneath it.
+    // Beat 2 — merge: the one-row bar fades in over the row, without any
+    // pop yet; the tiles fade out beneath it.
     await advance(SOLVE_GATHER_MS);
-    expect(bar(group.category).style.position).toBe("absolute");
-    expect(bar(group.category).style.opacity).toBe("1");
+    const merging = bar(group.category);
+    expect(merging.className).toContain("solved-bar");
+    expect(merging.style.position).toBe("absolute");
+    expect(merging.style.opacity).toBe("1");
+    expect(merging.className).not.toContain("animate-solved-pop");
     for (const w of group.words) expect(tileWrapper(container, w).style.opacity).toBe("0");
     expect(screen.getByText(group.category).className).toContain("animate-solved-content-land");
 
-    // Beat 3 — settle. The row has left the grid and the bar is in the page
-    // flow; everything else is still on the board.
+    // Still merging through the short pause before the pop.
     await advance(SOLVE_BAR_FADE_MS);
+    expect(bar(group.category).className).not.toContain("animate-solved-pop");
+
+    // Beats 3 and 4 — pop and settle. The row has left the grid, the bar is
+    // in the page flow (drawn above its neighbours) and pops; everything
+    // else is still on the board.
+    await advance(SOLVE_POP_PAUSE_MS);
+    const popping = bar(group.category);
     for (const w of group.words) expect(tileWrapper(container, w)).toBeNull();
-    expect(bar(group.category).style.position).toBe("");
+    expect(popping.style.position).toBe("relative");
+    expect(popping.className).toContain("animate-solved-pop");
     expect(new Set(gridWords(container))).toEqual(new Set(others));
 
-    // Done: a plain solved bar.
-    await advance(SOLVE_SETTLE_MS);
+    // Done: a plain solved bar, still one row tall.
+    await advance(SOLVE_POP_MS);
     const done = bar(group.category);
+    expect(done.className).toContain("solved-bar");
+    expect(done.className).not.toMatch(/animate-solved-pop|animate-group-appear/);
     expect(done.style.position).toBe("");
     expect(done.style.opacity).toBe("");
     expect(done.style.transform).toBe("");
     expect(screen.getByText(group.category).className).not.toContain("animate-solved-content-land");
-
-    // The bar box is never scaled: no pop or entrance class on it at any
-    // point, and never an inline transform.
-    expect(done.className).not.toMatch(/animate-solved-arrival|animate-group-appear/);
   });
 });
 
 describe("the final solve", () => {
-  it("un-gates the results only once the last category has settled", async () => {
+  it("un-gates the results only once the last category's pop has finished", async () => {
     setReducedMotion(false);
     const { container } = renderBoard(miniPuzzle);
     await act(async () => {});
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    const full = CHECKING_MS + SOLVE_GATHER_MS + SOLVE_BAR_FADE_MS + SOLVE_SETTLE_MS;
+    const full = CHECKING_MS + SOLVE_GATHER_MS + SOLVE_BAR_FADE_MS + SOLVE_POP_PAUSE_MS + SOLVE_POP_MS;
 
     for (const g of miniPuzzle.groups.slice(0, 2)) {
       await submit(container, g.words);
@@ -280,10 +295,11 @@ describe("the final solve", () => {
     await advance(CHECKING_MS);
     expect(screen.queryByText(/perfect game/i)).toBeNull();
     // The last row is the whole board, so there is nothing to gather: the bar
-    // comes straight in, then settles.
-    await advance(SOLVE_BAR_FADE_MS);
+    // merges straight in, then pops — and the celebration waits for the pop.
+    await advance(SOLVE_BAR_FADE_MS + SOLVE_POP_PAUSE_MS);
+    expect(bar(last.category).className).toContain("animate-solved-pop");
     expect(screen.queryByText(/perfect game/i)).toBeNull();
-    await advance(SOLVE_SETTLE_MS);
+    await advance(SOLVE_POP_MS);
     // The celebration is un-gated on a zero-delay timer from that last beat
     // (fake timers run a zero delay set inside a tick one millisecond later).
     await advance(10);

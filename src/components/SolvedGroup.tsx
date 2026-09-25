@@ -24,10 +24,11 @@ interface SolvedGroupProps {
   //    no top set, so it sits exactly where it will end up and at the full
   //    board width) — the board below doesn't move to make room for it yet.
   //  - "appearing": same place, fading in over the gathered row while its
-  //    text settles in (.animate-solved-content-land). The bar box itself
-  //    never scales or moves, so its width never changes.
-  //  - "settling": back in the page flow — the row has gone and the board
-  //    below is sliding up. The text animation carries on uninterrupted.
+  //    text settles in (.animate-solved-content-land). The bar covers the
+  //    row exactly (see .solved-bar) and doesn't move or scale while it
+  //    merges.
+  //  - "settling": back in the page flow in the same spot, doing its pop
+  //    (.animate-solved-pop). The text animation carries on uninterrupted.
   // undefined = normal rendering (animate-group-appear entrance if `animate`).
   reveal?: "pending" | "appearing" | "settling";
 }
@@ -42,6 +43,7 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
   const revealing = reveal !== undefined;
   const floating = reveal === "pending" || reveal === "appearing";
   const contentLand = reveal === "appearing" || reveal === "settling" ? "animate-solved-content-land" : "";
+  const popping = reveal === "settling";
   const displayWords = alphabetizeCompleted
     ? [...group.words].sort((a, b) => a.localeCompare(b))
     : group.words;
@@ -58,11 +60,18 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
   return (
     <div
       ref={ref}
-      className={`${colors.bg} ${colors.text} rounded-lg py-3 px-4 text-center ${
+      // solved-bar: one tile row tall (index.css), with its text centred.
+      // py-2, not more: the row height does the spacing, and on the
+      // narrowest phones (320px) a Full row is only ~60px tall — any more
+      // padding would make the bar taller than the row it replaces.
+      className={`solved-bar ${colors.bg} ${colors.text} rounded-lg py-2 px-4 text-center ${
         !revealing && animate ? "animate-group-appear" : ""
-      }`}
+      } ${popping ? "animate-solved-pop" : ""}`}
       style={
-        floating
+        popping
+          // Drawn above its neighbours while the pop briefly overshoots them.
+          ? { position: "relative", zIndex: 1 }
+          : floating
           ? {
               position: "absolute",
               left: 0,

@@ -295,6 +295,7 @@ html {
   .animate-tile-checking { animation: none; }
   .animate-group-appear { animation: none; }
   .animate-solved-content-land { animation: none; }
+  .animate-solved-pop { animation: none; }
   /* Same treatment as .rainbow-tile-static below, applied directly to
      .rainbow-tile since a reduced-motion OS preference should look the
      same as turning the Rainbow Animation setting off. */
@@ -377,13 +378,58 @@ html {
   transform-origin: center;
 }
 
-/* ── Solved category bar: text "lands" (solve animation, beats 2–3) ──
-   Applied to the bar's two text lines, never to the bar box, so the bar
-   keeps its exact final width and position the whole time it fades in (an
-   earlier scale pop on the whole bar made it visibly shrink, overshoot past
-   the board's edges and settle). The category name rises and pops a touch;
-   the answers line follows a beat behind. 360ms: must match
-   SOLVE_CONTENT_LAND_MS in lib/solveAnimation.ts. */
+/* ── A solved category bar is exactly one tile row ──
+   The list of solved bars (.board-bars, GameBoard) is a size container the
+   width of the board, and works out one tile's height from it the same way
+   the grid does: (board width − the gaps) ÷ columns, then the tile's own
+   shape — 11:10 on a Full board below md, a flat 110px from md up, square
+   on a Mini. So when four tiles merge into their bar, the bar covers the
+   whole row including the gaps between the tiles, and the board below
+   doesn't move. min-height rather than height, so an unusually long answer
+   line (big emoji answers) can still grow the bar instead of overflowing. */
+.board-bars {
+  container-type: inline-size;
+  --board-gap: 6px;
+  --solved-row-h: calc((100cqw - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols) * 10 / 11);
+}
+@media (min-width: 768px) {
+  .board-bars { --solved-row-h: 110px; }
+  .board-bars.board-bars-wide { --board-gap: 12px; }
+}
+.board-bars.board-bars-square {
+  --board-gap: 8px;
+  --solved-row-h: calc((100cqw - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols));
+}
+.solved-bar {
+  min-height: var(--solved-row-h, auto);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* ── Solved category bar "pop" (solve animation, after the merge) ──
+   The bar's own "category locked in" moment, played once the gathered
+   tiles have faded away beneath it. A gentle dip, a clear overshoot, then
+   it settles. It starts and ends at exactly the bar's size, so there is no
+   jump at either end (an earlier version started at 0.95, which read as the
+   bar snapping smaller for a frame). 480ms: must match SOLVE_POP_MS in
+   lib/solveAnimation.ts. */
+@keyframes solved-bar-pop {
+  0% { transform: scale(1); }
+  18% { transform: scale(0.96); }
+  55% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+.animate-solved-pop {
+  animation: solved-bar-pop 0.48s ease-in-out both;
+  transform-origin: center;
+}
+
+/* ── Solved category bar: text "lands" (solve animation, merge → pop) ──
+   Applied to the bar's two text lines as the bar fades in over the row: the
+   category name rises and pops a touch, the answers line a beat behind, so
+   the tiles' words and the bar's words never ghost over each other. 360ms:
+   must match SOLVE_CONTENT_LAND_MS in lib/solveAnimation.ts. */
 @keyframes solved-content-land {
   0% { opacity: 0; transform: translateY(6px) scale(0.94); }
   60% { opacity: 1; transform: translateY(0) scale(1.04); }

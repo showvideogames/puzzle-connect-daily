@@ -1,23 +1,32 @@
 /**
- * Timings for GameBoard's correct-guess solve animation, in three beats:
+ * Timings for GameBoard's correct-guess solve animation, in four beats:
  *
  *   1. GATHER — the guessed tiles swap into the top row of the board (only
  *      the tiles that have to move do; see gatherIntoFirstRow below).
- *   2. BAR — the solved bar fades in exactly over that row, at its final
- *      width and position, while the gathered tiles fade out beneath it.
- *      The bar box itself never scales or moves; only its text settles in.
- *   3. SETTLE — the row is removed and the remaining tiles (and everything
- *      below the board) slide up into the space it leaves.
+ *   2. MERGE — the solved bar fades in exactly over that row, while the
+ *      gathered tiles fade out beneath it. A solved bar is exactly one tile
+ *      row tall and the full board wide (index.css .solved-bar), so it
+ *      covers the four tiles and the gaps between them, nothing more.
+ *   3. POP — once the tiles are gone, a short pause, then the bar's own
+ *      distinct "category locked in" pop (.animate-solved-pop).
+ *   4. SETTLE — at the same moment the row leaves the grid and the bar
+ *      takes its place in the page. Because the bar is the row's size, the
+ *      rest of the board has nothing to close up; any leftover difference
+ *      (a very long answer line, a Rainbow bar above) glides rather than
+ *      jumps.
  *
- * Reduced motion skips all three: the bar simply appears and the row goes.
+ * Reduced motion skips all of it: the bar simply appears and the row goes.
  */
 export const SOLVE_GATHER_MS = 380;
 export const SOLVE_BAR_FADE_MS = 200;
+/** Pause between the merge finishing and the pop, so the pop reads on its own. */
+export const SOLVE_POP_PAUSE_MS = 80;
+/** Must match .animate-solved-pop in index.css. */
+export const SOLVE_POP_MS = 480;
 /**
  * The gathered tiles fade out faster than the bar fades in over them, so the
  * tiles' own words are gone before the bar's text arrives (no two sets of
- * words ghosting over each other), and the strip of tile below the shorter
- * bar is gone well before the settle.
+ * words ghosting over each other).
  */
 export const SOLVE_TILE_FADE_MS = 140;
 export const SOLVE_SETTLE_MS = 320;

@@ -38,6 +38,8 @@ import {
   SOLVE_BAR_FADE_MS,
   SOLVE_EASE,
   SOLVE_GATHER_MS,
+  SOLVE_POP_MS,
+  SOLVE_POP_PAUSE_MS,
   SOLVE_SETTLE_MS,
 } from "@/lib/solveAnimation";
 
@@ -84,7 +86,8 @@ interface RevealState {
   //              invisible, and the board hasn't moved yet.
   //  gathering — the guessed tiles are swapping into the top row.
   //  appearing — the bar fades in over that row; the tiles fade beneath it.
-  //  settling  — the row is gone and the rest of the board slides up.
+  //  settling  — the bar pops; the row has left the grid and anything the
+  //              bar didn't exactly replace glides into place.
   phase: "pending" | "gathering" | "appearing" | "settling";
 }
 
@@ -491,12 +494,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     setPhase("gathering");
 
     const barAt = gathers ? SOLVE_GATHER_MS : 0;
-    const settleAt = barAt + SOLVE_BAR_FADE_MS;
+    const settleAt = barAt + SOLVE_BAR_FADE_MS + SOLVE_POP_PAUSE_MS;
     revealTimersRef.current = [
-      // Beat 2 — the bar fades in over the gathered row.
+      // Beat 2 — merge: the bar fades in over the gathered row.
       setTimeout(() => setPhase("appearing"), barAt),
-      // Beat 3 — settle: release the hold (the row leaves the grid) and put
-      // the bar into the page flow, in one render, then slide the rest up.
+      // Beats 3 and 4 — pop and settle: release the hold (the row leaves the
+      // grid) and put the bar into the page flow in the same spot, in one
+      // render; the bar pops while anything else glides into place.
       setTimeout(() => {
         gridFlipRef.current = {
           before: measure(Object.keys(wordTileRefs.current).filter((w) => !groupWords.has(w))),
@@ -514,7 +518,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       setTimeout(() => {
         setPhase(null);
         if (isWonRef.current) revealVictory(true, VICTORY_HOLD_AFTER_SOLVE_MS);
-      }, settleAt + SOLVE_SETTLE_MS),
+      }, settleAt + Math.max(SOLVE_POP_MS, SOLVE_SETTLE_MS)),
     ];
   }, [reveal, remainingWords, format.columns, setWordOrder, releaseRevealHold, revealVictory]);
 
@@ -1033,6 +1037,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // as before, since it has no victory animation to wait on.
   const showEndState = state.isComplete && (!state.isWon || victoryRevealReady);
 
+  // Whether the solved-bar list has anything in the page flow — a bar still
+  // merging floats over its tile row and takes no space yet. Only then does
+  // the list need the gap that separates it from the grid, so the board
+  // doesn't shift the moment a merge starts.
+  const barsInFlow =
+    boardSlots.some(
+      (s) => s.kind === "rainbow" || !(reveal && reveal.groupIdx === s.groupIdx && reveal.phase !== "settling"),
+    ) ||
+    (showEndState && !state.gotRainbow && !!rainbowHerring);
+
   // The solved-rainbow reveal card (both the direct-guess and Spot the
   // Rainbow paths below) isn't itself gated by the Rainbow Animation
   // setting today, but should still show the same static treatment as the
@@ -1118,9 +1132,23 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       <div className={isMiniBoard ? "w-full max-w-[330px] mx-auto" : undefined}>
       {/* Solved groups — rainbow is interleaved at the position it was actually
           found (boardSlots), not always pinned to the top */}
-      {/* relative: the bar of a category mid-solve-animation is positioned
-          against this list (see SolvedGroup's `reveal`). */}
-      <div className="relative space-y-2 mb-2">
+      {/* The solved bars. Spaced exactly like the tile grid (same gaps), and
+          each bar is one tile row tall (.board-bars / .solved-bar in
+          index.css), so a row becoming a bar leaves the board below where
+          it was. pt-2 keeps the unsolved board exactly where it always sat,
+          and is where the first bar lands — right on top of the first row.
+          relative + z-[1]: the bar of a category mid-solve-animation is
+          positioned against this list, and must draw over the tile row it
+          replaces (.board-bars is a size container, which gives it its own
+          layer). */}
+      <div
+        className={`board-bars relative z-[1] pt-2 ${
+          isMiniBoard
+            ? `board-bars-square space-y-2 ${barsInFlow ? "mb-2" : ""}`
+            : `space-y-1.5 ${barsInFlow ? "mb-1.5" : ""} ${useWideBoard ? `board-bars-wide md:space-y-3 ${barsInFlow ? "md:mb-3" : ""}` : ""}`
+        }`}
+        style={{ "--board-cols": format.columns } as import("react").CSSProperties}
+      >
         {boardSlots.map((slot) =>
           slot.kind === "rainbow" ? (
             <RainbowRevealBar
