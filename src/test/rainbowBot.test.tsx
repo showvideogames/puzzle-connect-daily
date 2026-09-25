@@ -84,13 +84,37 @@ describe("RainbowBot", () => {
     expect(screen.getByTestId("skill-standing").textContent).toBe("Better than 50% of 4 other players");
   });
 
-  it("tells a solo player there is nobody to compare against yet", async () => {
+  it("tells a solo player there is nobody to compare against yet, without claiming they're first", async () => {
+    // total_players: 1 here means the report has already caught up to this
+    // player's own just-finalized session — a real, honest count, not a
+    // guess about being first.
     rpc.mockResolvedValue({ data: { ...REPORT, total_players: 1, score_counts: { "84": 1 }, common_wrong_guesses: [] }, error: null });
     render(<RainbowBot puzzle={puzzle} state={finished()} />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
-    expect(screen.getByTestId("skill-standing").textContent).toMatch(/first to finish/);
+    expect(screen.getByTestId("skill-standing").textContent).toBe("No comparison yet — check back once others have played.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Full report" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(within(screen.getByRole("dialog")).getByText("1 player finished this puzzle so far.")).toBeTruthy();
+  });
+
+  it("says nobody else has finished when the report genuinely counts zero sessions", async () => {
+    rpc.mockResolvedValue({ data: { ...REPORT, total_players: 0, wins: 0, perfect: 0, players_with_wrong_guess: 0, first_solved: {}, score_counts: {}, common_wrong_guesses: [] }, error: null });
+    render(<RainbowBot puzzle={puzzle} state={finished()} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(screen.getByTestId("skill-standing").textContent).toBe("No comparison yet — check back once others have played.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Full report" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(within(screen.getByRole("dialog")).getByText("No one else has finished this puzzle yet.")).toBeTruthy();
   });
 
   it("opens the full report with the score breakdown and the common wrong guesses", async () => {
@@ -118,13 +142,30 @@ describe("RainbowBot", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("survives a missing report without crashing", async () => {
+  it("survives a missing report without crashing, and never claims the player is first", async () => {
+    // This is what production looks like before the get_puzzle_report
+    // migration is applied: the RPC doesn't exist yet, so every fetch
+    // errors and report stays null. The player is very unlikely to
+    // actually be first, so the copy must not say so.
     rpc.mockResolvedValue({ data: null, error: { message: "boom" } });
     render(<RainbowBot puzzle={puzzle} state={finished()} />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
     expect(screen.getByTestId("skill-score").textContent).toBe("84");
-    expect(screen.getByTestId("skill-standing").textContent).toMatch(/first to finish/);
+    expect(screen.getByTestId("skill-standing").textContent).toBe("Comparison isn't available right now.");
+    expect(screen.getByTestId("skill-standing").textContent).not.toMatch(/first/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "Full report" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Comparison isn't available right now.")).toBeTruthy();
+    // The report-dependent sections (wrong guesses, first solved, Rainbow
+    // split) must not render at all when there is no report to draw them
+    // from — showing zeros there would be its own false claim.
+    expect(within(dialog).queryByText(/Most common wrong guess/)).toBeNull();
+    expect(within(dialog).queryByText(/First category solved/)).toBeNull();
   });
 });

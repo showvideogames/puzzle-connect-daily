@@ -92,9 +92,16 @@ export function RainbowBot({ puzzle, state }: RainbowBotProps) {
 
   const standing = report ? scoreStanding(report.score_counts, score) : null;
 
+  // These "no comparison" cases are worded apart on purpose. A missing
+  // report (the RPC errored, or is not deployed yet — fetchPuzzleReport
+  // returns null on any error rather than throwing) says nothing about who
+  // else has played; claiming "you're first" there would often just be
+  // wrong. Only a report that loaded fine and genuinely counted zero other
+  // finished sessions earns that claim.
   let standingLine: string;
   if (!loaded) standingLine = "Comparing with today's players…";
-  else if (!report || !standing || standing.others === 0) standingLine = "You're the first to finish. Check back later to compare.";
+  else if (!report) standingLine = "Comparison isn't available right now.";
+  else if (!standing || standing.others === 0) standingLine = "No comparison yet — check back once others have played.";
   else if (standing.betterThanPct === null) standingLine = `${standing.others + 1} players so far.`;
   else standingLine = `Better than ${standing.betterThanPct}% of ${standing.others} other player${standing.others === 1 ? "" : "s"}`;
 
@@ -187,9 +194,11 @@ function ReportModal({ puzzle, score, lines, report, onClose }: ReportModalProps
           <Bot className="w-5 h-5" aria-hidden="true" /> Rainbow Bot
         </h2>
         <p className="text-center text-xs text-muted-foreground mb-5">
-          {players === 0
-            ? "You're the first to finish this puzzle."
-            : `${players} player${players === 1 ? "" : "s"} finished this puzzle so far.`}
+          {!report
+            ? "Comparison isn't available right now."
+            : players === 0
+              ? "No one else has finished this puzzle yet."
+              : `${players} player${players === 1 ? "" : "s"} finished this puzzle so far.`}
         </p>
 
         {/* Your score */}
