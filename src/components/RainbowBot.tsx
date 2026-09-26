@@ -16,7 +16,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Bot, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { GameState, Puzzle } from "@/lib/types";
 import {
   DIFFICULTY_COLOR_NAME,
@@ -113,7 +113,13 @@ export function RainbowBot({ puzzle, state }: RainbowBotProps) {
       >
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary">
-            <Bot className="h-5 w-5" aria-hidden="true" />
+            {/* Lucky Bot — the Rainbow Bot's mascot face. public/lucky-bot.png
+                is a pre-cropped, pre-compressed 160x160 transparent PNG (see
+                the crop/optimize notes in git history for this file); never
+                swap it for a larger source image without re-cropping and
+                re-compressing the same way, or this becomes another entry
+                in the oversized-image findings from the performance audit. */}
+            <img src="/lucky-bot.png" alt="" aria-hidden="true" className="h-8 w-8 object-contain" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
@@ -191,7 +197,7 @@ function ReportModal({ puzzle, score, lines, report, onClose }: ReportModalProps
         </button>
 
         <h2 id="rainbow-bot-title" className="text-lg font-bold text-center mb-1 flex items-center justify-center gap-2">
-          <Bot className="w-5 h-5" aria-hidden="true" /> Rainbow Bot
+          <img src="/lucky-bot.png" alt="" aria-hidden="true" className="w-6 h-6 object-contain" /> Rainbow Bot
         </h2>
         <p className="text-center text-xs text-muted-foreground mb-5">
           {!report
