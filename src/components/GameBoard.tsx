@@ -22,7 +22,13 @@ import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
 import { supabase } from "@/integrations/supabase/client";
-import { getDeviceId, getDeviceToken, recordBonusRainbowAttempt } from "@/lib/gameStats";
+import { fetchSavedPromptAnswer, getDeviceId, getDeviceToken, recordBonusRainbowAttempt } from "@/lib/gameStats";
+import {
+  loadPromptAnswer,
+  markPromptAnswerSaved,
+  savePromptAnswer,
+  type PromptAnswerSave,
+} from "@/lib/gameProgress";
 import type { EntryContext } from "@/lib/entryContext";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { trackEvent } from "@/lib/analytics";
@@ -105,6 +111,18 @@ function prefersReducedMotion(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Sends a Full game's post-game Rainbow answer and, once the server has
+ * answered (saved it, or refused it because the game already has one),
+ * stops remembering it as pending. A save that fails, or never finishes
+ * because the page closed, stays pending and is sent again on the next
+ * visit; the server stores a repeat of the same submission once.
+ */
+async function deliverPromptAnswer(storageId: string, save: PromptAnswerSave) {
+  const result = await recordBonusRainbowAttempt(save);
+  if (result !== "failed") markPromptAnswerSaved(storageId);
 }
 
 function getResultHeadline(isWon: boolean, mistakes: number): string {
@@ -301,6 +319,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     handleTouchDragEnd,
     alreadyGuessed,
     isOfficialAttemptRef,
+    lockedByOfficialResult,
     sessionIdRef,
     activeSecondsRef,
     activeSeconds,
@@ -316,6 +335,78 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     // preload spinner is up — a slow image load is not solving time.
     boardReady: imagesReady,
   });
+
+  // ── One post-game Rainbow answer per Full game ──
+  // The answer is remembered at Submit (savePromptAnswer) and restored here
+  // before the first paint, so a refresh or a later visit shows the outcome
+  // instead of the prompt: a wrong answer shows the revealed Rainbow, exactly
+  // as it did in the visit it was given, and a right one shows the find. The
+  // database refuses a second answer too (record_bonus_rainbow, migration
+  // 20260928000000), so a stale page cannot add one. Mini keeps its own,
+  // original prompt behaviour for now.
+  const oneAnswerPrompt = format.id === "full";
+  // The locked "already finished" board (see lockedByOfficialResult) is the
+  // regular game's; a Mini keeps its live behaviour for now.
+  const lockedFullResult = lockedByOfficialResult && oneAnswerPrompt;
+  const promptAnsweredRef = useRef(false);
+  // A wrong answer restored from storage shows its Rainbow straight away,
+  // without replaying the reveal animation it already had.
+  const restoredWrongAnswerRef = useRef(false);
+  const promptRestoredForRef = useRef<string | null>(null);
+  // True while asking the server whether a reopened, finished game already
+  // used its prompt; the prompt stays hidden until the answer arrives.
+  const [promptCheckPending, setPromptCheckPending] = useState(false);
+  useLayoutEffect(() => {
+    if (promptRestoredForRef.current === storageId) return;
+    promptRestoredForRef.current = storageId;
+    promptAnsweredRef.current = false;
+    if (!oneAnswerPrompt) return;
+    const answer = loadPromptAnswer(storageId);
+    if (!answer) {
+      // A game finished before this visit, with no answer remembered here,
+      // may have been answered by an older version of the app, which kept no
+      // record of it in the browser. Ask the server before offering the
+      // prompt; the server refuses a second answer, so offering it would let
+      // the board celebrate a find that is never counted.
+      if (state.isComplete && !state.gotRainbow && rainbowHerring && !betaMode && !customMode) {
+        setPromptCheckPending(true);
+        void fetchSavedPromptAnswer(puzzle.id).then((saved) => {
+          if (saved?.answered) {
+            promptAnsweredRef.current = true;
+            const guessedAt = new Date().toISOString();
+            savePromptAnswer(storageId, { correct: saved.found, words: [], guessedAt, pendingSave: null });
+            if (saved.found) {
+              markRainbowFound(rainbowHerring, guessedAt);
+            } else {
+              restoredWrongAnswerRef.current = true;
+              setBonusRainbowCorrect(false);
+            }
+          }
+          setPromptCheckPending(false);
+        });
+      }
+      return;
+    }
+    promptAnsweredRef.current = true;
+    if (answer.correct) {
+      // Refreshed in the moment between Submit and the find reaching the
+      // board: finish recording it, once, with its original time.
+      if (!state.gotRainbow && rainbowHerring) markRainbowFound(rainbowHerring, answer.guessedAt);
+    } else if (bonusRainbowCorrect === null) {
+      restoredWrongAnswerRef.current = true;
+      setBonusRainbowCorrect(false);
+    }
+  }, [storageId, oneAnswerPrompt, state.isComplete, state.gotRainbow, rainbowHerring, markRainbowFound, bonusRainbowCorrect, betaMode, customMode, puzzle.id]);
+
+  // An answer whose save never got through on an earlier visit (the page
+  // closed during the reveal or while the request was in flight) is sent
+  // again when the game is opened. Once per opened game; the one-answer rule
+  // above only hides the prompt, it never stops this delivery.
+  useEffect(() => {
+    if (!oneAnswerPrompt) return;
+    const pending = loadPromptAnswer(storageId)?.pendingSave;
+    if (pending) void deliverPromptAnswer(storageId, pending);
+  }, [storageId, oneAnswerPrompt]);
 
   // Mini's tile grid, solved bars and Rainbow reveal bar are capped to a
   // compact, near-square-tile width regardless of useWideBoard — a Mini is
@@ -741,6 +832,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       // markRainbowFound sets it synchronously, before this delayed flag.
       trackEvent("rainbow_found", { source: "bonus_modal" });
     } else if (bonusRainbowCorrect === false) {
+      if (restoredWrongAnswerRef.current) {
+        // Restored from an earlier visit: already revealed then.
+        restoredWrongAnswerRef.current = false;
+        setRainbowVisible(true);
+        return;
+      }
       setRainbowVisible(false);
       requestAnimationFrame(() => requestAnimationFrame(() => setRainbowVisible(true)));
     }
@@ -761,6 +858,32 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     // only; the bonus attempt itself happened now.
     const guessedAt = new Date().toISOString();
     setShowSpotModal(false);
+    // One answer per Full game. Remembered now, at Submit, not after the
+    // reveal delay below, so a refresh during that delay still counts it —
+    // and a second press before the result appears is ignored. Its durable
+    // save starts now too, and stays remembered as pending until the server
+    // answers, so a page closed before then sends it on the next visit.
+    // (Same rules as the Mini path below: nothing is saved for a confirmed
+    // replay, a beta playtest, or a game that never got a session.)
+    if (oneAnswerPrompt) {
+      if (promptAnsweredRef.current) return;
+      promptAnsweredRef.current = true;
+      const sessionId = sessionIdRef.current;
+      const pendingSave =
+        sessionId && isOfficialAttemptRef.current !== false && !betaMode
+          ? {
+              sessionId,
+              guessNumber: nextGuessNumber(0),
+              words: [...words],
+              correct,
+              guessedAt,
+              activeTimeSeconds: activeSecondsRef.current,
+              groupsSolved: state.solvedGroups.length,
+            }
+          : null;
+      savePromptAnswer(storageId, { correct, words: [...words], guessedAt, pendingSave });
+      if (pendingSave) void deliverPromptAnswer(storageId, pendingSave);
+    }
     setSpotShaking(true);
     setTimeout(() => {
       setSpotShaking(false);
@@ -822,7 +945,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       // loss), and a Rainbow found there counts. A failed attempt would
       // otherwise vanish entirely, leaving it indistinguishable from never
       // having tried.
-      if (canPersist) {
+      // A Full game already started its save at Submit (above); this delayed
+      // write is the Mini's, unchanged.
+      if (canPersist && !oneAnswerPrompt) {
         void recordBonusRainbowAttempt({
           sessionId,
           guessNumber: nextGuessNumber(attemptOffset),
@@ -831,12 +956,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           guessedAt,
           activeTimeSeconds,
           groupsSolved: state.solvedGroups.length,
-        });
+        }, { retry: false });
       }
 
       setTimeout(() => setBonusRainbowCorrect(correct), correct ? 600 : 0);
     }, 400);
-  }, [rainbowHerring, markRainbowFound, isOfficialAttemptRef, sessionIdRef, activeSecondsRef, nextGuessNumber, state.solvedGroups.length, betaMode]);
+  }, [rainbowHerring, markRainbowFound, isOfficialAttemptRef, sessionIdRef, activeSecondsRef, nextGuessNumber, state.solvedGroups.length, betaMode, storageId, oneAnswerPrompt]);
 
   const hintItems = useCallback((): { color?: string; squareEmoji?: string; emoji: string }[] => {
     const sorted = [...puzzle.groups].sort((a, b) => a.difficulty - b.difficulty);
@@ -1181,10 +1306,18 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           )
         )}
 
-        {showEndState && !state.gotRainbow && rainbowHerring && (
+        {/* Not on a board locked by a result this browser holds no copy of
+            (lockedByOfficialResult): the prompt would score a Rainbow onto an
+            empty local game whose outcome is unknown here. */}
+        {showEndState && !lockedFullResult && !state.gotRainbow && rainbowHerring && (
           bonusRainbowCorrect === null ? (
+            // Hidden for the moment it takes to confirm with the server that
+            // a reopened game has not already used its prompt.
+            promptCheckPending ? null : (
             <button
-              onClick={() => setShowSpotModal(true)}
+              onClick={() => {
+                if (!promptAnsweredRef.current) setShowSpotModal(true);
+              }}
               className="w-full rounded-lg py-3 px-4 text-center text-white
                 hover:opacity-90 transition-opacity active:scale-[0.99]
                 animate-rainbow-breathe animate-rainbow-shimmer"
@@ -1193,6 +1326,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               <div className="font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">{theme.spotPrompt}</div>
               <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-0.5">Find one word from each group</div>
             </button>
+            )
           ) : (
             <RainbowRevealBar
               categoryName={puzzle.rainbowCategoryName}
@@ -1650,7 +1784,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* End state — hide headline/subtitle when viewing already-completed puzzle */}
       {showEndState && (
         <div className="text-center mt-6 animate-fade-up">
-          {!wasAlreadyComplete.current && (
+          {/* A board locked by an official result this browser has no copy
+              of is finished, but its outcome is unknown here — isWon is only
+              its default false. Say it is done without calling it a loss. */}
+          {lockedFullResult ? (
+            <p className="text-sm text-muted-foreground" data-testid="already-finished">
+              You've already finished this puzzle. Come back tomorrow!
+            </p>
+          ) : !wasAlreadyComplete.current && (
             <>
               <p className="text-lg font-bold">
                 {getResultHeadline(state.isWon, state.mistakes)}
@@ -1719,7 +1860,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   puzzles only, for the same reason as Global Stats above —
                   a beta or custom puzzle has no official sessions to compare
                   against. */}
-              {!betaMode && !customMode && <LuckyBot puzzle={puzzle} state={state} />}
+              {!betaMode && !customMode && !lockedFullResult && <LuckyBot puzzle={puzzle} state={state} rainbowPromptResult={bonusRainbowCorrect} />}
             </div>
           )}
         </div>

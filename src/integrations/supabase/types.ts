@@ -611,6 +611,7 @@ export type Database = {
           is_almost_rainbow: boolean | null
           is_one_away: boolean | null
           is_rainbow_attempt: boolean | null
+          server_numbered: boolean | null
           words: Json
         }
         Insert: {
@@ -626,6 +627,7 @@ export type Database = {
           is_almost_rainbow?: boolean | null
           is_one_away?: boolean | null
           is_rainbow_attempt?: boolean | null
+          server_numbered?: boolean | null
           words: Json
         }
         Update: {
@@ -641,6 +643,7 @@ export type Database = {
           is_almost_rainbow?: boolean | null
           is_one_away?: boolean | null
           is_rainbow_attempt?: boolean | null
+          server_numbered?: boolean | null
           words?: Json
         }
         Relationships: [
@@ -1303,6 +1306,10 @@ export type Database = {
           last_played_date: string
           longest_streak: number
         }[]
+      }
+      get_luck_report: {
+        Args: { _device_id?: string; _device_token?: string; _puzzle_id: string }
+        Returns: Json
       }
       get_puzzle_report: { Args: { _puzzle_id: string }; Returns: Json }
       get_puzzle_stats: { Args: { _puzzle_id: string }; Returns: Json }

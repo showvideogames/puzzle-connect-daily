@@ -282,6 +282,13 @@ export function useGame(
   // "this puzzle has been finished" are different facts. Checking mere
   // existence here would lock a player out of the game they are in the middle
   // of playing the moment they refreshed.
+  //
+  // A locked board is complete but its OUTCOME is not known here: this
+  // browser has no copy of the game, so isWon stays at its default false
+  // without meaning "lost". lockedByOfficialResult says so, and the board
+  // uses it to show neither loss wording nor anything scored from the empty
+  // local state (the post-game Rainbow prompt, Lucky Bot).
+  const [lockedByOfficialResult, setLockedByOfficialResult] = useState(false);
   useEffect(() => {
     // A Beta or custom puzzle structurally can never have an official result
     // (neither ever writes game_sessions) — nothing to check, and no lock to
@@ -291,6 +298,7 @@ export function useGame(
     let cancelled = false;
     hasOfficialResult(puzzle.id).then((played) => {
       if (!cancelled && played) {
+        setLockedByOfficialResult(true);
         setState((s) => ({ ...s, isComplete: true }));
       }
     });
@@ -1401,6 +1409,13 @@ export function useGame(
     handleTouchDragEnd,
     alreadyGuessed,
     isOfficialAttemptRef,
+    /**
+     * True when the board is locked because this identity already has an
+     * official result for the puzzle that this browser holds no copy of.
+     * The game is over, but whether it was won is unknown here — never read
+     * the default isWon=false as a loss when this is set.
+     */
+    lockedByOfficialResult,
     /**
      * The durable session this attempt belongs to. Exposed so GameBoard's
      * post-completion "Spot the Rainbow" bonus can attach its own writes to

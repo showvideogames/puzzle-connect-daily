@@ -28,6 +28,7 @@ import { OnboardingGate } from "@/components/OnboardingGate";
 // removed from the bundle.
 const CommunityFixtures = import.meta.env.DEV ? lazy(() => import("./dev/CommunityFixtures.tsx")) : null;
 const MiniFixtures = import.meta.env.DEV ? lazy(() => import("./dev/MiniFixtures.tsx")) : null;
+const LuckyBotFixtures = import.meta.env.DEV ? lazy(() => import("./dev/LuckyBotFixtures.tsx")) : null;
 
 const queryClient = new QueryClient();
 
@@ -74,6 +75,9 @@ const App = () => (
           )}
           {MiniFixtures && (
             <Route path="/__fixtures/mini" element={<Suspense fallback={null}><MiniFixtures /></Suspense>} />
+          )}
+          {LuckyBotFixtures && (
+            <Route path="/__fixtures/lucky-bot" element={<Suspense fallback={null}><LuckyBotFixtures /></Suspense>} />
           )}
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/privacy" element={<Privacy />} />

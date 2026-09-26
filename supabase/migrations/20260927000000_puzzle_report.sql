@@ -157,7 +157,12 @@ as $$
      order by players desc, key::text
      limit 3
   )
-  select json_build_object(
+  -- Full puzzles only. A Mini gets no report (null), exactly as when this
+  -- function did not exist: its Lucky Bot card keeps showing "Comparison
+  -- isn't available right now." until Mini's own rules are designed.
+  select case
+    when exists (select 1 from public.puzzles p where p.id = _puzzle_id and p.format = 'mini') then null
+    else json_build_object(
     'total_players',            (select count(*) from scored)::int,
     'wins',                     (select count(*) filter (where won) from scored)::int,
     'perfect',                  (select count(*) filter (where won and mistakes = 0) from scored)::int,
@@ -181,11 +186,11 @@ as $$
                                           'almost_rainbow', almost_rainbow
                                         ) order by players desc, key::text), '[]'::json)
                                    from top_wrong)
-  )
+  ) end
 $$;
 
 revoke all on function public.get_puzzle_report(uuid) from public;
 grant execute on function public.get_puzzle_report(uuid) to anon, authenticated, service_role;
 
 comment on function public.get_puzzle_report(uuid) is
-  'Aggregate-only Lucky Bot report for one puzzle: player counts, perfect solves, first-solved histogram, Rainbow outcomes, skill-score histogram, and the three most common wrong guesses. Never exposes an individual session.';
+  'Aggregate-only Lucky Bot report for one puzzle: player counts, perfect solves, first-solved histogram, Rainbow outcomes, skill-score histogram, and the three most common wrong guesses. Never exposes an individual session. Returns null for a Mini puzzle (Mini Lucky Bot comparisons are not released).';

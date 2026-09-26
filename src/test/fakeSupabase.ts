@@ -1507,15 +1507,64 @@ export class FakeSupabase {
         // The prompt only exists after the board is finished.
         if (!row) return { data: false, error: null };
 
-        const clash = this.tables.guess_events.some(
-          (g) =>
-            g.game_session_id === args._session_id && g.guess_number === args._guess_number
-        );
-        if (!clash) {
+        // Mini: the original 20260917000000 behaviour, as 20260928000000
+        // keeps it — the caller's guess number, a clash silently ignored.
+        if (row.format === "mini") {
+          const clash = this.tables.guess_events.some(
+            (g) => g.game_session_id === args._session_id && g.guess_number === args._guess_number
+          );
+          if (!clash) {
+            this.tables.guess_events.push({
+              id: this._newId(),
+              game_session_id: args._session_id,
+              guess_number: args._guess_number,
+              words: args._words,
+              correct: args._correct,
+              group_name: null,
+              is_rainbow_attempt: true,
+              attempt_type: "bonus_rainbow",
+              guessed_at: args._guessed_at ?? new Date().toISOString(),
+              active_time_seconds: args._active_time_seconds,
+              groups_solved: args._groups_solved,
+            });
+          }
+          if (!row.found_rainbow) {
+            row.bonus_rainbow_attempted = true;
+            if (args._correct) {
+              row.found_rainbow = true;
+              row.rainbow_source = "post_game";
+              row.rainbow_solve_index = 4;
+            }
+          }
+          this._log("game_sessions", "update");
+          return { data: true, error: null };
+        }
+        // Mirrors 20260928000000: a retry of the SAME submission (same
+        // guessed_at, words and result) reports success without storing it
+        // again; a Full game gets one answer, so any other submission after
+        // an answer (or an in-game find) is refused; otherwise it is stored
+        // at the caller's number or the next free one, whichever is higher.
+        const own = this.tables.guess_events.filter((g) => g.game_session_id === args._session_id);
+        const repeat =
+          args._guessed_at != null &&
+          own.some(
+            (g) =>
+              g.attempt_type === "bonus_rainbow" &&
+              g.guessed_at === args._guessed_at &&
+              JSON.stringify(g.words) === JSON.stringify(args._words) &&
+              g.correct === args._correct
+          );
+        if (repeat) return { data: true, error: null };
+        if ((row.format ?? "full") === "full" && (row.bonus_rainbow_attempted || row.found_rainbow)) {
+          return { data: false, error: null };
+        }
+        {
+          const nextFree = own.reduce((m, g) => Math.max(m, g.guess_number as number), 0) + 1;
           this.tables.guess_events.push({
             id: this._newId(),
             game_session_id: args._session_id,
-            guess_number: args._guess_number,
+            guess_number: Math.max((args._guess_number as number | undefined) ?? 1, nextFree),
+            server_numbered: true,
             words: args._words,
             correct: args._correct,
             group_name: null,
