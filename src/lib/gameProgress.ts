@@ -137,7 +137,53 @@ export function loadProgress(puzzleId: string): SavedProgress | null {
 export function clearProgress(puzzleId: string) {
   try {
     localStorage.removeItem(progressKey(puzzleId));
+    localStorage.removeItem(promptTriesKey(puzzleId));
   } catch {}
+}
+
+// ── Post-game "Spot the Rainbow" tries ──
+// Wrong answers submitted to the post-game prompt, remembered so a refresh
+// cannot let the player submit the same words again (the board's repeated-
+// guess rule, applied to the prompt). Kept under their OWN key rather than
+// in SavedProgress: every progress write replaces the whole blob, and the
+// prompt's tries are not part of the board state those writes are built
+// from. clearProgress removes both, so a new run starts with none.
+
+export function promptTriesKey(puzzleId: string) {
+  return `connections-prompt-tries-${puzzleId}`;
+}
+
+export function loadPromptTries(puzzleId: string): string[][] {
+  try {
+    const raw = localStorage.getItem(promptTriesKey(puzzleId));
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((t): t is string[] => Array.isArray(t) && t.every((w) => typeof w === "string"))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Remembers a wrong prompt answer and returns the updated list. */
+export function addPromptTry(puzzleId: string, words: readonly string[]): string[][] {
+  const tries = loadPromptTries(puzzleId);
+  if (!tries.some((t) => samePromptWords(t, words))) tries.push([...words]);
+  try {
+    localStorage.setItem(promptTriesKey(puzzleId), JSON.stringify(tries));
+  } catch {
+    // Storage blocked: the returned list still guards the rest of this visit.
+  }
+  return tries;
+}
+
+/** The same words, ignoring order, case and stray spaces. */
+export function samePromptWords(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const norm = (ws: readonly string[]) => ws.map((w) => w.trim().toUpperCase()).sort();
+  const na = norm(a);
+  const nb = norm(b);
+  return na.every((w, i) => w === nb[i]);
 }
 
 /**

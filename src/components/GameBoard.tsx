@@ -23,6 +23,7 @@ import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId, getDeviceToken, recordBonusRainbowAttempt } from "@/lib/gameStats";
+import { addPromptTry, loadPromptTries } from "@/lib/gameProgress";
 import type { EntryContext } from "@/lib/entryContext";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { trackEvent } from "@/lib/analytics";
@@ -317,6 +318,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     // preload spinner is up — a slow image load is not solving time.
     boardReady: imagesReady,
   });
+
+  // Wrong answers already given to the post-game Rainbow prompt, remembered
+  // across a refresh so the same words cannot be submitted again (see
+  // SpotTheRainbowModal's previousTries). Reloaded if this board is reused
+  // for a different game.
+  const [promptTries, setPromptTries] = useState<string[][]>(() => loadPromptTries(storageId));
+  useEffect(() => {
+    setPromptTries(loadPromptTries(storageId));
+  }, [storageId]);
 
   // Mini's tile grid, solved bars and Rainbow reveal bar are capped to a
   // compact, near-square-tile width regardless of useWideBoard — a Mini is
@@ -761,6 +771,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     // component's own 400ms shake/reveal delay. That delay is presentation
     // only; the bonus attempt itself happened now.
     const guessedAt = new Date().toISOString();
+    // Remembered now, at Submit, not after the reveal delay below: a refresh
+    // during that delay must still count these words as already tried.
+    // Only WRONG answers — a right one ends the prompt for good.
+    if (!correct) setPromptTries(addPromptTry(storageId, words));
     setShowSpotModal(false);
     setSpotShaking(true);
     setTimeout(() => {
@@ -837,7 +851,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
       setTimeout(() => setBonusRainbowCorrect(correct), correct ? 600 : 0);
     }, 400);
-  }, [rainbowHerring, markRainbowFound, isOfficialAttemptRef, sessionIdRef, activeSecondsRef, nextGuessNumber, state.solvedGroups.length, betaMode]);
+  }, [rainbowHerring, markRainbowFound, isOfficialAttemptRef, sessionIdRef, activeSecondsRef, nextGuessNumber, state.solvedGroups.length, betaMode, storageId]);
 
   const hintItems = useCallback((): { color?: string; squareEmoji?: string; emoji: string }[] => {
     const sorted = [...puzzle.groups].sort((a, b) => a.difficulty - b.difficulty);
@@ -1764,6 +1778,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           open={showSpotModal}
           puzzle={puzzle}
           onResult={handleSpotResult}
+          previousTries={promptTries}
           onClose={() => setShowSpotModal(false)}
         />
       )}

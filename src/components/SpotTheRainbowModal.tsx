@@ -5,6 +5,7 @@ import { Puzzle } from "@/lib/types";
 import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
 import { resolveTheme } from "@/lib/themes";
+import { samePromptWords } from "@/lib/gameProgress";
 
 const GROUP_COLORS: Record<number, { bg: string; text: string }> = {
   1: { bg: "bg-group-1", text: "text-group-1-fg" },
@@ -22,10 +23,21 @@ interface SpotTheRainbowModalProps {
   // existing behavior already resets `selected` on close, since this
   // component only rendered its content while `open`).
   onClose: () => void;
+  /**
+   * Wrong answers this player already submitted here, remembered across a
+   * refresh (see loadPromptTries). Submitting the same words again, in any
+   * order, is refused with a message — the same rule the board applies to a
+   * repeated guess — and is never passed to onResult, so nothing is saved
+   * and the player's path does not change.
+   */
+  previousTries?: readonly (readonly string[])[];
 }
 
-export function SpotTheRainbowModal({ open, puzzle, onResult, onClose }: SpotTheRainbowModalProps) {
+const NUMBER_WORDS: Record<number, string> = { 3: "three", 4: "four" };
+
+export function SpotTheRainbowModal({ open, puzzle, onResult, onClose, previousTries = [] }: SpotTheRainbowModalProps) {
   const [selected, setSelected] = useState<Record<number, string>>({});
+  const [repeated, setRepeated] = useState(false);
 
   if (!puzzle.rainbowHerring) return null;
   const rainbowHerring = puzzle.rainbowHerring;
@@ -35,6 +47,7 @@ export function SpotTheRainbowModal({ open, puzzle, onResult, onClose }: SpotThe
   const theme = resolveTheme(puzzle.theme, puzzle.groups.length);
 
   const handleSelect = (groupIdx: number, word: string) => {
+    setRepeated(false);
     setSelected(prev => ({ ...prev, [groupIdx]: word }));
   };
 
@@ -42,6 +55,11 @@ export function SpotTheRainbowModal({ open, puzzle, onResult, onClose }: SpotThe
 
   const handleSubmit = () => {
     if (!readyToSubmit) return;
+
+    if (previousTries.some((t) => samePromptWords(t, Object.values(selected)))) {
+      setRepeated(true);
+      return;
+    }
 
     const chosenSorted = Object.values(selected).sort();
     const correctSorted = [...rainbowHerring].sort();
@@ -150,6 +168,17 @@ export function SpotTheRainbowModal({ open, puzzle, onResult, onClose }: SpotThe
                 );
               })}
             </div>
+
+            {/* Same wording as the board's own repeated-guess popup, stated
+                for the prompt's word count; announced to screen readers. */}
+            <p
+              role="status"
+              aria-live="polite"
+              data-testid="prompt-already-guessed"
+              className={repeated ? "mb-3 text-center text-sm font-semibold" : "sr-only"}
+            >
+              {repeated ? `You already guessed these ${NUMBER_WORDS[puzzle.groups.length] ?? puzzle.groups.length} words.` : ""}
+            </p>
 
             <button
               onClick={handleSubmit}
