@@ -96,7 +96,7 @@ describe("LuckyBot", () => {
     });
     expect(screen.getByTestId("skill-standing").textContent).toBe("No comparison yet — check back once others have played.");
 
-    fireEvent.click(screen.getByRole("button", { name: "Full report" }));
+    fireEvent.click(screen.getByRole("button", { name: "Full Report" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -111,7 +111,7 @@ describe("LuckyBot", () => {
     });
     expect(screen.getByTestId("skill-standing").textContent).toBe("No comparison yet — check back once others have played.");
 
-    fireEvent.click(screen.getByRole("button", { name: "Full report" }));
+    fireEvent.click(screen.getByRole("button", { name: "Full Report" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -123,7 +123,7 @@ describe("LuckyBot", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
-    fireEvent.click(screen.getByRole("button", { name: "Full report" }));
+    fireEvent.click(screen.getByRole("button", { name: "Full Report" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -155,10 +155,12 @@ describe("LuckyBot", () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
     expect(screen.getByTestId("skill-score").textContent).toBe("84");
-    expect(screen.getByTestId("skill-standing").textContent).toBe("Comparison isn't available right now.");
+    // The literal newline is deliberate — see the comment on standingLine
+    // in LuckyBot.tsx — not left to the browser's own word-wrap.
+    expect(screen.getByTestId("skill-standing").textContent).toBe("Comparison isn't available\nright now.");
     expect(screen.getByTestId("skill-standing").textContent).not.toMatch(/first/i);
 
-    fireEvent.click(screen.getByRole("button", { name: "Full report" }));
+    fireEvent.click(screen.getByRole("button", { name: "Full Report" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });

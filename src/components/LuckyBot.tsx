@@ -98,9 +98,13 @@ export function LuckyBot({ puzzle, state }: LuckyBotProps) {
   // else has played; claiming "you're first" there would often just be
   // wrong. Only a report that loaded fine and genuinely counted zero other
   // finished sessions earns that claim.
+  // The line break in the "unavailable" message is deliberate (rendered via
+  // whitespace-pre-line below), not left to wrap on its own: at this card's
+  // width the natural wrap point falls after "right", stranding "now." alone
+  // on its own line, which reads worse than breaking after "available".
   let standingLine: string;
   if (!loaded) standingLine = "Comparing with today's players…";
-  else if (!report) standingLine = "Comparison isn't available right now.";
+  else if (!report) standingLine = "Comparison isn't available\nright now.";
   else if (!standing || standing.others === 0) standingLine = "No comparison yet — check back once others have played.";
   else if (standing.betterThanPct === null) standingLine = `${standing.others + 1} players so far.`;
   else standingLine = `Better than ${standing.betterThanPct}% of ${standing.others} other player${standing.others === 1 ? "" : "s"}`;
@@ -109,8 +113,24 @@ export function LuckyBot({ puzzle, state }: LuckyBotProps) {
     <>
       <div
         data-testid="lucky-bot-card"
-        className="mx-auto max-w-xs rounded-xl border border-border bg-card px-4 py-3 text-left shadow-sm"
+        className="relative mx-auto max-w-xs rounded-xl border border-border bg-card px-4 py-3 text-left shadow-sm"
       >
+        {/* Top-right corner, same convention as the report modal's own close
+            button below — out of the icon+text row's flow entirely (not an
+            inline flex sibling), which is what keeps the card as short as
+            the icon+text content itself rather than needing an extra row
+            underneath for the button. */}
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(true);
+            trackEvent("bot_report_opened", { puzzle_id: puzzle.id });
+          }}
+          className="absolute top-3 right-3 shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-semibold hover:bg-secondary transition-colors active:scale-95"
+        >
+          Full Report
+        </button>
+
         {/* Lucky Bot's face at roughly the height of the text block beside
             it — top of "LUCKY BOT" to the bottom of the (often two-line)
             comparison sentence — per Sam's ask to make him "almost as tall"
@@ -121,12 +141,7 @@ export function LuckyBot({ puzzle, state }: LuckyBotProps) {
             history for this file); never swap it for a larger source image
             without re-cropping and re-compressing the same way, or this
             becomes another entry in the oversized-image findings from the
-            performance audit.
-
-            The "Full report" button moved to its own row below rather than
-            sitting inline with the text: at this narrower card width, an
-            80px icon plus an inline button left so little room for the text
-            column that "skill score" split mid-phrase across two lines. */}
+            performance audit. */}
         <div className="flex items-center gap-3">
           <img src="/lucky-bot.png" alt="" aria-hidden="true" className="h-20 w-20 shrink-0 object-contain" />
           <div className="min-w-0 flex-1">
@@ -141,20 +156,8 @@ export function LuckyBot({ puzzle, state }: LuckyBotProps) {
               <span className="text-2xl font-bold tabular-nums text-green-700 dark:text-green-400" data-testid="skill-score">{score}</span>
               <span className="text-xs text-muted-foreground">/ {MAX_SKILL_SCORE} skill score</span>
             </div>
-            <p className="text-xs text-muted-foreground" data-testid="skill-standing">{standingLine}</p>
+            <p className="text-xs text-muted-foreground whitespace-pre-line" data-testid="skill-standing">{standingLine}</p>
           </div>
-        </div>
-        <div className="mt-3 flex justify-center">
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(true);
-              trackEvent("bot_report_opened", { puzzle_id: puzzle.id });
-            }}
-            className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-semibold hover:bg-secondary transition-colors active:scale-95"
-          >
-            Full report
-          </button>
         </div>
       </div>
 
