@@ -36,7 +36,9 @@
 --         normal category solved: Yellow +0, Green +1, Blue +2, Red +3 —
 --         or +4 instead when the whole order was Red → Blue → Green → Yellow.
 --   Lost: 50, plus each normal category actually solved: Yellow +4,
---         Green +6, Blue +8, Red +10. No order bonus.
+--         Green +6, Blue +8, Red +10. No order bonus. A genuine loss has
+--         zero, one or two solved: with three solved only the last
+--         category's words remain, so the game cannot be lost.
 --   Both: +1 if the Rainbow was found, mid-game or through the post-game
 --         prompt alike. Capped at 100.
 -- solve_order holds colour NAMES, written by the client at completion and
@@ -186,7 +188,8 @@ on conflict (effective_from) do nothing;
 --     migration 20260916150000; older rows cannot tell a board guess from
 --     a post-game Rainbow attempt, so no path is invented for them), the
 --     board guesses are numbered 1..n with no gaps, a win has all four
---     categories, and there are at least as many wrong board guesses as
+--     categories, a loss has at most two (see the filter below), and there
+--     are at least as many wrong board guesses as
 --     recorded mistakes. A session that fails any of these is left out of
 --     BOTH the player count and the path counts, rather than guessed at.
 --
@@ -277,7 +280,10 @@ as $$
      and s.first_normal = 1
      and s.last_normal = s.normals
      and (not c.won or s.correct_normals = 4)
-     and (c.won or s.correct_normals < 4)
+     -- A genuine loss solved at most two categories: with three solved,
+     -- the only words left are the last category, so the next submission
+     -- is necessarily correct. A "loss" with three or more is misrecorded.
+     and (c.won or s.correct_normals <= 2)
      and s.wrong_normals >= coalesce(c.mistakes, 0)
 $$;
 

@@ -301,6 +301,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     handleTouchDragEnd,
     alreadyGuessed,
     isOfficialAttemptRef,
+    lockedByOfficialResult,
     sessionIdRef,
     activeSecondsRef,
     activeSeconds,
@@ -1181,7 +1182,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           )
         )}
 
-        {showEndState && !state.gotRainbow && rainbowHerring && (
+        {/* Not on a board locked by a result this browser holds no copy of
+            (lockedByOfficialResult): the prompt would score a Rainbow onto an
+            empty local game whose outcome is unknown here. */}
+        {showEndState && !lockedByOfficialResult && !state.gotRainbow && rainbowHerring && (
           bonusRainbowCorrect === null ? (
             <button
               onClick={() => setShowSpotModal(true)}
@@ -1650,7 +1654,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* End state — hide headline/subtitle when viewing already-completed puzzle */}
       {showEndState && (
         <div className="text-center mt-6 animate-fade-up">
-          {!wasAlreadyComplete.current && (
+          {/* A board locked by an official result this browser has no copy
+              of is finished, but its outcome is unknown here — isWon is only
+              its default false. Say it is done without calling it a loss. */}
+          {lockedByOfficialResult ? (
+            <p className="text-sm text-muted-foreground" data-testid="already-finished">
+              You've already finished this puzzle. Come back tomorrow!
+            </p>
+          ) : !wasAlreadyComplete.current && (
             <>
               <p className="text-lg font-bold">
                 {getResultHeadline(state.isWon, state.mistakes)}
@@ -1719,7 +1730,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   puzzles only, for the same reason as Global Stats above —
                   a beta or custom puzzle has no official sessions to compare
                   against. */}
-              {!betaMode && !customMode && <LuckyBot puzzle={puzzle} state={state} rainbowPromptResult={bonusRainbowCorrect} />}
+              {!betaMode && !customMode && !lockedByOfficialResult && <LuckyBot puzzle={puzzle} state={state} rainbowPromptResult={bonusRainbowCorrect} />}
             </div>
           )}
         </div>

@@ -18,7 +18,9 @@
  *         category solved: Yellow +0, Green +1, Blue +2, Red +3 — or +4
  *         instead for the complete order Red → Blue → Green → Yellow.
  *   Lost: 50, plus each category actually solved: Yellow +4, Green +6,
- *         Blue +8, Red +10. No order bonus on a loss.
+ *         Blue +8, Red +10. No order bonus on a loss. A genuine loss has
+ *         zero, one or two solved (three solved leaves only the last
+ *         category's words, so it can only end in a win).
  *   Both: +1 for the Rainbow, found mid-game or after. Capped at 100; only
  *         a 100 is shown as "100 / 99".
  *

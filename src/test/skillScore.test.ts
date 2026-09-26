@@ -183,14 +183,13 @@ describe("computeFullSkillScore — the rules", () => {
     expect(full(false, 4, [3, 4])).toBe(68);
   });
 
-  // The brief assumed the fourth category is awarded automatically, so a
-  // loss could never have three solved. This game has no auto-solve: the
-  // last category is submitted like any other, so three-solved losses are
-  // real. Scored exactly by the stated rule — flagged for review, because
-  // Green+Blue+Red solved (74) ties a three-mistake win.
-  it("scores a three-category loss by the same per-category rule", () => {
-    expect(full(false, 4, [2, 3, 4])).toBe(74);
-    expect(full(false, 4, [1, 2, 3])).toBe(68);
+  // A genuine loss solves zero, one or two categories: with three solved,
+  // only the last four words remain and submitting them is a win (see
+  // src/test/unfinishedIsNotALoss.test.ts). The best genuine loss is
+  // therefore Blue + Red, which stays well below the lowest win.
+  it("keeps every genuine loss below the lowest win", () => {
+    expect(full(false, 4, [3, 4], true)).toBe(69);
+    expect(full(true, 3, [1, 2, 3, 4])).toBe(74);
   });
 
   it("adds exactly one point for the Rainbow, win or loss", () => {

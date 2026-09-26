@@ -123,7 +123,6 @@ const CHECKS: Check[] = [
         [false, 4, [], false, null, "full", 50],
         [false, 4, ["orange"], false, null, "full", 54],
         [false, 4, ["blue", "red"], false, null, "full", 68],
-        [false, 4, ["green", "blue", "red"], false, null, "full", 74],
         [false, 4, [], true, "post_game", "full", 51],
         [true, 3, ["orange", "green", "blue", "red"], true, null, "full", 75],
         // Mini — the original formula, unchanged.
@@ -396,8 +395,28 @@ const CHECKS: Check[] = [
       await insertSession({ deviceId: "legacy-device", untyped: true });
       await insertSession({ deviceId: "unknown" });
       await insertSession({ deviceId: "gappy-device", numbers: [1, 2, 4, 5] });
+      // A "loss" with three categories solved cannot happen in play (the only
+      // words left would be the last category, which is then correct), so a
+      // row that says so is misrecorded and must not count.
+      const misrecorded = await db.query<{ id: string }>(
+        `insert into public.game_sessions
+           (puzzle_id, device_id, status, won, mistakes, completed_at, is_official, format, solve_order)
+         values ($1, 'three-solved-loss', 'lost', false, 4, now(), true, 'full', '["orange","green","blue"]'::jsonb)
+         returning id`,
+        [puzzleId]
+      );
+      for (const [i, g] of [Y, G, B, W[0], W[1], W[2], W[3]].entries()) {
+        await db.query(
+          `insert into public.guess_events (game_session_id, guess_number, words, correct, attempt_type)
+           values ($1, $2, $3::jsonb, $4, 'normal')`,
+          [misrecorded.rows[0].id, i + 1, JSON.stringify(g), i < 3]
+        );
+      }
       r = await luck(a);
-      expect(r.eligible_players === 8, `admin, legacy, 'unknown' and gapped sessions must not count: ${r.eligible_players}`);
+      expect(
+        r.eligible_players === 8,
+        `admin, legacy, 'unknown', gapped and three-solved "loss" sessions must not count: ${r.eligible_players}`
+      );
       await actAs(db, adminId);
       r = await luck({ device_id: "", device_token: "" });
       expect(r.status === "not_eligible" && r.reason === "admin", `admin's own report: ${JSON.stringify(r)}`);
