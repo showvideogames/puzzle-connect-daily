@@ -109,31 +109,36 @@ export function LuckyBot({ puzzle, state }: LuckyBotProps) {
     <>
       <div
         data-testid="lucky-bot-card"
-        className="mx-auto max-w-sm rounded-xl border border-border bg-card px-4 py-3 text-left shadow-sm"
+        className="mx-auto max-w-xs rounded-xl border border-border bg-card px-4 py-3 text-left shadow-sm"
       >
+        {/* Lucky Bot's face at roughly the height of the text block beside
+            it — top of "LUCKY BOT" to the bottom of the (often two-line)
+            comparison sentence — per Sam's ask to make him "almost as tall"
+            as that stack. No circular badge at this size; that convention
+            existed for a small generic icon and just crowds a mascot this
+            big. public/lucky-bot.png is a pre-cropped, pre-compressed
+            160x160 transparent PNG (see the crop/optimize notes in git
+            history for this file); never swap it for a larger source image
+            without re-cropping and re-compressing the same way, or this
+            becomes another entry in the oversized-image findings from the
+            performance audit.
+
+            The "Full report" button moved to its own row below rather than
+            sitting inline with the text: at this narrower card width, an
+            80px icon plus an inline button left so little room for the text
+            column that "skill score" split mid-phrase across two lines. */}
         <div className="flex items-center gap-3">
-          {/* Container grew from 40px to 48px alongside the 32px→40px icon
-              bump below, so the ring of background around Lucky Bot's face
-              stays the same 4px on every side rather than shrinking to
-              nothing as the icon got bigger. public/lucky-bot.png is a
-              pre-cropped, pre-compressed 160x160 transparent PNG (see the
-              crop/optimize notes in git history for this file); never swap
-              it for a larger source image without re-cropping and
-              re-compressing the same way, or this becomes another entry in
-              the oversized-image findings from the performance audit. */}
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary">
-            <img src="/lucky-bot.png" alt="" aria-hidden="true" className="h-10 w-10 object-contain" />
-          </div>
+          <img src="/lucky-bot.png" alt="" aria-hidden="true" className="h-20 w-20 shrink-0 object-contain" />
           <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lucky Bot</span>
-            </div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lucky Bot</span>
             <div className="flex items-baseline gap-1">
               <span className="text-2xl font-bold tabular-nums" data-testid="skill-score">{score}</span>
               <span className="text-xs text-muted-foreground">/ {MAX_SKILL_SCORE} skill score</span>
             </div>
             <p className="text-xs text-muted-foreground" data-testid="skill-standing">{standingLine}</p>
           </div>
+        </div>
+        <div className="mt-3 flex justify-end">
           <button
             type="button"
             onClick={() => {
