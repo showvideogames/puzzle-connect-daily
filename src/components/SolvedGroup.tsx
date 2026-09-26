@@ -2,6 +2,7 @@ import { forwardRef } from "react";
 import { PuzzleGroup } from "@/lib/types";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { CategoryEmojiInline } from "./CategoryEmojiInline";
+import { SOLVE_BAR_FADE_MS } from "@/lib/solveAnimation";
 
 const groupColors: Record<number, { bg: string; text: string }> = {
   1: { bg: "bg-group-1", text: "text-group-1-fg" },
@@ -17,26 +18,32 @@ interface SolvedGroupProps {
   // setting — see Puzzle.alphabetizeCompleted.
   alphabetizeCompleted?: boolean;
   animate?: boolean;
-  // Reveal-phase override used by GameBoard's clone animation (two beats):
-  //  - "hidden": laid out but transparent, so its rect is measurable as the
-  //    clones' fly target while they're still flying. No transform, so the
-  //    measured size is the bar's true final size.
-  //  - "shown": beat 1 — quietly fades in (opacity 0→1) at scale 1 behind the
-  //    clones as they fade/merge out. No pop yet.
-  //  - "arrived": beat 2 — once the clones are gone, a distinct scale pop
-  //    (.animate-solved-arrival) so the bar clearly "lands".
+  // Phase of GameBoard's solve animation (see lib/solveAnimation.ts):
+  //  - "pending": the guessed tiles are still gathering into the top row.
+  //    The bar is invisible and taken OUT of the page flow (absolute, with
+  //    no top set, so it sits exactly where it will end up and at the full
+  //    board width) — the board below doesn't move to make room for it yet.
+  //  - "appearing": same place, fading in over the gathered row while its
+  //    text settles in (.animate-solved-content-land). The bar covers the
+  //    row exactly (see .solved-bar) and doesn't move or scale while it
+  //    merges.
+  //  - "settling": back in the page flow in the same spot, doing its pop
+  //    (.animate-solved-pop). The text animation carries on uninterrupted.
   // undefined = normal rendering (animate-group-appear entrance if `animate`).
-  reveal?: "hidden" | "shown" | "arrived";
+  reveal?: "pending" | "appearing" | "settling";
 }
 
-// forwardRef so GameBoard can measure this bar's real DOM rect (the clones'
-// fly target) via getBoundingClientRect.
+// forwardRef so GameBoard can reach this bar's DOM node during the solve
+// animation.
 export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function SolvedGroup(
   { group, alphabetizeCompleted = true, animate, reveal },
   ref
 ) {
   const colors = groupColors[group.difficulty] || groupColors[1];
   const revealing = reveal !== undefined;
+  const floating = reveal === "pending" || reveal === "appearing";
+  const contentLand = reveal === "appearing" || reveal === "settling" ? "animate-solved-content-land" : "";
+  const popping = reveal === "settling";
   const displayWords = alphabetizeCompleted
     ? [...group.words].sort((a, b) => a.localeCompare(b))
     : group.words;
@@ -53,21 +60,34 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
   return (
     <div
       ref={ref}
-      className={`${colors.bg} ${colors.text} rounded-lg py-3 px-4 text-center ${
+      // solved-bar: one tile row tall (index.css), with its text centred.
+      // py-2, not more: the row height does the spacing, and on the
+      // narrowest phones (320px) a Full row is only ~60px tall — any more
+      // padding would make the bar taller than the row it replaces.
+      className={`solved-bar ${colors.bg} ${colors.text} rounded-lg py-2 px-4 text-center ${
         !revealing && animate ? "animate-group-appear" : ""
-      } ${reveal === "arrived" ? "animate-solved-arrival" : ""}`}
+      } ${popping ? "animate-solved-pop" : ""}`}
       style={
-        reveal === "hidden"
-          ? { opacity: 0 }
-          : reveal === "shown"
-            ? { opacity: 1, transition: "opacity 0.2s ease-out" }
-            : undefined
+        popping
+          // Drawn above its neighbours while the pop briefly overshoots them.
+          ? { position: "relative", zIndex: 1 }
+          : floating
+          ? {
+              position: "absolute",
+              left: 0,
+              right: 0,
+              zIndex: 10,
+              pointerEvents: "none",
+              opacity: reveal === "appearing" ? 1 : 0,
+              transition: `opacity ${SOLVE_BAR_FADE_MS}ms ease-out`,
+            }
+          : undefined
       }
     >
       {/* Category title is the payoff/reveal on each card — noticeably
           larger and heavier than the answer line, and shares the puzzle
           tile's typeface (Inter) to visually connect the two. */}
-      <div className="font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
+      <div className={`font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide ${contentLand}`}>
         {group.category}
         {explicitEmoji && (
           <>
@@ -78,7 +98,7 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
       </div>
       {/* Answers stay clearly secondary: smaller, lighter weight, and a
           touch more breathing room below the title (~4px via mt-1). */}
-      <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-1 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
+      <div className={`text-[13px] md:text-[15px] font-[575] leading-tight mt-1 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5 ${contentLand}`}>
         {displayWords.map((w, i) => (
           <span key={`${w}-${i}`} className="inline-flex items-center gap-x-1">
             {/* Middot separator between answers (not before the first one) —

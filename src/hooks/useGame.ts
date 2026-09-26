@@ -301,10 +301,20 @@ export function useGame(
   const [lastRevealedGroup, setLastRevealedGroup] = useState<number | null>(null);
   // A group that's already in solvedGroups (for scoring/bar-rendering
   // purposes) but whose tiles should still show in the interactive grid —
-  // GameBoard holds this while it runs its own clone-based reveal animation,
+  // GameBoard holds this while it runs its own solve animation,
   // then calls releaseRevealHold() once that finishes. Scoring/stats timing
   // is unaffected: this only delays when the tiles visually leave the grid.
   const [revealHoldGroupIdx, setRevealHoldGroupIdx] = useState<number | null>(null);
+  // Puts the board's words into the given reading order. GameBoard's solve
+  // animation uses it to gather a just-solved category into the top row
+  // before that row becomes the solved bar (see lib/solveAnimation.ts). Words
+  // not named in `order` keep their relative place after it.
+  const setWordOrder = useCallback((order: string[]) => {
+    setShuffledWords((prev) => {
+      const named = new Set(order);
+      return [...order.filter((w) => prev.includes(w)), ...prev.filter((w) => !named.has(w))];
+    });
+  }, []);
   const releaseRevealHold = useCallback(() => {
     setRevealHoldGroupIdx((heldIdx) => {
       if (heldIdx !== null) {
@@ -972,7 +982,7 @@ export function useGame(
 
   // The full win celebration (confetti + melody + celebratory haptic). Kept
   // separate from the logical win so GameBoard can fire it only once the final
-  // category's arrival pop has finished, rather than the instant isWon flips.
+  // category's solve animation has finished, rather than the instant isWon flips.
   const fireWinCelebration = useCallback(() => {
     fireConfetti();
     vibrateCelebration();
@@ -1162,7 +1172,7 @@ export function useGame(
 
         vibrateSuccess();
         setLastRevealedGroup(groupIdx);
-        // Hold this group's tiles in the grid until GameBoard's clone-based
+        // Hold this group's tiles in the grid until GameBoard's solve
         // reveal animation finishes and calls releaseRevealHold() — see
         // remainingWords above. solvedGroups/isWon/stats are unaffected by
         // this hold; it only delays when the tiles visually leave the grid.
@@ -1188,8 +1198,8 @@ export function useGame(
         if (isWon) {
           // NB: the win celebration (confetti/haptic) is intentionally NOT
           // fired here. GameBoard triggers fireWinCelebration() only after the
-          // final category's arrival pop completes, so nothing celebratory
-          // appears while the last tiles are still flying. Scoring/stats/saving
+          // final category's solve animation completes, so nothing celebratory
+          // appears while the last tiles are still moving. Scoring/stats/saving
           // below stay on the immediate win, exactly as before.
           const fullGuessHistory = [...state.guessHistory, attempt];
           const shareGrid = buildShareGrid(fullGuessHistory, puzzle);
@@ -1367,6 +1377,7 @@ export function useGame(
     checkingWords,
     lastRevealedGroup,
     releaseRevealHold,
+    setWordOrder,
     fireWinCelebration,
     oneAway,
     setOneAway,

@@ -16,7 +16,6 @@ import { ResultGrid, ResultCellKind, ResultRow } from "./ResultGrid";
 import { PuzzleModeBadge } from "./PuzzleModeBadge";
 import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown, RotateCcw } from "lucide-react";
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
-import { createPortal } from "react-dom";
 import { useImagePreload } from "@/hooks/useImagePreload";
 import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
@@ -34,6 +33,15 @@ import { resolveCategoryVisual, splitCategoryVisual } from "@/lib/categoryVisual
 import { rainbowHerringFor, type CategoryColor } from "@/lib/puzzleFormat";
 import { categorySwatches } from "@/lib/categoryPalette";
 import { formatActiveTime } from "@/lib/activeTimer";
+import {
+  gatherIntoFirstRow,
+  SOLVE_BAR_FADE_MS,
+  SOLVE_EASE,
+  SOLVE_GATHER_MS,
+  SOLVE_POP_MS,
+  SOLVE_POP_PAUSE_MS,
+  SOLVE_SETTLE_MS,
+} from "@/lib/solveAnimation";
 
 const DIFFICULTY_SQUARE: Record<number, string> = {
   1: "🟨",
@@ -61,42 +69,35 @@ const DIFFICULTY_RESULT_KIND: Record<number, ResultCellKind> = {
   4: "red",
 };
 
-// ── Correct-guess reveal animation (deterministic, overlay-clone based) ──
-// Timings in ms, and a deliberate TWO-BEAT sequence:
-//   beat 1: clones FLY from the grid into the bar's row, then fade/merge out
-//           (CLONE_FADE) while the real bar quietly fades in at ~scale 1.
-//   beat 2: once the clones are gone, a short PAUSE, then a distinct, bigger
-//           "arrival" pop on the bar (index.css .animate-solved-arrival) so it
-//           reads as a separate "category locked in" moment, not the fade.
-const REVEAL_FLY_MS = 500; // must match .tile-reveal-clone position transition
-const CLONE_FADE_MS = 220; // must match .tile-reveal-clone opacity transition
-const ARRIVAL_PAUSE_MS = 80;
-const ARRIVAL_POP_MS = 480; // must match .animate-solved-arrival duration
-// The victory celebration triggers immediately when the final category's
-// arrival pop finishes — no extra hold, so the pop landing and the celebration
-// read as one continuous moment.
-const VICTORY_HOLD_AFTER_ARRIVAL_MS = 0;
-// Reduced-motion / fallback path: no clone animation plays, so reveal the
+// ── Correct-guess solve animation ──
+// Three beats — gather, bar, settle — with their timings and the reasoning in
+// lib/solveAnimation.ts. The celebration for the final category triggers the
+// moment its settle beat finishes, so the landing and the celebration read as
+// one continuous moment.
+const VICTORY_HOLD_AFTER_SOLVE_MS = 0;
+// Reduced-motion / fallback path: no solve animation plays, so reveal the
 // victory UI shortly after the final category bar has appeared.
 const VICTORY_REDUCED_MOTION_MS = 200;
 
-interface RevealRect {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-}
-
-function rectToRevealRect(r: DOMRect): RevealRect {
-  return { top: r.top, left: r.left, width: r.width, height: r.height };
-}
-
 interface RevealState {
   groupIdx: number;
-  words: string[]; // reading order (top-to-bottom, then left-to-right)
-  from: RevealRect[]; // each clone's starting rect (viewport-relative)
-  to: RevealRect[] | null; // each clone's target slot within the bar (null until the bar is measured)
-  phase: "cloned" | "flying" | "merging" | "arrived";
+  words: string[];
+  //  pending   — just solved; the bar is mounted out of the page flow and
+  //              invisible, and the board hasn't moved yet.
+  //  gathering — the guessed tiles are swapping into the top row.
+  //  appearing — the bar fades in over that row; the tiles fade beneath it.
+  //  settling  — the bar pops; the row has left the grid and anything the
+  //              bar didn't exactly replace glides into place.
+  phase: "pending" | "gathering" | "appearing" | "settling";
+}
+
+// One queued FLIP ("first, last, invert, play") slide of the grid, applied by
+// the layout effect that runs when the grid's words change.
+interface GridFlip {
+  before: Record<string, DOMRect>; // tile rects before the change
+  ms: number;
+  raise?: Set<string>; // tiles drawn above the others while they move
+  gridBottom?: number; // the grid's old bottom edge, so its height glides too
 }
 
 function prefersReducedMotion(): boolean {
@@ -278,6 +279,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     checkingWords,
     lastRevealedGroup,
     releaseRevealHold,
+    setWordOrder,
     fireWinCelebration,
     oneAway,
     setOneAway,
@@ -369,31 +371,26 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     return order;
   }, [remainingWords, checkingWords]);
 
-  // ── Correct-guess reveal animation (deterministic, overlay-clone based) ──
-  // Sequence: shake (in useGame, unchanged) -> measure the 4 real tiles ->
-  // mount the solved bar hidden (still occupying its layout space, so it's
-  // measurable) -> spawn 4 clones in a document.body portal positioned at
-  // the tiles' exact viewport rects -> hide the real tiles (kept in the grid
-  // via useGame's revealHoldGroupIdx, not removed) -> fly clones into the
-  // bar's 4 slots -> cross-fade clones out / real bar in -> release the hold,
-  // which is what actually removes the words from the grid's data model.
-  //
-  // Every rect here comes from getBoundingClientRect() and is used only
-  // against position:fixed clones portaled to document.body, so it's always
-  // viewport-relative on both ends — no reparented/transformed-ancestor
-  // coordinate mismatch is possible.
+  // ── Correct-guess solve animation (see lib/solveAnimation.ts) ──
+  // The guessed tiles stay in the grid the whole time (useGame holds them via
+  // revealHoldGroupIdx until releaseRevealHold()), so every movement is the
+  // REAL tiles moving — no stand-in copies — and the solved bar appears
+  // exactly where it ends up:
+  //   gather: the guessed tiles swap into the top row (FLIP slide).
+  //   bar:    the solved bar, mounted out of the page flow at its final spot,
+  //           fades in over that row while the tiles fade out beneath it.
+  //   settle: the hold is released, the bar joins the page flow in the same
+  //           spot, and the remaining tiles and the page below slide up.
   const wordTileRefs = useRef<Record<string, HTMLElement | null>>({});
-  const revealBarRef = useRef<HTMLElement | null>(null);
+  const gridWrapperRef = useRef<HTMLDivElement | null>(null);
   const prevRevealedGroupRef = useRef<number | null>(null);
   const revealTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  // Groups that have gone through (or are going through) the clone reveal.
-  // Their bar cross-fades in via the `reveal` prop, so it must NOT also get
-  // the normal animate-group-appear entrance once the reveal state clears.
-  const cloneRevealedGroupsRef = useRef<Set<number>>(new Set());
-  // Stores the remaining (non-solved) tiles' rects captured just before the
-  // held words are released, so the grid can FLIP those tiles smoothly into
-  // the gaps instead of snapping. Only set for a reveal-triggered release.
-  const gridFlipBeforeRef = useRef<Record<string, DOMRect> | null>(null);
+  // Groups that have gone through (or are going through) the solve
+  // animation. Their bar fades in via the `reveal` prop, so it must NOT also
+  // get the normal animate-group-appear entrance once the reveal clears.
+  const animatedRevealGroupsRef = useRef<Set<number>>(new Set());
+  // The next grid slide to play (see GridFlip), consumed by the FLIP effect.
+  const gridFlipRef = useRef<GridFlip | null>(null);
   const [reveal, setReveal] = useState<RevealState | null>(null);
 
   // ── Victory celebration gating ──────────────────────────────────────────
@@ -438,8 +435,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     revealTimersRef.current = [];
   }, []);
 
-  // Kick off the reveal once a group finishes shaking (lastRevealedGroup
-  // changes) and useGame is holding its tiles in the grid for us.
+  // Kick off the solve animation once a guess is confirmed correct
+  // (lastRevealedGroup changes) and useGame is holding its tiles in the grid.
   useLayoutEffect(() => {
     if (lastRevealedGroup === null || lastRevealedGroup === prevRevealedGroupRef.current) return;
     prevRevealedGroupRef.current = lastRevealedGroup;
@@ -447,131 +444,96 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
     if (prefersReducedMotion()) {
       releaseRevealHold();
-      // No clone animation to wait on — if this solve won the game, reveal the
-      // victory UI right after the final bar appears (no full animation delay).
+      // No animation to wait on — if this solve won the game, reveal the
+      // victory UI right after the final bar appears.
       if (isWonRef.current) revealVictory(true, VICTORY_REDUCED_MOTION_MS);
       return;
     }
 
     const words = puzzle.groups[groupIdx]?.words ?? [];
-    const fromByWord: Record<string, DOMRect> = {};
-    let haveAllRects = words.length === format.answersPerCategory;
-    words.forEach((w) => {
-      const el = wordTileRefs.current[w];
-      if (el) fromByWord[w] = el.getBoundingClientRect();
-      else haveAllRects = false;
-    });
-
-    if (!haveAllRects) {
-      // Couldn't measure the real tiles (shouldn't normally happen) — skip
-      // the clone animation rather than get stuck; just reveal plainly.
-      console.warn(`[reveal] couldn't measure all ${format.answersPerCategory} tiles for group`, groupIdx, "— falling back to a plain reveal");
+    if (words.length !== format.answersPerCategory || !words.every((w) => wordTileRefs.current[w])) {
+      // The tiles aren't on the board (e.g. the loss cascade, which removes
+      // them itself) — nothing to animate, so just reveal plainly.
       releaseRevealHold();
-      // Fallback still has to un-gate the victory UI on a winning solve, or the
-      // results would never appear.
       if (isWonRef.current) revealVictory(true, VICTORY_REDUCED_MOTION_MS);
       return;
     }
 
-    // Match the solved bar's own display order (SolvedGroup.tsx) so each
-    // clone lands in the slot matching its final subtitle position — the
-    // morph reads as continuous. Clone i starts at word i's measured grid
-    // rect and flies to slot i of the bar.
-    const ordered = puzzle.alphabetizeCompleted ?? true
-      ? [...words].sort((a, b) => a.localeCompare(b))
-      : [...words];
-
-    cloneRevealedGroupsRef.current.add(groupIdx);
+    animatedRevealGroupsRef.current.add(groupIdx);
     clearRevealTimers();
-    setReveal({
-      groupIdx,
-      words: ordered,
-      from: ordered.map((w) => rectToRevealRect(fromByWord[w])),
-      to: null,
-      phase: "cloned",
-    });
+    // "pending" takes the just-mounted bar back out of the page flow before
+    // the browser paints, so the board never jumps down to make room for it.
+    setReveal({ groupIdx, words: [...words], phase: "pending" });
   }, [lastRevealedGroup, puzzle, format.answersPerCategory, releaseRevealHold, clearRevealTimers, revealVictory]);
 
-  // Once the bar has mounted (hidden) for this reveal, measure it and start
-  // the fly. Runs whenever `reveal` is freshly "cloned" — i.e. once per
-  // reveal, right after the bar's ref is guaranteed to be populated.
+  // With the board back where the player last saw it, run the three beats.
   useLayoutEffect(() => {
-    if (!reveal || reveal.phase !== "cloned") return;
-    const barEl = revealBarRef.current;
-    if (!barEl) {
-      // Bar failed to mount/measure — bail out to a plain reveal rather than
-      // leaving clones stuck mid-air.
-      console.warn("[reveal] solved bar ref wasn't available for group", reveal.groupIdx, "— falling back to a plain reveal");
-      clearRevealTimers();
-      setReveal(null);
-      releaseRevealHold();
-      if (isWonRef.current) revealVictory(true, VICTORY_REDUCED_MOTION_MS);
-      return;
-    }
-
+    if (!reveal || reveal.phase !== "pending") return;
     const thisGroup = reveal.groupIdx;
-    const barRect = barEl.getBoundingClientRect();
-    const slotWidth = barRect.width / 4;
-    const to: RevealRect[] = reveal.words.map((_, i) => ({
-      top: barRect.top,
-      left: barRect.left + i * slotWidth,
-      width: slotWidth,
-      height: barRect.height,
-    }));
-
     const groupWords = new Set(reveal.words);
-
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      // Capture the remaining tiles' current positions (holes still present,
-      // the selected tiles are hidden-but-laid-out), then release the hold so
-      // the selected words leave the grid and the gaps close. The grid FLIP
-      // effect below animates the remaining tiles old→new so they slide into
-      // the gaps while the clones fly upward, instead of snapping.
-      const before: Record<string, DOMRect> = {};
-      Object.entries(wordTileRefs.current).forEach(([w, el]) => {
-        if (el && !groupWords.has(w)) before[w] = el.getBoundingClientRect();
+    const measure = (words: string[]) => {
+      const rects: Record<string, DOMRect> = {};
+      words.forEach((w) => {
+        const el = wordTileRefs.current[w];
+        if (el) rects[w] = el.getBoundingClientRect();
       });
-      gridFlipBeforeRef.current = before;
-      releaseRevealHold();
-      setReveal((r) => (r && r.groupIdx === thisGroup ? { ...r, to, phase: "flying" } : r));
-    }));
+      return rects;
+    };
+    const setPhase = (phase: RevealState["phase"] | null) =>
+      setReveal((r) => (r && r.groupIdx === thisGroup ? (phase ? { ...r, phase } : null) : r));
 
+    // Beat 1 — gather. Only the tiles that have to swap move; if the category
+    // is already the top row there is nothing to gather and the bar comes in
+    // straight away.
+    const gathered = gatherIntoFirstRow(remainingWords, reveal.words, format.columns);
+    const gathers = gathered.some((w, i) => w !== remainingWords[i]);
+    if (gathers) {
+      gridFlipRef.current = { before: measure(remainingWords), ms: SOLVE_GATHER_MS, raise: groupWords };
+      setWordOrder(gathered);
+    }
+    setPhase("gathering");
+
+    const barAt = gathers ? SOLVE_GATHER_MS : 0;
+    const settleAt = barAt + SOLVE_BAR_FADE_MS + SOLVE_POP_PAUSE_MS;
     revealTimersRef.current = [
-      // Beat 1: clones fade/merge out on top while the real bar quietly fades
-      // in behind them at ~scale 1 (no pop yet).
+      // Beat 2 — merge: the bar fades in over the gathered row.
+      setTimeout(() => setPhase("appearing"), barAt),
+      // Beats 3 and 4 — pop and settle: release the hold (the row leaves the
+      // grid) and put the bar into the page flow in the same spot, in one
+      // render; the bar pops while anything else glides into place.
       setTimeout(() => {
-        setReveal((r) => (r && r.groupIdx === thisGroup ? { ...r, phase: "merging" } : r));
-      }, REVEAL_FLY_MS),
-      // Beat 2: clones are gone + a brief pause -> the bar does its distinct
-      // arrival pop, so it reads as a separate "locked in" moment.
+        gridFlipRef.current = {
+          before: measure(Object.keys(wordTileRefs.current).filter((w) => !groupWords.has(w))),
+          ms: SOLVE_SETTLE_MS,
+          gridBottom: gridWrapperRef.current?.getBoundingClientRect().bottom,
+        };
+        releaseRevealHold();
+        setPhase("settling");
+      }, settleAt),
+      // Done. This is also the moment the FINAL category has fully landed: if
+      // the game is won, un-gate the celebration now so confetti, sound,
+      // haptics, streak and results all start together. isWonRef is read at
+      // fire time, so it can't be stale, and input is locked during the
+      // reveal, so a non-final group's timer can never see a later win.
       setTimeout(() => {
-        setReveal((r) => (r && r.groupIdx === thisGroup ? { ...r, phase: "arrived" } : r));
-      }, REVEAL_FLY_MS + CLONE_FADE_MS + ARRIVAL_PAUSE_MS),
-      // Tear the clones down once the arrival pop has played out. (The hold was
-      // released at fly-start, so the grid closed long ago.) This is also the
-      // moment the FINAL category has fully "landed": if the game is won by now,
-      // un-gate the victory celebration immediately (no extra hold) so confetti,
-      // sound, haptics, streak, and results all start together with the pop's
-      // finish. isWonRef is read at fire time (not captured earlier), so it
-      // can't be stale — and input is locked during the reveal, so a non-final
-      // group's timer can never see a win that hadn't happened when its pop
-      // started.
-      setTimeout(() => {
-        setReveal((r) => (r && r.groupIdx === thisGroup ? null : r));
-        if (isWonRef.current) revealVictory(true, VICTORY_HOLD_AFTER_ARRIVAL_MS);
-      }, REVEAL_FLY_MS + CLONE_FADE_MS + ARRIVAL_PAUSE_MS + ARRIVAL_POP_MS),
+        setPhase(null);
+        if (isWonRef.current) revealVictory(true, VICTORY_HOLD_AFTER_SOLVE_MS);
+      }, settleAt + Math.max(SOLVE_POP_MS, SOLVE_SETTLE_MS)),
     ];
-  }, [reveal, releaseRevealHold, clearRevealTimers, revealVictory]);
+  }, [reveal, remainingWords, format.columns, setWordOrder, releaseRevealHold, revealVictory]);
 
-  // Grid FLIP: after a reveal releases its held words (gaps close), slide the
-  // remaining tiles from their old positions into their new ones with a
-  // transform, rather than letting them jump.
+  // Grid FLIP: when the grid's words change for a queued slide (the gather
+  // swap, or the settle after the row leaves), start each moved tile at its
+  // old spot and let it glide to its new one — and, for the settle, let the
+  // grid's own height glide too, so the controls below follow smoothly
+  // instead of jumping up.
   useLayoutEffect(() => {
-    const before = gridFlipBeforeRef.current;
-    if (!before) return;
-    gridFlipBeforeRef.current = null;
+    const flip = gridFlipRef.current;
+    if (!flip) return;
+    gridFlipRef.current = null;
+    const { before, ms, raise, gridBottom } = flip;
+    const transition = `transform ${ms}ms ${SOLVE_EASE}`;
 
-    const FLIP_MS = 350;
     Object.keys(before).forEach((w) => {
       const el = wordTileRefs.current[w];
       if (!el) return;
@@ -580,21 +542,39 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       const dy = before[w].top - after.top;
       if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
 
-      // Invert: start the tile visually at its OLD spot, then animate to none.
+      // Invert: put the tile back at its OLD spot, commit that, then play.
       el.style.transition = "none";
       el.style.transform = `translate(${dx}px, ${dy}px)`;
-      requestAnimationFrame(() => {
-        el.style.transition = `transform ${FLIP_MS}ms cubic-bezier(0.2, 0, 0, 1)`;
-        el.style.transform = "";
-      });
+      if (raise?.has(w)) el.style.zIndex = "2";
+      void el.offsetWidth;
+      el.style.transition = transition;
+      el.style.transform = "";
       window.setTimeout(() => {
         // Clear inline styles so nothing lingers on the tile afterward.
-        if (el.style.transition.includes("transform")) {
-          el.style.transition = "";
-          el.style.transform = "";
-        }
-      }, FLIP_MS + 60);
+        if (el.style.transition === transition) el.style.transition = "";
+        el.style.zIndex = "";
+      }, ms + 60);
     });
+
+    const grid = gridWrapperRef.current;
+    if (grid && gridBottom !== undefined) {
+      const rect = grid.getBoundingClientRect();
+      const from = gridBottom - rect.top; // the height that keeps the old bottom edge
+      if (from > 0 && Math.abs(from - rect.height) >= 0.5) {
+        const heightTransition = `height ${ms}ms ${SOLVE_EASE}`;
+        grid.style.transition = "none";
+        grid.style.height = `${from}px`;
+        void grid.offsetWidth;
+        grid.style.transition = heightTransition;
+        grid.style.height = `${rect.height}px`;
+        window.setTimeout(() => {
+          if (grid.style.transition === heightTransition) {
+            grid.style.transition = "";
+            grid.style.height = "";
+          }
+        }, ms + 60);
+      }
+    }
   }, [remainingWords]);
 
   useEffect(() => clearRevealTimers, [clearRevealTimers]);
@@ -609,9 +589,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     setReveal(null);
     setVictoryRevealReady(false);
     wordTileRefs.current = {};
-    revealBarRef.current = null;
+    gridFlipRef.current = null;
     prevRevealedGroupRef.current = null;
-    cloneRevealedGroupsRef.current = new Set();
+    animatedRevealGroupsRef.current = new Set();
   }, [puzzle.id, clearRevealTimers, clearVictoryTimers]);
 
   // Safety net for a RESTORED completed+won puzzle. victoryRevealReady's
@@ -1057,6 +1037,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // as before, since it has no victory animation to wait on.
   const showEndState = state.isComplete && (!state.isWon || victoryRevealReady);
 
+  // Whether the solved-bar list has anything in the page flow — a bar still
+  // merging floats over its tile row and takes no space yet. Only then does
+  // the list need the gap that separates it from the grid, so the board
+  // doesn't shift the moment a merge starts.
+  const barsInFlow =
+    boardSlots.some(
+      (s) => s.kind === "rainbow" || !(reveal && reveal.groupIdx === s.groupIdx && reveal.phase !== "settling"),
+    ) ||
+    (showEndState && !state.gotRainbow && !!rainbowHerring);
+
   // The solved-rainbow reveal card (both the direct-guess and Spot the
   // Rainbow paths below) isn't itself gated by the Rainbow Animation
   // setting today, but should still show the same static treatment as the
@@ -1142,7 +1132,23 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       <div className={isMiniBoard ? "w-full max-w-[330px] mx-auto" : undefined}>
       {/* Solved groups — rainbow is interleaved at the position it was actually
           found (boardSlots), not always pinned to the top */}
-      <div className="space-y-2 mb-2">
+      {/* The solved bars. Spaced exactly like the tile grid (same gaps), and
+          each bar is one tile row tall (.board-bars / .solved-bar in
+          index.css), so a row becoming a bar leaves the board below where
+          it was. pt-2 keeps the unsolved board exactly where it always sat,
+          and is where the first bar lands — right on top of the first row.
+          relative + z-[1]: the bar of a category mid-solve-animation is
+          positioned against this list, and must draw over the tile row it
+          replaces (.board-bars is a size container, which gives it its own
+          layer). */}
+      <div
+        className={`board-bars relative z-[1] pt-2 ${
+          isMiniBoard
+            ? `board-bars-square space-y-2 ${barsInFlow ? "mb-2" : ""}`
+            : `space-y-1.5 ${barsInFlow ? "mb-1.5" : ""} ${useWideBoard ? `board-bars-wide md:space-y-3 ${barsInFlow ? "md:mb-3" : ""}` : ""}`
+        }`}
+        style={{ "--board-cols": format.columns } as import("react").CSSProperties}
+      >
         {boardSlots.map((slot) =>
           slot.kind === "rainbow" ? (
             <RainbowRevealBar
@@ -1161,20 +1167,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           ) : (
             <SolvedGroup
               key={slot.groupIdx}
-              ref={reveal?.groupIdx === slot.groupIdx ? (el) => { revealBarRef.current = el; } : undefined}
               group={puzzle.groups[slot.groupIdx]}
               alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
               // animate-group-appear is only for bars that DIDN'T go through the
-              // clone reveal (reduced-motion path, loss cascade). Clone-revealed
-              // bars cross-fade in via the `reveal` prop instead.
-              animate={slot.groupIdx === lastRevealedGroup && !cloneRevealedGroupsRef.current.has(slot.groupIdx)}
+              // solve animation (reduced-motion path, loss cascade). Animated
+              // bars fade in via the `reveal` prop instead.
+              animate={slot.groupIdx === lastRevealedGroup && !animatedRevealGroupsRef.current.has(slot.groupIdx)}
               reveal={
                 reveal?.groupIdx === slot.groupIdx
-                  ? (reveal.phase === "arrived"
-                      ? "arrived"
-                      : reveal.phase === "merging"
-                        ? "shown"
-                        : "hidden")
+                  ? (reveal.phase === "pending" || reveal.phase === "gathering"
+                      ? "pending"
+                      : reveal.phase)
                   : undefined
               }
             />
@@ -1210,9 +1213,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         )}
       </div>
 
-      {/* Word grid */}
-      {remainingWords.length > 0 && (
-        <div className="relative">
+      {/* Word grid. Stays mounted (empty) through the settle beat of the
+          final solve, so its height can glide to zero like any other settle. */}
+      {(remainingWords.length > 0 || reveal !== null) && (
+        <div ref={gridWrapperRef} className="relative">
           {/* Columns come from the format (4 on Full, 3 on Mini) as an inline
               grid-template rather than a `grid-cols-N` class, because Tailwind
               only emits the classes it can see in the source and a computed
@@ -1222,13 +1226,17 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             style={{ gridTemplateColumns: `repeat(${format.columns}, minmax(0, 1fr))` }}
           >
           {remainingWords.map((word, index) => {
+            // A word mid-solve-animation keeps its selected look (useGame
+            // clears the selection the moment the guess is confirmed) so the
+            // guessed tiles stay visibly the same four dark tiles right up to
+            // the moment the bar replaces them.
             const isRevealingWord = reveal?.words.includes(word) ?? false;
             return (
               <WordTile
                 key={word}
                 ref={(el) => { wordTileRefs.current[word] = el; }}
                 word={word}
-                isSelected={state.selectedWords.includes(word)}
+                isSelected={state.selectedWords.includes(word) || isRevealingWord}
                 isRainbow={
                   rainbowWords.includes(word) ||
                   bonusRainbowWords.includes(word)
@@ -1237,11 +1245,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 rainbowTextShadow={theme.textShadow}
                 rainbowAnimated={showRainbow}
                 isMatched={matchedWords.includes(word)}
-                hiddenForReveal={isRevealingWord}
+                fadingForReveal={isRevealingWord && reveal?.phase === "appearing"}
                 isChecking={checkingWords.includes(word)}
                 checkingIndex={checkingStagger[word] ?? 0}
                 onClick={() => handleTileClick(word)}
                 disabled={state.isComplete || matchedWords.length > 0 || reveal !== null || isChecking}
+                // Only a finished board (or the Rainbow wiggle) greys tiles
+                // out; the brief lock while a guess is checked and animates
+                // doesn't, so nothing dims and re-brightens mid-solve.
+                dimWhenDisabled={(state.isComplete && !isRevealingWord) || matchedWords.length > 0}
                 arrangeTiles={arrangeTiles}
                 colorCodeTiles={colorCodeTiles}
                 tileColor={tileColors[word] ?? null}
@@ -1267,47 +1279,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       )}
       </div>
 
-      {/* Correct-guess reveal overlay: clones portaled to document.body so
-          every measurement here is viewport-relative, with no risk of a
-          reparented/transformed-ancestor coordinate mismatch. */}
-      {reveal && typeof document !== "undefined" && createPortal(
-        reveal.words.map((word, i) => {
-          const rect = reveal.phase === "cloned" || !reveal.to ? reveal.from[i] : reveal.to[i];
-          // Faded out from the merge beat onward (and stay gone through the
-          // arrival pop) so they never reappear over the popping bar.
-          const faded = reveal.phase === "merging" || reveal.phase === "arrived";
-          return (
-            <div
-              key={word}
-              className="tile-reveal-clone flex items-center justify-center rounded-lg font-semibold text-xs sm:text-sm uppercase tracking-wide bg-tile-selected text-tile-selected-fg shadow-md"
-              style={{
-                top: rect.top,
-                left: rect.left,
-                width: rect.width,
-                height: rect.height,
-                // Fade AND scale down while the real bar fades in underneath
-                // them (z-index 60 keeps clones on top). transformOrigin center
-                // so they shrink in place.
-                opacity: faded ? 0 : 1,
-                transform: faded ? "scale(0.9)" : "scale(1)",
-                transformOrigin: "center",
-              }}
-            >
-              {isCustomEmoji(word) ? (
-                <img
-                  src={customEmojiUrl(word)}
-                  alt={customEmojiName(word) ?? ""}
-                  draggable={false}
-                  style={{ height: "28px", width: "auto", objectFit: "contain" }}
-                />
-              ) : (
-                word
-              )}
-            </div>
-          );
-        }),
-        document.body
-      )}
 
       {/* Rainbow Spotted popup — animated (or static, per the Rainbow
           Animation setting) rainbow-tile for the default theme; themed
