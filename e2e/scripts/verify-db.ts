@@ -33,6 +33,7 @@ import { seedFixtures, type SeedBackend } from "./lib/seed-core.ts";
 import {
   ACCOUNTS,
   CUSTOM_PUBLIC,
+  FULL_CLASSIC,
   FULL_RAINBOW,
   MINI_RAINBOW,
   OFFICIAL_PUZZLES,
@@ -103,20 +104,35 @@ const CHECKS: Check[] = [
     name: "the SQL skill score matches the browser formula on shared fixtures",
     async run(db) {
       const cases: [boolean, number, string[], boolean, string | null, string, number][] = [
-        [true, 0, ["orange", "green", "blue", "red"], false, null, "full", 90],
-        [true, 1, ["orange", "green", "blue", "red"], false, null, "full", 80],
-        [true, 3, ["orange", "green", "blue", "red"], false, null, "full", 60],
+        // Full — the examples in the brief, then each rule on its own.
+        [true, 0, ["orange", "green", "blue", "red"], true, "in_game", "full", 96],
+        [true, 0, ["red", "orange", "green", "blue"], true, "post_game", "full", 99],
+        [true, 0, ["red", "blue", "green", "orange"], false, null, "full", 99],
+        [true, 0, ["red", "blue", "green", "orange"], true, "post_game", "full", 100],
+        [true, 1, ["orange", "blue", "green", "red"], true, "in_game", "full", 89],
+        [false, 4, ["red", "blue"], true, "post_game", "full", 69],
+        [true, 0, ["orange", "green", "blue", "red"], false, null, "full", 95],
+        [true, 1, ["orange", "green", "blue", "red"], false, null, "full", 88],
+        [true, 2, ["orange", "green", "blue", "red"], false, null, "full", 81],
+        [true, 3, ["orange", "green", "blue", "red"], false, null, "full", 74],
+        [true, 0, ["green", "orange", "blue", "red"], false, null, "full", 96],
+        [true, 0, ["blue", "orange", "green", "red"], false, null, "full", 97],
+        [true, 0, ["red", "orange", "green", "blue"], false, null, "full", 98],
+        [true, 2, ["red", "blue", "green", "orange"], false, null, "full", 85],
+        [true, 2, ["red", "blue", "orange", "green"], false, null, "full", 84],
         [false, 4, [], false, null, "full", 50],
-        [false, 4, ["orange", "green"], false, null, "full", 58],
-        [true, 0, ["orange", "green", "blue", "red"], true, "in_game", "full", 94],
-        [true, 0, ["orange", "green", "blue", "red"], true, "post_game", "full", 91],
-        [true, 0, ["orange", "green", "blue", "red"], true, null, "full", 94],
-        [true, 0, ["red", "orange", "green", "blue"], false, null, "full", 92],
-        [true, 0, ["red", "blue", "green", "orange"], false, null, "full", 95],
-        [true, 0, ["red", "blue", "green", "orange"], true, "in_game", "full", 99],
-        [false, 4, ["red"], false, null, "full", 56],
+        [false, 4, ["orange"], false, null, "full", 54],
+        [false, 4, ["blue", "red"], false, null, "full", 68],
+        [false, 4, ["green", "blue", "red"], false, null, "full", 74],
+        [false, 4, [], true, "post_game", "full", 51],
+        [true, 3, ["orange", "green", "blue", "red"], true, null, "full", 75],
+        // Mini — the original formula, unchanged.
         [true, 0, ["red", "blue", "green"], false, null, "mini", 95],
         [true, 0, ["green", "blue", "red"], false, null, "mini", 90],
+        [true, 0, ["green", "blue", "red"], true, "in_game", "mini", 94],
+        [true, 0, ["green", "blue", "red"], true, "post_game", "mini", 91],
+        [false, 4, ["green", "blue"], false, null, "mini", 58],
+        [false, 4, ["red"], false, null, "mini", 56],
       ];
       for (const [won, mistakes, order, rainbow, source, format, expected] of cases) {
         const r = await db.query<{ score: number }>(
@@ -181,9 +197,9 @@ const CHECKS: Check[] = [
         expect(done.rows[0].ok === true, "finalize_game_session should accept the completed session");
       }
 
-      // Player A: one mistake, easiest-first, Rainbow spotted mid-game → 84.
+      // Player A: one mistake, easiest-first, Rainbow spotted mid-game → 88 + 0 + 1 = 89.
       await play({ mistakes: 1, order: ["orange", "green", "blue", "red"], rainbow: true, rainbowIndex: 2 });
-      // Player B: one mistake, full reverse order, no Rainbow → 85.
+      // Player B: one mistake, full reverse order, no Rainbow → 88 + 4 = 92.
       await play({ mistakes: 1, order: ["red", "blue", "green", "orange"], rainbow: false, rainbowIndex: null });
 
       const result = await db.query<{ report: Record<string, unknown> }>(
@@ -200,7 +216,7 @@ const CHECKS: Check[] = [
       const first = report.first_solved as Record<string, number>;
       expect(first.orange === 1 && first.red === 1, `first_solved = ${JSON.stringify(first)}`);
       const scores = report.score_counts as Record<string, number>;
-      expect(scores["84"] === 1 && scores["85"] === 1, `score_counts = ${JSON.stringify(scores)}, expected {84:1, 85:1}`);
+      expect(scores["89"] === 1 && scores["92"] === 1, `score_counts = ${JSON.stringify(scores)}, expected {89:1, 92:1}`);
       const common = report.common_wrong_guesses as { words: string[]; players: number; one_away: boolean }[];
       expect(common.length === 1, `expected one distinct wrong guess, got ${common.length}`);
       expect(common[0].players === 2, `the shared wrong guess should count 2 players, got ${common[0].players}`);
@@ -210,6 +226,228 @@ const CHECKS: Check[] = [
         JSON.stringify(common[0].words) === JSON.stringify(expectedWords),
         `wrong-guess words ${JSON.stringify(common[0].words)}, expected ${JSON.stringify(expectedWords)}`
       );
+    },
+  },
+  {
+    // The database half of the Luck Score: who counts, and whose path
+    // matches. The browser half (the formula, the 500-player threshold,
+    // the wording) is pinned in src/test/luckScore.test.ts.
+    name: "Luck counts only eligible first attempts and matches exact ordered paths",
+    async run(db) {
+      await actAs(db, null);
+      const puzzleRow = await db.query<{ id: string }>(
+        "select id from public.puzzles where date = $1 and format = 'full'",
+        [FULL_CLASSIC.date]
+      );
+      const puzzleId = puzzleRow.rows[0].id;
+      const words = (d: number) => FULL_CLASSIC.groups.find((g) => g.difficulty === d)!.words;
+      const [Y, G, B, R] = [words(1), words(2), words(3), words(4)];
+      const colour: Record<number, string> = { 1: "orange", 2: "green", 3: "blue", 4: "red" };
+      const groupOf = (guess: string[]) => {
+        const set = new Set(guess.map((w) => w.toUpperCase()));
+        return FULL_CLASSIC.groups.find((g) => g.words.every((w) => set.has(w)));
+      };
+      // Four wrong guesses, each one word from every category.
+      const W = [0, 1, 2, 3].map((i) => [Y[i], G[(i + 1) % 4], B[(i + 2) % 4], R[(i + 3) % 4]]);
+
+      interface Identity { device_id: string; device_token: string }
+      interface Played extends Identity { sessionId: string; official: boolean; guesses: number }
+
+      async function newIdentity(): Promise<Identity> {
+        const r = await db.query<Identity>("select * from public.create_device_identity()");
+        return r.rows[0];
+      }
+
+      async function play(guesses: string[][], identity?: Identity): Promise<Played> {
+        const id = identity ?? (await newIdentity());
+        const s = await db.query<{ id: string }>(
+          "select public.create_game_session($1, $2, $3, 'daily_home') as id",
+          [puzzleId, id.device_id, id.device_token]
+        );
+        const sessionId = s.rows[0].id;
+        expect(!!sessionId, "create_game_session should return a session id");
+        const order: string[] = [];
+        let mistakes = 0;
+        const events = guesses.map((g, i) => {
+          const group = groupOf(g);
+          if (group) order.push(colour[group.difficulty]);
+          else mistakes += 1;
+          return {
+            guess_number: i + 1,
+            words: g,
+            correct: !!group,
+            group_name: group ? colour[group.difficulty] : null,
+            guessed_at: new Date().toISOString(),
+            is_rainbow_attempt: false,
+            is_one_away: false,
+            is_almost_rainbow: false,
+            active_time_seconds: 10 * (i + 1),
+            groups_solved: order.length,
+          };
+        });
+        await db.query("select public.record_guess_events($1, $2, $3, $4::jsonb)", [
+          sessionId, id.device_id, id.device_token, JSON.stringify(events),
+        ]);
+        const won = order.length === 4;
+        const done = await db.query<{ ok: boolean }>(
+          `select public.finalize_game_session($1, $2, $3, $4, $5, 60, false, null, $6::jsonb, false, '', true, null) as ok`,
+          [sessionId, id.device_id, id.device_token, won, mistakes, JSON.stringify(order)]
+        );
+        return { ...id, sessionId, official: done.rows[0].ok === true, guesses: guesses.length };
+      }
+
+      async function bonus(p: Played, guessNumber: number, bonusWords: string[], correct: boolean) {
+        await db.query(
+          "select public.record_bonus_rainbow($1, $2, $3, $4, $5::jsonb, $6, now(), 60, 4::smallint)",
+          [p.sessionId, p.device_id, p.device_token, guessNumber, JSON.stringify(bonusWords), correct]
+        );
+      }
+
+      type Luck = { status: string; reason?: string; eligible_players?: number; same_path?: number; ceiling?: number; min_players?: number };
+      async function luck(id: Identity, pid = puzzleId): Promise<Luck> {
+        const r = await db.query<{ r: Luck }>("select public.get_luck_report($1, $2, $3) as r", [
+          pid, id.device_id, id.device_token,
+        ]);
+        return r.rows[0].r;
+      }
+
+      // ---- ordering and normalization -------------------------------------
+      const a = await play([Y, G, B, R]);
+      // Same guesses, words tapped in another order and in lower case.
+      const b = await play([[...Y].reverse().map((w) => w.toLowerCase()), [G[2], G[0], G[3], G[1]], B, R]);
+      // Same four guesses, different ORDER of guesses: a different path.
+      const c = await play([G, Y, B, R]);
+      const d = await play([W[0], Y, G, B, R]);
+      const e = await play([Y, W[0], W[1], W[2], W[3]]);
+      expect([a, b, c, d, e].every((p) => p.official), "every first attempt should be official");
+
+      let r = await luck(a);
+      expect(r.status === "ok", `luck(a) status ${r.status}`);
+      expect(r.eligible_players === 5, `eligible_players = ${r.eligible_players}, expected 5`);
+      expect(r.same_path === 2, `word order within a guess must not matter: same_path = ${r.same_path}, expected 2`);
+      expect(r.ceiling === 5000 && r.min_players === 500, `ceiling/min_players = ${r.ceiling}/${r.min_players}`);
+      r = await luck(c);
+      expect(r.same_path === 1, `guess order must matter: same_path = ${r.same_path}, expected 1`);
+      r = await luck(e);
+      expect(r.status === "ok" && r.same_path === 1, "a loss has a path too");
+
+      // ---- replays and bad credentials ------------------------------------
+      const replay = await play([Y, G, B, R], c);
+      expect(!replay.official, "a replay by the same player must not be official");
+      r = await luck(c);
+      expect(r.eligible_players === 5 && r.same_path === 1, `a replay must not count: ${JSON.stringify(r)}`);
+      r = await luck({ device_id: a.device_id, device_token: "not-the-token" });
+      expect(r.status === "no_session", `a wrong device token must find nothing, got ${r.status}`);
+
+      // ---- the post-game Rainbow prompt updates the path -------------------
+      const rainbowWords = [Y[0], G[0], B[0], R[0]];
+      const f = await play([Y, G, B, R]);
+      r = await luck(a);
+      expect(r.same_path === 3, `f matches a before its Rainbow: same_path = ${r.same_path}, expected 3`);
+      await bonus(f, f.guesses + 1, rainbowWords, true);
+      r = await luck(f);
+      expect(r.same_path === 1, `finding the Rainbow later must change f's path: same_path = ${r.same_path}`);
+      r = await luck(a);
+      expect(r.same_path === 2, `and a is back to 2, got ${r.same_path}`);
+
+      // A wrong attempt then a right one. h's right attempt reuses the wrong
+      // one's guess number (what a refresh between attempts produces), so
+      // its event is dropped; the session row still records the find, and
+      // h must end up on the same path as j, whose events both survived.
+      const wrongRainbow = [Y[1], G[1], B[1], R[1]];
+      const h = await play([Y, G, B, R]);
+      await bonus(h, h.guesses + 1, wrongRainbow, false);
+      await bonus(h, h.guesses + 1, rainbowWords, true);
+      const hEvents = await db.query<{ n: number }>(
+        "select count(*)::int as n from public.guess_events where game_session_id = $1 and attempt_type = 'bonus_rainbow'",
+        [h.sessionId]
+      );
+      expect(hEvents.rows[0].n === 1, `expected the colliding right attempt to be dropped, found ${hEvents.rows[0].n} bonus events`);
+      const j = await play([Y, G, B, R]);
+      await bonus(j, j.guesses + 1, wrongRainbow, false);
+      await bonus(j, j.guesses + 2, rainbowWords, true);
+      r = await luck(h);
+      expect(r.same_path === 2, `h and j should share a path, same_path = ${r.same_path}`);
+      expect(r.eligible_players === 8, `eligible_players = ${r.eligible_players}, expected 8`);
+
+      // ---- sessions that must never count ---------------------------------
+      const admin = await db.query<{ user_id: string }>(
+        "select user_id from public.user_roles where role = 'admin' limit 1"
+      );
+      const adminId = admin.rows[0].user_id;
+      async function insertSession(opts: { userId?: string | null; deviceId: string; untyped?: boolean; numbers?: number[] }) {
+        const s = await db.query<{ id: string }>(
+          `insert into public.game_sessions
+             (puzzle_id, user_id, device_id, status, won, mistakes, completed_at, is_official, format, solve_order)
+           values ($1, $2, $3, 'won', true, 0, now(), true, 'full', '["orange","green","blue","red"]'::jsonb)
+           returning id`,
+          [puzzleId, opts.userId ?? null, opts.deviceId]
+        );
+        const numbers = opts.numbers ?? [1, 2, 3, 4];
+        for (const [i, g] of [Y, G, B, R].entries()) {
+          await db.query(
+            `insert into public.guess_events (game_session_id, guess_number, words, correct, attempt_type)
+             values ($1, $2, $3::jsonb, true, $4)`,
+            [s.rows[0].id, numbers[i], JSON.stringify(g), opts.untyped ? null : "normal"]
+          );
+        }
+      }
+      await insertSession({ userId: adminId, deviceId: "admin-device" });
+      await insertSession({ deviceId: "legacy-device", untyped: true });
+      await insertSession({ deviceId: "unknown" });
+      await insertSession({ deviceId: "gappy-device", numbers: [1, 2, 4, 5] });
+      r = await luck(a);
+      expect(r.eligible_players === 8, `admin, legacy, 'unknown' and gapped sessions must not count: ${r.eligible_players}`);
+      await actAs(db, adminId);
+      r = await luck({ device_id: "", device_token: "" });
+      expect(r.status === "not_eligible" && r.reason === "admin", `admin's own report: ${JSON.stringify(r)}`);
+      await actAs(db, null);
+
+      // ---- Full only -------------------------------------------------------
+      const mini = await db.query<{ id: string }>(
+        "select id from public.puzzles where date = $1 and format = 'mini'",
+        [MINI_RAINBOW.date]
+      );
+      r = await luck(a, mini.rows[0].id);
+      expect(r.status === "unsupported", `a Mini must not get a Luck report, got ${r.status}`);
+
+      // ---- the ceiling is stable per puzzle --------------------------------
+      await db.query(
+        "insert into public.luck_score_ceilings (effective_from, ceiling) values (($1::date + 1), 50000)",
+        [FULL_CLASSIC.date]
+      );
+      r = await luck(a);
+      expect(r.ceiling === 5000, `a ceiling raised AFTER the puzzle's date must not change it, got ${r.ceiling}`);
+      await db.query(
+        "insert into public.luck_score_ceilings (effective_from, ceiling) values ($1::date, 20000)",
+        [FULL_CLASSIC.date]
+      );
+      r = await luck(a);
+      expect(r.ceiling === 20000, `a ceiling effective on the puzzle's date applies, got ${r.ceiling}`);
+      await db.query("delete from public.luck_score_ceilings where effective_from >= $1::date", [FULL_CLASSIC.date]);
+
+      // ---- 500 eligible players --------------------------------------------
+      // 492 more perfect Yellow→Red solves, written straight into the tables
+      // (this is an in-process throwaway database) to reach exactly 500.
+      await db.query(
+        `with s as (
+           insert into public.game_sessions
+             (puzzle_id, device_id, status, won, mistakes, completed_at, is_official, format)
+           select $1, 'bulk-' || n, 'won', true, 0, now(), true, 'full'
+             from generate_series(1, 492) as n
+           returning id
+         )
+         insert into public.guess_events (game_session_id, guess_number, words, correct, attempt_type)
+         select s.id, x.n, x.words, true, 'normal'
+           from s
+          cross join (values (1, $2::jsonb), (2, $3::jsonb), (3, $4::jsonb), (4, $5::jsonb)) as x(n, words)`,
+        [puzzleId, JSON.stringify(Y), JSON.stringify(G), JSON.stringify(B), JSON.stringify(R)]
+      );
+      r = await luck(a);
+      expect(r.eligible_players === 500, `eligible_players = ${r.eligible_players}, expected 500`);
+      expect(r.same_path === 494, `same_path = ${r.same_path}, expected 494 (a, b and the 492)`);
+      r = await luck(f);
+      expect(r.same_path === 1, `f's Rainbow path is still unique among 500, got ${r.same_path}`);
     },
   },
   {

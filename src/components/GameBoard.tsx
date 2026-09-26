@@ -1719,7 +1719,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   puzzles only, for the same reason as Global Stats above —
                   a beta or custom puzzle has no official sessions to compare
                   against. */}
-              {!betaMode && !customMode && <LuckyBot puzzle={puzzle} state={state} />}
+              {!betaMode && !customMode && <LuckyBot puzzle={puzzle} state={state} rainbowPromptResult={bonusRainbowCorrect} />}
             </div>
           )}
         </div>

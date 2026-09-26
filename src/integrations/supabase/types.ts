@@ -1304,6 +1304,10 @@ export type Database = {
           longest_streak: number
         }[]
       }
+      get_luck_report: {
+        Args: { _device_id?: string; _device_token?: string; _puzzle_id: string }
+        Returns: Json
+      }
       get_puzzle_report: { Args: { _puzzle_id: string }; Returns: Json }
       get_puzzle_stats: { Args: { _puzzle_id: string }; Returns: Json }
       get_streak_admin_summary: {
