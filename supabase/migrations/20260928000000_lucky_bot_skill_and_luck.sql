@@ -33,11 +33,12 @@
 --                           into the score (src/lib/luckScore.ts), so the
 --                           formula lives in exactly one place.
 --
---   record_bonus_rainbow    Now numbers each post-game Rainbow submission
---                           itself, so a try after a refresh can no longer
---                           collide with an earlier one and be dropped, and
---                           marks it server_numbered so Luck can tell a
---                           complete prompt history from an older one.
+--   record_bonus_rainbow    One post-game Rainbow answer per Full game: a
+--                           second, different answer is refused. Numbers
+--                           each answer itself (so none is silently
+--                           dropped) and marks it server_numbered, so Luck
+--                           can tell a reliable prompt history from an
+--                           older one.
 --
 -- Full Skill Score, in words:
 --   Won:  95 / 88 / 81 / 74 for 0 / 1 / 2 / 3 mistakes, plus the FIRST
@@ -445,24 +446,31 @@ comment on function public.get_luck_report(uuid, text, text) is
 
 
 -- ===========================================================================
--- record_bonus_rainbow — every post-game Rainbow submission is kept.
+-- record_bonus_rainbow — one post-game Rainbow answer per Full game, and it
+-- is always kept.
 --
--- Luck compares exact ordered paths, and a post-game "Spot the Rainbow"
--- submission is part of the path, right or wrong. Before this, the guess
--- number came only from the browser, which counts a WRONG prompt attempt
--- in memory: after a refresh it forgot that attempt, proposed the same
--- number again, and the next submission hit the (game_session_id,
--- guess_number) unique index and was silently dropped. Two players who
--- tried the prompt a different number of times could then look like the
--- same path.
+-- Luck compares exact ordered paths, and the post-game "Spot the Rainbow"
+-- answer is part of the path. Two problems with the 20260917000000 version:
 --
--- Now the function takes the browser's number as a floor and uses the
--- next free number after everything already saved for the session, under
--- a row lock so two submissions can never take the same one. The floor
--- keeps a prompt attempt after every board guess even if the last board
--- guess's own write is still in flight. A retry of the SAME submission
--- (same guessed_at, words and result — the browser captures guessed_at
--- once, at Submit) is recognised and not stored twice.
+--   * A FULL game could be answered more than once. After a wrong answer the
+--     board reveals the Rainbow, but a refresh brought the prompt back, so a
+--     player could enter the answer they had just been shown and have it
+--     count as found (+1 Skill). A Full game now gets ONE answer: once a
+--     session has a prompt answer — or found the Rainbow during play — any
+--     different submission is refused (returns false, stores nothing). The
+--     browser enforces the same rule (it remembers the answer and shows the
+--     outcome instead of the prompt); this makes it hold for every device,
+--     stale page or retry. A Mini keeps its original behaviour for now.
+--
+--   * The guess number came only from the browser, which could propose one
+--     already taken and have the submission silently dropped by the
+--     (game_session_id, guess_number) unique index. The function now takes
+--     the browser's number as a floor and uses the next free number, under
+--     a row lock, and marks the row server_numbered.
+--
+-- A retry of the SAME submission (same guessed_at, words and result — the
+-- browser captures guessed_at once, at Submit) is recognised and reported as
+-- saved without storing it twice, so network retries are safe.
 --
 -- Same signature and grants as 20260917000000; the session summary update
 -- (bonus_rainbow_attempted, found_rainbow, rainbow_source) is unchanged.
@@ -486,49 +494,58 @@ security definer
 set search_path = public
 as $$
 declare
-  _n integer;
+  _n        integer;
+  _format   text;
+  _answered boolean;
 begin
   if not public.session_capability_ok(_session_id, _device_id, _device_token) then
     return false;
   end if;
 
   -- Lock the session row: serializes concurrent prompt submissions for it.
-  perform 1
-     from public.game_sessions
-    where id = _session_id
-      and status in ('won', 'lost')
-      for update;
+  select coalesce(gs.format, 'full'),
+         coalesce(gs.bonus_rainbow_attempted, false) or coalesce(gs.found_rainbow, false)
+    into _format, _answered
+    from public.game_sessions gs
+   where gs.id = _session_id
+     and gs.status in ('won', 'lost')
+     for update;
   if not found then
     return false;
   end if;
 
-  if not (
-    _guessed_at is not null
-    and exists (
-      select 1
-        from public.guess_events g
-       where g.game_session_id = _session_id
-         and g.attempt_type = 'bonus_rainbow'
-         and g.guessed_at = _guessed_at
-         and g.words = _words
-         and g.correct is not distinct from _correct
-    )
-  ) then
-    select greatest(coalesce(_guess_number, 1), coalesce(max(g.guess_number), 0) + 1)
-      into _n
+  -- A retry of a submission that is already saved.
+  if _guessed_at is not null and exists (
+    select 1
       from public.guess_events g
-     where g.game_session_id = _session_id;
-
-    insert into public.guess_events (
-      game_session_id, guess_number, words, correct, group_name,
-      is_rainbow_attempt, attempt_type, guessed_at, active_time_seconds,
-      groups_solved, server_numbered
-    ) values (
-      _session_id, _n, _words, _correct, null,
-      true, 'bonus_rainbow', coalesce(_guessed_at, now()), _active_time_seconds,
-      _groups_solved, true
-    );
+     where g.game_session_id = _session_id
+       and g.attempt_type = 'bonus_rainbow'
+       and g.guessed_at = _guessed_at
+       and g.words = _words
+       and g.correct is not distinct from _correct
+  ) then
+    return true;
   end if;
+
+  -- One answer per Full game.
+  if _format = 'full' and _answered then
+    return false;
+  end if;
+
+  select greatest(coalesce(_guess_number, 1), coalesce(max(g.guess_number), 0) + 1)
+    into _n
+    from public.guess_events g
+   where g.game_session_id = _session_id;
+
+  insert into public.guess_events (
+    game_session_id, guess_number, words, correct, group_name,
+    is_rainbow_attempt, attempt_type, guessed_at, active_time_seconds,
+    groups_solved, server_numbered
+  ) values (
+    _session_id, _n, _words, _correct, null,
+    true, 'bonus_rainbow', coalesce(_guessed_at, now()), _active_time_seconds,
+    _groups_solved, true
+  );
 
   update public.game_sessions
      set bonus_rainbow_attempted = true,
@@ -536,12 +553,12 @@ begin
          rainbow_source = case when _correct then 'post_game' else rainbow_source end,
          rainbow_solve_index = case when _correct then 4::smallint else rainbow_solve_index end
    where id = _session_id
-     and status in ('won', 'lost')
      and not coalesce(found_rainbow, false);
 
   return true;
 end;
 $$;
+
 
 revoke all on function public.record_bonus_rainbow(uuid, text, text, integer, jsonb, boolean, timestamptz, integer, smallint) from public;
 grant execute on function public.record_bonus_rainbow(uuid, text, text, integer, jsonb, boolean, timestamptz, integer, smallint) to anon, authenticated, service_role;

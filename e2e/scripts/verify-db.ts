@@ -360,34 +360,40 @@ const CHECKS: Check[] = [
       r = await luck(a);
       expect(r.same_path === 2, `and a is back to 2, got ${r.same_path}`);
 
-      // A wrong attempt then a right one. h's right attempt proposes the
-      // wrong one's guess number again — what a refresh between attempts
-      // produces, since the page forgets a wrong try. It must still be kept,
-      // so h ends up on the same path as j, who never refreshed.
+      // One prompt answer per Full game. h answers wrong, sees the Rainbow
+      // revealed, then (a refresh, another device) enters the revealed right
+      // answer — proposing the same guess number again, as a reloaded page
+      // does. It is refused: no second row, and no Rainbow found.
       const wrongRainbow = [Y[1], G[1], B[1], R[1]];
       const h = await play([Y, G, B, R]);
       await bonus(h, h.guesses + 1, wrongRainbow, false);
       await bonus(h, h.guesses + 1, rainbowWords, true);
-      expect((await bonusCount(h)) === 2, `a try after a refresh must be kept, found ${await bonusCount(h)} prompt rows`);
+      expect((await bonusCount(h)) === 1, `a second answer must be refused, found ${await bonusCount(h)} prompt rows`);
+      const hRow = await db.query<{ found: boolean; source: string | null; attempted: boolean }>(
+        "select found_rainbow as found, rainbow_source as source, bonus_rainbow_attempted as attempted from public.game_sessions where id = $1",
+        [h.sessionId]
+      );
+      expect(
+        hRow.rows[0].found === false && hRow.rows[0].source === null && hRow.rows[0].attempted === true,
+        `re-entering the revealed answer must earn nothing: ${JSON.stringify(hRow.rows[0])}`
+      );
       const j = await play([Y, G, B, R]);
       await bonus(j, j.guesses + 1, wrongRainbow, false);
       await bonus(j, j.guesses + 2, rainbowWords, true);
       r = await luck(h);
-      expect(r.same_path === 2, `h and j should share a path, same_path = ${r.same_path}`);
+      expect(r.same_path === 2, `h and j both have exactly one wrong answer, same_path = ${r.same_path}`);
 
-      // Two wrong tries around a refresh (k) is a different path from one
-      // wrong try (l) — the case the old numbering merged.
+      // A different second wrong answer is refused too, so k's path is the
+      // same one-wrong-answer path as h, j and l.
       const otherWrong = [Y[2], G[2], B[2], R[2]];
       const k = await play([Y, G, B, R]);
       await bonus(k, k.guesses + 1, wrongRainbow, false);
       await bonus(k, k.guesses + 1, otherWrong, false);
       const l = await play([Y, G, B, R]);
       await bonus(l, l.guesses + 1, wrongRainbow, false);
-      expect((await bonusCount(k)) === 2, `k's second wrong try must be kept, found ${await bonusCount(k)}`);
-      r = await luck(k);
-      expect(r.same_path === 1, `two wrong tries must not match one: same_path(k) = ${r.same_path}`);
+      expect((await bonusCount(k)) === 1, `k's second answer must be refused, found ${await bonusCount(k)}`);
       r = await luck(l);
-      expect(r.same_path === 1, `one wrong try must not match two: same_path(l) = ${r.same_path}`);
+      expect(r.same_path === 4, `h, j, k and l share one path, same_path(l) = ${r.same_path}`);
 
       // A repeated save of the SAME submission (a network retry) is stored once.
       const retryAt = "2026-06-12T13:00:00.000Z";
@@ -396,12 +402,38 @@ const CHECKS: Check[] = [
       await bonus(m, m.guesses + 1, wrongRainbow, false, retryAt);
       expect((await bonusCount(m)) === 1, `a retried save must not duplicate, found ${await bonusCount(m)}`);
       r = await luck(m);
-      expect(r.same_path === 2, `m (one wrong try) matches l, same_path = ${r.same_path}`);
+      expect(r.same_path === 5, `m (one wrong answer) joins h, j, k and l, same_path = ${r.same_path}`);
+
+      // A Rainbow found during play leaves nothing to answer afterwards.
+      const n = await play([Y, G, rainbowWords, B, R]);
+      await db.query("update public.game_sessions set found_rainbow = true, rainbow_source = 'in_game', rainbow_solve_index = 2 where id = $1", [n.sessionId]);
+      await bonus(n, n.guesses + 1, rainbowWords, true);
+      expect((await bonusCount(n)) === 0, `an in-game find must refuse a prompt answer, found ${await bonusCount(n)}`);
+
+      // Mini keeps its original prompt behaviour: a second answer is kept.
+      const miniRow = await db.query<{ id: string }>(
+        "select id from public.puzzles where date = $1 and format = 'mini'",
+        [MINI_RAINBOW.date]
+      );
+      const miniId = await newIdentity();
+      const miniSession = await db.query<{ id: string }>(
+        "select public.create_game_session($1, $2, $3, 'daily_home') as id",
+        [miniRow.rows[0].id, miniId.device_id, miniId.device_token]
+      );
+      await db.query(
+        `select public.finalize_game_session($1, $2, $3, true, 0, 30, false, null, '["green","blue","red"]'::jsonb, false, '', true, null)`,
+        [miniSession.rows[0].id, miniId.device_id, miniId.device_token]
+      );
+      const miniPlayed: Played = { ...miniId, sessionId: miniSession.rows[0].id, official: true, guesses: 3 };
+      await bonus(miniPlayed, 4, ["X1", "X2", "X3"], false);
+      await bonus(miniPlayed, 4, ["X4", "X5", "X6"], false);
+      expect((await bonusCount(miniPlayed)) === 2, `a Mini still keeps a second answer, found ${await bonusCount(miniPlayed)}`);
       const numbered = await db.query<{ ok: boolean }>(
         "select bool_and(coalesce(server_numbered, false)) as ok from public.guess_events where attempt_type = 'bonus_rainbow'"
       );
       expect(numbered.rows[0].ok === true, "every prompt row saved by the function must be marked server_numbered");
-      expect(r.eligible_players === 11, `eligible_players = ${r.eligible_players}, expected 11`);
+      r = await luck(a);
+      expect(r.eligible_players === 12, `eligible_players = ${r.eligible_players}, expected 12`);
 
       // ---- sessions that must never count ---------------------------------
       const admin = await db.query<{ user_id: string }>(
@@ -464,7 +496,7 @@ const CHECKS: Check[] = [
       }
       r = await luck(a);
       expect(
-        r.eligible_players === 11,
+        r.eligible_players === 12,
         `admin, legacy, 'unknown', gapped, old-style prompt and three-solved "loss" sessions must not count: ${r.eligible_players}`
       );
       await actAs(db, adminId);
@@ -496,14 +528,14 @@ const CHECKS: Check[] = [
       await db.query("delete from public.luck_score_ceilings where effective_from >= $1::date", [FULL_CLASSIC.date]);
 
       // ---- 500 eligible players --------------------------------------------
-      // 489 more perfect Yellow→Red solves, written straight into the tables
+      // 488 more perfect Yellow→Red solves, written straight into the tables
       // (this is an in-process throwaway database) to reach exactly 500.
       await db.query(
         `with s as (
            insert into public.game_sessions
              (puzzle_id, device_id, status, won, mistakes, completed_at, is_official, format)
            select $1, 'bulk-' || n, 'won', true, 0, now(), true, 'full'
-             from generate_series(1, 489) as n
+             from generate_series(1, 488) as n
            returning id
          )
          insert into public.guess_events (game_session_id, guess_number, words, correct, attempt_type)
@@ -514,7 +546,7 @@ const CHECKS: Check[] = [
       );
       r = await luck(a);
       expect(r.eligible_players === 500, `eligible_players = ${r.eligible_players}, expected 500`);
-      expect(r.same_path === 491, `same_path = ${r.same_path}, expected 491 (a, b and the 489)`);
+      expect(r.same_path === 490, `same_path = ${r.same_path}, expected 490 (a, b and the 488)`);
       r = await luck(f);
       expect(r.same_path === 1, `f's Rainbow path is still unique among 500, got ${r.same_path}`);
     },

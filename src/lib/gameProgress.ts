@@ -137,53 +137,49 @@ export function loadProgress(puzzleId: string): SavedProgress | null {
 export function clearProgress(puzzleId: string) {
   try {
     localStorage.removeItem(progressKey(puzzleId));
-    localStorage.removeItem(promptTriesKey(puzzleId));
+    localStorage.removeItem(promptAnswerKey(puzzleId));
   } catch {}
 }
 
-// ── Post-game "Spot the Rainbow" tries ──
-// Wrong answers submitted to the post-game prompt, remembered so a refresh
-// cannot let the player submit the same words again (the board's repeated-
-// guess rule, applied to the prompt). Kept under their OWN key rather than
-// in SavedProgress: every progress write replaces the whole blob, and the
-// prompt's tries are not part of the board state those writes are built
-// from. clearProgress removes both, so a new run starts with none.
+// ── The post-game "Spot the Rainbow" answer ──
+// A Full game gets ONE answer to the post-game prompt. The answer is
+// remembered here the moment Submit is pressed, so a refresh or a later
+// visit shows the outcome (the found Rainbow, or the revealed one after a
+// wrong answer) instead of offering the prompt again. Kept under its OWN key
+// rather than in SavedProgress: every progress write replaces that whole
+// record, and the prompt answer is not part of the board state those writes
+// are built from. clearProgress removes both, so a new run starts fresh.
 
-export function promptTriesKey(puzzleId: string) {
-  return `connections-prompt-tries-${puzzleId}`;
+export interface PromptAnswer {
+  correct: boolean;
+  words: string[];
+  /** When Submit was pressed (ISO 8601), the same stamp the save carries. */
+  guessedAt: string;
 }
 
-export function loadPromptTries(puzzleId: string): string[][] {
+export function promptAnswerKey(puzzleId: string) {
+  return `connections-prompt-answer-${puzzleId}`;
+}
+
+export function loadPromptAnswer(puzzleId: string): PromptAnswer | null {
   try {
-    const raw = localStorage.getItem(promptTriesKey(puzzleId));
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed)
-      ? parsed.filter((t): t is string[] => Array.isArray(t) && t.every((w) => typeof w === "string"))
-      : [];
+    const raw = localStorage.getItem(promptAnswerKey(puzzleId));
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Partial<PromptAnswer>;
+    if (typeof v.correct !== "boolean" || !Array.isArray(v.words) || typeof v.guessedAt !== "string") return null;
+    return { correct: v.correct, words: v.words.map(String), guessedAt: v.guessedAt };
   } catch {
-    return [];
+    return null;
   }
 }
 
-/** Remembers a wrong prompt answer and returns the updated list. */
-export function addPromptTry(puzzleId: string, words: readonly string[]): string[][] {
-  const tries = loadPromptTries(puzzleId);
-  if (!tries.some((t) => samePromptWords(t, words))) tries.push([...words]);
+export function savePromptAnswer(puzzleId: string, answer: PromptAnswer) {
   try {
-    localStorage.setItem(promptTriesKey(puzzleId), JSON.stringify(tries));
+    localStorage.setItem(promptAnswerKey(puzzleId), JSON.stringify(answer));
   } catch {
-    // Storage blocked: the returned list still guards the rest of this visit.
+    // Storage blocked: this visit still shows the outcome, and the database
+    // refuses a second answer for the game regardless.
   }
-  return tries;
-}
-
-/** The same words, ignoring order, case and stray spaces. */
-export function samePromptWords(a: readonly string[], b: readonly string[]): boolean {
-  if (a.length !== b.length) return false;
-  const norm = (ws: readonly string[]) => ws.map((w) => w.trim().toUpperCase()).sort();
-  const na = norm(a);
-  const nb = norm(b);
-  return na.every((w, i) => w === nb[i]);
 }
 
 /**

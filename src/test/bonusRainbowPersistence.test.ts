@@ -1,13 +1,14 @@
 /**
- * Every post-game "Spot the Rainbow" submission is kept.
+ * The database side of the post-game "Spot the Rainbow" answer.
  *
- * Submissions are part of a player's Luck path, so none may vanish. The
- * browser forgets a WRONG attempt when the page reloads (it has no share-grid
- * row), so after a refresh it proposes the same guess number again; the
- * database used to discard the second submission on that clash. Since
- * migration 20260928000000 the database numbers each submission itself and
- * stores a genuine retry of the SAME submission only once — the in-memory
- * fake mirrors that, and e2e/scripts/verify-db.ts pins it on real Postgres.
+ * A Full game gets ONE prompt answer, and that answer is always kept: the
+ * database numbers it itself (so it can never be silently dropped on a
+ * guess-number clash) and treats a retry of the SAME submission as already
+ * saved. Any later, different submission — from a stale page, another tab
+ * or device — is refused, so re-entering the revealed answer can never earn
+ * the Rainbow point. The in-memory fake mirrors migration 20260928000000,
+ * and e2e/scripts/verify-db.ts pins it on real Postgres. The board-side rule
+ * (the prompt is not offered again) is in promptOneAnswer.test.tsx.
  *
  * Runs the REAL useGame hook and lib/gameStats against the in-memory
  * Supabase fake, the same way durableSession.test.ts does.
@@ -147,42 +148,45 @@ async function winTheBoard() {
   return view;
 }
 
-describe("post-game Rainbow submissions all persist", () => {
-  it("keeps a wrong try, a second wrong try after a refresh, and the right answer after another refresh", async () => {
+describe("post-game Rainbow answers: one per Full game, always kept", () => {
+  it("keeps the first answer and refuses later ones, even the revealed right answer after a refresh", async () => {
     const first = await winTheBoard();
     await submitPrompt(first, ["y2", "g2", "b2", "r2"], false, 0);
     first.unmount();
 
-    // Refresh: the page has forgotten the wrong try, so it proposes the same
-    // number as before. The second wrong try must still be kept.
+    // A stale page or another device tries again after the refresh.
     const second = mount();
     await settle();
-    expect(second.result.current.nextGuessNumber(0)).toBe(5);
     await submitPrompt(second, ["y3", "g3", "b3", "r3"], false, 0);
-    second.unmount();
-
-    const third = mount();
-    await settle();
-    await submitPrompt(third, ["y1", "g1", "b1", "r1"], true, 0);
+    await submitPrompt(second, ["y1", "g1", "b1", "r1"], true, 0);
 
     const saved = bonusEvents();
-    expect(saved.map((g) => g.guess_number)).toEqual([5, 6, 7]);
-    expect(saved.map((g) => g.correct)).toEqual([false, false, true]);
-    expect(saved.map((g) => (g.words as string[])[0])).toEqual(["y2", "y3", "y1"]);
-    expect(saved.every((g) => g.server_numbered === true)).toBe(true);
+    expect(saved.map((g) => g.guess_number)).toEqual([5]);
+    expect(saved.map((g) => g.correct)).toEqual([false]);
+    expect(saved[0].server_numbered).toBe(true);
+    // The re-entered answer earned nothing.
+    expect(sessions()[0].found_rainbow).toBe(false);
+    expect(sessions()[0].rainbow_source).toBeNull();
+    expect(sessions()[0].bonus_rainbow_attempted).toBe(true);
+  });
+
+  it("keeps a right first answer", async () => {
+    const view = await winTheBoard();
+    await submitPrompt(view, ["y1", "g1", "b1", "r1"], true, 0);
+    expect(bonusEvents().map((g) => g.correct)).toEqual([true]);
     expect(sessions()[0].found_rainbow).toBe(true);
     expect(sessions()[0].rainbow_source).toBe("post_game");
   });
 
-  it("stores a repeated save of the SAME submission only once", async () => {
+  it("stores a repeated save of the SAME submission only once, and refuses a later one", async () => {
     const view = await winTheBoard();
     const at = new Date().toISOString();
     await submitPrompt(view, ["y2", "g2", "b2", "r2"], false, 0, at);
     await submitPrompt(view, ["y2", "g2", "b2", "r2"], false, 0, at);
     expect(bonusEvents()).toHaveLength(1);
-    // A different submission a moment later is a new try, and is kept.
+    // The same words pressed again later is a second answer: refused.
     await submitPrompt(view, ["y2", "g2", "b2", "r2"], false, 1, new Date(Date.parse(at) + 5000).toISOString());
-    expect(bonusEvents()).toHaveLength(2);
+    expect(bonusEvents()).toHaveLength(1);
   });
 
   it("retries a save that failed on a brief network error", async () => {

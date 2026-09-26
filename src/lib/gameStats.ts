@@ -200,6 +200,15 @@ export async function recordBonusRainbowAttempt(params: {
   activeTimeSeconds: number;
   groupsSolved: number;
 }): Promise<void> {
+  // KNOWN GAP, deliberately not fixed here: this write is sent from memory,
+  // ~0.4s after Submit (GameBoard's reveal delay). If the page is closed or
+  // refreshed before it reaches the server — or stays offline through the
+  // retries below — the answer is never saved and nothing records that it
+  // was lost; the board still remembers it locally (savePromptAnswer). The
+  // smallest reliable fix: send at Submit, keep unconfirmed answers in the
+  // browser, and re-send them on the next page load (the server already
+  // stores a repeat of the same submission once).
+  //
   // Every prompt submission is part of the player's Luck path, so a write
   // lost to a brief network error is retried. Safe to repeat: the function
   // recognises the same submission (same guessedAt, words and result) and

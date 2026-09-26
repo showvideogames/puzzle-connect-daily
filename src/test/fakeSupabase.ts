@@ -1507,8 +1507,10 @@ export class FakeSupabase {
         // The prompt only exists after the board is finished.
         if (!row) return { data: false, error: null };
 
-        // Mirrors 20260928000000: the SAME submission (same guessed_at, words
-        // and result) is stored once, and any other one is always stored,
+        // Mirrors 20260928000000: a retry of the SAME submission (same
+        // guessed_at, words and result) reports success without storing it
+        // again; a Full game gets one answer, so any other submission after
+        // an answer (or an in-game find) is refused; otherwise it is stored
         // at the caller's number or the next free one, whichever is higher.
         const own = this.tables.guess_events.filter((g) => g.game_session_id === args._session_id);
         const repeat =
@@ -1520,7 +1522,11 @@ export class FakeSupabase {
               JSON.stringify(g.words) === JSON.stringify(args._words) &&
               g.correct === args._correct
           );
-        if (!repeat) {
+        if (repeat) return { data: true, error: null };
+        if ((row.format ?? "full") === "full" && (row.bonus_rainbow_attempted || row.found_rainbow)) {
+          return { data: false, error: null };
+        }
+        {
           const nextFree = own.reduce((m, g) => Math.max(m, g.guess_number as number), 0) + 1;
           this.tables.guess_events.push({
             id: this._newId(),

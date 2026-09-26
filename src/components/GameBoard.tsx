@@ -23,7 +23,7 @@ import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId, getDeviceToken, recordBonusRainbowAttempt } from "@/lib/gameStats";
-import { addPromptTry, loadPromptTries } from "@/lib/gameProgress";
+import { loadPromptAnswer, savePromptAnswer } from "@/lib/gameProgress";
 import type { EntryContext } from "@/lib/entryContext";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { trackEvent } from "@/lib/analytics";
@@ -319,14 +319,37 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     boardReady: imagesReady,
   });
 
-  // Wrong answers already given to the post-game Rainbow prompt, remembered
-  // across a refresh so the same words cannot be submitted again (see
-  // SpotTheRainbowModal's previousTries). Reloaded if this board is reused
-  // for a different game.
-  const [promptTries, setPromptTries] = useState<string[][]>(() => loadPromptTries(storageId));
-  useEffect(() => {
-    setPromptTries(loadPromptTries(storageId));
-  }, [storageId]);
+  // ── One post-game Rainbow answer per Full game ──
+  // The answer is remembered at Submit (savePromptAnswer) and restored here
+  // before the first paint, so a refresh or a later visit shows the outcome
+  // instead of the prompt: a wrong answer shows the revealed Rainbow, exactly
+  // as it did in the visit it was given, and a right one shows the find. The
+  // database refuses a second answer too (record_bonus_rainbow, migration
+  // 20260928000000), so a stale page cannot add one. Mini keeps its own,
+  // original prompt behaviour for now.
+  const oneAnswerPrompt = format.id === "full";
+  const promptAnsweredRef = useRef(false);
+  // A wrong answer restored from storage shows its Rainbow straight away,
+  // without replaying the reveal animation it already had.
+  const restoredWrongAnswerRef = useRef(false);
+  const promptRestoredForRef = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (promptRestoredForRef.current === storageId) return;
+    promptRestoredForRef.current = storageId;
+    promptAnsweredRef.current = false;
+    if (!oneAnswerPrompt) return;
+    const answer = loadPromptAnswer(storageId);
+    if (!answer) return;
+    promptAnsweredRef.current = true;
+    if (answer.correct) {
+      // Refreshed in the moment between Submit and the find reaching the
+      // board: finish recording it, once, with its original time.
+      if (!state.gotRainbow && rainbowHerring) markRainbowFound(rainbowHerring, answer.guessedAt);
+    } else if (bonusRainbowCorrect === null) {
+      restoredWrongAnswerRef.current = true;
+      setBonusRainbowCorrect(false);
+    }
+  }, [storageId, oneAnswerPrompt, state.gotRainbow, rainbowHerring, markRainbowFound, bonusRainbowCorrect]);
 
   // Mini's tile grid, solved bars and Rainbow reveal bar are capped to a
   // compact, near-square-tile width regardless of useWideBoard — a Mini is
@@ -752,6 +775,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       // markRainbowFound sets it synchronously, before this delayed flag.
       trackEvent("rainbow_found", { source: "bonus_modal" });
     } else if (bonusRainbowCorrect === false) {
+      if (restoredWrongAnswerRef.current) {
+        // Restored from an earlier visit: already revealed then.
+        restoredWrongAnswerRef.current = false;
+        setRainbowVisible(true);
+        return;
+      }
       setRainbowVisible(false);
       requestAnimationFrame(() => requestAnimationFrame(() => setRainbowVisible(true)));
     }
@@ -771,11 +800,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     // component's own 400ms shake/reveal delay. That delay is presentation
     // only; the bonus attempt itself happened now.
     const guessedAt = new Date().toISOString();
-    // Remembered now, at Submit, not after the reveal delay below: a refresh
-    // during that delay must still count these words as already tried.
-    // Only WRONG answers — a right one ends the prompt for good.
-    if (!correct) setPromptTries(addPromptTry(storageId, words));
     setShowSpotModal(false);
+    // One answer per Full game. Remembered now, at Submit, not after the
+    // reveal delay below, so a refresh during that delay still counts it —
+    // and a second press before the result appears is ignored.
+    if (oneAnswerPrompt) {
+      if (promptAnsweredRef.current) return;
+      promptAnsweredRef.current = true;
+      savePromptAnswer(storageId, { correct, words: [...words], guessedAt });
+    }
     setSpotShaking(true);
     setTimeout(() => {
       setSpotShaking(false);
@@ -851,7 +884,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
       setTimeout(() => setBonusRainbowCorrect(correct), correct ? 600 : 0);
     }, 400);
-  }, [rainbowHerring, markRainbowFound, isOfficialAttemptRef, sessionIdRef, activeSecondsRef, nextGuessNumber, state.solvedGroups.length, betaMode, storageId]);
+  }, [rainbowHerring, markRainbowFound, isOfficialAttemptRef, sessionIdRef, activeSecondsRef, nextGuessNumber, state.solvedGroups.length, betaMode, storageId, oneAnswerPrompt]);
 
   const hintItems = useCallback((): { color?: string; squareEmoji?: string; emoji: string }[] => {
     const sorted = [...puzzle.groups].sort((a, b) => a.difficulty - b.difficulty);
@@ -1202,7 +1235,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         {showEndState && !lockedByOfficialResult && !state.gotRainbow && rainbowHerring && (
           bonusRainbowCorrect === null ? (
             <button
-              onClick={() => setShowSpotModal(true)}
+              onClick={() => {
+                if (!promptAnsweredRef.current) setShowSpotModal(true);
+              }}
               className="w-full rounded-lg py-3 px-4 text-center text-white
                 hover:opacity-90 transition-opacity active:scale-[0.99]
                 animate-rainbow-breathe animate-rainbow-shimmer"
@@ -1778,7 +1813,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           open={showSpotModal}
           puzzle={puzzle}
           onResult={handleSpotResult}
-          previousTries={promptTries}
           onClose={() => setShowSpotModal(false)}
         />
       )}
