@@ -132,13 +132,19 @@ export function LuckyBot({ puzzle, state }: LuckyBotProps) {
           <div className="min-w-0 flex-1">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lucky Bot</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold tabular-nums" data-testid="skill-score">{score}</span>
+              {/* Green to match Lucky Bot, not the puzzle's own pastel
+                  --group-2 green: that token is a light tile FILL meant to
+                  sit under dark ink, and reads at only ~1.8:1 contrast as
+                  text on this card's light background — a standard Tailwind
+                  green (with a lighter dark-mode shade) stays legible in
+                  both themes instead. */}
+              <span className="text-2xl font-bold tabular-nums text-green-700 dark:text-green-400" data-testid="skill-score">{score}</span>
               <span className="text-xs text-muted-foreground">/ {MAX_SKILL_SCORE} skill score</span>
             </div>
             <p className="text-xs text-muted-foreground" data-testid="skill-standing">{standingLine}</p>
           </div>
         </div>
-        <div className="mt-3 flex justify-end">
+        <div className="mt-3 flex justify-center">
           <button
             type="button"
             onClick={() => {
