@@ -460,7 +460,8 @@ comment on function public.get_luck_report(uuid, text, text) is
 --     different submission is refused (returns false, stores nothing). The
 --     browser enforces the same rule (it remembers the answer and shows the
 --     outcome instead of the prompt); this makes it hold for every device,
---     stale page or retry. A Mini keeps its original behaviour for now.
+--     stale page or retry. A Mini keeps its original behaviour for now,
+--     including how it is saved (the branch below runs the old body).
 --
 --   * The guess number came only from the browser, which could propose one
 --     already taken and have the submission silently dropped by the
@@ -512,6 +513,33 @@ begin
      for update;
   if not found then
     return false;
+  end if;
+
+  -- Mini: exactly the 20260917000000 behaviour, unchanged (the browser's
+  -- guess number, a clash silently ignored, no server_numbered mark, no
+  -- one-answer rule) until Mini's own rules are designed.
+  if _format = 'mini' then
+    insert into public.guess_events (
+      game_session_id, guess_number, words, correct, group_name,
+      is_rainbow_attempt, attempt_type, guessed_at, active_time_seconds,
+      groups_solved
+    ) values (
+      _session_id, _guess_number, _words, _correct, null,
+      true, 'bonus_rainbow', coalesce(_guessed_at, now()), _active_time_seconds,
+      _groups_solved
+    )
+    on conflict (game_session_id, guess_number) do nothing;
+
+    update public.game_sessions
+       set bonus_rainbow_attempted = true,
+           found_rainbow = case when _correct then true else found_rainbow end,
+           rainbow_source = case when _correct then 'post_game' else rainbow_source end,
+           rainbow_solve_index = case when _correct then 4::smallint else rainbow_solve_index end
+     where id = _session_id
+       and status in ('won', 'lost')
+       and not coalesce(found_rainbow, false);
+
+    return true;
   end if;
 
   -- A retry of a submission that is already saved.

@@ -264,6 +264,30 @@ describe("LuckyBot — Mini (unchanged)", () => {
     expect(within(dialog).queryByTestId("report-luck")).toBeNull();
   });
 
+  // The release boundary: once the migrations are applied, get_puzzle_report
+  // answers a Mini with null (no error). The Mini card must look exactly as
+  // it does on the live site today, where the function does not exist yet —
+  // no comparison line, no crowd sections, and no Luck request.
+  it("shows exactly today's live card when the database answers a Mini with no report", async () => {
+    reportAnswer = { data: null, error: null };
+    render(<LuckyBot puzzle={miniPuzzle} state={miniState()} />);
+    await settle();
+    expect(screen.getByTestId("skill-score").textContent).toBe("80");
+    expect(screen.getByTestId("lucky-bot-card").textContent).toContain("/ 99 skill score");
+    expect(screen.getByTestId("skill-standing").textContent).toBe("Comparison isn't available\nright now.");
+    expect(screen.queryByTestId("luck-row")).toBeNull();
+    expect(luckCalls()).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Full Report" }));
+    await settle(0);
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Comparison isn't available right now.")).toBeTruthy();
+    expect(within(dialog).queryByTestId("wrong-guess-list")).toBeNull();
+    expect(within(dialog).queryByText(/First category solved/)).toBeNull();
+    expect(within(dialog).queryByText(/The Rainbow/)).toBeNull();
+    expect(within(dialog).queryByTestId("report-luck")).toBeNull();
+  });
+
   it("survives a missing report without claiming the player is first", async () => {
     reportAnswer = { data: null, error: { message: "boom" } };
     render(<LuckyBot puzzle={miniPuzzle} state={miniState()} />);

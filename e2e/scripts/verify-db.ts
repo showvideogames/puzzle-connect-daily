@@ -410,7 +410,11 @@ const CHECKS: Check[] = [
       await bonus(n, n.guesses + 1, rainbowWords, true);
       expect((await bonusCount(n)) === 0, `an in-game find must refuse a prompt answer, found ${await bonusCount(n)}`);
 
-      // Mini keeps its original prompt behaviour: a second answer is kept.
+      // ---- the Mini boundary: nothing in these migrations reaches a Mini ----
+      // A Mini's prompt is saved exactly as before (the browser's guess
+      // number, a clash ignored, no server_numbered, no one-answer rule), it
+      // gets no crowd report and no Luck — just as on the live site, where
+      // neither report function exists yet.
       const miniRow = await db.query<{ id: string }>(
         "select id from public.puzzles where date = $1 and format = 'mini'",
         [MINI_RAINBOW.date]
@@ -427,11 +431,31 @@ const CHECKS: Check[] = [
       const miniPlayed: Played = { ...miniId, sessionId: miniSession.rows[0].id, official: true, guesses: 3 };
       await bonus(miniPlayed, 4, ["X1", "X2", "X3"], false);
       await bonus(miniPlayed, 4, ["X4", "X5", "X6"], false);
-      expect((await bonusCount(miniPlayed)) === 2, `a Mini still keeps a second answer, found ${await bonusCount(miniPlayed)}`);
-      const numbered = await db.query<{ ok: boolean }>(
-        "select bool_and(coalesce(server_numbered, false)) as ok from public.guess_events where attempt_type = 'bonus_rainbow'"
+      await bonus(miniPlayed, 5, ["X7", "X8", "X9"], false);
+      const miniRows = await db.query<{ n: number; numbered: number }>(
+        `select count(*)::int as n, count(*) filter (where server_numbered)::int as numbered
+           from public.guess_events where game_session_id = $1 and attempt_type = 'bonus_rainbow'`,
+        [miniPlayed.sessionId]
       );
-      expect(numbered.rows[0].ok === true, "every prompt row saved by the function must be marked server_numbered");
+      expect(
+        miniRows.rows[0].n === 2 && miniRows.rows[0].numbered === 0,
+        `a Mini prompt must save as before (clash ignored, later number kept, unmarked): ${JSON.stringify(miniRows.rows[0])}`
+      );
+      const miniReport = await db.query<{ report: unknown }>("select public.get_puzzle_report($1) as report", [miniRow.rows[0].id]);
+      expect(miniReport.rows[0].report === null, `a Mini must get no crowd report, got ${JSON.stringify(miniReport.rows[0].report)}`);
+      const miniLuck = await luck(miniId, miniRow.rows[0].id);
+      expect(miniLuck.status === "unsupported", `a Mini must get no Luck, got ${miniLuck.status}`);
+      const fullReport = await db.query<{ report: { total_players: number } | null }>(
+        "select public.get_puzzle_report($1) as report",
+        [puzzleId]
+      );
+      expect((fullReport.rows[0].report?.total_players ?? 0) > 0, "the regular game must still get its crowd report");
+      const numbered = await db.query<{ ok: boolean }>(
+        `select bool_and(coalesce(g.server_numbered, false)) as ok
+           from public.guess_events g join public.game_sessions s on s.id = g.game_session_id
+          where g.attempt_type = 'bonus_rainbow' and s.format = 'full'`
+      );
+      expect(numbered.rows[0].ok === true, "every Full prompt row saved by the function must be marked server_numbered");
       r = await luck(a);
       expect(r.eligible_players === 12, `eligible_players = ${r.eligible_players}, expected 12`);
 

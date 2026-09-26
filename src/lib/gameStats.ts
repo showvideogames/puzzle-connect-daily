@@ -199,7 +199,9 @@ export async function recordBonusRainbowAttempt(params: {
   guessedAt: string;
   activeTimeSeconds: number;
   groupsSolved: number;
-}): Promise<"saved" | "refused" | "failed"> {
+}, options: { retry?: boolean } = {}): Promise<"saved" | "refused" | "failed"> {
+  // retry: false sends once, as the Mini always has; see its call in GameBoard.
+  const attempts = options.retry === false ? 1 : BONUS_WRITE_RETRY_DELAYS_MS.length + 1;
   // A Full game's answer is sent at Submit and kept in the browser until
   // this returns "saved" or "refused"; a "failed" one is sent again on the
   // next visit (see GameBoard's deliverPromptAnswer). An answer is still
@@ -212,7 +214,7 @@ export async function recordBonusRainbowAttempt(params: {
   // stores it once, and it picks the saved guess number itself — guessNumber
   // is only a floor — so a try after a refresh can no longer collide with an
   // earlier one and be dropped (migration 20260928000000).
-  for (let attempt = 0; attempt < BONUS_WRITE_RETRY_DELAYS_MS.length + 1; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, BONUS_WRITE_RETRY_DELAYS_MS[attempt - 1]));
     try {
       const { deviceId, deviceToken } = await getIdentity();

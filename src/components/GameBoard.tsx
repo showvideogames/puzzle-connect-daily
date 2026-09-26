@@ -345,6 +345,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // 20260928000000), so a stale page cannot add one. Mini keeps its own,
   // original prompt behaviour for now.
   const oneAnswerPrompt = format.id === "full";
+  // The locked "already finished" board (see lockedByOfficialResult) is the
+  // regular game's; a Mini keeps its live behaviour for now.
+  const lockedFullResult = lockedByOfficialResult && oneAnswerPrompt;
   const promptAnsweredRef = useRef(false);
   // A wrong answer restored from storage shows its Rainbow straight away,
   // without replaying the reveal animation it already had.
@@ -953,7 +956,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           guessedAt,
           activeTimeSeconds,
           groupsSolved: state.solvedGroups.length,
-        });
+        }, { retry: false });
       }
 
       setTimeout(() => setBonusRainbowCorrect(correct), correct ? 600 : 0);
@@ -1306,7 +1309,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         {/* Not on a board locked by a result this browser holds no copy of
             (lockedByOfficialResult): the prompt would score a Rainbow onto an
             empty local game whose outcome is unknown here. */}
-        {showEndState && !lockedByOfficialResult && !state.gotRainbow && rainbowHerring && (
+        {showEndState && !lockedFullResult && !state.gotRainbow && rainbowHerring && (
           bonusRainbowCorrect === null ? (
             // Hidden for the moment it takes to confirm with the server that
             // a reopened game has not already used its prompt.
@@ -1784,7 +1787,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           {/* A board locked by an official result this browser has no copy
               of is finished, but its outcome is unknown here — isWon is only
               its default false. Say it is done without calling it a loss. */}
-          {lockedByOfficialResult ? (
+          {lockedFullResult ? (
             <p className="text-sm text-muted-foreground" data-testid="already-finished">
               You've already finished this puzzle. Come back tomorrow!
             </p>
@@ -1857,7 +1860,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   puzzles only, for the same reason as Global Stats above —
                   a beta or custom puzzle has no official sessions to compare
                   against. */}
-              {!betaMode && !customMode && !lockedByOfficialResult && <LuckyBot puzzle={puzzle} state={state} rainbowPromptResult={bonusRainbowCorrect} />}
+              {!betaMode && !customMode && !lockedFullResult && <LuckyBot puzzle={puzzle} state={state} rainbowPromptResult={bonusRainbowCorrect} />}
             </div>
           )}
         </div>
