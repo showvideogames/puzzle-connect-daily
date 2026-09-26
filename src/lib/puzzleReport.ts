@@ -1,5 +1,5 @@
 /**
- * Rainbow Bot report — the client side of public.get_puzzle_report.
+ * Lucky Bot report — the client side of public.get_puzzle_report.
  *
  * The function returns aggregates only (counts and histograms), so this
  * module's job is to fetch that JSON and turn it into sentences: what the

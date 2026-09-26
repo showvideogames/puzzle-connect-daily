@@ -1,5 +1,5 @@
 /**
- * The Rainbow Bot card and its full report, rendered against a canned
+ * The Lucky Bot card and its full report, rendered against a canned
  * get_puzzle_report answer.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -11,7 +11,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 vi.mock("@/lib/analytics", () => ({ trackEvent: () => {} }));
 
-import { RainbowBot } from "@/components/RainbowBot";
+import { LuckyBot } from "@/components/LuckyBot";
 import type { GameState, Puzzle } from "@/lib/types";
 
 const puzzle: Puzzle = {
@@ -64,15 +64,16 @@ beforeEach(() => {
   rpc.mockResolvedValue({ data: REPORT, error: null });
 });
 
-describe("RainbowBot", () => {
+describe("LuckyBot", () => {
   it("renders nothing until the game is complete", () => {
-    render(<RainbowBot puzzle={puzzle} state={finished({ isComplete: false })} />);
-    expect(screen.queryByTestId("rainbow-bot-card")).toBeNull();
+    render(<LuckyBot puzzle={puzzle} state={finished({ isComplete: false })} />);
+    expect(screen.queryByTestId("lucky-bot-card")).toBeNull();
     expect(rpc).not.toHaveBeenCalled();
   });
 
   it("shows the player's score and standing once the report arrives", async () => {
-    render(<RainbowBot puzzle={puzzle} state={finished()} />);
+    render(<LuckyBot puzzle={puzzle} state={finished()} />);
+    expect(screen.getByTestId("lucky-bot-card").textContent).toContain("Lucky Bot");
     // One mistake (80) + Rainbow mid-game (+4).
     expect(screen.getByTestId("skill-score").textContent).toBe("84");
     expect(screen.getByTestId("skill-standing").textContent).toMatch(/Comparing/);
@@ -89,13 +90,13 @@ describe("RainbowBot", () => {
     // player's own just-finalized session — a real, honest count, not a
     // guess about being first.
     rpc.mockResolvedValue({ data: { ...REPORT, total_players: 1, score_counts: { "84": 1 }, common_wrong_guesses: [] }, error: null });
-    render(<RainbowBot puzzle={puzzle} state={finished()} />);
+    render(<LuckyBot puzzle={puzzle} state={finished()} />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
     expect(screen.getByTestId("skill-standing").textContent).toBe("No comparison yet — check back once others have played.");
 
-    fireEvent.click(screen.getByRole("button", { name: "Full report" }));
+    fireEvent.click(screen.getByRole("button", { name: "Full Report" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -104,13 +105,13 @@ describe("RainbowBot", () => {
 
   it("says nobody else has finished when the report genuinely counts zero sessions", async () => {
     rpc.mockResolvedValue({ data: { ...REPORT, total_players: 0, wins: 0, perfect: 0, players_with_wrong_guess: 0, first_solved: {}, score_counts: {}, common_wrong_guesses: [] }, error: null });
-    render(<RainbowBot puzzle={puzzle} state={finished()} />);
+    render(<LuckyBot puzzle={puzzle} state={finished()} />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
     expect(screen.getByTestId("skill-standing").textContent).toBe("No comparison yet — check back once others have played.");
 
-    fireEvent.click(screen.getByRole("button", { name: "Full report" }));
+    fireEvent.click(screen.getByRole("button", { name: "Full Report" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -118,15 +119,16 @@ describe("RainbowBot", () => {
   });
 
   it("opens the full report with the score breakdown and the common wrong guesses", async () => {
-    render(<RainbowBot puzzle={puzzle} state={finished()} />);
+    render(<LuckyBot puzzle={puzzle} state={finished()} />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
-    fireEvent.click(screen.getByRole("button", { name: "Full report" }));
+    fireEvent.click(screen.getByRole("button", { name: "Full Report" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
     const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Lucky Bot")).toBeTruthy();
     expect(within(dialog).getByText("Solved with 1 mistake")).toBeTruthy();
     expect(within(dialog).getByText("Spotted the Rainbow mid-game")).toBeTruthy();
     expect(within(dialog).getByText(/5 players finished/)).toBeTruthy();
@@ -148,15 +150,17 @@ describe("RainbowBot", () => {
     // errors and report stays null. The player is very unlikely to
     // actually be first, so the copy must not say so.
     rpc.mockResolvedValue({ data: null, error: { message: "boom" } });
-    render(<RainbowBot puzzle={puzzle} state={finished()} />);
+    render(<LuckyBot puzzle={puzzle} state={finished()} />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
     expect(screen.getByTestId("skill-score").textContent).toBe("84");
-    expect(screen.getByTestId("skill-standing").textContent).toBe("Comparison isn't available right now.");
+    // The literal newline is deliberate — see the comment on standingLine
+    // in LuckyBot.tsx — not left to the browser's own word-wrap.
+    expect(screen.getByTestId("skill-standing").textContent).toBe("Comparison isn't available\nright now.");
     expect(screen.getByTestId("skill-standing").textContent).not.toMatch(/first/i);
 
-    fireEvent.click(screen.getByRole("button", { name: "Full report" }));
+    fireEvent.click(screen.getByRole("button", { name: "Full Report" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });

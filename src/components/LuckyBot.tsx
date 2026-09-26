@@ -1,5 +1,5 @@
 /**
- * Rainbow Bot — the post-game report card and its full-report modal.
+ * Lucky Bot — the post-game report card and its full-report modal.
  *
  * The card sits under the Share row on the result screen and answers the
  * question players actually have after finishing: "how well did I do, and
@@ -16,7 +16,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Bot, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { GameState, Puzzle } from "@/lib/types";
 import {
   DIFFICULTY_COLOR_NAME,
@@ -34,7 +34,7 @@ import {
 } from "@/lib/puzzleReport";
 import { trackEvent } from "@/lib/analytics";
 
-interface RainbowBotProps {
+interface LuckyBotProps {
   puzzle: Puzzle;
   state: GameState;
 }
@@ -54,7 +54,7 @@ function capitalise(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-export function RainbowBot({ puzzle, state }: RainbowBotProps) {
+export function LuckyBot({ puzzle, state }: LuckyBotProps) {
   const [report, setReport] = useState<PuzzleReport | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState(false);
@@ -98,9 +98,13 @@ export function RainbowBot({ puzzle, state }: RainbowBotProps) {
   // else has played; claiming "you're first" there would often just be
   // wrong. Only a report that loaded fine and genuinely counted zero other
   // finished sessions earns that claim.
+  // The line break in the "unavailable" message is deliberate (rendered via
+  // whitespace-pre-line below), not left to wrap on its own: at this card's
+  // width the natural wrap point falls after "right", stranding "now." alone
+  // on its own line, which reads worse than breaking after "available".
   let standingLine: string;
   if (!loaded) standingLine = "Comparing with today's players…";
-  else if (!report) standingLine = "Comparison isn't available right now.";
+  else if (!report) standingLine = "Comparison isn't available\nright now.";
   else if (!standing || standing.others === 0) standingLine = "No comparison yet — check back once others have played.";
   else if (standing.betterThanPct === null) standingLine = `${standing.others + 1} players so far.`;
   else standingLine = `Better than ${standing.betterThanPct}% of ${standing.others} other player${standing.others === 1 ? "" : "s"}`;
@@ -108,33 +112,52 @@ export function RainbowBot({ puzzle, state }: RainbowBotProps) {
   return (
     <>
       <div
-        data-testid="rainbow-bot-card"
-        className="mx-auto max-w-sm rounded-xl border border-border bg-card px-4 py-3 text-left shadow-sm"
+        data-testid="lucky-bot-card"
+        className="relative mx-auto max-w-xs rounded-xl border border-border bg-card px-4 py-3 text-left shadow-sm"
       >
+        {/* Top-right corner, same convention as the report modal's own close
+            button below — out of the icon+text row's flow entirely (not an
+            inline flex sibling), which is what keeps the card as short as
+            the icon+text content itself rather than needing an extra row
+            underneath for the button. */}
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(true);
+            trackEvent("bot_report_opened", { puzzle_id: puzzle.id });
+          }}
+          className="absolute top-3 right-3 shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-semibold hover:bg-secondary transition-colors active:scale-95"
+        >
+          Full Report
+        </button>
+
+        {/* Lucky Bot's face at roughly the height of the text block beside
+            it — top of "LUCKY BOT" to the bottom of the (often two-line)
+            comparison sentence — per Sam's ask to make him "almost as tall"
+            as that stack. No circular badge at this size; that convention
+            existed for a small generic icon and just crowds a mascot this
+            big. public/lucky-bot.png is a pre-cropped, pre-compressed
+            160x160 transparent PNG (see the crop/optimize notes in git
+            history for this file); never swap it for a larger source image
+            without re-cropping and re-compressing the same way, or this
+            becomes another entry in the oversized-image findings from the
+            performance audit. */}
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary">
-            <Bot className="h-5 w-5" aria-hidden="true" />
-          </div>
+          <img src="/lucky-bot.png" alt="" aria-hidden="true" className="h-20 w-20 shrink-0 object-contain" />
           <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rainbow Bot</span>
-            </div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lucky Bot</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold tabular-nums" data-testid="skill-score">{score}</span>
+              {/* Green to match Lucky Bot, not the puzzle's own pastel
+                  --group-2 green: that token is a light tile FILL meant to
+                  sit under dark ink, and reads at only ~1.8:1 contrast as
+                  text on this card's light background — a standard Tailwind
+                  green (with a lighter dark-mode shade) stays legible in
+                  both themes instead. */}
+              <span className="text-2xl font-bold tabular-nums text-green-700 dark:text-green-400" data-testid="skill-score">{score}</span>
               <span className="text-xs text-muted-foreground">/ {MAX_SKILL_SCORE} skill score</span>
             </div>
-            <p className="text-xs text-muted-foreground" data-testid="skill-standing">{standingLine}</p>
+            <p className="text-xs text-muted-foreground whitespace-pre-line" data-testid="skill-standing">{standingLine}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(true);
-              trackEvent("bot_report_opened", { puzzle_id: puzzle.id });
-            }}
-            className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-semibold hover:bg-secondary transition-colors active:scale-95"
-          >
-            Full report
-          </button>
         </div>
       </div>
 
@@ -178,7 +201,7 @@ function ReportModal({ puzzle, score, lines, report, onClose }: ReportModalProps
       <div
         role="dialog"
         aria-modal="true"
-        aria-labelledby="rainbow-bot-title"
+        aria-labelledby="lucky-bot-title"
         className="relative bg-card rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 max-h-[85vh] overflow-y-auto animate-pop"
       >
         <button
@@ -190,8 +213,8 @@ function ReportModal({ puzzle, score, lines, report, onClose }: ReportModalProps
           <X className="w-4 h-4" />
         </button>
 
-        <h2 id="rainbow-bot-title" className="text-lg font-bold text-center mb-1 flex items-center justify-center gap-2">
-          <Bot className="w-5 h-5" aria-hidden="true" /> Rainbow Bot
+        <h2 id="lucky-bot-title" className="text-lg font-bold text-center mb-1 flex items-center justify-center gap-2">
+          <img src="/lucky-bot.png" alt="" aria-hidden="true" className="w-[30px] h-[30px] object-contain" /> Lucky Bot
         </h2>
         <p className="text-center text-xs text-muted-foreground mb-5">
           {!report

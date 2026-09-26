@@ -1,5 +1,5 @@
 /**
- * The Rainbow Bot skill score formula. These fixtures are ALSO run through
+ * The Lucky Bot skill score formula. These fixtures are ALSO run through
  * the SQL copy (public.skill_score) in e2e/scripts/verify-db.ts, so a
  * change to either side that is not mirrored fails somewhere.
  */
