@@ -150,11 +150,30 @@ export function clearProgress(puzzleId: string) {
 // record, and the prompt answer is not part of the board state those writes
 // are built from. clearProgress removes both, so a new run starts fresh.
 
+/** Everything record_bonus_rainbow needs to save one prompt answer. */
+export interface PromptAnswerSave {
+  sessionId: string;
+  guessNumber: number;
+  words: string[];
+  correct: boolean;
+  guessedAt: string;
+  activeTimeSeconds: number;
+  groupsSolved: number;
+}
+
 export interface PromptAnswer {
   correct: boolean;
   words: string[];
   /** When Submit was pressed (ISO 8601), the same stamp the save carries. */
   guessedAt: string;
+  /**
+   * The save still to be delivered, or null once the server has answered
+   * (or when there is nothing to save, e.g. a replay). Kept so an answer
+   * whose save never got through — the page closed during the reveal or
+   * while the request was in flight — is sent again on the next visit. The
+   * server stores a repeat of the same submission only once.
+   */
+  pendingSave?: PromptAnswerSave | null;
 }
 
 export function promptAnswerKey(puzzleId: string) {
@@ -167,10 +186,35 @@ export function loadPromptAnswer(puzzleId: string): PromptAnswer | null {
     if (!raw) return null;
     const v = JSON.parse(raw) as Partial<PromptAnswer>;
     if (typeof v.correct !== "boolean" || !Array.isArray(v.words) || typeof v.guessedAt !== "string") return null;
-    return { correct: v.correct, words: v.words.map(String), guessedAt: v.guessedAt };
+    const p = v.pendingSave;
+    const pendingSave =
+      p &&
+      typeof p.sessionId === "string" &&
+      typeof p.guessNumber === "number" &&
+      Array.isArray(p.words) &&
+      typeof p.correct === "boolean" &&
+      typeof p.guessedAt === "string"
+        ? {
+            sessionId: p.sessionId,
+            guessNumber: p.guessNumber,
+            words: p.words.map(String),
+            correct: p.correct,
+            guessedAt: p.guessedAt,
+            activeTimeSeconds: typeof p.activeTimeSeconds === "number" ? p.activeTimeSeconds : 0,
+            groupsSolved: typeof p.groupsSolved === "number" ? p.groupsSolved : 0,
+          }
+        : null;
+    return { correct: v.correct, words: v.words.map(String), guessedAt: v.guessedAt, pendingSave };
   } catch {
     return null;
   }
+}
+
+/** The server has answered this game's prompt save: stop re-sending it. */
+export function markPromptAnswerSaved(puzzleId: string) {
+  const answer = loadPromptAnswer(puzzleId);
+  if (!answer || !answer.pendingSave) return;
+  savePromptAnswer(puzzleId, { ...answer, pendingSave: null });
 }
 
 export function savePromptAnswer(puzzleId: string, answer: PromptAnswer) {

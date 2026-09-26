@@ -199,15 +199,12 @@ export async function recordBonusRainbowAttempt(params: {
   guessedAt: string;
   activeTimeSeconds: number;
   groupsSolved: number;
-}): Promise<void> {
-  // KNOWN GAP, deliberately not fixed here: this write is sent from memory,
-  // ~0.4s after Submit (GameBoard's reveal delay). If the page is closed or
-  // refreshed before it reaches the server — or stays offline through the
-  // retries below — the answer is never saved and nothing records that it
-  // was lost; the board still remembers it locally (savePromptAnswer). The
-  // smallest reliable fix: send at Submit, keep unconfirmed answers in the
-  // browser, and re-send them on the next page load (the server already
-  // stores a repeat of the same submission once).
+}): Promise<"saved" | "refused" | "failed"> {
+  // A Full game's answer is sent at Submit and kept in the browser until
+  // this returns "saved" or "refused"; a "failed" one is sent again on the
+  // next visit (see GameBoard's deliverPromptAnswer). An answer is still
+  // lost if the player never returns on that browser, or clears its data,
+  // before it gets through.
   //
   // Every prompt submission is part of the player's Luck path, so a write
   // lost to a brief network error is retried. Safe to repeat: the function
@@ -229,7 +226,7 @@ export async function recordBonusRainbowAttempt(params: {
       // the session must be COMPLETED (the prompt only exists after the board
       // finishes), and a Rainbow already found in normal play cannot have its
       // rainbow_source rewritten to post_game.
-      const { error } = await supabase.rpc("record_bonus_rainbow", {
+      const { data, error } = await supabase.rpc("record_bonus_rainbow", {
         _session_id: params.sessionId,
         _device_id: deviceId,
         _device_token: deviceToken,
@@ -240,14 +237,16 @@ export async function recordBonusRainbowAttempt(params: {
         _active_time_seconds: params.activeTimeSeconds,
         _groups_solved: params.groupsSolved,
       });
-      // A refusal (false: not this player's session, or not finished) is an
-      // answer, not a network failure — retrying cannot change it.
-      if (!error) return;
+      // A refusal (false: not this player's session, not finished, or the
+      // game already has its answer) is an answer, not a network failure —
+      // retrying cannot change it.
+      if (!error) return data === false ? "refused" : "saved";
       console.error("Failed to record bonus Rainbow attempt:", error);
     } catch (err) {
       console.error("recordBonusRainbowAttempt error:", err);
     }
   }
+  return "failed";
 }
 
 /** Waits between retries of a failed post-game Rainbow write. */

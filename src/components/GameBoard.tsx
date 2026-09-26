@@ -23,7 +23,12 @@ import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId, getDeviceToken, recordBonusRainbowAttempt } from "@/lib/gameStats";
-import { loadPromptAnswer, savePromptAnswer } from "@/lib/gameProgress";
+import {
+  loadPromptAnswer,
+  markPromptAnswerSaved,
+  savePromptAnswer,
+  type PromptAnswerSave,
+} from "@/lib/gameProgress";
 import type { EntryContext } from "@/lib/entryContext";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { trackEvent } from "@/lib/analytics";
@@ -106,6 +111,18 @@ function prefersReducedMotion(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Sends a Full game's post-game Rainbow answer and, once the server has
+ * answered (saved it, or refused it because the game already has one),
+ * stops remembering it as pending. A save that fails, or never finishes
+ * because the page closed, stays pending and is sent again on the next
+ * visit; the server stores a repeat of the same submission once.
+ */
+async function deliverPromptAnswer(storageId: string, save: PromptAnswerSave) {
+  const result = await recordBonusRainbowAttempt(save);
+  if (result !== "failed") markPromptAnswerSaved(storageId);
 }
 
 function getResultHeadline(isWon: boolean, mistakes: number): string {
@@ -350,6 +367,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       setBonusRainbowCorrect(false);
     }
   }, [storageId, oneAnswerPrompt, state.gotRainbow, rainbowHerring, markRainbowFound, bonusRainbowCorrect]);
+
+  // An answer whose save never got through on an earlier visit (the page
+  // closed during the reveal or while the request was in flight) is sent
+  // again when the game is opened. Once per opened game; the one-answer rule
+  // above only hides the prompt, it never stops this delivery.
+  useEffect(() => {
+    if (!oneAnswerPrompt) return;
+    const pending = loadPromptAnswer(storageId)?.pendingSave;
+    if (pending) void deliverPromptAnswer(storageId, pending);
+  }, [storageId, oneAnswerPrompt]);
 
   // Mini's tile grid, solved bars and Rainbow reveal bar are capped to a
   // compact, near-square-tile width regardless of useWideBoard — a Mini is
@@ -803,11 +830,29 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     setShowSpotModal(false);
     // One answer per Full game. Remembered now, at Submit, not after the
     // reveal delay below, so a refresh during that delay still counts it —
-    // and a second press before the result appears is ignored.
+    // and a second press before the result appears is ignored. Its durable
+    // save starts now too, and stays remembered as pending until the server
+    // answers, so a page closed before then sends it on the next visit.
+    // (Same rules as the Mini path below: nothing is saved for a confirmed
+    // replay, a beta playtest, or a game that never got a session.)
     if (oneAnswerPrompt) {
       if (promptAnsweredRef.current) return;
       promptAnsweredRef.current = true;
-      savePromptAnswer(storageId, { correct, words: [...words], guessedAt });
+      const sessionId = sessionIdRef.current;
+      const pendingSave =
+        sessionId && isOfficialAttemptRef.current !== false && !betaMode
+          ? {
+              sessionId,
+              guessNumber: nextGuessNumber(0),
+              words: [...words],
+              correct,
+              guessedAt,
+              activeTimeSeconds: activeSecondsRef.current,
+              groupsSolved: state.solvedGroups.length,
+            }
+          : null;
+      savePromptAnswer(storageId, { correct, words: [...words], guessedAt, pendingSave });
+      if (pendingSave) void deliverPromptAnswer(storageId, pendingSave);
     }
     setSpotShaking(true);
     setTimeout(() => {
@@ -870,7 +915,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       // loss), and a Rainbow found there counts. A failed attempt would
       // otherwise vanish entirely, leaving it indistinguishable from never
       // having tried.
-      if (canPersist) {
+      // A Full game already started its save at Submit (above); this delayed
+      // write is the Mini's, unchanged.
+      if (canPersist && !oneAnswerPrompt) {
         void recordBonusRainbowAttempt({
           sessionId,
           guessNumber: nextGuessNumber(attemptOffset),
