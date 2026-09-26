@@ -22,7 +22,7 @@ import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
 import { supabase } from "@/integrations/supabase/client";
-import { getDeviceId, getDeviceToken, recordBonusRainbowAttempt } from "@/lib/gameStats";
+import { fetchSavedPromptAnswer, getDeviceId, getDeviceToken, recordBonusRainbowAttempt } from "@/lib/gameStats";
 import {
   loadPromptAnswer,
   markPromptAnswerSaved,
@@ -350,13 +350,40 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // without replaying the reveal animation it already had.
   const restoredWrongAnswerRef = useRef(false);
   const promptRestoredForRef = useRef<string | null>(null);
+  // True while asking the server whether a reopened, finished game already
+  // used its prompt; the prompt stays hidden until the answer arrives.
+  const [promptCheckPending, setPromptCheckPending] = useState(false);
   useLayoutEffect(() => {
     if (promptRestoredForRef.current === storageId) return;
     promptRestoredForRef.current = storageId;
     promptAnsweredRef.current = false;
     if (!oneAnswerPrompt) return;
     const answer = loadPromptAnswer(storageId);
-    if (!answer) return;
+    if (!answer) {
+      // A game finished before this visit, with no answer remembered here,
+      // may have been answered by an older version of the app, which kept no
+      // record of it in the browser. Ask the server before offering the
+      // prompt; the server refuses a second answer, so offering it would let
+      // the board celebrate a find that is never counted.
+      if (state.isComplete && !state.gotRainbow && rainbowHerring && !betaMode && !customMode) {
+        setPromptCheckPending(true);
+        void fetchSavedPromptAnswer(puzzle.id).then((saved) => {
+          if (saved?.answered) {
+            promptAnsweredRef.current = true;
+            const guessedAt = new Date().toISOString();
+            savePromptAnswer(storageId, { correct: saved.found, words: [], guessedAt, pendingSave: null });
+            if (saved.found) {
+              markRainbowFound(rainbowHerring, guessedAt);
+            } else {
+              restoredWrongAnswerRef.current = true;
+              setBonusRainbowCorrect(false);
+            }
+          }
+          setPromptCheckPending(false);
+        });
+      }
+      return;
+    }
     promptAnsweredRef.current = true;
     if (answer.correct) {
       // Refreshed in the moment between Submit and the find reaching the
@@ -366,7 +393,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       restoredWrongAnswerRef.current = true;
       setBonusRainbowCorrect(false);
     }
-  }, [storageId, oneAnswerPrompt, state.gotRainbow, rainbowHerring, markRainbowFound, bonusRainbowCorrect]);
+  }, [storageId, oneAnswerPrompt, state.isComplete, state.gotRainbow, rainbowHerring, markRainbowFound, bonusRainbowCorrect, betaMode, customMode, puzzle.id]);
 
   // An answer whose save never got through on an earlier visit (the page
   // closed during the reveal or while the request was in flight) is sent
@@ -1281,6 +1308,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             empty local game whose outcome is unknown here. */}
         {showEndState && !lockedByOfficialResult && !state.gotRainbow && rainbowHerring && (
           bonusRainbowCorrect === null ? (
+            // Hidden for the moment it takes to confirm with the server that
+            // a reopened game has not already used its prompt.
+            promptCheckPending ? null : (
             <button
               onClick={() => {
                 if (!promptAnsweredRef.current) setShowSpotModal(true);
@@ -1293,6 +1323,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               <div className="font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">{theme.spotPrompt}</div>
               <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-0.5">Find one word from each group</div>
             </button>
+            )
           ) : (
             <RainbowRevealBar
               categoryName={puzzle.rainbowCategoryName}

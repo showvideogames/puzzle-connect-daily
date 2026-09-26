@@ -249,6 +249,35 @@ export async function recordBonusRainbowAttempt(params: {
   return "failed";
 }
 
+/**
+ * Whether this player's official Full game for a puzzle already has a
+ * post-game Rainbow answer on the server. Needed for games answered by an
+ * older version of the app, which kept no record of the answer in the
+ * browser: without this check a reopened game would offer the prompt again.
+ * null when the server could not be asked; the row's found flag says
+ * whether that earlier answer was right.
+ */
+export async function fetchSavedPromptAnswer(
+  puzzleId: string
+): Promise<{ answered: boolean; found: boolean } | null> {
+  try {
+    const { deviceId, deviceToken } = await getIdentity();
+    const { data, error } = await supabase.rpc("get_own_completed_sessions", {
+      _device_id: deviceId,
+      _device_token: deviceToken,
+      _format: "full",
+    });
+    if (error || !Array.isArray(data)) return null;
+    const row = (data as unknown as OwnCompletedSession[]).find((r) => r.puzzle_id === puzzleId);
+    return {
+      answered: row?.bonus_rainbow_attempted === true,
+      found: row?.bonus_rainbow_attempted === true && row?.found_rainbow === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Waits between retries of a failed post-game Rainbow write. */
 const BONUS_WRITE_RETRY_DELAYS_MS = [1000, 3000];
 

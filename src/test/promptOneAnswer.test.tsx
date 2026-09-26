@@ -38,6 +38,7 @@ vi.mock("@/lib/haptics", () => ({
 vi.mock("@/lib/analytics", () => ({ trackEvent: () => {} }));
 
 import { GameBoard } from "@/components/GameBoard";
+import { promptAnswerKey } from "@/lib/gameProgress";
 
 const FULL: Puzzle = {
   id: "puzzle-1",
@@ -224,6 +225,38 @@ describe("Full: one post-game Rainbow answer per game", () => {
     await settle(700);
     expect(promptSaves()).toBe(1);
     expect(promptRows()).toHaveLength(1);
+  }, 30000);
+});
+
+describe("Full: games answered by an older version of the app", () => {
+  it("a game whose prompt was answered before this release is not offered the prompt again", async () => {
+    const first = renderBoard(FULL);
+    await settle();
+    await winOnTheBoard(first.container, FULL);
+    await submitPrompt(["y2", "g2", "b2", "r2"]);
+    await settle(700);
+    first.unmount();
+    // The older app kept no record of the answer in the browser.
+    localStorage.removeItem(promptAnswerKey(FULL.id));
+    const saves = promptSaves();
+
+    renderBoard(FULL);
+    await settle(300);
+    expect(screen.queryByText(PROMPT)).toBeNull();
+    expect(screen.getByText("Hidden Link")).toBeTruthy();
+    expect(skill()).toBe("95");
+    expect(promptSaves()).toBe(saves);
+  }, 30000);
+
+  it("a finished game that never used its prompt still offers it when reopened", async () => {
+    const first = renderBoard(FULL);
+    await settle();
+    await winOnTheBoard(first.container, FULL);
+    first.unmount();
+
+    renderBoard(FULL);
+    await settle(300);
+    expect(screen.getByText(PROMPT)).toBeTruthy();
   }, 30000);
 });
 
