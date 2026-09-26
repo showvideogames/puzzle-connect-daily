@@ -37,6 +37,8 @@ import {
   fetchPuzzleReport,
   scoreStanding,
   wrongGuessSentence,
+  listedWrongGuesses,
+  perfectAndWrongPct,
   categoryForSolveKey,
   type PuzzleReport,
 } from "@/lib/puzzleReport";
@@ -551,18 +553,22 @@ function CrowdSections({ puzzle, report }: { puzzle: Puzzle; report: PuzzleRepor
   const players = report?.total_players ?? 0;
   if (!report || players === 0) return null;
 
+  // Finding the Rainbow is never listed as a wrong guess.
+  const wrongGuesses = listedWrongGuesses(report, puzzle);
+  const { perfectPct, wrongPct } = perfectAndWrongPct(report);
+
   return (
     <>
       {/* Most common wrong guesses */}
       <section className="mb-5">
-        <h3 className="text-sm font-semibold mb-2">Most common wrong guess{report.common_wrong_guesses.length === 1 ? "" : "es"}</h3>
-        {report.common_wrong_guesses.length === 0 ? (
+        <h3 className="text-sm font-semibold mb-2">Most common wrong guess{wrongGuesses.length === 1 ? "" : "es"}</h3>
+        {wrongGuesses.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Nobody has made a wrong guess yet. {pct(report.perfect, players)}% of players were perfect.
+            {wrongPct === 0 ? "Nobody has made a wrong guess yet." : "No wrong guesses to show yet."}
           </p>
         ) : (
           <ul className="space-y-2" data-testid="wrong-guess-list">
-            {report.common_wrong_guesses.map((g, i) => (
+            {wrongGuesses.map((g, i) => (
               <li key={i} className="rounded-lg border border-border p-3">
                 <div className="flex flex-wrap gap-1 mb-1.5">
                   {g.words.map((w) => (
@@ -574,9 +580,9 @@ function CrowdSections({ puzzle, report }: { puzzle: Puzzle; report: PuzzleRepor
             ))}
           </ul>
         )}
-        <p className="mt-2 text-xs text-muted-foreground">
-          {pct(report.players_with_wrong_guess, players)}% of players made at least one wrong guess.
-          {" "}{pct(report.perfect, players)}% were perfect.
+        {/* Same finishers, same measure: every finisher is one or the other. */}
+        <p className="mt-2 text-xs text-muted-foreground" data-testid="wrong-perfect-line">
+          {wrongPct}% of players made at least one wrong guess. {perfectPct}% were perfect.
         </p>
       </section>
 
@@ -609,10 +615,20 @@ function CrowdSections({ puzzle, report }: { puzzle: Puzzle; report: PuzzleRepor
       {puzzle.rainbowHerring && puzzle.rainbowHerring.length > 0 && (
         <section>
           <h3 className="text-sm font-semibold mb-2">The Rainbow 🌈</h3>
-          <p className="text-sm text-muted-foreground">
-            {pct(report.rainbow_in_game, players)}% spotted it mid-game
-            {report.rainbow_post_game > 0 && <>, and another {pct(report.rainbow_post_game, players)}% found it afterwards</>}.
-          </p>
+          {/* All three out of the same finishers. "First" is during play,
+              before any category was solved; "last" is through the
+              post-game prompt. */}
+          {report.rainbow_found === 0 ? (
+            <p className="text-sm text-muted-foreground">Nobody has found the Rainbow yet.</p>
+          ) : (
+            <ul className="space-y-0.5 text-sm text-muted-foreground" data-testid="rainbow-stats">
+              <li>
+                <span className="font-semibold text-foreground tabular-nums">{pct(report.rainbow_found, players)}%</span> found the Rainbow
+              </li>
+              <li><span className="tabular-nums">{pct(report.rainbow_first, players)}%</span> found it first</li>
+              <li><span className="tabular-nums">{pct(report.rainbow_last, players)}%</span> found it last</li>
+            </ul>
+          )}
         </section>
       )}
     </>

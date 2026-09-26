@@ -228,6 +228,79 @@ const CHECKS: Check[] = [
     },
   },
   {
+    // Runs after the report check above, on the same puzzle (whose two
+    // players each made one wrong guess; one found the Rainbow in play after
+    // two categories).
+    name: "the crowd report never counts finding the Rainbow as a wrong guess",
+    async run(db) {
+      await actAs(db, null);
+      const pr = await db.query<{ id: string }>("select id from public.puzzles where date = $1 and format = 'full'", [
+        FULL_RAINBOW.date,
+      ]);
+      const puzzleId = pr.rows[0].id;
+      const byDifficulty = (d: number) => FULL_RAINBOW.groups.find((g) => g.difficulty === d)!.words;
+      const [Y, G, B, R] = [byDifficulty(1), byDifficulty(2), byDifficulty(3), byDifficulty(4)];
+      const herring = FULL_RAINBOW.rainbowHerring!;
+      const miss = [Y[0], Y[1], G[0], G[1]];
+      const colour: Record<number, string> = { 1: "orange", 2: "green", 3: "blue", 4: "red" };
+
+      async function finish(guesses: string[][], opts: { mistakes: number; rainbowIndex: number | null }) {
+        const id = (await db.query<{ device_id: string; device_token: string }>("select * from public.create_device_identity()")).rows[0];
+        const sessionId = (
+          await db.query<{ id: string }>("select public.create_game_session($1, $2, $3, 'daily_home') as id", [
+            puzzleId, id.device_id, id.device_token,
+          ])
+        ).rows[0].id;
+        const events = guesses.map((words, i) => {
+          const group = FULL_RAINBOW.groups.find((g) => g.words.every((w) => words.includes(w)));
+          return { guess_number: i + 1, words, correct: !!group, group_name: group ? colour[group.difficulty] : null };
+        });
+        await db.query("select public.record_guess_events($1, $2, $3, $4::jsonb)", [
+          sessionId, id.device_id, id.device_token, JSON.stringify(events),
+        ]);
+        await db.query(
+          `select public.finalize_game_session($1, $2, $3, true, $4, 60, $5, $6, '["orange","green","blue","red"]'::jsonb, false, '', true, null)`,
+          [sessionId, id.device_id, id.device_token, opts.mistakes, opts.rainbowIndex !== null, opts.rainbowIndex]
+        );
+        return { ...id, sessionId, guesses: guesses.length };
+      }
+
+      // Perfect, and found the Rainbow first (before any category).
+      await finish([herring, Y, G, B, R], { mistakes: 0, rainbowIndex: 0 });
+      // Perfect, never found it.
+      await finish([Y, G, B, R], { mistakes: 0, rainbowIndex: null });
+      // One real mistake, then found it last through the post-game prompt.
+      const p3 = await finish([miss, Y, G, B, R], { mistakes: 1, rainbowIndex: null });
+      await db.query(
+        "select public.record_bonus_rainbow($1, $2, $3, $4, $5::jsonb, true, now(), 60, 4::smallint)",
+        [p3.sessionId, p3.device_id, p3.device_token, p3.guesses + 1, JSON.stringify(herring)]
+      );
+
+      const report = (await db.query<{ r: Record<string, unknown> }>("select public.get_puzzle_report($1) as r", [puzzleId]))
+        .rows[0].r;
+      const total = report.total_players as number;
+      expect(total === 5, `total_players = ${total}, expected 5`);
+      expect(report.perfect === 2, `perfect = ${report.perfect}, expected 2`);
+      expect(
+        report.players_with_wrong_guess === 3,
+        `players_with_wrong_guess = ${report.players_with_wrong_guess}, expected 3 (the Rainbow finder with no mistakes is perfect, not wrong)`
+      );
+      expect(
+        (report.perfect as number) + (report.players_with_wrong_guess as number) === total,
+        "perfect and wrong-guess players must be the same finishers, adding up to the total"
+      );
+      const herringKey = JSON.stringify([...herring].map((w) => w.toUpperCase()).sort());
+      const listed = report.common_wrong_guesses as { words: string[]; players: number }[];
+      expect(!listed.some((g) => JSON.stringify(g.words) === herringKey), `the Rainbow's words must not be listed: ${JSON.stringify(listed)}`);
+      const missKey = JSON.stringify([...miss].map((w) => w.toUpperCase()).sort());
+      expect(listed.some((g) => JSON.stringify(g.words) === missKey), "a real wrong guess must still be listed");
+      expect(listed.length === 2, `expected the two real wrong guesses, got ${JSON.stringify(listed)}`);
+      expect(report.rainbow_found === 3, `rainbow_found = ${report.rainbow_found}, expected 3`);
+      expect(report.rainbow_first === 1, `rainbow_first = ${report.rainbow_first}, expected 1`);
+      expect(report.rainbow_last === 1, `rainbow_last = ${report.rainbow_last}, expected 1`);
+    },
+  },
+  {
     // The database half of the Luck Score: who counts, and whose path
     // matches. The browser half (the formula, the 500-player threshold,
     // the wording) is pinned in src/test/luckScore.test.ts.
