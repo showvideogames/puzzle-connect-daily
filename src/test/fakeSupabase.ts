@@ -1507,15 +1507,26 @@ export class FakeSupabase {
         // The prompt only exists after the board is finished.
         if (!row) return { data: false, error: null };
 
-        const clash = this.tables.guess_events.some(
-          (g) =>
-            g.game_session_id === args._session_id && g.guess_number === args._guess_number
-        );
-        if (!clash) {
+        // Mirrors 20260928000000: the SAME submission (same guessed_at, words
+        // and result) is stored once, and any other one is always stored,
+        // at the caller's number or the next free one, whichever is higher.
+        const own = this.tables.guess_events.filter((g) => g.game_session_id === args._session_id);
+        const repeat =
+          args._guessed_at != null &&
+          own.some(
+            (g) =>
+              g.attempt_type === "bonus_rainbow" &&
+              g.guessed_at === args._guessed_at &&
+              JSON.stringify(g.words) === JSON.stringify(args._words) &&
+              g.correct === args._correct
+          );
+        if (!repeat) {
+          const nextFree = own.reduce((m, g) => Math.max(m, g.guess_number as number), 0) + 1;
           this.tables.guess_events.push({
             id: this._newId(),
             game_session_id: args._session_id,
-            guess_number: args._guess_number,
+            guess_number: Math.max((args._guess_number as number | undefined) ?? 1, nextFree),
+            server_numbered: true,
             words: args._words,
             correct: args._correct,
             group_name: null,

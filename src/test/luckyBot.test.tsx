@@ -111,12 +111,15 @@ describe("LuckyBot — Full game", () => {
     // One mistake (88), Yellow first (+0), Rainbow (+1).
     expect(screen.getByTestId("skill-score").textContent).toBe("89");
     expect(skill.textContent).toContain("/ 99 skill");
-    expect(screen.getByTestId("luck-score").textContent).toBe("?");
+    expect(screen.getByTestId("luck-score").textContent).toBe("—");
     expect(screen.getByTestId("luck-line").textContent).toBe("Lucky Bot is checking your path…");
 
     await settle();
     expect(luckCalls()[0][1]).toMatchObject({ _puzzle_id: "puzzle-1" });
-    expect(screen.getByTestId("luck-score").textContent).toBe("?");
+    expect(screen.getByTestId("luck-score").textContent).toBe("—");
+    // The dash is hidden from screen readers, which hear words instead.
+    expect(screen.getByTestId("luck-score").getAttribute("aria-hidden")).toBe("true");
+    expect(screen.getByTestId("luck-row").textContent).toContain("No Luck Score yet");
     expect(screen.getByTestId("luck-line").textContent).toBe(
       "Lucky Bot is still collecting results. So far, 1 in 30 players took your path."
     );
@@ -130,6 +133,8 @@ describe("LuckyBot — Full game", () => {
     await settle();
     expect(screen.getByTestId("luck-score").textContent).toBe("73");
     expect(screen.getByTestId("luck-row").textContent).toContain("/ 100 luck");
+    expect(screen.getByTestId("luck-score").hasAttribute("aria-hidden")).toBe(false);
+    expect(screen.getByTestId("luck-row").textContent).not.toContain("No Luck Score yet");
     expect(screen.getByTestId("luck-line").textContent).toBe("Nobody else took your exact path — 1 in 500.");
   });
 

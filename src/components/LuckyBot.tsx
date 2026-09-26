@@ -199,9 +199,17 @@ function FullLuckyBot({ puzzle, state, rainbowPromptResult = null, dataSource = 
               {/* Violet, so Luck never reads as a second Skill number. A
                   standard Tailwind shade with a lighter dark-mode partner,
                   for the same contrast reason as Skill's green. */}
-              <span className="text-2xl font-bold tabular-nums text-violet-700 dark:text-violet-300" data-testid="luck-score">
-                {view.kind === "score" ? view.score : "?"}
+              {/* A dash, not "?", until there is a number: the line under
+                  the card says why, and "?" read as a missing score. Screen
+                  readers get words instead of "dash". */}
+              <span
+                className="text-2xl font-bold tabular-nums text-violet-700 dark:text-violet-300"
+                data-testid="luck-score"
+                aria-hidden={view.kind === "score" ? undefined : true}
+              >
+                {view.kind === "score" ? view.score : "—"}
               </span>
+              {view.kind !== "score" && <span className="sr-only">No Luck Score yet</span>}
               <span className="text-xs text-muted-foreground">/ 100 luck</span>
             </div>
           </div>
