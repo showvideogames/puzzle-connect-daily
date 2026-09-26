@@ -11,7 +11,7 @@ import { CustomStatsModal } from "./CustomStatsModal";
 import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
-import { RainbowBot } from "./RainbowBot";
+import { LuckyBot } from "./LuckyBot";
 import { ResultGrid, ResultCellKind, ResultRow } from "./ResultGrid";
 import { PuzzleModeBadge } from "./PuzzleModeBadge";
 import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown, RotateCcw } from "lucide-react";
@@ -1714,12 +1714,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   </button>
                 )}
               </div>
-              {/* Rainbow Bot: the player's skill score and how it compares
+              {/* Lucky Bot: the player's skill score and how it compares
                   with everyone else who finished this puzzle. Official daily
                   puzzles only, for the same reason as Global Stats above —
                   a beta or custom puzzle has no official sessions to compare
                   against. */}
-              {!betaMode && !customMode && <RainbowBot puzzle={puzzle} state={state} />}
+              {!betaMode && !customMode && <LuckyBot puzzle={puzzle} state={state} />}
             </div>
           )}
         </div>

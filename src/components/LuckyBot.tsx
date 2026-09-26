@@ -1,5 +1,5 @@
 /**
- * Rainbow Bot — the post-game report card and its full-report modal.
+ * Lucky Bot — the post-game report card and its full-report modal.
  *
  * The card sits under the Share row on the result screen and answers the
  * question players actually have after finishing: "how well did I do, and
@@ -34,7 +34,7 @@ import {
 } from "@/lib/puzzleReport";
 import { trackEvent } from "@/lib/analytics";
 
-interface RainbowBotProps {
+interface LuckyBotProps {
   puzzle: Puzzle;
   state: GameState;
 }
@@ -54,7 +54,7 @@ function capitalise(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-export function RainbowBot({ puzzle, state }: RainbowBotProps) {
+export function LuckyBot({ puzzle, state }: LuckyBotProps) {
   const [report, setReport] = useState<PuzzleReport | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState(false);
@@ -108,22 +108,25 @@ export function RainbowBot({ puzzle, state }: RainbowBotProps) {
   return (
     <>
       <div
-        data-testid="rainbow-bot-card"
+        data-testid="lucky-bot-card"
         className="mx-auto max-w-sm rounded-xl border border-border bg-card px-4 py-3 text-left shadow-sm"
       >
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary">
-            {/* Lucky Bot — the Rainbow Bot's mascot face. public/lucky-bot.png
-                is a pre-cropped, pre-compressed 160x160 transparent PNG (see
-                the crop/optimize notes in git history for this file); never
-                swap it for a larger source image without re-cropping and
-                re-compressing the same way, or this becomes another entry
-                in the oversized-image findings from the performance audit. */}
-            <img src="/lucky-bot.png" alt="" aria-hidden="true" className="h-8 w-8 object-contain" />
+          {/* Container grew from 40px to 48px alongside the 32px→40px icon
+              bump below, so the ring of background around Lucky Bot's face
+              stays the same 4px on every side rather than shrinking to
+              nothing as the icon got bigger. public/lucky-bot.png is a
+              pre-cropped, pre-compressed 160x160 transparent PNG (see the
+              crop/optimize notes in git history for this file); never swap
+              it for a larger source image without re-cropping and
+              re-compressing the same way, or this becomes another entry in
+              the oversized-image findings from the performance audit. */}
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary">
+            <img src="/lucky-bot.png" alt="" aria-hidden="true" className="h-10 w-10 object-contain" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rainbow Bot</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lucky Bot</span>
             </div>
             <div className="flex items-baseline gap-1">
               <span className="text-2xl font-bold tabular-nums" data-testid="skill-score">{score}</span>
@@ -184,7 +187,7 @@ function ReportModal({ puzzle, score, lines, report, onClose }: ReportModalProps
       <div
         role="dialog"
         aria-modal="true"
-        aria-labelledby="rainbow-bot-title"
+        aria-labelledby="lucky-bot-title"
         className="relative bg-card rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 max-h-[85vh] overflow-y-auto animate-pop"
       >
         <button
@@ -196,8 +199,8 @@ function ReportModal({ puzzle, score, lines, report, onClose }: ReportModalProps
           <X className="w-4 h-4" />
         </button>
 
-        <h2 id="rainbow-bot-title" className="text-lg font-bold text-center mb-1 flex items-center justify-center gap-2">
-          <img src="/lucky-bot.png" alt="" aria-hidden="true" className="w-6 h-6 object-contain" /> Rainbow Bot
+        <h2 id="lucky-bot-title" className="text-lg font-bold text-center mb-1 flex items-center justify-center gap-2">
+          <img src="/lucky-bot.png" alt="" aria-hidden="true" className="w-[30px] h-[30px] object-contain" /> Lucky Bot
         </h2>
         <p className="text-center text-xs text-muted-foreground mb-5">
           {!report

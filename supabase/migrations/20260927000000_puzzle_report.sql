@@ -1,4 +1,4 @@
--- Rainbow Bot: the post-game report.
+-- Lucky Bot: the post-game report.
 --
 -- Two functions.
 --
@@ -103,7 +103,7 @@ revoke all on function public.skill_score(boolean, integer, jsonb, boolean, text
 grant execute on function public.skill_score(boolean, integer, jsonb, boolean, text, text) to anon, authenticated, service_role;
 
 comment on function public.skill_score(boolean, integer, jsonb, boolean, text, text) is
-  'Rainbow Bot skill score (50–99) for one finished session. Mirrors src/lib/skillScore.ts exactly; keep the two in step.';
+  'Lucky Bot skill score (50–99) for one finished session. Mirrors src/lib/skillScore.ts exactly; keep the two in step.';
 
 
 create or replace function public.get_puzzle_report(_puzzle_id uuid)
@@ -188,4 +188,4 @@ revoke all on function public.get_puzzle_report(uuid) from public;
 grant execute on function public.get_puzzle_report(uuid) to anon, authenticated, service_role;
 
 comment on function public.get_puzzle_report(uuid) is
-  'Aggregate-only Rainbow Bot report for one puzzle: player counts, perfect solves, first-solved histogram, Rainbow outcomes, skill-score histogram, and the three most common wrong guesses. Never exposes an individual session.';
+  'Aggregate-only Lucky Bot report for one puzzle: player counts, perfect solves, first-solved histogram, Rainbow outcomes, skill-score histogram, and the three most common wrong guesses. Never exposes an individual session.';

@@ -1,5 +1,5 @@
 /**
- * Rainbow Bot skill score — the browser-side copy of the formula.
+ * Lucky Bot skill score — the browser-side copy of the formula.
  *
  * The SAME formula lives in SQL as public.skill_score (migration
  * 20260927000000_puzzle_report.sql), where it is applied to every OTHER
