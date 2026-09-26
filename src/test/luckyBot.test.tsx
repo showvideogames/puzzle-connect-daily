@@ -61,6 +61,9 @@ const REPORT = {
   players_with_wrong_guess: 4,
   rainbow_in_game: 2,
   rainbow_post_game: 1,
+  rainbow_found: 3,
+  rainbow_first: 2,
+  rainbow_last: 1,
   first_solved: { orange: 3, red: 2 },
   score_counts: { "70": 1, "80": 1, "84": 1, "90": 1, "95": 1 },
   common_wrong_guesses: [
@@ -214,13 +217,57 @@ describe("LuckyBot — Full game", () => {
     expect(within(luck).getByText(/not how well you\s+played/)).toBeTruthy();
     expect(skill.compareDocumentPosition(luck) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    // The crowd sections are unchanged.
+    // Wrong guesses: the real one is listed; the Rainbow's own words (a
+    // find, not a mistake) are not, even if the server sent them.
     const list = within(dialog).getByTestId("wrong-guess-list");
+    expect(within(list).getAllByRole("listitem")).toHaveLength(1);
     expect(within(list).getByText("3 players: 3 from Parts of the Leg and 1 from Adore. One away.")).toBeTruthy();
-    expect(within(dialog).getByText(/40% spotted it mid-game/)).toBeTruthy();
+    expect(within(list).queryByText("DUCKLING")).toBeNull();
+    // The same 5 finishers: 1 perfect, so 4 made a wrong guess.
+    expect(within(dialog).getByTestId("wrong-perfect-line").textContent).toBe(
+      "80% of players made at least one wrong guess. 20% were perfect."
+    );
+    // Rainbow, all out of the same 5 finishers.
+    const rainbow = within(dialog).getByTestId("rainbow-stats");
+    expect(Array.from(rainbow.querySelectorAll("li")).map((li) => li.textContent)).toEqual([
+      "60% found the Rainbow",
+      "40% found it first",
+      "20% found it last",
+    ]);
+    expect(within(dialog).queryByText(/spotted it mid-game/)).toBeNull();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Close report" }));
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("says plainly when nobody has found the Rainbow, and when nobody made a wrong guess", async () => {
+    reportAnswer = {
+      data: {
+        ...REPORT,
+        total_players: 3,
+        wins: 3,
+        perfect: 3,
+        players_with_wrong_guess: 0,
+        rainbow_in_game: 0,
+        rainbow_post_game: 0,
+        rainbow_found: 0,
+        rainbow_first: 0,
+        rainbow_last: 0,
+        common_wrong_guesses: [],
+      },
+      error: null,
+    };
+    render(<LuckyBot puzzle={puzzle} state={finished()} />);
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Full Report" }));
+    await settle(0);
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Nobody has found the Rainbow yet.")).toBeTruthy();
+    expect(within(dialog).queryByTestId("rainbow-stats")).toBeNull();
+    expect(within(dialog).getByText("Nobody has made a wrong guess yet.")).toBeTruthy();
+    expect(within(dialog).getByTestId("wrong-perfect-line").textContent).toBe(
+      "0% of players made at least one wrong guess. 100% were perfect."
+    );
   });
 
   it("explains the threshold in the report while results are collected", async () => {

@@ -47,6 +47,9 @@ const REPORT: PuzzleReport = {
   players_with_wrong_guess: 1028,
   rainbow_in_game: 390,
   rainbow_post_game: 140,
+  rainbow_found: 530,
+  rainbow_first: 390,
+  rainbow_last: 140,
   first_solved: { orange: 610, green: 330, blue: 180, red: 120 },
   score_counts: { "74": 180, "81": 240, "88": 300, "89": 120, "95": 160, "96": 90, "99": 20, "100": 3, "60": 127 },
   common_wrong_guesses: [
