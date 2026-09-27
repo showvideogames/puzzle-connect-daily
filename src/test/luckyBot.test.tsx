@@ -227,17 +227,46 @@ describe("LuckyBot — Full game", () => {
     expect(within(dialog).getByTestId("wrong-perfect-line").textContent).toBe(
       "80% of players made at least one wrong guess. 20% were perfect."
     );
-    // Rainbow, all out of the same 5 finishers.
+    // Rainbow: 3 of the 5 finishers found it (60%); of those 3, 2 found it
+    // first and 1 last — shares of the finders, adding up to 100.
     const rainbow = within(dialog).getByTestId("rainbow-stats");
     expect(Array.from(rainbow.querySelectorAll("li")).map((li) => li.textContent)).toEqual([
       "60% found the Rainbow",
-      "40% found it first",
-      "20% found it last",
+      "67% found it first",
+      "33% found it last",
     ]);
     expect(within(dialog).queryByText(/spotted it mid-game/)).toBeNull();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Close report" }));
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("shows first and last as shares of the Rainbow's finders: 13 of 20 found it, all first", async () => {
+    reportAnswer = {
+      data: {
+        ...REPORT,
+        total_players: 20,
+        wins: 18,
+        perfect: 9,
+        players_with_wrong_guess: 11,
+        rainbow_in_game: 13,
+        rainbow_post_game: 0,
+        rainbow_found: 13,
+        rainbow_first: 13,
+        rainbow_last: 0,
+      },
+      error: null,
+    };
+    render(<LuckyBot puzzle={puzzle} state={finished()} />);
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Full Report" }));
+    await settle(0);
+    const rainbow = within(screen.getByRole("dialog")).getByTestId("rainbow-stats");
+    expect(Array.from(rainbow.querySelectorAll("li")).map((li) => li.textContent)).toEqual([
+      "65% found the Rainbow",
+      "100% found it first",
+      "0% found it last",
+    ]);
   });
 
   it("says plainly when nobody has found the Rainbow, and when nobody made a wrong guess", async () => {
