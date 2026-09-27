@@ -6,6 +6,7 @@ import {
   categoryForSolveKey,
   listedWrongGuesses,
   perfectAndWrongPct,
+  rainbowFirstLastPct,
   type PuzzleReport,
 } from "@/lib/puzzleReport";
 import type { Puzzle } from "@/lib/types";
@@ -121,5 +122,25 @@ describe("categoryForSolveKey", () => {
     expect(categoryForSolveKey("orange", puzzle)?.category).toBe("MLB Teams Singular");
     expect(categoryForSolveKey("red", puzzle)?.category).toBe("Adore");
     expect(categoryForSolveKey("purple", puzzle)).toBeUndefined();
+  });
+});
+
+describe("rainbowFirstLastPct", () => {
+  // "First" and "last" are shares of the players who FOUND the Rainbow.
+  it("splits the finders, not all finishers — everyone who found it found it first", () => {
+    expect(rainbowFirstLastPct({ rainbow_found: 13, rainbow_first: 13, rainbow_last: 0 })).toEqual({ firstPct: 100, lastPct: 0 });
+  });
+
+  it("adds up to 100 for a mixed first/last split, rounding included", () => {
+    expect(rainbowFirstLastPct({ rainbow_found: 3, rainbow_first: 2, rainbow_last: 1 })).toEqual({ firstPct: 67, lastPct: 33 });
+    expect(rainbowFirstLastPct({ rainbow_found: 7, rainbow_first: 3, rainbow_last: 4 })).toEqual({ firstPct: 43, lastPct: 57 });
+  });
+
+  it("is null when nobody found it", () => {
+    expect(rainbowFirstLastPct({ rainbow_found: 0, rainbow_first: 0, rainbow_last: 0 })).toBeNull();
+  });
+
+  it("leaves an older find at some other point in play out of both, rather than forcing it into one", () => {
+    expect(rainbowFirstLastPct({ rainbow_found: 4, rainbow_first: 2, rainbow_last: 1 })).toEqual({ firstPct: 50, lastPct: 25 });
   });
 });

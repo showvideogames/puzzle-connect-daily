@@ -39,6 +39,7 @@ import {
   wrongGuessSentence,
   listedWrongGuesses,
   perfectAndWrongPct,
+  rainbowFirstLastPct,
   categoryForSolveKey,
   type PuzzleReport,
 } from "@/lib/puzzleReport";
@@ -556,6 +557,7 @@ function CrowdSections({ puzzle, report }: { puzzle: Puzzle; report: PuzzleRepor
   // Finding the Rainbow is never listed as a wrong guess.
   const wrongGuesses = listedWrongGuesses(report, puzzle);
   const { perfectPct, wrongPct } = perfectAndWrongPct(report);
+  const rainbowSplit = rainbowFirstLastPct(report);
 
   return (
     <>
@@ -615,18 +617,19 @@ function CrowdSections({ puzzle, report }: { puzzle: Puzzle; report: PuzzleRepor
       {puzzle.rainbowHerring && puzzle.rainbowHerring.length > 0 && (
         <section>
           <h3 className="text-sm font-semibold mb-2">The Rainbow 🌈</h3>
-          {/* All three out of the same finishers. "First" is during play,
-              before any category was solved; "last" is through the
-              post-game prompt. */}
-          {report.rainbow_found === 0 ? (
+          {/* "Found the Rainbow" is out of every finisher. "First" (during
+              play, before any category was solved) and "last" (through the
+              post-game prompt) are out of the players who found it, so the
+              two add up to 100. */}
+          {rainbowSplit === null ? (
             <p className="text-sm text-muted-foreground">Nobody has found the Rainbow yet.</p>
           ) : (
             <ul className="space-y-0.5 text-sm text-muted-foreground" data-testid="rainbow-stats">
               <li>
                 <span className="font-semibold text-foreground tabular-nums">{pct(report.rainbow_found, players)}%</span> found the Rainbow
               </li>
-              <li><span className="tabular-nums">{pct(report.rainbow_first, players)}%</span> found it first</li>
-              <li><span className="tabular-nums">{pct(report.rainbow_last, players)}%</span> found it last</li>
+              <li><span className="tabular-nums">{rainbowSplit.firstPct}%</span> found it first</li>
+              <li><span className="tabular-nums">{rainbowSplit.lastPct}%</span> found it last</li>
             </ul>
           )}
         </section>

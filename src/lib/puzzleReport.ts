@@ -186,6 +186,27 @@ export function perfectAndWrongPct(report: Pick<PuzzleReport, "total_players" | 
   return { perfectPct, wrongPct: 100 - perfectPct };
 }
 
+/**
+ * How the Rainbow's finders found it — first (during play, before solving
+ * any category) or last (through the post-game prompt) — as percentages of
+ * the players who FOUND it, not of all finishers ("N% found the Rainbow"
+ * uses all finishers). When every finder is one or the other, which the
+ * current game guarantees, the two add up to 100, rounding included; an
+ * older find at some other point in play is left out of both rather than
+ * forced into one. null when nobody has found it.
+ */
+export function rainbowFirstLastPct(
+  report: Pick<PuzzleReport, "rainbow_found" | "rainbow_first" | "rainbow_last">
+): { firstPct: number; lastPct: number } | null {
+  const found = report.rainbow_found;
+  if (found <= 0) return null;
+  const first = Math.min(Math.max(report.rainbow_first, 0), found);
+  const last = Math.min(Math.max(report.rainbow_last, 0), found - first);
+  const firstPct = Math.round((first / found) * 100);
+  const lastPct = first + last === found ? 100 - firstPct : Math.round((last / found) * 100);
+  return { firstPct, lastPct };
+}
+
 /** One plain sentence for a wrong guess. */
 export function wrongGuessSentence(guess: WrongGuessSummary, puzzle: Puzzle): string {
   const d = describeWrongGuess(guess.words, puzzle);
