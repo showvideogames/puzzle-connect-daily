@@ -27,11 +27,11 @@ export default function Privacy() {
         <section className="space-y-2">
           <h2 className="text-base font-semibold">What we collect</h2>
 
-          <p><strong>Account information.</strong> If you create an account, we collect your email address and an optional display name. If you sign in with Google, we receive the basic profile information Google shares during that sign-in (such as your name, email address, and profile photo). We also send authentication-related and transactional emails, like sign-up confirmations and password resets.</p>
+          <p><strong>Account information.</strong> Rainbow Categories does not have its own sign-up, passwords or sign-in emails. When you sign in, you use a shared sign-in service that also serves our other games; it tells Rainbow Categories who you are (an account identifier and your email address), and Rainbow Categories keeps its own account record for you, linked to that identifier. Your password and any sign-in emails are handled by that service, not by this game.</p>
 
           <p><strong>Gameplay data.</strong> To run the game and calculate your stats, we record things like your game sessions and results, the individual guesses you make, whether you used a hint, your mistakes and completion status, how long you spent actively playing, any puzzle ratings you submit, and your streak progress. We also keep the puzzle and puzzle-version information needed to make sure a game you're already partway through stays playable and resumable, even if that puzzle is edited later.</p>
 
-          <p><strong>Guest play data.</strong> If you play without signing in, your browser is given a randomly generated device identity and a security credential, stored on your device. These let us save and retrieve your guest progress, and let us recognize that games played on the same browser belong together. This data is tied to your browser, not to a real-world identity — but it isn't fully anonymous, since it can still be linked back to that browser. If you later create an account, you may be offered a one-time choice to bring that browser's guest history into your new account or to start fresh instead. Signing into an account you already have does not automatically import games you played while logged out.</p>
+          <p><strong>Guest play data.</strong> If you play without signing in, your browser is given a randomly generated device identity and a security credential, stored on your device. These let us save and retrieve your guest progress, and let us recognize that games played on the same browser belong together. This data is tied to your browser, not to a real-world identity — but it isn't fully anonymous, since it can still be linked back to that browser. The first time you sign in on a browser that holds guest games, you are offered a one-time choice for that browser: bring its guest history into your account, or start fresh. Either way the choice is recorded against that browser's device identity, which is then retired; nothing is imported without your say-so.</p>
 
           <p><strong>Submitted content.</strong> Feedback messages you send us through the in-app form, along with any email address you choose to include.</p>
 
@@ -62,7 +62,7 @@ export default function Privacy() {
             <li>Improve future puzzles and the site's design</li>
             <li>Understand website traffic through Google Analytics</li>
             <li>Respond to feedback you send us</li>
-            <li>Send authentication and other transactional emails (like sign-up confirmations and password resets)</li>
+            <li>Recognise your account when you sign in through the shared sign-in service</li>
             <li>Send optional product updates, only if you opt in</li>
           </ul>
         </section>
@@ -71,9 +71,10 @@ export default function Privacy() {
           <h2 className="text-base font-semibold">Who we share it with</h2>
           <p>We don't sell your data. We do share information with the service providers we rely on to run Rainbow Categories, each of which processes it on our behalf to provide their service:</p>
           <ul className="list-disc pl-5 space-y-1">
-            <li><strong>Supabase</strong> — database, authentication, and account-related email delivery</li>
+            <li><strong>Supabase</strong> — database and session handling</li>
+            <li><strong>WorkOS</strong> — the shared sign-in service (your password, sign-in emails and any Google sign-in you choose to use are handled there)</li>
             <li><strong>Vercel</strong> — hosting and content delivery</li>
-            <li><strong>Google</strong> — optional Google sign-in, and Google Analytics</li>
+            <li><strong>Google</strong> — Google Analytics</li>
           </ul>
         </section>
 
@@ -86,7 +87,8 @@ export default function Privacy() {
 
         <section className="space-y-2">
           <h2 className="text-base font-semibold">Your choices and deletion requests</h2>
-          <p>You can email <a href="mailto:samwestgames@gmail.com" className="underline hover:text-foreground">samwestgames@gmail.com</a> to request access to, correction of, or deletion of personal data we can reasonably identify and verify as yours. We'll respond within a reasonable timeframe.</p>
+          <p>If you have an account, you can delete it yourself at any time from the account menu (the person icon): this removes your Rainbow Categories account and the personal records attached to it. Your shared sign-in itself is not deleted by this; signing in again starts a fresh, empty Rainbow Categories account.</p>
+          <p>You can also email <a href="mailto:samwestgames@gmail.com" className="underline hover:text-foreground">samwestgames@gmail.com</a> to request access to, correction of, or deletion of personal data we can reasonably identify and verify as yours. We'll respond within a reasonable timeframe.</p>
           <p>Guest gameplay has no email address attached to it by default, so to locate and delete it we may need information tied to the specific browser or device it was played on. Clearing your browser's storage on your end does not, by itself, submit a deletion request to us. As with any deletion, de-identified or aggregate statistics that can no longer be linked back to you may remain.</p>
           <p>Depending on where you live and whether an applicable privacy law covers Rainbow Categories, you may have additional rights concerning your personal information. We honor privacy rights required by applicable law. Regardless of whether a particular state privacy law applies to us, you may contact us with a request concerning personal data we can reasonably identify and verify as yours. We do not sell personal information.</p>
         </section>

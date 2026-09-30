@@ -29,7 +29,7 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
 
   if (state.phase === "checking") {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-background">
+      <div className="fixed inset-0 flex items-center justify-center bg-background" data-testid="onboarding-checking">
         <div className="h-8 w-8 rounded-full border-2 border-muted-foreground/30 border-t-foreground animate-spin" />
       </div>
     );

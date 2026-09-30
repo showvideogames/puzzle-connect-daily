@@ -3244,7 +3244,7 @@
     {
       "name": "ensure_account",
       "args": "",
-      "returns": "TABLE(user_id uuid, global_user_id text, email text, created_at timestamp with time zone)",
+      "returns": "TABLE(outcome text, user_id uuid, global_user_id text, email text, created_at timestamp with time zone)",
       "language": "plpgsql",
       "kind": "function",
       "securityDefiner": true,
@@ -3256,7 +3256,7 @@
         "authenticated",
         "service_role"
       ],
-      "comment": "Called by the client after every sign-in. Creates the caller's accounts row from their custom:platform identity (or bumps last_seen_at) and returns it. Raises not_platform_linked for an auth user with no such identity, which the client treats as \"not a Rainbow account\": local sign-out, stay a guest."
+      "comment": "Called by the client after every sign-in. Creates the caller's accounts row from their custom:platform identity (or bumps last_seen_at) and returns it with outcome ok. Answers not_platform_linked (no account row) for an auth user with no such identity, which the client treats as \"not a Rainbow account\": local sign-out, stay a guest. Never raises."
     },
     {
       "name": "finalize_game_session",

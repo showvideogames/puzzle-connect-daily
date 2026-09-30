@@ -1,11 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import type { User as AuthUser } from "@supabase/supabase-js";
+import { ACCOUNTS_ENABLED, deleteMyAccount, signInWithPlatform } from "@/lib/platformSignIn";
 
 interface PlayerAuthProps {
   user: AuthUser | null;
@@ -15,30 +12,12 @@ interface PlayerAuthProps {
   hideTrigger?: boolean;
   /**
    * Which edge the signed-in account dropdown hangs from, i.e. which
-   * DIRECTION it opens. Default "right" is tuned for this component's
-   * original context — the site header, where the icon sits at the far
-   * right of the screen, so anchoring the dropdown's right edge to the
-   * icon and letting it grow leftward keeps it on-screen.
-   *
-   * That same anchor breaks in a context where the icon sits near the LEFT
-   * of its container instead (e.g. SettingsModal's Menu row, icon-then-
-   * label): "grow leftward from a point near the left edge" pushes most of
-   * a ~200px-wide dropdown off the visible panel. "left" flips it to anchor
-   * the LEFT edge and grow rightward, which is what a left-positioned
-   * trigger needs.
+   * DIRECTION it opens. Default "right" is tuned for the site header, where
+   * the icon sits at the far right of the screen. "left" is for a context
+   * where the icon sits near the LEFT of its container (SettingsModal's Menu
+   * row), so the dropdown grows rightward and stays on-screen.
    */
   dropdownAlign?: "left" | "right";
-}
-
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-      <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-      <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
-      <path d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.592.102-1.167.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/>
-      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z" fill="#EA4335"/>
-    </svg>
-  );
 }
 
 function PersonIcon({ filled, className }: { filled: boolean; className?: string }) {
@@ -61,103 +40,79 @@ function PersonIcon({ filled, className }: { filled: boolean; className?: string
   );
 }
 
-type AuthView = "signin" | "signup" | "forgot" | "confirm";
-
+/**
+ * The account control: one "Sign In" that leaves for the shared sign-in page,
+ * and, once signed in, a small menu with Sign Out and account deletion.
+ *
+ * Rainbow keeps no passwords and sends no email: there is nothing to sign up
+ * for, reset or confirm here. When accounts are switched off by configuration
+ * (see lib/platformSignIn.ts) this component renders nothing for a guest, so
+ * the whole game is guest-only without any other change.
+ */
 export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, hideTrigger = false, dropdownAlign = "right" }: PlayerAuthProps) {
   const [showAuth, setShowAuth] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   // forceOpen opens whichever UI actually applies right now: the sign-in
-  // modal when signed out, the account dropdown when signed in. This is
-  // what lets an external trigger — e.g. a full clickable row elsewhere in
-  // the app, not just this component's own icon button — open the correct
-  // one without having to know or duplicate which auth state the user is
-  // currently in. Every existing forceOpen caller only ever passes it while
-  // signed out (LandingScreen's own "Sign In" button is itself hidden once
-  // signed in), so this is a superset of the previous behavior, not a
-  // change to it.
+  // dialog when signed out, the account dropdown when signed in, so an
+  // external trigger (e.g. SettingsModal's "Sign In" row) need not know
+  // which auth state the user is in.
   useEffect(() => {
     if (!forceOpen) return;
     if (user) setShowDropdown(true);
     else setShowAuth(true);
   }, [forceOpen, user]);
-  // Mirrors handleModalClose's onForceClose?.() call below, but for the
-  // dropdown: there are several places that close it (outside click, Sign
-  // Out, a successful password change), and catching the true->false
-  // transition here once covers all of them — including any added later —
-  // rather than needing every one of those call sites to individually
-  // remember to notify the external controller. Without this, a second
-  // forceOpen=true edge would never re-fire the effect above, since
-  // forceOpen's own value would not have changed in between.
   const wasDropdownOpenRef = useRef(false);
   useEffect(() => {
     if (wasDropdownOpenRef.current && !showDropdown) onForceClose?.();
     wasDropdownOpenRef.current = showDropdown;
   }, [showDropdown, onForceClose]);
-  const [view, setView] = useState<AuthView>("signin");
-  const [resetSent, setResetSent] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [signingInGoogle, setSigningInGoogle] = useState(false);
-  const [showChangePassword, setShowChangePassword] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
-  const [changingPassword, setChangingPassword] = useState(false);
-  const [signupEmail, setSignupEmail] = useState("");
-  const [confirmError, setConfirmError] = useState(false);
-  const [confirmLoading, setConfirmLoading] = useState(false);
-  const [resending, setResending] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!showDropdown) return;
     function handleClick(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setShowDropdown(false);
-        setShowChangePassword(false);
+        setConfirmDelete(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showDropdown]);
 
-  async function handleSignOut() {
+  async function handleSignIn() {
+    setLeaving(true);
+    const problem = await signInWithPlatform();
+    if (problem) {
+      toast.error(problem);
+      setLeaving(false);
+    }
+    // On success the browser is leaving for the sign-in page.
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    const result = await deleteMyAccount();
+    setDeleting(false);
+    if (!result.ok) {
+      toast.error(result.message ?? "Could not delete the account.");
+      return;
+    }
     setShowDropdown(false);
-    onSignOut();
+    setConfirmDelete(false);
+    toast.success("Your Rainbow Categories account was deleted.");
   }
 
-  async function handleGoogleSignIn() {
-    setSigningInGoogle(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin },
-    });
-    if (error) {
-      toast.error(error.message);
-      setSigningInGoogle(false);
-    }
-    // On success the browser redirects to Google — no need to clear loading.
-  }
-
-  async function handleChangePassword(e: React.FormEvent) {
-    e.preventDefault();
-    setChangingPassword(true);
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Password updated!");
-      setShowChangePassword(false);
-      setShowDropdown(false);
-      setNewPassword("");
-    }
-    setChangingPassword(false);
-  }
-
-  // ── Logged in ──
+  // ── Signed in ──
   if (user) {
     return (
       <div className="relative shrink-0" ref={dropdownRef}>
         <button
-          onClick={() => { setShowDropdown((v) => !v); setShowChangePassword(false); }}
+          onClick={() => { setShowDropdown((v) => !v); setConfirmDelete(false); }}
           className="p-1 sm:p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95"
           aria-label="Account"
         >
@@ -170,70 +125,62 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
             style={{
               background: "hsl(var(--card))",
               border: "1px solid hsl(var(--border))",
-              minWidth: "200px",
+              minWidth: "220px",
               zIndex: 9999,
             }}
+            data-testid="account-menu"
           >
-            {!showChangePassword ? (
-              <>
-                <div className="px-4 py-3" style={{ borderBottom: "1px solid hsl(var(--border))" }}>
-                  <p style={{
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    color: "hsl(var(--muted-foreground))",
-                    marginBottom: "2px",
-                  }}>
-                    Signed in as
-                  </p>
-                  <p className="text-sm font-medium truncate">{user.email}</p>
-                </div>
-                <div className="py-1">
-                  <button
-                    onClick={() => setShowChangePassword(true)}
-                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-secondary transition-colors"
-                  >
-                    Change Password
-                  </button>
-                  <button
-                    onClick={handleSignOut}
-                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-secondary transition-colors"
-                    style={{ color: "hsl(0 84% 60%)" }}
-                  >
-                    Sign Out
-                  </button>
-                </div>
-              </>
+            <div className="px-4 py-3" style={{ borderBottom: "1px solid hsl(var(--border))" }}>
+              <p style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "hsl(var(--muted-foreground))",
+                marginBottom: "2px",
+              }}>
+                Signed in as
+              </p>
+              <p className="text-sm font-medium truncate" data-testid="account-email">{user.email}</p>
+            </div>
+            {!confirmDelete ? (
+              <div className="py-1">
+                <button
+                  onClick={() => { setShowDropdown(false); onSignOut(); }}
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-secondary transition-colors"
+                >
+                  Sign Out
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-secondary transition-colors"
+                  style={{ color: "hsl(0 84% 60%)" }}
+                >
+                  Delete account…
+                </button>
+              </div>
             ) : (
-              <form onSubmit={handleChangePassword} className="p-4 space-y-3">
-                <div className="flex items-center gap-2 mb-1">
+              <div className="p-4 space-y-3">
+                <p className="text-sm">Delete your Rainbow Categories account and its history? This cannot be undone.</p>
+                <p className="text-xs text-muted-foreground">Your sign-in itself is not affected; signing in again starts a fresh account.</p>
+                <div className="flex gap-2">
                   <button
-                    type="button"
-                    onClick={() => setShowChangePassword(false)}
-                    className="text-xs hover:opacity-70 transition-opacity"
-                    style={{ color: "hsl(var(--muted-foreground))" }}
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="flex-1 py-2 rounded-full text-sm font-semibold transition-colors hover:opacity-90 active:scale-95 disabled:opacity-50"
+                    style={{ background: "hsl(0 84% 60%)", color: "white" }}
                   >
-                    ←
+                    {deleting ? "Deleting…" : "Delete"}
                   </button>
-                  <p className="text-sm font-semibold">Change Password</p>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={deleting}
+                    className="flex-1 py-2 rounded-full text-sm font-medium transition-colors hover:bg-secondary active:scale-95"
+                  >
+                    Cancel
+                  </button>
                 </div>
-                <div>
-                  <Label htmlFor="new-pw" className="text-xs">New Password</Label>
-                  <Input
-                    id="new-pw"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    minLength={6}
-                    className="h-8 text-sm mt-1"
-                  />
-                </div>
-                <Button type="submit" className="w-full h-8 text-xs" disabled={changingPassword}>
-                  {changingPassword ? "Updating…" : "Update Password"}
-                </Button>
-              </form>
+              </div>
             )}
           </div>
         )}
@@ -241,13 +188,11 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
     );
   }
 
-  // ── Logged out ──
+  // ── Signed out ──
+  if (!ACCOUNTS_ENABLED) return null;
+
   const handleModalClose = () => {
     setShowAuth(false);
-    setView("signin");
-    setResetSent(false);
-    setSignupEmail("");
-    setConfirmError(false);
     onForceClose?.();
   };
 
@@ -269,11 +214,6 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
             className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
             onClick={handleModalClose}
           />
-          {/* A real dialog: it traps the page behind a backdrop and is the
-              only thing on screen that matters while it is open, so it says
-              so. Its heading names it, which is what makes "the Sign In
-              dialog" addressable — the page can also hold a "Sign In" menu
-              button at the same time. */}
           <div
             role="dialog"
             aria-modal="true"
@@ -281,209 +221,27 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
             className="relative bg-card rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4"
           >
             <h2 id="player-auth-heading" className="text-lg font-bold text-center mb-1">
-              {view === "confirm" ? "Check your email" : view === "signup" ? "Create Account" : view === "forgot" ? "Reset your password" : "Sign In"}
+              Sign In
             </h2>
-            <p className="text-xs text-muted-foreground text-center mb-4">
-              {view === "confirm"
-                ? "We sent a confirmation link to verify your account."
-                : view === "signup"
-                  ? "Sign up to track your stats and streaks."
-                  : view === "forgot"
-                    ? "Enter your email and we'll send you a reset link."
-                    : "Sign in to see puzzle stats."}
+            <p className="text-xs text-muted-foreground text-center mb-5">
+              Sign in to keep your stats and streaks on every device. Your guest games on this browser can come with you.
             </p>
-
-            {view === "confirm" ? (
-              <div className="space-y-4 text-center">
-                <p className="text-sm font-medium">{signupEmail}</p>
-
-                <Button
-                  className="w-full h-9 text-sm"
-                  disabled={confirmLoading}
-                  onClick={async () => {
-                    setConfirmLoading(true);
-                    setConfirmError(false);
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (session?.user?.email_confirmed_at) {
-                      toast.success("Email confirmed!");
-                      handleModalClose();
-                    } else {
-                      setConfirmError(true);
-                    }
-                    setConfirmLoading(false);
-                  }}
-                >
-                  {confirmLoading ? "Checking…" : "I've confirmed my email"}
-                </Button>
-
-                {confirmError && (
-                  <p className="text-xs" style={{ color: "hsl(0 84% 60%)" }}>
-                    Not confirmed yet — check your inbox.
-                  </p>
-                )}
-
-                <button
-                  type="button"
-                  disabled={resending}
-                  onClick={async () => {
-                    setResending(true);
-                    const { error } = await supabase.auth.resend({
-                      type: "signup",
-                      email: signupEmail,
-                    });
-                    if (error) toast.error(error.message);
-                    else toast.success("Confirmation email resent!");
-                    setResending(false);
-                  }}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                >
-                  {resending ? "Sending…" : "Resend confirmation email"}
-                </button>
-              </div>
-            ) : (
-              <>
-                {view !== "forgot" && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleGoogleSignIn}
-                      disabled={signingInGoogle || loading}
-                      className="w-full h-9 text-sm font-medium rounded-md border border-border bg-card
-                        hover:bg-secondary transition-colors active:scale-[0.98]
-                        disabled:opacity-50 disabled:cursor-default
-                        flex items-center justify-center gap-2"
-                    >
-                      <GoogleIcon />
-                      {signingInGoogle ? "Redirecting…" : `Sign ${view === "signup" ? "up" : "in"} with Google`}
-                    </button>
-                    <div className="flex items-center gap-3 my-4">
-                      <div className="flex-1 h-px bg-border" />
-                      <span className="text-xs text-muted-foreground">or</span>
-                      <div className="flex-1 h-px bg-border" />
-                    </div>
-                  </>
-                )}
-
-                {view === "forgot" ? (
-              resetSent ? (
-                <div className="space-y-4 text-center">
-                  <p className="text-sm">Check your email for a reset link.</p>
-                  <button
-                    type="button"
-                    onClick={() => { setView("signin"); setResetSent(false); }}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    ← Back to sign in
-                  </button>
-                </div>
-              ) : (
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    setLoading(true);
-                    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                      redirectTo: "https://rainbowcategories.com/reset-password",
-                    });
-                    setLoading(false);
-                    if (error) toast.error(error.message);
-                    else setResetSent(true);
-                  }}
-                  className="space-y-3"
-                >
-                  <div>
-                    <Label htmlFor="player-email" className="text-xs">Email</Label>
-                    <Input
-                      id="player-email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      className="h-9 text-sm"
-                    />
-                  </div>
-                  <Button type="submit" className="w-full h-9 text-sm" disabled={loading}>
-                    {loading ? "…" : "Send reset link"}
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => setView("signin")}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center"
-                  >
-                    ← Back to sign in
-                  </button>
-                </form>
-              )
-            ) : (
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  setLoading(true);
-                  if (view === "signup") {
-                    const { error } = await supabase.auth.signUp({ email, password });
-                    if (error) toast.error(error.message);
-                    else { setSignupEmail(email); setView("confirm"); }
-                  } else {
-                    const { error } = await supabase.auth.signInWithPassword({ email, password });
-                    if (error) toast.error(error.message);
-                    else handleModalClose();
-                  }
-                  setLoading(false);
-                }}
-                className="space-y-3"
-              >
-                <div>
-                  <Label htmlFor="player-email" className="text-xs">Email</Label>
-                  <Input
-                    id="player-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="h-9 text-sm"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="player-pw" className="text-xs">Password</Label>
-                  <Input
-                    id="player-pw"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="h-9 text-sm"
-                  />
-                  {view === "signin" && (
-                    <button
-                      type="button"
-                      onClick={() => setView("forgot")}
-                      className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-right mt-1"
-                    >
-                      Forgot password?
-                    </button>
-                  )}
-                </div>
-                <Button type="submit" className="w-full h-9 text-sm" disabled={loading}>
-                  {loading ? "…" : view === "signup" ? "Sign Up" : "Sign In"}
-                </Button>
-                {view === "signup" && (
-                  <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
-                    By signing up, you agree to our{" "}
-                    <Link to="/terms" className="underline hover:text-foreground">Terms of Service</Link>
-                    {" "}and{" "}
-                    <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>.
-                  </p>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setView(view === "signup" ? "signin" : "signup")}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center"
-                >
-                  {view === "signup" ? "Already have an account? Sign in" : "Need an account? Sign up"}
-                </button>
-              </form>
-            )}
-              </>
-            )}
+            <button
+              type="button"
+              onClick={handleSignIn}
+              disabled={leaving}
+              data-testid="platform-sign-in"
+              className="w-full py-2.5 rounded-full text-sm font-semibold transition-colors hover:opacity-90 active:scale-95 disabled:opacity-50"
+              style={{ background: "hsl(var(--foreground))", color: "hsl(var(--background))" }}
+            >
+              {leaving ? "Opening sign-in…" : "Continue to sign in"}
+            </button>
+            <p className="text-[10px] text-muted-foreground text-center leading-relaxed mt-4">
+              By signing in, you agree to our{" "}
+              <Link to="/terms" className="underline hover:text-foreground">Terms of Service</Link>
+              {" "}and{" "}
+              <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>.
+            </p>
           </div>
         </div>
       )}

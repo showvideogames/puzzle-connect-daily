@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { CalendarCheck } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { signOutOfRainbow } from "@/lib/platformSignIn";
 import { GameHeader } from "@/components/GameHeader";
 import { TutorialModal } from "@/components/TutorialModal";
 import { StatsModal } from "@/components/StatsModal";
@@ -250,7 +251,7 @@ export default function MiniArchive() {
         onHowToPlayClick={() => setActiveModal("help")}
         onSettingsClick={() => setActiveModal("settings")}
         user={user}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={() => signOutOfRainbow()}
         simplifiedIcons
       />
       <div className="w-full max-w-lg px-4">
@@ -320,7 +321,7 @@ export default function MiniArchive() {
         showMenuLinks
         onHowToPlayClick={() => setActiveModal("help")}
         user={user}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={() => signOutOfRainbow()}
       />
       <FeedbackModal open={activeModal === "feedback"} onClose={() => setActiveModal(null)} user={null} />
       <SiteFooter />

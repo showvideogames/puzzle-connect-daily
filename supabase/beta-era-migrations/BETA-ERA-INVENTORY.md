@@ -8,7 +8,7 @@ GENERATED once, on 2026-09-30, by applying the 32 beta-era migrations plus the f
 |---|---|
 | Tables | 23 |
 | Columns | 195 |
-| Constraints | 203 |
+| Constraints | 84 |
 | Indexes | 56 |
 | Functions | 53 |
 | Triggers | 4 |
@@ -28,7 +28,7 @@ GENERATED once, on 2026-09-30, by applying the 32 beta-era migrations plus the f
 
 > One row per account. status=pending means a genuinely new account with an unresolved import decision, and gameplay is refused until it resolves. Terminal states are never re-entered. Rows are created lazily by resolve_onboarding; every account existing at cutover was backfilled as legacy.
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -40,12 +40,9 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `account_onboarding_created_at_not_null` NOT NULL created_at
 - `account_onboarding_pkey` PRIMARY KEY (user_id)
 - `account_onboarding_status_check` CHECK ((status = ANY (ARRAY['pending'::text, 'no_guest_history'::text, 'imported'::text, 'started_fresh'::text, 'legacy'::text])))
-- `account_onboarding_status_not_null` NOT NULL status
 - `account_onboarding_user_id_fkey` FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
-- `account_onboarding_user_id_not_null` NOT NULL user_id
 
 Indexes:
 
@@ -53,7 +50,7 @@ Indexes:
 
 ### `archive_access`
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: anon=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE, authenticated=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -64,13 +61,10 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `archive_access_granted_at_not_null` NOT NULL granted_at
 - `archive_access_granted_by_fkey` FOREIGN KEY (granted_by) REFERENCES auth.users(id) ON DELETE SET NULL
-- `archive_access_id_not_null` NOT NULL id
 - `archive_access_pkey` PRIMARY KEY (id)
 - `archive_access_user_id_fkey` FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
 - `archive_access_user_id_key` UNIQUE (user_id)
-- `archive_access_user_id_not_null` NOT NULL user_id
 
 Indexes:
 
@@ -86,7 +80,7 @@ Policies:
 
 > Beta playtest feedback forms. No account required to submit -- validated and inserted only through submit_beta_feedback(). Read only by admins.
 
-RLS: enabled. Grants: authenticated=SELECT
+RLS: enabled. Grants: authenticated=SELECT, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -105,20 +99,13 @@ RLS: enabled. Grants: authenticated=SELECT
 
 Constraints:
 
-- `beta_feedback_created_at_not_null` NOT NULL created_at
 - `beta_feedback_difficulty_rating_check` CHECK (((difficulty_rating >= 1) AND (difficulty_rating <= 5)))
-- `beta_feedback_difficulty_rating_not_null` NOT NULL difficulty_rating
 - `beta_feedback_fun_rating_check` CHECK (((fun_rating >= 1) AND (fun_rating <= 5)))
-- `beta_feedback_fun_rating_not_null` NOT NULL fun_rating
-- `beta_feedback_id_not_null` NOT NULL id
 - `beta_feedback_pkey` PRIMARY KEY (id)
 - `beta_feedback_playtest_id_fkey` FOREIGN KEY (playtest_id) REFERENCES beta_playtests(id) ON DELETE SET NULL
 - `beta_feedback_puzzle_id_fkey` FOREIGN KEY (puzzle_id) REFERENCES puzzles(id) ON DELETE CASCADE
-- `beta_feedback_puzzle_id_not_null` NOT NULL puzzle_id
 - `beta_feedback_puzzle_version_id_fkey` FOREIGN KEY (puzzle_version_id) REFERENCES puzzle_versions(id) ON DELETE CASCADE
-- `beta_feedback_puzzle_version_id_not_null` NOT NULL puzzle_version_id
 - `beta_feedback_rainbow_fairness_rating_check` CHECK (((rainbow_fairness_rating >= 1) AND (rainbow_fairness_rating <= 5)))
-- `beta_feedback_would_play_again_not_null` NOT NULL would_play_again
 
 Indexes:
 
@@ -133,7 +120,7 @@ Policies:
 
 > Lightweight Beta-only playtest tracking. Never contributes to game_sessions/game_results/user_streaks/puzzle_aggregates. Written only through start_beta_playtest/complete_beta_playtest/reset_beta_playtest; read only by admins.
 
-RLS: enabled. Grants: authenticated=SELECT
+RLS: enabled. Grants: authenticated=SELECT, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -152,20 +139,10 @@ RLS: enabled. Grants: authenticated=SELECT
 
 Constraints:
 
-- `beta_playtests_device_id_not_null` NOT NULL device_id
-- `beta_playtests_hints_used_not_null` NOT NULL hints_used
-- `beta_playtests_id_not_null` NOT NULL id
-- `beta_playtests_is_reset_not_null` NOT NULL is_reset
-- `beta_playtests_mistakes_not_null` NOT NULL mistakes
 - `beta_playtests_pkey` PRIMARY KEY (id)
 - `beta_playtests_puzzle_id_fkey` FOREIGN KEY (puzzle_id) REFERENCES puzzles(id) ON DELETE CASCADE
-- `beta_playtests_puzzle_id_not_null` NOT NULL puzzle_id
 - `beta_playtests_puzzle_version_id_fkey` FOREIGN KEY (puzzle_version_id) REFERENCES puzzle_versions(id) ON DELETE CASCADE
-- `beta_playtests_puzzle_version_id_not_null` NOT NULL puzzle_version_id
-- `beta_playtests_started_at_not_null` NOT NULL started_at
 - `beta_playtests_status_check` CHECK ((status = ANY (ARRAY['in_progress'::text, 'completed'::text, 'abandoned'::text])))
-- `beta_playtests_status_not_null` NOT NULL status
-- `beta_playtests_updated_at_not_null` NOT NULL updated_at
 
 Indexes:
 
@@ -181,7 +158,7 @@ Policies:
 
 > Public creator identity for signed-in custom-puzzle authors: slug + the display name they already published. Created lazily by create_custom_puzzle. Read only through get_creator_profile.
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -192,14 +169,10 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `creator_profiles_created_at_not_null` NOT NULL created_at
-- `creator_profiles_display_name_not_null` NOT NULL display_name
 - `creator_profiles_pkey` PRIMARY KEY (user_id)
 - `creator_profiles_public_slug_check` CHECK (((public_slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text) AND ((length(public_slug) >= 3) AND (length(public_slug) <= 48))))
 - `creator_profiles_public_slug_key` UNIQUE (public_slug)
-- `creator_profiles_public_slug_not_null` NOT NULL public_slug
 - `creator_profiles_user_id_fkey` FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
-- `creator_profiles_user_id_not_null` NOT NULL user_id
 
 Indexes:
 
@@ -210,7 +183,7 @@ Indexes:
 
 > One row per (account, custom puzzle). No email or profile data. Written only by set_custom_puzzle_favorite (auth.uid() only); read only in aggregate or as the caller's own list.
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -220,12 +193,9 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `custom_puzzle_favorites_created_at_not_null` NOT NULL created_at
 - `custom_puzzle_favorites_custom_puzzle_id_fkey` FOREIGN KEY (custom_puzzle_id) REFERENCES custom_puzzles(id) ON DELETE CASCADE
-- `custom_puzzle_favorites_custom_puzzle_id_not_null` NOT NULL custom_puzzle_id
 - `custom_puzzle_favorites_pkey` PRIMARY KEY (custom_puzzle_id, user_id)
 - `custom_puzzle_favorites_user_id_fkey` FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
-- `custom_puzzle_favorites_user_id_not_null` NOT NULL user_id
 
 Indexes:
 
@@ -236,7 +206,7 @@ Indexes:
 
 > One row per (custom_puzzle, device) that finished a game. No guess/hint/tile-selection detail, no player-identifying data beyond the existing verified device id. Written only by submit_custom_puzzle_result; read only in aggregate, by get_custom_puzzle_stats.
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -250,17 +220,10 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `custom_puzzle_results_completed_at_not_null` NOT NULL completed_at
 - `custom_puzzle_results_custom_puzzle_id_device_id_key` UNIQUE (custom_puzzle_id, device_id)
 - `custom_puzzle_results_custom_puzzle_id_fkey` FOREIGN KEY (custom_puzzle_id) REFERENCES custom_puzzles(id) ON DELETE CASCADE
-- `custom_puzzle_results_custom_puzzle_id_not_null` NOT NULL custom_puzzle_id
-- `custom_puzzle_results_device_id_not_null` NOT NULL device_id
-- `custom_puzzle_results_id_not_null` NOT NULL id
 - `custom_puzzle_results_pkey` PRIMARY KEY (id)
-- `custom_puzzle_results_recent_run_ids_not_null` NOT NULL recent_run_ids
 - `custom_puzzle_results_total_guesses_check` CHECK (((total_guesses >= 0) AND (total_guesses <= 60)))
-- `custom_puzzle_results_total_guesses_not_null` NOT NULL total_guesses
-- `custom_puzzle_results_won_not_null` NOT NULL won
 
 Indexes:
 
@@ -272,7 +235,7 @@ Indexes:
 
 > One fixed-size aggregate row per custom puzzle (wins, losses, five guess buckets). Written only by submit_custom_puzzle_result; read only by get_custom_puzzle_stats and get_creator_profile.
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -290,25 +253,15 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 Constraints:
 
 - `custom_puzzle_stats_custom_puzzle_id_fkey` FOREIGN KEY (custom_puzzle_id) REFERENCES custom_puzzles(id) ON DELETE CASCADE
-- `custom_puzzle_stats_custom_puzzle_id_not_null` NOT NULL custom_puzzle_id
 - `custom_puzzle_stats_guesses_4_check` CHECK ((guesses_4 >= 0))
-- `custom_puzzle_stats_guesses_4_not_null` NOT NULL guesses_4
 - `custom_puzzle_stats_guesses_5_check` CHECK ((guesses_5 >= 0))
-- `custom_puzzle_stats_guesses_5_not_null` NOT NULL guesses_5
 - `custom_puzzle_stats_guesses_6_check` CHECK ((guesses_6 >= 0))
-- `custom_puzzle_stats_guesses_6_not_null` NOT NULL guesses_6
 - `custom_puzzle_stats_guesses_7_check` CHECK ((guesses_7 >= 0))
-- `custom_puzzle_stats_guesses_7_not_null` NOT NULL guesses_7
 - `custom_puzzle_stats_guesses_8_plus_check` CHECK ((guesses_8_plus >= 0))
-- `custom_puzzle_stats_guesses_8_plus_not_null` NOT NULL guesses_8_plus
 - `custom_puzzle_stats_losses_check` CHECK ((losses >= 0))
-- `custom_puzzle_stats_losses_not_null` NOT NULL losses
 - `custom_puzzle_stats_pkey` PRIMARY KEY (custom_puzzle_id)
-- `custom_puzzle_stats_updated_at_not_null` NOT NULL updated_at
 - `custom_puzzle_stats_win_guess_total_check` CHECK ((win_guess_total >= 0))
-- `custom_puzzle_stats_win_guess_total_not_null` NOT NULL win_guess_total
 - `custom_puzzle_stats_wins_check` CHECK ((wins >= 0))
-- `custom_puzzle_stats_wins_not_null` NOT NULL wins
 
 Indexes:
 
@@ -318,7 +271,7 @@ Indexes:
 
 > Player-created puzzles (Phase 2, Full 4x4 only). Immutable after creation. Reachable only through create_custom_puzzle/get_custom_puzzle -- no direct grants to anon/authenticated.
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -335,21 +288,12 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `custom_puzzles_content_not_null` NOT NULL content
-- `custom_puzzles_created_at_not_null` NOT NULL created_at
 - `custom_puzzles_created_by_fkey` FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL
-- `custom_puzzles_creator_name_not_null` NOT NULL creator_name
-- `custom_puzzles_id_not_null` NOT NULL id
 - `custom_puzzles_moderation_status_check` CHECK ((moderation_status = ANY (ARRAY['active'::text, 'hidden'::text])))
-- `custom_puzzles_moderation_status_not_null` NOT NULL moderation_status
 - `custom_puzzles_pkey` PRIMARY KEY (id)
 - `custom_puzzles_share_id_key` UNIQUE (share_id)
-- `custom_puzzles_share_id_not_null` NOT NULL share_id
 - `custom_puzzles_short_code_format` CHECK ((short_code ~ '^[2-9A-HJKMNP-Za-hjkmnp-z]{8,12}$'::text))
-- `custom_puzzles_short_code_not_null` NOT NULL short_code
-- `custom_puzzles_title_not_null` NOT NULL title
 - `custom_puzzles_visibility_check` CHECK ((visibility = ANY (ARRAY['public'::text, 'private'::text])))
-- `custom_puzzles_visibility_not_null` NOT NULL visibility
 
 Indexes:
 
@@ -368,7 +312,7 @@ Policies:
 
 > One row per anonymous browser identity. token_hash is sha256 of a token returned exactly once at creation and never stored in the clear. retired_at is permanent: a retired identity can never be verified, claimed or resumed, but its gameplay rows are never touched.
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -380,8 +324,6 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `device_identities_created_at_not_null` NOT NULL created_at
-- `device_identities_device_id_not_null` NOT NULL device_id
 - `device_identities_pkey` PRIMARY KEY (device_id)
 
 Indexes:
@@ -390,7 +332,7 @@ Indexes:
 
 ### `feedback`
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: anon=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE, authenticated=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -403,10 +345,7 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `feedback_id_not_null` NOT NULL id
-- `feedback_message_not_null` NOT NULL message
 - `feedback_pkey` PRIMARY KEY (id)
-- `feedback_type_not_null` NOT NULL type
 
 Indexes:
 
@@ -418,7 +357,7 @@ Policies:
 
 ### `game_results`
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: anon=REFERENCES/SELECT/TRIGGER, authenticated=REFERENCES/SELECT/TRIGGER, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -431,16 +370,10 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `game_results_completed_at_not_null` NOT NULL completed_at
-- `game_results_id_not_null` NOT NULL id
-- `game_results_mistakes_not_null` NOT NULL mistakes
 - `game_results_pkey` PRIMARY KEY (id)
 - `game_results_puzzle_id_fkey` FOREIGN KEY (puzzle_id) REFERENCES puzzles(id) ON DELETE CASCADE
-- `game_results_puzzle_id_not_null` NOT NULL puzzle_id
 - `game_results_user_id_fkey` FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
-- `game_results_user_id_not_null` NOT NULL user_id
 - `game_results_user_id_puzzle_id_key` UNIQUE (user_id, puzzle_id)
-- `game_results_won_not_null` NOT NULL won
 
 Indexes:
 
@@ -454,7 +387,7 @@ Policies:
 
 ### `game_sessions`
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: anon=REFERENCES/SELECT/TRIGGER, authenticated=REFERENCES/SELECT/TRIGGER, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -483,18 +416,11 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `game_sessions_bonus_rainbow_attempted_not_null` NOT NULL bonus_rainbow_attempted
 - `game_sessions_format_check` CHECK ((format = ANY (ARRAY['full'::text, 'mini'::text])))
-- `game_sessions_format_not_null` NOT NULL format
-- `game_sessions_id_not_null` NOT NULL id
-- `game_sessions_is_official_not_null` NOT NULL is_official
-- `game_sessions_mistakes_not_null` NOT NULL mistakes
 - `game_sessions_pkey` PRIMARY KEY (id)
-- `game_sessions_puzzle_id_not_null` NOT NULL puzzle_id
 - `game_sessions_rainbow_source_check` CHECK (((rainbow_source IS NULL) OR (rainbow_source = ANY (ARRAY['in_game'::text, 'post_game'::text]))))
 - `game_sessions_status_check` CHECK ((status = ANY (ARRAY['in_progress'::text, 'won'::text, 'lost'::text])))
 - `game_sessions_status_completed_at_check` CHECK (((status = 'in_progress'::text) = (completed_at IS NULL)))
-- `game_sessions_status_not_null` NOT NULL status
 - `game_sessions_status_won_check` CHECK ((((status = 'in_progress'::text) AND (won IS NULL)) OR ((status = 'won'::text) AND (won IS TRUE)) OR ((status = 'lost'::text) AND (won IS FALSE))))
 
 Indexes:
@@ -520,7 +446,7 @@ Policies:
 
 ### `guess_events`
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: anon=REFERENCES/SELECT/TRIGGER, authenticated=REFERENCES/SELECT/TRIGGER, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -542,12 +468,7 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 Constraints:
 
 - `guess_events_attempt_type_check` CHECK (((attempt_type IS NULL) OR (attempt_type = ANY (ARRAY['normal'::text, 'bonus_rainbow'::text]))))
-- `guess_events_correct_not_null` NOT NULL correct
-- `guess_events_game_session_id_not_null` NOT NULL game_session_id
-- `guess_events_guess_number_not_null` NOT NULL guess_number
-- `guess_events_id_not_null` NOT NULL id
 - `guess_events_pkey` PRIMARY KEY (id)
-- `guess_events_words_not_null` NOT NULL words
 
 Indexes:
 
@@ -566,7 +487,7 @@ Policies:
 
 > One row per hint ACTUALLY REVEALED. Opening the hint modal or viewing options is deliberately not recorded. Idempotent on (game_session_id, hint_type).
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: anon=REFERENCES/SELECT/TRIGGER, authenticated=REFERENCES/SELECT/TRIGGER, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -583,13 +504,9 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 Constraints:
 
 - `hint_events_game_session_id_fkey` FOREIGN KEY (game_session_id) REFERENCES game_sessions(id) ON DELETE CASCADE
-- `hint_events_game_session_id_not_null` NOT NULL game_session_id
 - `hint_events_hint_type_check` CHECK ((hint_type = ANY (ARRAY['small'::text, 'full'::text])))
-- `hint_events_hint_type_not_null` NOT NULL hint_type
-- `hint_events_id_not_null` NOT NULL id
 - `hint_events_one_per_type` UNIQUE (game_session_id, hint_type)
 - `hint_events_pkey` PRIMARY KEY (id)
-- `hint_events_revealed_at_not_null` NOT NULL revealed_at
 
 Indexes:
 
@@ -608,7 +525,7 @@ Policies:
 
 > Lucky Bot Luck Score ceiling ("1 in N" that scores 100). A puzzle uses the row with the latest effective_from on or before its own date, so adding a row later never changes an older puzzle's score. Add rows; do not edit old ones.
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -620,9 +537,6 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 Constraints:
 
 - `luck_score_ceilings_ceiling_check` CHECK ((ceiling >= 2))
-- `luck_score_ceilings_ceiling_not_null` NOT NULL ceiling
-- `luck_score_ceilings_created_at_not_null` NOT NULL created_at
-- `luck_score_ceilings_effective_from_not_null` NOT NULL effective_from
 - `luck_score_ceilings_pkey` PRIMARY KEY (effective_from)
 
 Indexes:
@@ -631,7 +545,7 @@ Indexes:
 
 ### `puzzle_aggregates`
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: anon=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE, authenticated=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -646,7 +560,6 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 Constraints:
 
 - `puzzle_aggregates_pkey` PRIMARY KEY (puzzle_id)
-- `puzzle_aggregates_puzzle_id_not_null` NOT NULL puzzle_id
 
 Indexes:
 
@@ -658,7 +571,7 @@ Policies:
 
 ### `puzzle_groups`
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: anon=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE, authenticated=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -674,16 +587,9 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `puzzle_groups_category_emoji_hint_only_not_null` NOT NULL category_emoji_hint_only
-- `puzzle_groups_category_not_null` NOT NULL category
 - `puzzle_groups_difficulty_check` CHECK (((difficulty >= 1) AND (difficulty <= 4)))
-- `puzzle_groups_difficulty_not_null` NOT NULL difficulty
-- `puzzle_groups_id_not_null` NOT NULL id
 - `puzzle_groups_pkey` PRIMARY KEY (id)
 - `puzzle_groups_puzzle_id_fkey` FOREIGN KEY (puzzle_id) REFERENCES puzzles(id) ON DELETE CASCADE
-- `puzzle_groups_puzzle_id_not_null` NOT NULL puzzle_id
-- `puzzle_groups_sort_order_not_null` NOT NULL sort_order
-- `puzzle_groups_words_not_null` NOT NULL words
 
 Indexes:
 
@@ -698,7 +604,7 @@ Policies:
 
 ### `puzzle_ratings`
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: anon=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE, authenticated=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -710,11 +616,7 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `puzzle_ratings_id_not_null` NOT NULL id
 - `puzzle_ratings_pkey` PRIMARY KEY (id)
-- `puzzle_ratings_puzzle_id_not_null` NOT NULL puzzle_id
-- `puzzle_ratings_rating_not_null` NOT NULL rating
-- `puzzle_ratings_user_id_not_null` NOT NULL user_id
 
 Indexes:
 
@@ -732,7 +634,7 @@ Policies:
 
 > Immutable gameplay-content snapshots of a puzzle. Never updated, never deleted except by cascade when the puzzle itself is deleted. A game_sessions row pins the exact snapshot that player is playing.
 
-RLS: enabled. Grants: anon=SELECT, authenticated=SELECT
+RLS: enabled. Grants: anon=SELECT, authenticated=SELECT, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -745,16 +647,11 @@ RLS: enabled. Grants: anon=SELECT, authenticated=SELECT
 
 Constraints:
 
-- `puzzle_versions_content_not_null` NOT NULL content
-- `puzzle_versions_created_at_not_null` NOT NULL created_at
 - `puzzle_versions_created_by_fkey` FOREIGN KEY (created_by) REFERENCES auth.users(id)
-- `puzzle_versions_id_not_null` NOT NULL id
 - `puzzle_versions_pkey` PRIMARY KEY (id)
 - `puzzle_versions_puzzle_id_fkey` FOREIGN KEY (puzzle_id) REFERENCES puzzles(id) ON DELETE CASCADE
-- `puzzle_versions_puzzle_id_not_null` NOT NULL puzzle_id
 - `puzzle_versions_puzzle_id_version_number_key` UNIQUE (puzzle_id, version_number)
 - `puzzle_versions_version_number_check` CHECK ((version_number >= 1))
-- `puzzle_versions_version_number_not_null` NOT NULL version_number
 
 Indexes:
 
@@ -775,7 +672,7 @@ Policies:
 
 ### `puzzles`
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: anon=REFERENCES/SELECT/TRIGGER/TRUNCATE, authenticated=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -805,20 +702,10 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `puzzles_alphabetize_completed_not_null` NOT NULL alphabetize_completed
-- `puzzles_created_at_not_null` NOT NULL created_at
 - `puzzles_created_by_fkey` FOREIGN KEY (created_by) REFERENCES auth.users(id)
-- `puzzles_date_not_null` NOT NULL date
-- `puzzles_designer_name_not_null` NOT NULL designer_name
 - `puzzles_format_check` CHECK ((format = ANY (ARRAY['full'::text, 'mini'::text])))
-- `puzzles_format_not_null` NOT NULL format
-- `puzzles_id_not_null` NOT NULL id
-- `puzzles_is_beta_not_null` NOT NULL is_beta
-- `puzzles_is_published_not_null` NOT NULL is_published
 - `puzzles_not_beta_and_published` CHECK ((NOT (is_published AND is_beta)))
 - `puzzles_pkey` PRIMARY KEY (id)
-- `puzzles_rainbow_category_emoji_hint_only_not_null` NOT NULL rainbow_category_emoji_hint_only
-- `puzzles_updated_at_not_null` NOT NULL updated_at
 
 Indexes:
 
@@ -837,7 +724,7 @@ Policies:
 
 ### `user_roles`
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: anon=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE, authenticated=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE, service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -848,12 +735,8 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 
 Constraints:
 
-- `user_roles_created_at_not_null` NOT NULL created_at
-- `user_roles_id_not_null` NOT NULL id
 - `user_roles_pkey` PRIMARY KEY (id)
-- `user_roles_role_not_null` NOT NULL role
 - `user_roles_user_id_fkey` FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
-- `user_roles_user_id_not_null` NOT NULL user_id
 - `user_roles_user_id_role_key` UNIQUE (user_id, role)
 
 Indexes:
@@ -868,7 +751,7 @@ Policies:
 
 ### `user_streaks`
 
-RLS: enabled. Grants: none for anon/authenticated/service_role
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -884,8 +767,6 @@ RLS: enabled. Grants: none for anon/authenticated/service_role
 Constraints:
 
 - `user_streaks_format_check` CHECK ((format = ANY (ARRAY['full'::text, 'mini'::text])))
-- `user_streaks_format_not_null` NOT NULL format
-- `user_streaks_id_not_null` NOT NULL id
 - `user_streaks_pkey` PRIMARY KEY (id)
 
 Indexes:
@@ -898,20 +779,20 @@ Indexes:
 
 | Function | Returns | Definer | Volatility | Executable by |
 |---|---|---|---|---|
-| `admin_save_puzzle(_puzzle_id uuid, _metadata jsonb, _content jsonb)` | jsonb | yes | volatile | authenticated, service_role |
-| `admin_set_custom_puzzle_status(_puzzle_id uuid, _status text)` | boolean | yes | volatile | authenticated, service_role |
+| `admin_save_puzzle(_puzzle_id uuid, _metadata jsonb, _content jsonb)` | jsonb | yes | volatile | anon, authenticated, service_role |
+| `admin_set_custom_puzzle_status(_puzzle_id uuid, _status text)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `complete_beta_playtest(_playtest_id uuid, _device_id text, _device_token text, _won boolean, _mistakes integer, _hints_used boolean)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `count_own_anonymous_sessions(_device_id text, _device_token text)` | integer | yes | stable | anon, authenticated, service_role |
 | `create_custom_puzzle(_creator_name text, _title text, _visibility text, _content jsonb)` | jsonb | yes | volatile | anon, authenticated, service_role |
 | `create_device_identity()` | TABLE(device_id text, device_token text) | yes | volatile | anon, authenticated, service_role |
 | `create_game_session(_puzzle_id text, _device_id text, _device_token text, _entry_context text, _active_time_seconds integer, _mistakes integer, _puzzle_version_id uuid)` | uuid | yes | volatile | anon, authenticated, service_role |
-| `custom_creator_new_slug(_name text)` | text | no | volatile | none of the client roles |
-| `custom_ensure_creator_profile(_uid uuid, _name text)` | void | yes | volatile | none of the client roles |
-| `custom_puzzle_new_short_code()` | text | no | volatile | none of the client roles |
-| `custom_puzzle_public_json(_p custom_puzzles)` | jsonb | yes | stable | none of the client roles |
-| `custom_random_string(_alphabet text, _len integer)` | text | no | volatile | none of the client roles |
+| `custom_creator_new_slug(_name text)` | text | no | volatile | service_role |
+| `custom_ensure_creator_profile(_uid uuid, _name text)` | void | yes | volatile | service_role |
+| `custom_puzzle_new_short_code()` | text | no | volatile | service_role |
+| `custom_puzzle_public_json(_p custom_puzzles)` | jsonb | yes | stable | service_role |
+| `custom_random_string(_alphabet text, _len integer)` | text | no | volatile | service_role |
 | `decline_guest_history(_device_id text, _device_token text)` | TABLE(outcome text) | yes | volatile | authenticated, service_role |
-| `device_has_importable_history(_device_id text)` | boolean | yes | stable | none of the client roles |
+| `device_has_importable_history(_device_id text)` | boolean | yes | stable | service_role |
 | `finalize_game_session(_session_id uuid, _device_id text, _device_token text, _won boolean, _mistakes integer, _active_time_seconds integer, _found_rainbow boolean, _rainbow_solve_index smallint, _solve_order jsonb, _hints_used boolean, _share_grid text, _skip_streak boolean, _local_date text)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `game_sessions_sync_status()` | trigger | yes | volatile | anon, authenticated, service_role |
 | `get_archive_puzzles()` | TABLE(id uuid, date date, title text) | yes | stable | anon, authenticated, service_role |
@@ -930,13 +811,13 @@ Indexes:
 | `has_official_result(_puzzle_id text, _device_id text, _device_token text)` | boolean | yes | stable | anon, authenticated, service_role |
 | `has_role(_user_id uuid, _role app_role)` | boolean | yes | stable | anon, authenticated, service_role |
 | `import_guest_history(_device_id text, _device_token text)` | TABLE(outcome text, sessions_claimed integer) | yes | volatile | authenticated, service_role |
-| `luck_eligible_paths(_puzzle_id text)` | TABLE(session_id uuid, user_id uuid, device_id text, path jsonb) | yes | stable | none of the client roles |
+| `luck_eligible_paths(_puzzle_id text)` | TABLE(session_id uuid, user_id uuid, device_id text, path jsonb) | yes | stable | service_role |
 | `puzzle_versions_block_update()` | trigger | no | volatile | anon, authenticated, service_role |
 | `puzzles_check_current_version()` | trigger | no | volatile | anon, authenticated, service_role |
 | `record_bonus_rainbow(_session_id uuid, _device_id text, _device_token text, _guess_number integer, _words jsonb, _correct boolean, _guessed_at timestamp with time zone, _active_time_seconds integer, _groups_solved smallint)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `record_guess_events(_session_id uuid, _device_id text, _device_token text, _events jsonb)` | integer | yes | volatile | anon, authenticated, service_role |
 | `record_hint_event(_session_id uuid, _device_id text, _device_token text, _hint_type text, _revealed_at timestamp with time zone, _active_time_seconds integer, _guess_count smallint, _mistakes smallint, _groups_solved smallint, _rainbow_found boolean)` | boolean | yes | volatile | anon, authenticated, service_role |
-| `record_streak(_user_id uuid, _device_id text, _won boolean, _local_date text, _format text)` | void | yes | volatile | none of the client roles |
+| `record_streak(_user_id uuid, _device_id text, _won boolean, _local_date text, _format text)` | void | yes | volatile | service_role |
 | `reset_beta_playtest(_puzzle_id uuid, _device_id text, _device_token text)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `resolve_onboarding(_device_id text, _device_token text)` | TABLE(outcome text, status text, games_played integer, current_streak integer, longest_streak integer) | yes | volatile | authenticated, service_role |
 | `session_capability_ok(_session_id uuid, _device_id text, _device_token text)` | boolean | yes | stable | anon, authenticated, service_role |
@@ -949,8 +830,8 @@ Indexes:
 | `touch_game_session(_session_id uuid, _device_id text, _device_token text, _active_time_seconds integer, _mistakes integer)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `update_updated_at_column()` | trigger | no | volatile | anon, authenticated, service_role |
 | `validate_custom_puzzle_content(_content jsonb)` | jsonb | no | immutable | anon, authenticated, service_role |
-| `validate_puzzle_content(_content jsonb)` | jsonb | no | immutable | authenticated, service_role |
-| `verify_device(_device_id text, _device_token text)` | boolean | yes | stable | none of the client roles |
+| `validate_puzzle_content(_content jsonb)` | jsonb | no | immutable | anon, authenticated, service_role |
+| `verify_device(_device_id text, _device_token text)` | boolean | yes | stable | service_role |
 
 ## Storage
 

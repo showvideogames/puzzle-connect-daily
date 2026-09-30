@@ -2,6 +2,17 @@
 
 TODO: Document your project here
 
+## Accounts and the database
+
+Rainbow's only sign-in is the shared account service (WorkOS AuthKit), reached
+through Supabase Auth's `custom:platform` provider; Rainbow keeps no passwords
+and sends no email. Guests play with a per-browser device credential. The
+whole database is `supabase/migrations/` (one baseline file, applicable to a
+blank project), and `supabase/RAINBOW-OWNED-OBJECTS.md` lists exactly what
+Rainbow owns. See `docs/CONFIG-INVENTORY.md` for every environment value,
+`docs/WORKOS-LOCAL-SMOKE.md` for the manual sign-in test, and
+`docs/PHASE-2-HOSTED-CHANGE-PREVIEW.md` for the pending beta reset.
+
 ## Configuration
 
 `VITE_SUPPORT_URL` (optional, public): the destination of the "Keep the Puzzles Coming" button on custom puzzle pages. Set it to a full `https://` URL in the production host's environment variables and redeploy (Vite reads it at build time). When unset or invalid, the button and its supporting sentence are simply not shown. See `.env.example`.

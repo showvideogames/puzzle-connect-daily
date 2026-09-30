@@ -3125,7 +3125,7 @@ CREATE FUNCTION public.rainbow_uid() RETURNS uuid
 $$;
 
 -- ensure_account()
-CREATE FUNCTION public.ensure_account() RETURNS TABLE(user_id uuid, global_user_id text, email text, created_at timestamp with time zone)
+CREATE FUNCTION public.ensure_account() RETURNS TABLE(outcome text, user_id uuid, global_user_id text, email text, created_at timestamp with time zone)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3136,8 +3136,12 @@ declare
   _uid uuid := auth.uid();
   _gid text;
 begin
+  -- Outcomes are ordinary rows, not exceptions: "not a Rainbow account" is a
+  -- normal answer in a shared project, and it must not surface as a failed
+  -- request in the browser.
   if _uid is null then
-    raise exception 'not_signed_in' using errcode = '28000';
+    return query select 'not_signed_in'::text, null::uuid, null::text, null::text, null::timestamptz;
+    return;
   end if;
 
   -- The link is read from GoTrue's own identity table on the server, never
@@ -3154,7 +3158,8 @@ begin
     -- An auth user that did not come through the shared sign-in. In the
     -- shared beta project that is another tenant's admin or a stray signup;
     -- either way it is not, and never becomes, a Rainbow account.
-    raise exception 'not_platform_linked' using errcode = '42501';
+    return query select 'not_platform_linked'::text, null::uuid, null::text, null::text, null::timestamptz;
+    return;
   end if;
 
   insert into public.accounts (user_id, global_user_id)
@@ -3163,7 +3168,7 @@ begin
     set last_seen_at = now();
 
   return query
-    select a.user_id, a.global_user_id, u.email::text, a.created_at
+    select 'ok'::text, a.user_id, a.global_user_id, u.email::text, a.created_at
       from public.accounts a
       join auth.users u on u.id = a.user_id
      where a.user_id = _uid;
@@ -4108,7 +4113,7 @@ COMMENT ON TABLE public.device_identities IS 'One row per anonymous browser iden
 COMMENT ON FUNCTION public.rainbow_uid() IS 'The caller''s Rainbow account id, or NULL for a guest and for any auth user without a public.accounts row. Every Rainbow function and policy uses this where it once used auth.uid(); it is the tenant boundary while the auth pool is shared.';
 
 -- FUNCTION ensure_account()
-COMMENT ON FUNCTION public.ensure_account() IS 'Called by the client after every sign-in. Creates the caller''s accounts row from their custom:platform identity (or bumps last_seen_at) and returns it. Raises not_platform_linked for an auth user with no such identity, which the client treats as "not a Rainbow account": local sign-out, stay a guest.';
+COMMENT ON FUNCTION public.ensure_account() IS 'Called by the client after every sign-in. Creates the caller''s accounts row from their custom:platform identity (or bumps last_seen_at) and returns it with outcome ok. Answers not_platform_linked (no account row) for an auth user with no such identity, which the client treats as "not a Rainbow account": local sign-out, stay a guest. Never raises.';
 
 -- FUNCTION resolve_device_import(_device_id text, _device_token text)
 COMMENT ON FUNCTION public.resolve_device_import(_device_id text, _device_token text) IS 'Asked on every signed-in load: does THIS device still owe the one-time import decision? unauthenticated | no_guest_history | already_decided | credential_invalid | import_available (+ counts). Never writes.';

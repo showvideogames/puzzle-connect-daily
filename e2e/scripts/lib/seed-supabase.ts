@@ -38,7 +38,7 @@ function client(url: string, key: string): SupabaseClient {
  * the row is written the way GoTrue itself would write it. The connection
  * is the same guarded local dbUrl every other e2e script uses.
  */
-async function attachPlatformIdentity(
+export async function attachPlatformIdentity(
   dbUrl: string,
   userId: string,
   email: string,

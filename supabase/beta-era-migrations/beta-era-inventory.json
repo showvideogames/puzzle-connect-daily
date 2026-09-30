@@ -54,11 +54,6 @@
       ],
       "constraints": [
         {
-          "name": "account_onboarding_created_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL created_at"
-        },
-        {
           "name": "account_onboarding_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (user_id)"
@@ -69,19 +64,9 @@
           "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'no_guest_history'::text, 'imported'::text, 'started_fresh'::text, 'legacy'::text])))"
         },
         {
-          "name": "account_onboarding_status_not_null",
-          "type": "n",
-          "definition": "NOT NULL status"
-        },
-        {
           "name": "account_onboarding_user_id_fkey",
           "type": "f",
           "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
-        },
-        {
-          "name": "account_onboarding_user_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL user_id"
         }
       ],
       "indexes": [
@@ -92,7 +77,17 @@
       ],
       "triggers": [],
       "policies": [],
-      "grants": {}
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "archive_access",
@@ -131,19 +126,9 @@
       ],
       "constraints": [
         {
-          "name": "archive_access_granted_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL granted_at"
-        },
-        {
           "name": "archive_access_granted_by_fkey",
           "type": "f",
           "definition": "FOREIGN KEY (granted_by) REFERENCES auth.users(id) ON DELETE SET NULL"
-        },
-        {
-          "name": "archive_access_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
         },
         {
           "name": "archive_access_pkey",
@@ -159,11 +144,6 @@
           "name": "archive_access_user_id_key",
           "type": "u",
           "definition": "UNIQUE (user_id)"
-        },
-        {
-          "name": "archive_access_user_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL user_id"
         }
       ],
       "indexes": [
@@ -199,7 +179,35 @@
           "withCheck": null
         }
       ],
-      "grants": {}
+      "grants": {
+        "anon": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ],
+        "authenticated": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "beta_feedback",
@@ -294,34 +302,14 @@
       ],
       "constraints": [
         {
-          "name": "beta_feedback_created_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL created_at"
-        },
-        {
           "name": "beta_feedback_difficulty_rating_check",
           "type": "c",
           "definition": "CHECK (((difficulty_rating >= 1) AND (difficulty_rating <= 5)))"
         },
         {
-          "name": "beta_feedback_difficulty_rating_not_null",
-          "type": "n",
-          "definition": "NOT NULL difficulty_rating"
-        },
-        {
           "name": "beta_feedback_fun_rating_check",
           "type": "c",
           "definition": "CHECK (((fun_rating >= 1) AND (fun_rating <= 5)))"
-        },
-        {
-          "name": "beta_feedback_fun_rating_not_null",
-          "type": "n",
-          "definition": "NOT NULL fun_rating"
-        },
-        {
-          "name": "beta_feedback_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
         },
         {
           "name": "beta_feedback_pkey",
@@ -339,29 +327,14 @@
           "definition": "FOREIGN KEY (puzzle_id) REFERENCES puzzles(id) ON DELETE CASCADE"
         },
         {
-          "name": "beta_feedback_puzzle_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL puzzle_id"
-        },
-        {
           "name": "beta_feedback_puzzle_version_id_fkey",
           "type": "f",
           "definition": "FOREIGN KEY (puzzle_version_id) REFERENCES puzzle_versions(id) ON DELETE CASCADE"
         },
         {
-          "name": "beta_feedback_puzzle_version_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL puzzle_version_id"
-        },
-        {
           "name": "beta_feedback_rainbow_fairness_rating_check",
           "type": "c",
           "definition": "CHECK (((rainbow_fairness_rating >= 1) AND (rainbow_fairness_rating <= 5)))"
-        },
-        {
-          "name": "beta_feedback_would_play_again_not_null",
-          "type": "n",
-          "definition": "NOT NULL would_play_again"
         }
       ],
       "indexes": [
@@ -390,6 +363,15 @@
       "grants": {
         "authenticated": [
           "SELECT"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
         ]
       }
     },
@@ -486,31 +468,6 @@
       ],
       "constraints": [
         {
-          "name": "beta_playtests_device_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL device_id"
-        },
-        {
-          "name": "beta_playtests_hints_used_not_null",
-          "type": "n",
-          "definition": "NOT NULL hints_used"
-        },
-        {
-          "name": "beta_playtests_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
-        },
-        {
-          "name": "beta_playtests_is_reset_not_null",
-          "type": "n",
-          "definition": "NOT NULL is_reset"
-        },
-        {
-          "name": "beta_playtests_mistakes_not_null",
-          "type": "n",
-          "definition": "NOT NULL mistakes"
-        },
-        {
           "name": "beta_playtests_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (id)"
@@ -521,39 +478,14 @@
           "definition": "FOREIGN KEY (puzzle_id) REFERENCES puzzles(id) ON DELETE CASCADE"
         },
         {
-          "name": "beta_playtests_puzzle_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL puzzle_id"
-        },
-        {
           "name": "beta_playtests_puzzle_version_id_fkey",
           "type": "f",
           "definition": "FOREIGN KEY (puzzle_version_id) REFERENCES puzzle_versions(id) ON DELETE CASCADE"
         },
         {
-          "name": "beta_playtests_puzzle_version_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL puzzle_version_id"
-        },
-        {
-          "name": "beta_playtests_started_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL started_at"
-        },
-        {
           "name": "beta_playtests_status_check",
           "type": "c",
           "definition": "CHECK ((status = ANY (ARRAY['in_progress'::text, 'completed'::text, 'abandoned'::text])))"
-        },
-        {
-          "name": "beta_playtests_status_not_null",
-          "type": "n",
-          "definition": "NOT NULL status"
-        },
-        {
-          "name": "beta_playtests_updated_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL updated_at"
         }
       ],
       "indexes": [
@@ -586,6 +518,15 @@
       "grants": {
         "authenticated": [
           "SELECT"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
         ]
       }
     },
@@ -626,16 +567,6 @@
       ],
       "constraints": [
         {
-          "name": "creator_profiles_created_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL created_at"
-        },
-        {
-          "name": "creator_profiles_display_name_not_null",
-          "type": "n",
-          "definition": "NOT NULL display_name"
-        },
-        {
           "name": "creator_profiles_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (user_id)"
@@ -651,19 +582,9 @@
           "definition": "UNIQUE (public_slug)"
         },
         {
-          "name": "creator_profiles_public_slug_not_null",
-          "type": "n",
-          "definition": "NOT NULL public_slug"
-        },
-        {
           "name": "creator_profiles_user_id_fkey",
           "type": "f",
           "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
-        },
-        {
-          "name": "creator_profiles_user_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL user_id"
         }
       ],
       "indexes": [
@@ -678,7 +599,17 @@
       ],
       "triggers": [],
       "policies": [],
-      "grants": {}
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "custom_puzzle_favorites",
@@ -710,19 +641,9 @@
       ],
       "constraints": [
         {
-          "name": "custom_puzzle_favorites_created_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL created_at"
-        },
-        {
           "name": "custom_puzzle_favorites_custom_puzzle_id_fkey",
           "type": "f",
           "definition": "FOREIGN KEY (custom_puzzle_id) REFERENCES custom_puzzles(id) ON DELETE CASCADE"
-        },
-        {
-          "name": "custom_puzzle_favorites_custom_puzzle_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL custom_puzzle_id"
         },
         {
           "name": "custom_puzzle_favorites_pkey",
@@ -733,11 +654,6 @@
           "name": "custom_puzzle_favorites_user_id_fkey",
           "type": "f",
           "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
-        },
-        {
-          "name": "custom_puzzle_favorites_user_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL user_id"
         }
       ],
       "indexes": [
@@ -752,7 +668,17 @@
       ],
       "triggers": [],
       "policies": [],
-      "grants": {}
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "custom_puzzle_results",
@@ -812,11 +738,6 @@
       ],
       "constraints": [
         {
-          "name": "custom_puzzle_results_completed_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL completed_at"
-        },
-        {
           "name": "custom_puzzle_results_custom_puzzle_id_device_id_key",
           "type": "u",
           "definition": "UNIQUE (custom_puzzle_id, device_id)"
@@ -827,44 +748,14 @@
           "definition": "FOREIGN KEY (custom_puzzle_id) REFERENCES custom_puzzles(id) ON DELETE CASCADE"
         },
         {
-          "name": "custom_puzzle_results_custom_puzzle_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL custom_puzzle_id"
-        },
-        {
-          "name": "custom_puzzle_results_device_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL device_id"
-        },
-        {
-          "name": "custom_puzzle_results_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
-        },
-        {
           "name": "custom_puzzle_results_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (id)"
         },
         {
-          "name": "custom_puzzle_results_recent_run_ids_not_null",
-          "type": "n",
-          "definition": "NOT NULL recent_run_ids"
-        },
-        {
           "name": "custom_puzzle_results_total_guesses_check",
           "type": "c",
           "definition": "CHECK (((total_guesses >= 0) AND (total_guesses <= 60)))"
-        },
-        {
-          "name": "custom_puzzle_results_total_guesses_not_null",
-          "type": "n",
-          "definition": "NOT NULL total_guesses"
-        },
-        {
-          "name": "custom_puzzle_results_won_not_null",
-          "type": "n",
-          "definition": "NOT NULL won"
         }
       ],
       "indexes": [
@@ -883,7 +774,17 @@
       ],
       "triggers": [],
       "policies": [],
-      "grants": {}
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "custom_puzzle_stats",
@@ -969,19 +870,9 @@
           "definition": "FOREIGN KEY (custom_puzzle_id) REFERENCES custom_puzzles(id) ON DELETE CASCADE"
         },
         {
-          "name": "custom_puzzle_stats_custom_puzzle_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL custom_puzzle_id"
-        },
-        {
           "name": "custom_puzzle_stats_guesses_4_check",
           "type": "c",
           "definition": "CHECK ((guesses_4 >= 0))"
-        },
-        {
-          "name": "custom_puzzle_stats_guesses_4_not_null",
-          "type": "n",
-          "definition": "NOT NULL guesses_4"
         },
         {
           "name": "custom_puzzle_stats_guesses_5_check",
@@ -989,19 +880,9 @@
           "definition": "CHECK ((guesses_5 >= 0))"
         },
         {
-          "name": "custom_puzzle_stats_guesses_5_not_null",
-          "type": "n",
-          "definition": "NOT NULL guesses_5"
-        },
-        {
           "name": "custom_puzzle_stats_guesses_6_check",
           "type": "c",
           "definition": "CHECK ((guesses_6 >= 0))"
-        },
-        {
-          "name": "custom_puzzle_stats_guesses_6_not_null",
-          "type": "n",
-          "definition": "NOT NULL guesses_6"
         },
         {
           "name": "custom_puzzle_stats_guesses_7_check",
@@ -1009,19 +890,9 @@
           "definition": "CHECK ((guesses_7 >= 0))"
         },
         {
-          "name": "custom_puzzle_stats_guesses_7_not_null",
-          "type": "n",
-          "definition": "NOT NULL guesses_7"
-        },
-        {
           "name": "custom_puzzle_stats_guesses_8_plus_check",
           "type": "c",
           "definition": "CHECK ((guesses_8_plus >= 0))"
-        },
-        {
-          "name": "custom_puzzle_stats_guesses_8_plus_not_null",
-          "type": "n",
-          "definition": "NOT NULL guesses_8_plus"
         },
         {
           "name": "custom_puzzle_stats_losses_check",
@@ -1029,19 +900,9 @@
           "definition": "CHECK ((losses >= 0))"
         },
         {
-          "name": "custom_puzzle_stats_losses_not_null",
-          "type": "n",
-          "definition": "NOT NULL losses"
-        },
-        {
           "name": "custom_puzzle_stats_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (custom_puzzle_id)"
-        },
-        {
-          "name": "custom_puzzle_stats_updated_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL updated_at"
         },
         {
           "name": "custom_puzzle_stats_win_guess_total_check",
@@ -1049,19 +910,9 @@
           "definition": "CHECK ((win_guess_total >= 0))"
         },
         {
-          "name": "custom_puzzle_stats_win_guess_total_not_null",
-          "type": "n",
-          "definition": "NOT NULL win_guess_total"
-        },
-        {
           "name": "custom_puzzle_stats_wins_check",
           "type": "c",
           "definition": "CHECK ((wins >= 0))"
-        },
-        {
-          "name": "custom_puzzle_stats_wins_not_null",
-          "type": "n",
-          "definition": "NOT NULL wins"
         }
       ],
       "indexes": [
@@ -1072,7 +923,17 @@
       ],
       "triggers": [],
       "policies": [],
-      "grants": {}
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "custom_puzzles",
@@ -1153,39 +1014,14 @@
       ],
       "constraints": [
         {
-          "name": "custom_puzzles_content_not_null",
-          "type": "n",
-          "definition": "NOT NULL content"
-        },
-        {
-          "name": "custom_puzzles_created_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL created_at"
-        },
-        {
           "name": "custom_puzzles_created_by_fkey",
           "type": "f",
           "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL"
         },
         {
-          "name": "custom_puzzles_creator_name_not_null",
-          "type": "n",
-          "definition": "NOT NULL creator_name"
-        },
-        {
-          "name": "custom_puzzles_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
-        },
-        {
           "name": "custom_puzzles_moderation_status_check",
           "type": "c",
           "definition": "CHECK ((moderation_status = ANY (ARRAY['active'::text, 'hidden'::text])))"
-        },
-        {
-          "name": "custom_puzzles_moderation_status_not_null",
-          "type": "n",
-          "definition": "NOT NULL moderation_status"
         },
         {
           "name": "custom_puzzles_pkey",
@@ -1198,34 +1034,14 @@
           "definition": "UNIQUE (share_id)"
         },
         {
-          "name": "custom_puzzles_share_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL share_id"
-        },
-        {
           "name": "custom_puzzles_short_code_format",
           "type": "c",
           "definition": "CHECK ((short_code ~ '^[2-9A-HJKMNP-Za-hjkmnp-z]{8,12}$'::text))"
         },
         {
-          "name": "custom_puzzles_short_code_not_null",
-          "type": "n",
-          "definition": "NOT NULL short_code"
-        },
-        {
-          "name": "custom_puzzles_title_not_null",
-          "type": "n",
-          "definition": "NOT NULL title"
-        },
-        {
           "name": "custom_puzzles_visibility_check",
           "type": "c",
           "definition": "CHECK ((visibility = ANY (ARRAY['public'::text, 'private'::text])))"
-        },
-        {
-          "name": "custom_puzzles_visibility_not_null",
-          "type": "n",
-          "definition": "NOT NULL visibility"
         }
       ],
       "indexes": [
@@ -1267,7 +1083,17 @@
           "withCheck": null
         }
       ],
-      "grants": {}
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "device_identities",
@@ -1313,16 +1139,6 @@
       ],
       "constraints": [
         {
-          "name": "device_identities_created_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL created_at"
-        },
-        {
-          "name": "device_identities_device_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL device_id"
-        },
-        {
           "name": "device_identities_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (device_id)"
@@ -1336,7 +1152,17 @@
       ],
       "triggers": [],
       "policies": [],
-      "grants": {}
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "feedback",
@@ -1389,24 +1215,9 @@
       ],
       "constraints": [
         {
-          "name": "feedback_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
-        },
-        {
-          "name": "feedback_message_not_null",
-          "type": "n",
-          "definition": "NOT NULL message"
-        },
-        {
           "name": "feedback_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (id)"
-        },
-        {
-          "name": "feedback_type_not_null",
-          "type": "n",
-          "definition": "NOT NULL type"
         }
       ],
       "indexes": [
@@ -1428,7 +1239,35 @@
           "withCheck": null
         }
       ],
-      "grants": {}
+      "grants": {
+        "anon": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ],
+        "authenticated": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "game_results",
@@ -1481,21 +1320,6 @@
       ],
       "constraints": [
         {
-          "name": "game_results_completed_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL completed_at"
-        },
-        {
-          "name": "game_results_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
-        },
-        {
-          "name": "game_results_mistakes_not_null",
-          "type": "n",
-          "definition": "NOT NULL mistakes"
-        },
-        {
           "name": "game_results_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (id)"
@@ -1506,29 +1330,14 @@
           "definition": "FOREIGN KEY (puzzle_id) REFERENCES puzzles(id) ON DELETE CASCADE"
         },
         {
-          "name": "game_results_puzzle_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL puzzle_id"
-        },
-        {
           "name": "game_results_user_id_fkey",
           "type": "f",
           "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
         },
         {
-          "name": "game_results_user_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL user_id"
-        },
-        {
           "name": "game_results_user_id_puzzle_id_key",
           "type": "u",
           "definition": "UNIQUE (user_id, puzzle_id)"
-        },
-        {
-          "name": "game_results_won_not_null",
-          "type": "n",
-          "definition": "NOT NULL won"
         }
       ],
       "indexes": [
@@ -1564,7 +1373,27 @@
           "withCheck": null
         }
       ],
-      "grants": {}
+      "grants": {
+        "anon": [
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER"
+        ],
+        "authenticated": [
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "game_sessions",
@@ -1729,44 +1558,14 @@
       ],
       "constraints": [
         {
-          "name": "game_sessions_bonus_rainbow_attempted_not_null",
-          "type": "n",
-          "definition": "NOT NULL bonus_rainbow_attempted"
-        },
-        {
           "name": "game_sessions_format_check",
           "type": "c",
           "definition": "CHECK ((format = ANY (ARRAY['full'::text, 'mini'::text])))"
         },
         {
-          "name": "game_sessions_format_not_null",
-          "type": "n",
-          "definition": "NOT NULL format"
-        },
-        {
-          "name": "game_sessions_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
-        },
-        {
-          "name": "game_sessions_is_official_not_null",
-          "type": "n",
-          "definition": "NOT NULL is_official"
-        },
-        {
-          "name": "game_sessions_mistakes_not_null",
-          "type": "n",
-          "definition": "NOT NULL mistakes"
-        },
-        {
           "name": "game_sessions_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (id)"
-        },
-        {
-          "name": "game_sessions_puzzle_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL puzzle_id"
         },
         {
           "name": "game_sessions_rainbow_source_check",
@@ -1782,11 +1581,6 @@
           "name": "game_sessions_status_completed_at_check",
           "type": "c",
           "definition": "CHECK (((status = 'in_progress'::text) = (completed_at IS NULL)))"
-        },
-        {
-          "name": "game_sessions_status_not_null",
-          "type": "n",
-          "definition": "NOT NULL status"
         },
         {
           "name": "game_sessions_status_won_check",
@@ -1860,7 +1654,27 @@
           "withCheck": null
         }
       ],
-      "grants": {}
+      "grants": {
+        "anon": [
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER"
+        ],
+        "authenticated": [
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "guess_events",
@@ -1974,34 +1788,9 @@
           "definition": "CHECK (((attempt_type IS NULL) OR (attempt_type = ANY (ARRAY['normal'::text, 'bonus_rainbow'::text]))))"
         },
         {
-          "name": "guess_events_correct_not_null",
-          "type": "n",
-          "definition": "NOT NULL correct"
-        },
-        {
-          "name": "guess_events_game_session_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL game_session_id"
-        },
-        {
-          "name": "guess_events_guess_number_not_null",
-          "type": "n",
-          "definition": "NOT NULL guess_number"
-        },
-        {
-          "name": "guess_events_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
-        },
-        {
           "name": "guess_events_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (id)"
-        },
-        {
-          "name": "guess_events_words_not_null",
-          "type": "n",
-          "definition": "NOT NULL words"
         }
       ],
       "indexes": [
@@ -2041,7 +1830,27 @@
           "withCheck": null
         }
       ],
-      "grants": {}
+      "grants": {
+        "anon": [
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER"
+        ],
+        "authenticated": [
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "hint_events",
@@ -2120,24 +1929,9 @@
           "definition": "FOREIGN KEY (game_session_id) REFERENCES game_sessions(id) ON DELETE CASCADE"
         },
         {
-          "name": "hint_events_game_session_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL game_session_id"
-        },
-        {
           "name": "hint_events_hint_type_check",
           "type": "c",
           "definition": "CHECK ((hint_type = ANY (ARRAY['small'::text, 'full'::text])))"
-        },
-        {
-          "name": "hint_events_hint_type_not_null",
-          "type": "n",
-          "definition": "NOT NULL hint_type"
-        },
-        {
-          "name": "hint_events_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
         },
         {
           "name": "hint_events_one_per_type",
@@ -2148,11 +1942,6 @@
           "name": "hint_events_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (id)"
-        },
-        {
-          "name": "hint_events_revealed_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL revealed_at"
         }
       ],
       "indexes": [
@@ -2192,7 +1981,27 @@
           "withCheck": null
         }
       ],
-      "grants": {}
+      "grants": {
+        "anon": [
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER"
+        ],
+        "authenticated": [
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "luck_score_ceilings",
@@ -2236,21 +2045,6 @@
           "definition": "CHECK ((ceiling >= 2))"
         },
         {
-          "name": "luck_score_ceilings_ceiling_not_null",
-          "type": "n",
-          "definition": "NOT NULL ceiling"
-        },
-        {
-          "name": "luck_score_ceilings_created_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL created_at"
-        },
-        {
-          "name": "luck_score_ceilings_effective_from_not_null",
-          "type": "n",
-          "definition": "NOT NULL effective_from"
-        },
-        {
           "name": "luck_score_ceilings_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (effective_from)"
@@ -2264,7 +2058,17 @@
       ],
       "triggers": [],
       "policies": [],
-      "grants": {}
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "puzzle_aggregates",
@@ -2327,11 +2131,6 @@
           "name": "puzzle_aggregates_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (puzzle_id)"
-        },
-        {
-          "name": "puzzle_aggregates_puzzle_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL puzzle_id"
         }
       ],
       "indexes": [
@@ -2353,7 +2152,35 @@
           "withCheck": null
         }
       ],
-      "grants": {}
+      "grants": {
+        "anon": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ],
+        "authenticated": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "puzzle_groups",
@@ -2427,29 +2254,9 @@
       ],
       "constraints": [
         {
-          "name": "puzzle_groups_category_emoji_hint_only_not_null",
-          "type": "n",
-          "definition": "NOT NULL category_emoji_hint_only"
-        },
-        {
-          "name": "puzzle_groups_category_not_null",
-          "type": "n",
-          "definition": "NOT NULL category"
-        },
-        {
           "name": "puzzle_groups_difficulty_check",
           "type": "c",
           "definition": "CHECK (((difficulty >= 1) AND (difficulty <= 4)))"
-        },
-        {
-          "name": "puzzle_groups_difficulty_not_null",
-          "type": "n",
-          "definition": "NOT NULL difficulty"
-        },
-        {
-          "name": "puzzle_groups_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
         },
         {
           "name": "puzzle_groups_pkey",
@@ -2460,21 +2267,6 @@
           "name": "puzzle_groups_puzzle_id_fkey",
           "type": "f",
           "definition": "FOREIGN KEY (puzzle_id) REFERENCES puzzles(id) ON DELETE CASCADE"
-        },
-        {
-          "name": "puzzle_groups_puzzle_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL puzzle_id"
-        },
-        {
-          "name": "puzzle_groups_sort_order_not_null",
-          "type": "n",
-          "definition": "NOT NULL sort_order"
-        },
-        {
-          "name": "puzzle_groups_words_not_null",
-          "type": "n",
-          "definition": "NOT NULL words"
         }
       ],
       "indexes": [
@@ -2506,7 +2298,35 @@
           "withCheck": null
         }
       ],
-      "grants": {}
+      "grants": {
+        "anon": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ],
+        "authenticated": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "puzzle_ratings",
@@ -2552,29 +2372,9 @@
       ],
       "constraints": [
         {
-          "name": "puzzle_ratings_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
-        },
-        {
           "name": "puzzle_ratings_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (id)"
-        },
-        {
-          "name": "puzzle_ratings_puzzle_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL puzzle_id"
-        },
-        {
-          "name": "puzzle_ratings_rating_not_null",
-          "type": "n",
-          "definition": "NOT NULL rating"
-        },
-        {
-          "name": "puzzle_ratings_user_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL user_id"
         }
       ],
       "indexes": [
@@ -2630,7 +2430,35 @@
           "withCheck": null
         }
       ],
-      "grants": {}
+      "grants": {
+        "anon": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ],
+        "authenticated": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "puzzle_versions",
@@ -2683,24 +2511,9 @@
       ],
       "constraints": [
         {
-          "name": "puzzle_versions_content_not_null",
-          "type": "n",
-          "definition": "NOT NULL content"
-        },
-        {
-          "name": "puzzle_versions_created_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL created_at"
-        },
-        {
           "name": "puzzle_versions_created_by_fkey",
           "type": "f",
           "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id)"
-        },
-        {
-          "name": "puzzle_versions_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
         },
         {
           "name": "puzzle_versions_pkey",
@@ -2713,11 +2526,6 @@
           "definition": "FOREIGN KEY (puzzle_id) REFERENCES puzzles(id) ON DELETE CASCADE"
         },
         {
-          "name": "puzzle_versions_puzzle_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL puzzle_id"
-        },
-        {
           "name": "puzzle_versions_puzzle_id_version_number_key",
           "type": "u",
           "definition": "UNIQUE (puzzle_id, version_number)"
@@ -2726,11 +2534,6 @@
           "name": "puzzle_versions_version_number_check",
           "type": "c",
           "definition": "CHECK ((version_number >= 1))"
-        },
-        {
-          "name": "puzzle_versions_version_number_not_null",
-          "type": "n",
-          "definition": "NOT NULL version_number"
         }
       ],
       "indexes": [
@@ -2781,6 +2584,15 @@
         ],
         "authenticated": [
           "SELECT"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
         ]
       }
     },
@@ -2954,54 +2766,14 @@
       ],
       "constraints": [
         {
-          "name": "puzzles_alphabetize_completed_not_null",
-          "type": "n",
-          "definition": "NOT NULL alphabetize_completed"
-        },
-        {
-          "name": "puzzles_created_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL created_at"
-        },
-        {
           "name": "puzzles_created_by_fkey",
           "type": "f",
           "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id)"
         },
         {
-          "name": "puzzles_date_not_null",
-          "type": "n",
-          "definition": "NOT NULL date"
-        },
-        {
-          "name": "puzzles_designer_name_not_null",
-          "type": "n",
-          "definition": "NOT NULL designer_name"
-        },
-        {
           "name": "puzzles_format_check",
           "type": "c",
           "definition": "CHECK ((format = ANY (ARRAY['full'::text, 'mini'::text])))"
-        },
-        {
-          "name": "puzzles_format_not_null",
-          "type": "n",
-          "definition": "NOT NULL format"
-        },
-        {
-          "name": "puzzles_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
-        },
-        {
-          "name": "puzzles_is_beta_not_null",
-          "type": "n",
-          "definition": "NOT NULL is_beta"
-        },
-        {
-          "name": "puzzles_is_published_not_null",
-          "type": "n",
-          "definition": "NOT NULL is_published"
         },
         {
           "name": "puzzles_not_beta_and_published",
@@ -3012,16 +2784,6 @@
           "name": "puzzles_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (id)"
-        },
-        {
-          "name": "puzzles_rainbow_category_emoji_hint_only_not_null",
-          "type": "n",
-          "definition": "NOT NULL rainbow_category_emoji_hint_only"
-        },
-        {
-          "name": "puzzles_updated_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL updated_at"
         }
       ],
       "indexes": [
@@ -3066,7 +2828,32 @@
           "withCheck": null
         }
       ],
-      "grants": {}
+      "grants": {
+        "anon": [
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE"
+        ],
+        "authenticated": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "user_roles",
@@ -3105,34 +2892,14 @@
       ],
       "constraints": [
         {
-          "name": "user_roles_created_at_not_null",
-          "type": "n",
-          "definition": "NOT NULL created_at"
-        },
-        {
-          "name": "user_roles_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
-        },
-        {
           "name": "user_roles_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (id)"
         },
         {
-          "name": "user_roles_role_not_null",
-          "type": "n",
-          "definition": "NOT NULL role"
-        },
-        {
           "name": "user_roles_user_id_fkey",
           "type": "f",
           "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
-        },
-        {
-          "name": "user_roles_user_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL user_id"
         },
         {
           "name": "user_roles_user_id_role_key",
@@ -3173,7 +2940,35 @@
           "withCheck": null
         }
       ],
-      "grants": {}
+      "grants": {
+        "anon": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ],
+        "authenticated": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ],
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     },
     {
       "name": "user_streaks",
@@ -3245,16 +3040,6 @@
           "definition": "CHECK ((format = ANY (ARRAY['full'::text, 'mini'::text])))"
         },
         {
-          "name": "user_streaks_format_not_null",
-          "type": "n",
-          "definition": "NOT NULL format"
-        },
-        {
-          "name": "user_streaks_id_not_null",
-          "type": "n",
-          "definition": "NOT NULL id"
-        },
-        {
           "name": "user_streaks_pkey",
           "type": "p",
           "definition": "PRIMARY KEY (id)"
@@ -3276,7 +3061,17 @@
       ],
       "triggers": [],
       "policies": [],
-      "grants": {}
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
     }
   ],
   "views": [],
@@ -3294,6 +3089,7 @@
         "search_path=public"
       ],
       "executableBy": [
+        "anon",
         "authenticated",
         "service_role"
       ],
@@ -3311,6 +3107,7 @@
         "search_path=public"
       ],
       "executableBy": [
+        "anon",
         "authenticated",
         "service_role"
       ],
@@ -3417,7 +3214,9 @@
       "config": [
         "search_path=public"
       ],
-      "executableBy": [],
+      "executableBy": [
+        "service_role"
+      ],
       "comment": null
     },
     {
@@ -3431,7 +3230,9 @@
       "config": [
         "search_path=public"
       ],
-      "executableBy": [],
+      "executableBy": [
+        "service_role"
+      ],
       "comment": null
     },
     {
@@ -3445,7 +3246,9 @@
       "config": [
         "search_path=public"
       ],
-      "executableBy": [],
+      "executableBy": [
+        "service_role"
+      ],
       "comment": null
     },
     {
@@ -3459,7 +3262,9 @@
       "config": [
         "search_path=public"
       ],
-      "executableBy": [],
+      "executableBy": [
+        "service_role"
+      ],
       "comment": null
     },
     {
@@ -3473,7 +3278,9 @@
       "config": [
         "search_path=public"
       ],
-      "executableBy": [],
+      "executableBy": [
+        "service_role"
+      ],
       "comment": null
     },
     {
@@ -3504,7 +3311,9 @@
       "config": [
         "search_path=public"
       ],
-      "executableBy": [],
+      "executableBy": [
+        "service_role"
+      ],
       "comment": null
     },
     {
@@ -3839,7 +3648,9 @@
       "config": [
         "search_path=public"
       ],
-      "executableBy": [],
+      "executableBy": [
+        "service_role"
+      ],
       "comment": "Internal. Every Luck-eligible session for one Full puzzle with its normalized ordered guess path. Never granted to clients: get_luck_report returns counts only."
     },
     {
@@ -3943,7 +3754,9 @@
       "config": [
         "search_path=public"
       ],
-      "executableBy": [],
+      "executableBy": [
+        "service_role"
+      ],
       "comment": null
     },
     {
@@ -4170,6 +3983,7 @@
         "search_path=public"
       ],
       "executableBy": [
+        "anon",
         "authenticated",
         "service_role"
       ],
@@ -4186,7 +4000,9 @@
       "config": [
         "search_path=public"
       ],
-      "executableBy": [],
+      "executableBy": [
+        "service_role"
+      ],
       "comment": null
     }
   ],

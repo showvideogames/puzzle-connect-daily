@@ -795,7 +795,7 @@ Indexes:
 | `delete_local_account(_user_id uuid)` | void | yes | volatile | service_role |
 | `delete_my_account()` | boolean | yes | volatile | authenticated, service_role |
 | `device_has_importable_history(_device_id text)` | boolean | yes | stable | service_role |
-| `ensure_account()` | TABLE(user_id uuid, global_user_id text, email text, created_at timestamp with time zone) | yes | volatile | authenticated, service_role |
+| `ensure_account()` | TABLE(outcome text, user_id uuid, global_user_id text, email text, created_at timestamp with time zone) | yes | volatile | authenticated, service_role |
 | `finalize_game_session(_session_id uuid, _device_id text, _device_token text, _won boolean, _mistakes integer, _active_time_seconds integer, _found_rainbow boolean, _rainbow_solve_index smallint, _solve_order jsonb, _hints_used boolean, _share_grid text, _skip_streak boolean, _local_date text)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `game_sessions_sync_status()` | trigger | yes | volatile | anon, authenticated, service_role |
 | `get_archive_puzzles()` | TABLE(id uuid, date date, title text) | yes | stable | anon, authenticated, service_role |

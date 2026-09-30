@@ -133,7 +133,7 @@ const skill = () => screen.getByTestId("skill-score").textContent;
 beforeEach(async () => {
   reduceMotion();
   for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 10));
-  for (const t of ["game_sessions", "guess_events", "hint_events", "game_results", "user_streaks", "device_identities", "account_onboarding", "puzzle_aggregates"]) {
+  for (const t of ["game_sessions", "guess_events", "hint_events", "game_results", "user_streaks", "device_identities", "accounts", "puzzle_aggregates"]) {
     db.tables[t] = [];
   }
   db.failAggregateWrites = 0;

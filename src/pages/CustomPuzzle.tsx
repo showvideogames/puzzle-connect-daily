@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { signOutOfRainbow } from "@/lib/platformSignIn";
 import { GameBoard } from "@/components/GameBoard";
 import { GameHeader } from "@/components/GameHeader";
 import { CustomPuzzleHeader } from "@/components/CustomPuzzleHeader";
@@ -138,7 +139,7 @@ export default function CustomPuzzle() {
         onHintClick={() => setShowHintModal(true)}
         showHint={true}
         user={user ?? null}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={() => signOutOfRainbow()}
         simplifiedIcons
         wideHeader
       />
@@ -211,7 +212,7 @@ export default function CustomPuzzle() {
         showMenuLinks
         onHowToPlayClick={() => setActiveModal("help")}
         user={user ?? null}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={() => signOutOfRainbow()}
       />
       <FeedbackModal
         open={activeModal === "feedback"}

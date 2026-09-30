@@ -140,6 +140,7 @@ async function main(): Promise<number> {
     ...rebuilt,
     tables: rebuilt.tables.filter((t) => !/^(xw|cv|wtf)_/.test(t.name)),
     functions: rebuilt.functions.filter((f) => !/^(xw|cv|wtf)_/.test(f.name)),
+    sequences: rebuilt.sequences.filter((s) => !/^(xw|cv|wtf)_/.test(s)),
     storage: { available: false, buckets: [], policies: [] },
   };
   const diff = diffInventories({ ...manifest, storage: { available: false, buckets: [], policies: [] } }, rainbowOnly);

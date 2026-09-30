@@ -91,6 +91,13 @@ export function writeE2eEnvFile(keys: StackKeys): string {
     "# The support CTA must stay hidden in tests (custom.spec.ts asserts it).",
     "VITE_SUPPORT_URL=",
     "",
+    "# The shared sign-in service. Empty = accounts switched off in the built",
+    "# app, which is what the automated suite wants: it signs test users in",
+    "# through the LOCAL GoTrue directly and never touches the hosted sign-in",
+    "# page. For the manual WorkOS smoke test, export E2E_PLATFORM_DISCOVERY_URL",
+    "# before `npm run e2e:up` (or edit this line) and rebuild with e2e:app.",
+    `VITE_PLATFORM_DISCOVERY_URL=${process.env.E2E_PLATFORM_DISCOVERY_URL ?? ""}`,
+    "",
   ].join("\n");
   writeFileSync(E2E_ENV_FILE, body, "utf8");
   return E2E_ENV_FILE;
