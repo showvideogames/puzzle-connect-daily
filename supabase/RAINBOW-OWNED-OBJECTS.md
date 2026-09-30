@@ -25,7 +25,7 @@ shows up as a diff instead of as a surprise on a blank project.
 | Columns | 190 |
 | Constraints | 92 |
 | Indexes | 56 |
-| Functions | 58 |
+| Functions | 59 |
 | Triggers | 4 |
 | RLS policies | 25 |
 | Enum types | 1 |
@@ -779,6 +779,7 @@ Indexes:
 
 | Function | Returns | Definer | Volatility | Executable by |
 |---|---|---|---|---|
+| `account_email(_user_id uuid)` | text | yes | stable | service_role |
 | `admin_find_account(_email text)` | TABLE(user_id uuid, email text) | yes | stable | authenticated, service_role |
 | `admin_save_puzzle(_puzzle_id uuid, _metadata jsonb, _content jsonb)` | jsonb | yes | volatile | authenticated, service_role |
 | `admin_set_custom_puzzle_status(_puzzle_id uuid, _status text)` | boolean | yes | volatile | authenticated, service_role |

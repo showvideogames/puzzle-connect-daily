@@ -43,6 +43,35 @@ provider. The client secret lives only in `.runtime/workos-local.json`
 Verification queries below run against the local database, e.g.
 `docker exec supabase_db_rainbow-categories-e2e psql -U postgres -c "<sql>"`.
 
+### Give the real browser a puzzle for today (local stack only)
+
+The seed pins every fixture puzzle to a FIXED date (`FIXTURE_TODAY`,
+2026-06-15, in `e2e/fixtures/catalog.ts`): the browser suite freezes the
+page clock to that day, but a person's browser runs on the real date, so
+`http://127.0.0.1:5183` shows no daily puzzle. Before the cases, move one
+published Full and one published Mini fixture to today's date. This touches
+the disposable local database only; `npm run e2e:reset` puts the fixtures
+back afterwards.
+
+```bash
+docker exec supabase_db_rainbow-categories-e2e psql -U postgres -c "
+  update public.puzzles set date = current_date
+   where title in ('#902', 'Mini #12') and is_published;
+  select format, date, title from public.puzzles where date = current_date;"
+```
+
+(#902 and Mini #12 are the fixtures dated `FIXTURE_TODAY`; any published Full
+and Mini pair works. If the run spans midnight, run it again.)
+
+### Which cases a person actually needs to run
+
+The automated suite proves every database-level behaviour with a genuine
+GoTrue JWT on every run, so the human set is only what a real OIDC round trip
+can show. Run these four, in this order, with ONE test person in ONE ordinary
+Chrome window: **S1, S4, S6, S7** (about 15 minutes). S2, S3, S5, S8, S9 and
+S10 are covered by `persistence.spec.ts`, `admin.spec.ts`, the unit suite
+and `npm run e2e:db:verify`; run them by hand only if a reviewer asks.
+
 ## The cases
 
 Open http://127.0.0.1:5183 in your ordinary browser. Use a private window per
@@ -81,15 +110,25 @@ My Progress moves the one new game onto the account.
 
 **S6 — email change.** Change the test person's email in the WorkOS
 dashboard (Staging → Users). Sign out of Rainbow and sign in again. Expect:
-the account menu shows the new email; `accounts.global_user_id` unchanged.
-If `auth.users.email` did not follow, note it: the plan's risk R3 fallback is
-to read the identity's email in `my_account()`.
+the account menu shows the new email; `accounts.global_user_id` unchanged;
+one `accounts` row for it; the S1 game still owned by it.
+```sql
+select a.global_user_id, public.account_email(a.user_id) as current_email, u.email as auth_users_email,
+       i.identity_data->>'email' as identity_email
+  from public.accounts a join auth.users u on u.id = a.user_id
+  join auth.identities i on i.user_id = a.user_id and i.provider = 'custom:platform';
+```
+Known and by design (found on 2026-09-30): GoTrue refreshes the identity's
+email on the next sign-in but never `auth.users.email`, so `auth_users_email`
+stays at the sign-up address. Rainbow reads `account_email()` (the identity)
+everywhere, so `current_email` and the menu must show the NEW address.
 
 **S7 — delete account.** Person icon → Delete account… → Delete. Expect: the
 `accounts` row and the auth user are gone; the S1 session row still exists
 with `user_id` and `device_id` null; `puzzle_aggregates.total_plays` unchanged.
 Sign in again as the same person: a fresh, empty account with the same
-`global_user_id`.
+`global_user_id` on a NEW auth user, whose email is whatever the provider
+reports at that moment (after S6, the new address).
 
 **S8 — sign-in service unreachable.** In devtools, block requests to the
 AuthKit domain (Network → request blocking), then press Sign In. Expect: the

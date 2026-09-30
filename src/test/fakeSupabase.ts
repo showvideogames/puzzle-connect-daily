@@ -401,7 +401,7 @@ export function canonicalizeCustomPuzzleContent(raw: unknown): FakeRow {
   });
 
   const herringRaw = content.rainbow_herring;
-  let herring: string[] | null =
+  const herring: string[] | null =
     herringRaw === null || herringRaw === undefined ? null : (herringRaw as string[]);
 
   if (mode === "classic") {
@@ -742,12 +742,12 @@ export class FakeSupabase {
         if (this.unlinkedAuthUsers.has(authId)) return nobody("not_platform_linked");
         this._seedAccount(authId);
         const row = this.tables.accounts.find((a) => a.user_id === authId)!;
-        return { data: [{ outcome: "ok", user_id: authId, global_user_id: row.global_user_id, email: `${authId}@rainbow.test`, created_at: row.created_at }], error: null };
+        return { data: [{ outcome: "ok", user_id: authId, global_user_id: row.global_user_id, email: this._accountEmail(authId), created_at: row.created_at }], error: null };
       }
       case "my_account": {
         if (uid === null) return { data: [], error: null };
         const row = this.tables.accounts.find((a) => a.user_id === uid)!;
-        return { data: [{ user_id: uid, global_user_id: row.global_user_id, email: `${uid}@rainbow.test`, created_at: row.created_at }], error: null };
+        return { data: [{ user_id: uid, global_user_id: row.global_user_id, email: this._accountEmail(uid), created_at: row.created_at }], error: null };
       }
       case "resolve_device_import": {
         // Asked per DEVICE: does this browser's device still owe the decision?
@@ -854,7 +854,7 @@ export class FakeSupabase {
       case "admin_find_account": {
         if (uid === null || !this.isAdmin) return { data: [], error: null };
         const email = String(args._email ?? "").trim().toLowerCase();
-        const hit = this.tables.accounts.find((a) => `${a.user_id}@rainbow.test`.toLowerCase() === email);
+        const hit = this.tables.accounts.find((a) => this._accountEmail(String(a.user_id)).toLowerCase() === email);
         return { data: hit ? [{ user_id: hit.user_id, email }] : [], error: null };
       }
       case "get_own_streak": {
@@ -2109,6 +2109,17 @@ export class FakeSupabase {
    * custom:platform identity). ensure_account() refuses them.
    */
   unlinkedAuthUsers = new Set<string>();
+
+  /**
+   * The email the shared provider's identity currently carries, per auth
+   * user (what GoTrue refreshes on each sign-in). Unset = the sign-up email.
+   */
+  identityEmails = new Map<string, string>();
+
+  /** account_email(), mirrored: the identity's address, never a stale user row. */
+  _accountEmail(userId: string): string {
+    return this.identityEmails.get(userId) ?? `${userId}@rainbow.test`;
+  }
 
   /** Give an auth user its Rainbow accounts row (what ensure_account() does on first sign-in). */
   _seedAccount(userId: string, globalUserId = `user_FAKE${userId.replace(/[^0-9A-Za-z]/g, "").toUpperCase().padEnd(20, "0")}`) {

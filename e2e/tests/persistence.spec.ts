@@ -9,7 +9,7 @@
 
 import { expect, gotoApp, test } from "../support/fixtures.ts";
 import { loadE2eConfig } from "../env.ts";
-import { attachPlatformIdentity } from "../scripts/lib/seed-supabase.ts";
+import { attachPlatformIdentity, setPlatformIdentityEmail } from "../scripts/lib/seed-supabase.ts";
 import { signInAs, storedSession } from "../support/auth.ts";
 import {
   discoverRainbow,
@@ -251,6 +251,53 @@ test.describe("Guest identity", () => {
     expect(account.data?.global_user_id).toMatch(/^user_/);
   });
 
+  test("an email changed at the shared sign-in is the account's email on the next sign-in, on the same account", async ({
+    page,
+    admin,
+  }, testInfo) => {
+    // Staging smoke case S6, replayed without the hosted page: a throwaway
+    // Rainbow account signs in, plays, changes its address at the shared
+    // provider, and signs in again. GoTrue then refreshes the identity and
+    // leaves auth.users.email alone; the app must show the identity's
+    // address, keep the same link, create no second account and move no
+    // history.
+    const stamp = `${testInfo.workerIndex}-${Date.now()}`;
+    const email = `e2e-rename-${stamp}@rainbow.test`;
+    const renamed = `e2e-renamed-${stamp}@rainbow.test`;
+    const password = "e2e-rename-password";
+    const globalUserId = `user_E2ERENAME${testInfo.workerIndex}${Date.now()}`;
+    const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+    expect(created.error, created.error?.message).toBeNull();
+    const userId = created.data!.user!.id;
+    await attachPlatformIdentity(loadE2eConfig().dbUrl, userId, email, globalUserId);
+
+    await gotoApp(page, "/");
+    await signInAs(page, { email, password });
+    await expect(tiles(page)).toHaveCount(16);
+    await solveCategory(page, FULL_RAINBOW.groups[0]);
+    await expect
+      .poll(async () => (await admin.from("game_sessions").select("id").eq("user_id", userId)).data?.length)
+      .toBe(1);
+
+    await setPlatformIdentityEmail(loadE2eConfig().dbUrl, userId, renamed);
+    // The password grant still keys on the auth user's (stale) email: that
+    // IS GoTrue's row, and exactly why Rainbow must not display it.
+    await signInAs(page, { email, password });
+
+    await page.getByRole("button", { name: "Settings and menu" }).click();
+    await page.getByRole("button", { name: "Account", exact: true }).last().click();
+    await expect(page.getByTestId("account-email")).toHaveText(renamed);
+
+    const linked = await admin.from("accounts").select("user_id, global_user_id").eq("global_user_id", globalUserId);
+    expect(linked.data, "exactly one account, still the same auth user").toEqual([{ user_id: userId, global_user_id: globalUserId }]);
+    const owned = await admin.from("game_sessions").select("user_id").eq("user_id", userId);
+    expect(owned.data, "history ownership must not move with the email").toHaveLength(1);
+    const stale = await admin.auth.admin.getUserById(userId);
+    expect(stale.data.user?.email, "auth.users.email stays stale; Rainbow must not rely on it").toBe(email);
+
+    await admin.auth.admin.deleteUser(userId);
+  });
+
   test("an auth user that did not come through the shared sign-in is not a Rainbow account", async ({
     page,
     admin,
@@ -289,7 +336,8 @@ test.describe("Guest identity", () => {
     const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
     expect(created.error, created.error?.message).toBeNull();
     const userId = created.data!.user!.id;
-    await attachPlatformIdentity(loadE2eConfig().dbUrl, userId, email, `user_E2EDELETE${testInfo.workerIndex}${Date.now()}`);
+    const globalUserId = `user_E2EDELETE${testInfo.workerIndex}${Date.now()}`;
+    await attachPlatformIdentity(loadE2eConfig().dbUrl, userId, email, globalUserId);
 
     await gotoApp(page, "/");
     await signInAs(page, { email, password });
@@ -317,5 +365,26 @@ test.describe("Guest identity", () => {
     const users = await admin.auth.admin.getUserById(userId);
     expect(users.data.user, "the auth user must be gone").toBeNull();
     await expect.poll(() => storedSession(page)).toBeNull();
+
+    // Staging smoke case S7, second half: the same shared identity signs in
+    // again. GoTrue creates a NEW auth user for the subject, carrying
+    // whatever email the provider reports now (the old row's email is
+    // irrelevant, it is gone). Rainbow makes one clean, empty account.
+    const againEmail = email.replace("e2e-delete-", "e2e-deleted-again-");
+    const again = await admin.auth.admin.createUser({ email: againEmail, password, email_confirm: true });
+    expect(again.error, again.error?.message).toBeNull();
+    const secondId = again.data!.user!.id;
+    expect(secondId).not.toBe(userId);
+    await attachPlatformIdentity(loadE2eConfig().dbUrl, secondId, againEmail, globalUserId);
+    await signInAs(page, { email: againEmail, password });
+
+    const linked = await admin.from("accounts").select("user_id").eq("global_user_id", globalUserId);
+    expect(linked.data, "exactly one account, on the new auth user").toEqual([{ user_id: secondId }]);
+    expect((await admin.from("game_sessions").select("id").eq("user_id", secondId)).data, "a fresh account owns no games").toHaveLength(0);
+    await page.getByRole("button", { name: "Settings and menu" }).click();
+    await page.getByRole("button", { name: "Account", exact: true }).last().click();
+    await expect(page.getByTestId("account-email")).toHaveText(againEmail);
+
+    await admin.auth.admin.deleteUser(secondId);
   });
 });

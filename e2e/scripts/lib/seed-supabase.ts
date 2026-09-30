@@ -57,6 +57,29 @@ export async function attachPlatformIdentity(
   }
 }
 
+/**
+ * What GoTrue does on the next sign-in after the person changed their email
+ * at the shared provider: the custom:platform identity's data is refreshed,
+ * and auth.users.email is left exactly as it was (Staging smoke case S6).
+ * Tests use this to model that sign-in without the hosted page.
+ */
+export async function setPlatformIdentityEmail(dbUrl: string, userId: string, email: string): Promise<void> {
+  const db = new pg.Client({ connectionString: dbUrl });
+  await db.connect();
+  try {
+    await db.query(
+      `update auth.identities
+          set identity_data = identity_data || jsonb_build_object('email', $2::text),
+              updated_at = now(),
+              last_sign_in_at = now()
+        where user_id = $1 and provider = 'custom:platform'`,
+      [userId, email]
+    );
+  } finally {
+    await db.end();
+  }
+}
+
 export function createSupabaseSeedBackend(config: E2eConfig): SeedBackend {
   const admin = client(config.apiUrl, config.serviceRoleKey);
   const anon = client(config.apiUrl, config.anonKey);

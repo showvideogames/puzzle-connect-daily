@@ -90,7 +90,8 @@ default privileges; the baseline grants exactly SELECT/INSERT/UPDATE/DELETE as i
 
 | Function | Change | Detail |
 |---|---|---|
-| `admin_find_account(_email text)` | **CREATE** | authenticated; searches `accounts`, replaces the `admin-find-user` edge function |
+| `account_email(_user_id uuid)` | **CREATE** | service_role only; the one source of an account's CURRENT email: the `custom:platform` identity's address (GoTrue refreshes it on every sign-in) with `auth.users.email` only as fallback (GoTrue sets it once and never refreshes it; Staging smoke case S6). Used by `ensure_account`, `my_account`, `admin_find_account` |
+| `admin_find_account(_email text)` | **CREATE** | authenticated; searches `accounts` by current email, replaces the `admin-find-user` edge function |
 | `delete_local_account(_user_id uuid)` | **CREATE** | service_role only |
 | `delete_my_account()` | **CREATE** | authenticated |
 | `ensure_account()` | **CREATE** | authenticated; the only writer of `accounts` |

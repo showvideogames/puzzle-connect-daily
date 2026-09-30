@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import type { User as AuthUser } from "@supabase/supabase-js";
 import { ACCOUNTS_ENABLED, deleteMyAccount, signInWithPlatform } from "@/lib/platformSignIn";
+import { useCurrentAccount } from "@/hooks/useCurrentAccount";
 
 interface PlayerAuthProps {
   user: AuthUser | null;
@@ -56,6 +57,10 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // The account behind the session, as the server last reported it. Its
+  // email is the CURRENT one; user.email is what GoTrue stored at creation
+  // and is only a fallback while the account is not known yet.
+  const account = useCurrentAccount();
 
   // forceOpen opens whichever UI actually applies right now: the sign-in
   // dialog when signed out, the account dropdown when signed in, so an
@@ -141,7 +146,7 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
               }}>
                 Signed in as
               </p>
-              <p className="text-sm font-medium truncate" data-testid="account-email">{user.email}</p>
+              <p className="text-sm font-medium truncate" data-testid="account-email">{account?.email ?? user.email}</p>
             </div>
             {!confirmDelete ? (
               <div className="py-1">

@@ -150,9 +150,46 @@ export function forgetHubTokens(): void {
 
 export interface RainbowAccount {
   user_id: string;
+  /** The permanent identity key: the shared provider's subject (`user_…`). */
   global_user_id: string;
+  /**
+   * The account's CURRENT email, as the server's account_email() reports it:
+   * the provider identity's address, which GoTrue refreshes on every sign-in.
+   * NOT auth.users.email, which GoTrue sets once and never updates (Staging
+   * smoke case S6). Display only; never an identity key.
+   */
   email: string | null;
   created_at: string;
+}
+
+// ── The current account: one client-side source, fed by the server ──
+//
+// ensureAccount() runs on every signed-in load (useAccountOnboarding) and
+// after the callback, so whatever it last returned IS the account the app
+// is showing. Anything that displays account details reads this rather
+// than the auth user object, whose email is stale after a change at the
+// shared provider.
+
+type AccountListener = (account: RainbowAccount | null) => void;
+let currentAccount: RainbowAccount | null = null;
+const accountListeners = new Set<AccountListener>();
+
+function publishAccount(account: RainbowAccount | null): void {
+  currentAccount = account;
+  for (const listener of accountListeners) listener(account);
+}
+
+/** The Rainbow account behind the current session, or null (guest, unknown, or not a Rainbow account). */
+export function getCurrentAccount(): RainbowAccount | null {
+  return currentAccount;
+}
+
+/** Subscribe to changes of the current account; returns the unsubscribe function. */
+export function subscribeToCurrentAccount(listener: AccountListener): () => void {
+  accountListeners.add(listener);
+  return () => {
+    accountListeners.delete(listener);
+  };
 }
 
 /** One shape rather than a discriminated union: the app compiles without strictNullChecks, where narrowing on `ok` is unreliable. */
@@ -175,15 +212,25 @@ export async function ensureAccount(): Promise<EnsureAccountResult> {
   if (error) return { ok: false, account: null, reason: "unavailable", message: error.message };
   const row = (Array.isArray(data) ? data[0] : data) as (RainbowAccount & { outcome?: string }) | null | undefined;
   switch (row?.outcome) {
-    case "ok":
+    case "ok": {
       if (!row.user_id) break;
-      return { ok: true, account: row, reason: "ok", message: "" };
+      const account: RainbowAccount = {
+        user_id: row.user_id,
+        global_user_id: row.global_user_id,
+        email: row.email ?? null,
+        created_at: row.created_at,
+      };
+      publishAccount(account);
+      return { ok: true, account, reason: "ok", message: "" };
+    }
     case "not_platform_linked":
       // The auth user exists but is not a Rainbow account. Drop the local
       // session so the app carries on as a guest.
+      publishAccount(null);
       await supabase.auth.signOut({ scope: "local" });
       return { ok: false, account: null, reason: "not_platform_linked", message: NOT_RAINBOW_ACCOUNT };
     case "not_signed_in":
+      publishAccount(null);
       return { ok: false, account: null, reason: "not_signed_in", message: "Not signed in." };
   }
   return { ok: false, account: null, reason: "unavailable", message: "No account row was returned." };
@@ -198,6 +245,7 @@ export async function signOutOfRainbow(): Promise<void> {
   try {
     await supabase.auth.signOut({ scope: "local" });
   } finally {
+    publishAccount(null);
     resetDeviceIdentity();
   }
 }

@@ -24,6 +24,7 @@ import {
   PLATFORM_PROVIDER,
   ensureAccount,
   forgetHubTokens,
+  getCurrentAccount,
   handleCallback,
   signInWithPlatform,
   signOutOfRainbow,
@@ -149,6 +150,39 @@ describe("ensureAccount", () => {
     rpc.mockResolvedValueOnce({ data: null, error: { code: "PGRST202", message: "not in schema cache" } });
     expect((await ensureAccount()).reason).toBe("unavailable");
     expect(auth.signOut).not.toHaveBeenCalled();
+  });
+});
+
+describe("the current account", () => {
+  const ok = (email: string) => ({ data: [{ outcome: "ok", user_id: "u1", global_user_id: "user_X", email, created_at: "now" }], error: null });
+
+  it("is what ensureAccount last returned, with the server's (current) email", async () => {
+    rpc.mockResolvedValueOnce(ok("renamed@b.test"));
+    await ensureAccount();
+    expect(getCurrentAccount()).toEqual({ user_id: "u1", global_user_id: "user_X", email: "renamed@b.test", created_at: "now" });
+  });
+
+  it("is cleared on local sign-out", async () => {
+    rpc.mockResolvedValueOnce(ok("a@b.test"));
+    await ensureAccount();
+    await signOutOfRainbow();
+    expect(getCurrentAccount()).toBeNull();
+  });
+
+  it("is cleared when the auth user turns out not to be a Rainbow account", async () => {
+    rpc.mockResolvedValueOnce(ok("a@b.test"));
+    await ensureAccount();
+    rpc.mockResolvedValueOnce({ data: [{ outcome: "not_platform_linked", user_id: null, global_user_id: null, email: null, created_at: null }], error: null });
+    await ensureAccount();
+    expect(getCurrentAccount()).toBeNull();
+  });
+
+  it("survives a transient failure unchanged", async () => {
+    rpc.mockResolvedValueOnce(ok("a@b.test"));
+    await ensureAccount();
+    rpc.mockResolvedValueOnce({ data: null, error: { code: "PGRST202", message: "not in schema cache" } });
+    await ensureAccount();
+    expect(getCurrentAccount()?.email).toBe("a@b.test");
   });
 });
 

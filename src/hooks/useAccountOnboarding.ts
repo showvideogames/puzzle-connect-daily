@@ -125,7 +125,10 @@ export function useAccountOnboarding() {
         setState({ phase: account.reason === "not_platform_linked" ? "ready" : "saving_unavailable" });
         return;
       }
-      const accountEmail = account.account.email ?? user.email ?? null;
+      // The email shown in the import prompt is the account's CURRENT one,
+      // from the server. Never user.email: GoTrue does not refresh it after
+      // a change at the shared provider.
+      const accountEmail = account.account.email ?? null;
 
       const { data, error } = await supabase.rpc("resolve_device_import", {
         _device_id: identity.deviceId,

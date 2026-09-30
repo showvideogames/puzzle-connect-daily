@@ -829,6 +829,109 @@ const CHECKS: Check[] = [
       expect(!!rows.rows[0].share_id, "custom puzzle has no share id");
     },
   },
+  {
+    // Staging smoke case S6, as a schema invariant: after the person changes
+    // their email at the shared provider, GoTrue refreshes the identity on
+    // the next sign-in and leaves auth.users.email untouched. Rainbow must
+    // report the identity's address, keep the same global link, create no
+    // second account and move no history.
+    name: "an email changed at the shared provider is the account's current email; link and ownership unchanged (S6)",
+    async run(db) {
+      const player = await db.query<{ id: string }>("select id from auth.users where email = $1", [ACCOUNTS.player.email]);
+      const uid = player.rows[0].id;
+      const before = await db.query<{ global_user_id: string; email: string }>(
+        "select global_user_id, public.account_email(user_id) as email from public.accounts where user_id = $1",
+        [uid]
+      );
+      expect(before.rows[0]?.email === ACCOUNTS.player.email, "the seeded account should start with its sign-up email");
+
+      // A game the account owns, so ownership can be checked afterwards.
+      const device = await db.query<{ device_id: string; device_token: string }>("select * from public.create_device_identity()");
+      const puzzle = await db.query<{ id: string }>("select id from public.puzzles where is_published and format = 'full' limit 1");
+      await actAs(db, uid);
+      const session = await db.query<{ id: string | null }>("select public.create_game_session($1, $2, $3, 'daily') as id", [
+        puzzle.rows[0].id,
+        device.rows[0].device_id,
+        device.rows[0].device_token,
+      ]);
+      await actAs(db, null);
+      expect(!!session.rows[0].id, "the account could not start a game before the change");
+
+      const renamed = "e2e-player-renamed@rainbow.test";
+      await db.query(
+        "update auth.identities set identity_data = identity_data || jsonb_build_object('email', $2::text), updated_at = now() where user_id = $1 and provider = 'custom:platform'",
+        [uid, renamed]
+      );
+
+      await actAs(db, uid);
+      const ensured = await db.query<{ outcome: string; global_user_id: string; email: string }>("select * from public.ensure_account()");
+      const mine = await db.query<{ email: string }>("select email from public.my_account()");
+      await actAs(db, null);
+      expect(ensured.rows[0].outcome === "ok", "ensure_account() refused the renamed account");
+      expect(ensured.rows[0].email === renamed, `ensure_account() reported ${ensured.rows[0].email}, not the identity's ${renamed}`);
+      expect(mine.rows[0].email === renamed, `my_account() reported ${mine.rows[0].email}, not the identity's ${renamed}`);
+      expect(ensured.rows[0].global_user_id === before.rows[0].global_user_id, "the global identity link changed with the email");
+
+      const linked = await db.query<{ n: number }>("select count(*)::int as n from public.accounts where global_user_id = $1", [before.rows[0].global_user_id]);
+      expect(linked.rows[0].n === 1, "a second Rainbow account appeared for the same shared identity");
+      const stale = await db.query<{ email: string }>("select email from auth.users where id = $1", [uid]);
+      expect(stale.rows[0].email === ACCOUNTS.player.email, "this check models GoTrue: auth.users.email must have stayed stale");
+      const owned = await db.query<{ user_id: string | null }>("select user_id from public.game_sessions where id = $1", [session.rows[0].id]);
+      expect(owned.rows[0].user_id === uid, "history ownership moved with the email change");
+
+      // The admin lookup finds the account by its CURRENT address only.
+      const admin = await db.query<{ id: string }>("select id from auth.users where email = $1", [ACCOUNTS.admin.email]);
+      await actAs(db, admin.rows[0].id);
+      const byNew = await db.query<{ user_id: string }>("select user_id from public.admin_find_account($1)", [renamed]);
+      const byOld = await db.query<{ user_id: string }>("select user_id from public.admin_find_account($1)", [ACCOUNTS.player.email]);
+      await actAs(db, null);
+      expect(byNew.rows[0]?.user_id === uid, "admin_find_account() did not find the account by its current email");
+      expect(byOld.rows.length === 0, "admin_find_account() still matched the stale auth.users.email");
+    },
+  },
+  {
+    // Staging smoke case S7: delete, then the next sign-in with the same
+    // shared identity. GoTrue makes a NEW auth user for the subject (the old
+    // row is gone) carrying whatever email the provider reports now; Rainbow
+    // makes exactly one clean, empty account for it, and the deleted
+    // account's games stay anonymised.
+    name: "delete, then sign in again with the same shared identity: one clean new account (S7)",
+    async run(db) {
+      const backend = pgliteSeedBackend(db);
+      const globalUserId = "user_VERIFYDELETE0000000000000";
+      const first = await backend.createAccount("verify-delete@rainbow.test", "", globalUserId);
+
+      const device = await db.query<{ device_id: string; device_token: string }>("select * from public.create_device_identity()");
+      const puzzle = await db.query<{ id: string }>("select id from public.puzzles where is_published and format = 'full' limit 1");
+      await actAs(db, first);
+      const session = await db.query<{ id: string | null }>("select public.create_game_session($1, $2, $3, 'daily') as id", [
+        puzzle.rows[0].id,
+        device.rows[0].device_id,
+        device.rows[0].device_token,
+      ]);
+      await actAs(db, null);
+      expect(!!session.rows[0].id, "the throwaway account could not start a game");
+
+      await db.query("select public.delete_local_account($1)", [first]);
+      const userGone = await db.query<{ n: number }>("select count(*)::int as n from auth.users where id = $1", [first]);
+      expect(userGone.rows[0].n === 0, "the auth user survived deletion");
+      const accountGone = await db.query<{ n: number }>("select count(*)::int as n from public.accounts where global_user_id = $1", [globalUserId]);
+      expect(accountGone.rows[0].n === 0, "the accounts row survived deletion");
+      const orphan = await db.query<{ user_id: string | null; device_id: string | null }>("select user_id, device_id from public.game_sessions where id = $1", [session.rows[0].id]);
+      expect(orphan.rows.length === 1 && orphan.rows[0].user_id === null && orphan.rows[0].device_id === null, "the deleted account's game was not kept anonymised");
+
+      const second = await backend.createAccount("verify-delete-renamed@rainbow.test", "", globalUserId);
+      expect(second !== first, "the re-sign-in reused the deleted auth user id");
+      const linked = await db.query<{ user_id: string }>("select user_id from public.accounts where global_user_id = $1", [globalUserId]);
+      expect(linked.rows.length === 1 && linked.rows[0].user_id === second, "the re-sign-in did not yield exactly one account linked to the new auth user");
+      await actAs(db, second);
+      const mine = await db.query<{ email: string }>("select email from public.my_account()");
+      const games = await db.query<{ n: number }>("select count(*)::int as n from public.game_sessions where user_id = $1", [second]);
+      await actAs(db, null);
+      expect(mine.rows[0].email === "verify-delete-renamed@rainbow.test", "the new account does not report the provider's current email");
+      expect(games.rows[0].n === 0, "the new account inherited history it must not have");
+    },
+  },
 ];
 
 async function main(): Promise<number> {

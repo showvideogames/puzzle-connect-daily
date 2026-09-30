@@ -897,6 +897,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      account_email: { Args: { _user_id: string }; Returns: string }
       admin_find_account: {
         Args: { _email: string }
         Returns: {
@@ -983,6 +984,7 @@ export type Database = {
           created_at: string
           email: string
           global_user_id: string
+          outcome: string
           user_id: string
         }[]
       }

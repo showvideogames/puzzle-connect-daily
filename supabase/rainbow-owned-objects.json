@@ -2973,6 +2973,22 @@
   "sequences": [],
   "functions": [
     {
+      "name": "account_email",
+      "args": "_user_id uuid",
+      "returns": "text",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "service_role"
+      ],
+      "comment": "The account's CURRENT email: the custom:platform identity's address (which GoTrue refreshes on every sign-in), falling back to auth.users.email (which GoTrue sets once, at creation, and never refreshes). The only place Rainbow reads an email from; accounts.global_user_id is the identity key."
+    },
+    {
       "name": "admin_find_account",
       "args": "_email text",
       "returns": "TABLE(user_id uuid, email text)",

@@ -3124,6 +3124,38 @@ CREATE FUNCTION public.rainbow_uid() RETURNS uuid
    where a.user_id = auth.uid()
 $$;
 
+-- account_email(uuid)
+CREATE FUNCTION public.account_email(_user_id uuid) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  -- The ONE source of a Rainbow account's current email address.
+  --
+  -- The shared identity provider owns the address, and GoTrue mirrors it into
+  -- auth.identities.identity_data on every sign-in but writes auth.users.email
+  -- only once, when the auth user is created (observed in the Staging smoke
+  -- test, case S6: after an email change at the provider the identity said
+  -- the new address and the user row still said the old one). So for a
+  -- WorkOS-linked account the identity is authoritative and auth.users.email
+  -- is only the fallback for an account that somehow has no identity row.
+  -- The permanent key is accounts.global_user_id; the email is display and
+  -- lookup only, never identity. Both reads resolve through the account
+  -- boundary: a user id that is not a Rainbow account gets NULL.
+  select coalesce(
+    (select nullif(btrim(i.identity_data ->> 'email'), '')
+       from public.accounts a
+       join auth.identities i on i.user_id = a.user_id
+      where a.user_id = _user_id
+        and i.provider = 'custom:platform'
+      order by i.created_at
+      limit 1),
+    (select u.email::text
+       from public.accounts a
+       join auth.users u on u.id = a.user_id
+      where a.user_id = _user_id)
+  )
+$$;
+
 -- ensure_account()
 CREATE FUNCTION public.ensure_account() RETURNS TABLE(outcome text, user_id uuid, global_user_id text, email text, created_at timestamp with time zone)
     LANGUAGE plpgsql SECURITY DEFINER
@@ -3168,9 +3200,8 @@ begin
     set last_seen_at = now();
 
   return query
-    select 'ok'::text, a.user_id, a.global_user_id, u.email::text, a.created_at
+    select 'ok'::text, a.user_id, a.global_user_id, public.account_email(a.user_id), a.created_at
       from public.accounts a
-      join auth.users u on u.id = a.user_id
      where a.user_id = _uid;
 end;
 $$;
@@ -3180,9 +3211,8 @@ CREATE FUNCTION public.my_account() RETURNS TABLE(user_id uuid, global_user_id t
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-  select a.user_id, a.global_user_id, u.email::text, a.created_at
+  select a.user_id, a.global_user_id, public.account_email(a.user_id), a.created_at
     from public.accounts a
-    join auth.users u on u.id = a.user_id
    where a.user_id = auth.uid()
 $$;
 
@@ -3458,12 +3488,13 @@ CREATE FUNCTION public.admin_find_account(_email text) RETURNS TABLE(user_id uui
     AS $$
   -- Looks only among Rainbow ACCOUNTS, never across every auth user in the
   -- project, so a Rainbow admin cannot see another tenant's users. The email
-  -- is a lookup key for a human typing it in, not an identity key.
-  select a.user_id, u.email::text
+  -- is a lookup key for a human typing it in, not an identity key, and it is
+  -- the CURRENT address (account_email: the provider identity, not the stale
+  -- auth.users.email).
+  select a.user_id, public.account_email(a.user_id)
     from public.accounts a
-    join auth.users u on u.id = a.user_id
    where public.has_role(public.rainbow_uid(), 'admin'::public.app_role)
-     and lower(u.email::text) = lower(btrim(_email))
+     and lower(public.account_email(a.user_id)) = lower(btrim(_email))
 $$;
 
 set check_function_bodies = on;
@@ -3782,6 +3813,10 @@ GRANT ALL ON TABLE public.user_streaks TO service_role;
 -- record_streak, verify_device and delete_local_account must never be
 -- client-callable, so this section revokes first and grants only what each
 -- function is for.
+
+-- FUNCTION account_email(_user_id uuid)
+REVOKE ALL ON FUNCTION public.account_email(_user_id uuid) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.account_email(_user_id uuid) TO service_role;
 
 -- FUNCTION admin_find_account(_email text)
 REVOKE ALL ON FUNCTION public.admin_find_account(_email text) FROM PUBLIC, anon, authenticated, service_role;
@@ -4108,6 +4143,9 @@ COMMENT ON COLUMN public.accounts.global_user_id IS 'The shared (WorkOS) identit
 
 -- TABLE device_identities
 COMMENT ON TABLE public.device_identities IS 'One row per anonymous browser identity. token_hash is sha256 of a token returned exactly once at creation and never stored in the clear. retired_at is permanent: a retired identity can never be verified, claimed or resumed, but its gameplay rows are never touched. Since the launch baseline it also records the one-time import decision: retired_reason imported|started_fresh, claimed_by the account that decided, decided_at when.';
+
+-- FUNCTION account_email(_user_id uuid)
+COMMENT ON FUNCTION public.account_email(_user_id uuid) IS 'The account''s CURRENT email: the custom:platform identity''s address (which GoTrue refreshes on every sign-in), falling back to auth.users.email (which GoTrue sets once, at creation, and never refreshes). The only place Rainbow reads an email from; accounts.global_user_id is the identity key.';
 
 -- FUNCTION rainbow_uid()
 COMMENT ON FUNCTION public.rainbow_uid() IS 'The caller''s Rainbow account id, or NULL for a guest and for any auth user without a public.accounts row. Every Rainbow function and policy uses this where it once used auth.uid(); it is the tenant boundary while the auth pool is shared.';
