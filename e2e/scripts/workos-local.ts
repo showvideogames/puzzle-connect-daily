@@ -65,14 +65,14 @@ function checkDomain(domain: string): string {
   return d;
 }
 
-async function workos(method: string, urlPath: string, body?: unknown): Promise<{ status: number; json: any }> {
+async function workos(method: string, urlPath: string, body?: unknown): Promise<{ status: number; json: Record<string, unknown> | null }> {
   const res = await fetch(`${MANAGEMENT_URL}${urlPath}`, {
     method,
     headers: { Authorization: `Bearer ${apiKey()}`, "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
-  let json: any = null;
+  let json: Record<string, unknown> | null = null;
   try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text.slice(0, 300) }; }
   return { status: res.status, json };
 }
@@ -102,12 +102,17 @@ async function register(domainArg: string | undefined): Promise<number> {
 
   if (readState()) { console.error(`${RUNTIME_FILE} exists; run \`remove\` first.`); return 1; }
 
+  // Exactly the shape the proof registered its applications with (shared-accounts-poc,
+  // tools/register-workos-apps.mjs, proof entry E-19): a confidential first-party OAuth
+  // application with one default redirect. WorkOS validates the field names strictly
+  // (`application_type`, not `type`; `is_first_party`; redirect objects).
   const created = await workos("POST", "/connect/applications", {
     name: APP_NAME,
-    type: "oauth",
-    redirect_uris: [redirectUri],
-    first_party: true,
-    registration_type: "authenticated",
+    application_type: "oauth",
+    description: "Rainbow Categories, LOCAL smoke-test stack only. Safe to delete.",
+    redirect_uris: [{ uri: redirectUri, default: true }],
+    uses_pkce: false,
+    is_first_party: true,
   });
   if (created.status >= 300 || !created.json?.id) {
     console.error(`WorkOS refused the application: HTTP ${created.status} ${JSON.stringify(created.json).slice(0, 400)}`);
@@ -117,7 +122,7 @@ async function register(domainArg: string | undefined): Promise<number> {
   const clientId = (created.json.client_id ?? created.json.id) as string;
 
   const secret = await workos("POST", `/connect/applications/${appId}/client_secrets`, {});
-  const clientSecret = secret.json?.secret ?? secret.json?.client_secret ?? secret.json?.value;
+  const clientSecret = (secret.json?.secret ?? secret.json?.client_secret ?? secret.json?.value) as string | undefined;
   if (secret.status >= 300 || !clientSecret) {
     console.error(`Application created (${appId}) but no secret was issued: HTTP ${secret.status}. Remove it in the dashboard.`);
     return 1;
