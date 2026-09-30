@@ -20,6 +20,7 @@
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import pg from "pg";
 import type { E2eConfig } from "../../env.ts";
 import type { SeedBackend } from "./seed-core.ts";
 
@@ -29,6 +30,33 @@ function client(url: string, key: string): SupabaseClient {
   });
 }
 
+/**
+ * The one thing the seeder does over a direct database connection: give a
+ * fixture user the `custom:platform` identity a real WorkOS sign-in would
+ * have left in auth.identities. GoTrue has no admin API for attaching a
+ * custom-provider identity, and the local stack never talks to WorkOS, so
+ * the row is written the way GoTrue itself would write it. The connection
+ * is the same guarded local dbUrl every other e2e script uses.
+ */
+async function attachPlatformIdentity(
+  dbUrl: string,
+  userId: string,
+  email: string,
+  globalUserId: string
+): Promise<void> {
+  const db = new pg.Client({ connectionString: dbUrl });
+  await db.connect();
+  try {
+    await db.query(
+      `insert into auth.identities (id, user_id, provider, provider_id, identity_data, last_sign_in_at, created_at, updated_at)
+       values (gen_random_uuid(), $1, 'custom:platform', $2, $3::jsonb, now(), now(), now())`,
+      [userId, globalUserId, JSON.stringify({ sub: globalUserId, email, email_verified: true })]
+    );
+  } finally {
+    await db.end();
+  }
+}
+
 export function createSupabaseSeedBackend(config: E2eConfig): SeedBackend {
   const admin = client(config.apiUrl, config.serviceRoleKey);
   const anon = client(config.apiUrl, config.anonKey);
@@ -36,7 +64,9 @@ export function createSupabaseSeedBackend(config: E2eConfig): SeedBackend {
   const sessions = new Map<string, SupabaseClient>();
 
   return {
-    async createAccount(email, password) {
+    async createAccount(email, password, globalUserId) {
+      // The password exists so tests can obtain a session from the LOCAL
+      // GoTrue without WorkOS; the hosted project has no password sign-in.
       const { data, error } = await admin.auth.admin.createUser({
         email,
         password,
@@ -45,6 +75,21 @@ export function createSupabaseSeedBackend(config: E2eConfig): SeedBackend {
       if (error || !data.user) {
         throw new Error(`Could not create ${email}: ${error?.message ?? "no user returned"}`);
       }
+      await attachPlatformIdentity(config.dbUrl, data.user.id, email, globalUserId);
+
+      // Then the real thing: sign in and let ensure_account() create the
+      // Rainbow account from that identity, exactly as the client does.
+      const scoped = client(config.apiUrl, config.anonKey);
+      const signedIn = await scoped.auth.signInWithPassword({ email, password });
+      if (signedIn.error) throw new Error(`Sign-in failed while seeding ${email}: ${signedIn.error.message}`);
+      const ensured = await scoped.rpc("ensure_account");
+      const row = (Array.isArray(ensured.data) ? ensured.data[0] : ensured.data) as { global_user_id?: string } | null;
+      if (ensured.error || row?.global_user_id !== globalUserId) {
+        throw new Error(
+          `ensure_account() did not link ${email} to ${globalUserId}: ${ensured.error?.message ?? JSON.stringify(row)}`
+        );
+      }
+      await scoped.auth.signOut({ scope: "local" });
       return data.user.id;
     },
 

@@ -7,58 +7,25 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
-      account_onboarding: {
+      accounts: {
         Row: {
           created_at: string
-          decided_at: string | null
-          source_device_id: string | null
-          status: string
+          global_user_id: string
+          last_seen_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
-          decided_at?: string | null
-          source_device_id?: string | null
-          status: string
+          global_user_id: string
+          last_seen_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
-          decided_at?: string | null
-          source_device_id?: string | null
-          status?: string
+          global_user_id?: string
+          last_seen_at?: string
           user_id?: string
         }
         Relationships: []
@@ -196,6 +163,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "beta_playtests_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "device_identities"
+            referencedColumns: ["device_id"]
+          },
+          {
             foreignKeyName: "beta_playtests_puzzle_id_fkey"
             columns: ["puzzle_id"]
             isOneToOne: false
@@ -294,6 +268,13 @@ export type Database = {
             referencedRelation: "custom_puzzles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "custom_puzzle_results_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "device_identities"
+            referencedColumns: ["device_id"]
+          },
         ]
       }
       custom_puzzle_stats: {
@@ -382,81 +363,33 @@ export type Database = {
         }
         Relationships: []
       }
-      cv_puzzles: {
-        Row: {
-          author: string | null
-          cards: Json | null
-          clues: Json | null
-          created_at: string
-          date: string | null
-          difficulty: string | null
-          id: number
-          solution: Json | null
-          status: string | null
-          title: string | null
-        }
-        Insert: {
-          author?: string | null
-          cards?: Json | null
-          clues?: Json | null
-          created_at?: string
-          date?: string | null
-          difficulty?: string | null
-          id?: number
-          solution?: Json | null
-          status?: string | null
-          title?: string | null
-        }
-        Update: {
-          author?: string | null
-          cards?: Json | null
-          clues?: Json | null
-          created_at?: string
-          date?: string | null
-          difficulty?: string | null
-          id?: number
-          solution?: Json | null
-          status?: string | null
-          title?: string | null
-        }
-        Relationships: []
-      }
-      cv_wordbank: {
-        Row: {
-          id: number
-          word: string
-        }
-        Insert: {
-          id?: number
-          word: string
-        }
-        Update: {
-          id?: number
-          word?: string
-        }
-        Relationships: []
-      }
       device_identities: {
         Row: {
+          claimed_by: string | null
           created_at: string
+          decided_at: string | null
           device_id: string
           retired_at: string | null
           retired_reason: string | null
-          token_hash: string | null
+          token_hash: string
         }
         Insert: {
+          claimed_by?: string | null
           created_at?: string
+          decided_at?: string | null
           device_id: string
           retired_at?: string | null
           retired_reason?: string | null
-          token_hash?: string | null
+          token_hash: string
         }
         Update: {
+          claimed_by?: string | null
           created_at?: string
+          decided_at?: string | null
           device_id?: string
           retired_at?: string | null
           retired_reason?: string | null
-          token_hash?: string | null
+          token_hash?: string
         }
         Relationships: []
       }
@@ -484,33 +417,6 @@ export type Database = {
           message?: string
           type?: string
           user_id?: string | null
-        }
-        Relationships: []
-      }
-      game_results: {
-        Row: {
-          completed_at: string
-          id: string
-          mistakes: number
-          puzzle_id: string
-          user_id: string
-          won: boolean
-        }
-        Insert: {
-          completed_at?: string
-          id?: string
-          mistakes?: number
-          puzzle_id: string
-          user_id: string
-          won: boolean
-        }
-        Update: {
-          completed_at?: string
-          id?: string
-          mistakes?: number
-          puzzle_id?: string
-          user_id?: string
-          won?: boolean
         }
         Relationships: []
       }
@@ -589,11 +495,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "game_sessions_puzzle_version_id_fkey"
-            columns: ["puzzle_version_id"]
+            foreignKeyName: "game_sessions_device_id_fkey"
+            columns: ["device_id"]
             isOneToOne: false
-            referencedRelation: "puzzle_versions"
-            referencedColumns: ["id"]
+            referencedRelation: "device_identities"
+            referencedColumns: ["device_id"]
           },
         ]
       }
@@ -646,15 +552,7 @@ export type Database = {
           server_numbered?: boolean | null
           words?: Json
         }
-        Relationships: [
-          {
-            foreignKeyName: "guess_events_game_session_id_fkey"
-            columns: ["game_session_id"]
-            isOneToOne: false
-            referencedRelation: "game_sessions"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       hint_events: {
         Row: {
@@ -699,6 +597,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      luck_score_ceilings: {
+        Row: {
+          ceiling: number
+          created_at: string
+          effective_from: string
+          note: string | null
+        }
+        Insert: {
+          ceiling: number
+          created_at?: string
+          effective_from: string
+          note?: string | null
+        }
+        Update: {
+          ceiling?: number
+          created_at?: string
+          effective_from?: string
+          note?: string | null
+        }
+        Relationships: []
       }
       puzzle_aggregates: {
         Row: {
@@ -963,215 +882,28 @@ export type Database = {
           updated_at?: string | null
           user_id?: string | null
         }
-        Relationships: []
-      }
-      wtf_game_records: {
-        Row: {
-          answers: Json
-          completed: boolean
-          completed_at: string | null
-          game_date: string
-          id: number
-          player_id: string
-          score: number
-          started_at: string | null
-          theme_title: string | null
-          total_questions: number
-        }
-        Insert: {
-          answers?: Json
-          completed?: boolean
-          completed_at?: string | null
-          game_date: string
-          id?: number
-          player_id: string
-          score?: number
-          started_at?: string | null
-          theme_title?: string | null
-          total_questions?: number
-        }
-        Update: {
-          answers?: Json
-          completed?: boolean
-          completed_at?: string | null
-          game_date?: string
-          id?: number
-          player_id?: string
-          score?: number
-          started_at?: string | null
-          theme_title?: string | null
-          total_questions?: number
-        }
         Relationships: [
           {
-            foreignKeyName: "wtf_game_records_player_id_fkey"
-            columns: ["player_id"]
+            foreignKeyName: "user_streaks_device_id_fkey"
+            columns: ["device_id"]
             isOneToOne: false
-            referencedRelation: "wtf_players"
-            referencedColumns: ["id"]
+            referencedRelation: "device_identities"
+            referencedColumns: ["device_id"]
           },
         ]
-      }
-      wtf_games: {
-        Row: {
-          category_a: string
-          category_a_color: string | null
-          category_a_image: string | null
-          category_b: string
-          category_b_color: string | null
-          category_b_image: string | null
-          created_at: string | null
-          date: string
-          header_image: string | null
-          id: string
-          questions: Json
-          status: string
-          theme_title: string
-          updated_at: string | null
-        }
-        Insert: {
-          category_a: string
-          category_a_color?: string | null
-          category_a_image?: string | null
-          category_b: string
-          category_b_color?: string | null
-          category_b_image?: string | null
-          created_at?: string | null
-          date: string
-          header_image?: string | null
-          id: string
-          questions?: Json
-          status?: string
-          theme_title: string
-          updated_at?: string | null
-        }
-        Update: {
-          category_a?: string
-          category_a_color?: string | null
-          category_a_image?: string | null
-          category_b?: string
-          category_b_color?: string | null
-          category_b_image?: string | null
-          created_at?: string | null
-          date?: string
-          header_image?: string | null
-          id?: string
-          questions?: Json
-          status?: string
-          theme_title?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      wtf_player_stats: {
-        Row: {
-          best_combo: number
-          current_streak: number
-          last_played_date: string | null
-          longest_streak: number
-          player_id: string
-          total_correct: number
-          total_played: number
-          total_questions: number
-          updated_at: string | null
-        }
-        Insert: {
-          best_combo?: number
-          current_streak?: number
-          last_played_date?: string | null
-          longest_streak?: number
-          player_id: string
-          total_correct?: number
-          total_played?: number
-          total_questions?: number
-          updated_at?: string | null
-        }
-        Update: {
-          best_combo?: number
-          current_streak?: number
-          last_played_date?: string | null
-          longest_streak?: number
-          player_id?: string
-          total_correct?: number
-          total_played?: number
-          total_questions?: number
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "wtf_player_stats_player_id_fkey"
-            columns: ["player_id"]
-            isOneToOne: true
-            referencedRelation: "wtf_players"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      wtf_players: {
-        Row: {
-          created_at: string | null
-          email: string | null
-          id: string
-          is_guest: boolean
-          last_seen_at: string
-        }
-        Insert: {
-          created_at?: string | null
-          email?: string | null
-          id: string
-          is_guest?: boolean
-          last_seen_at?: string
-        }
-        Update: {
-          created_at?: string | null
-          email?: string | null
-          id?: string
-          is_guest?: boolean
-          last_seen_at?: string
-        }
-        Relationships: []
-      }
-      wtf_puzzle_stats: {
-        Row: {
-          game_date: string
-          perfect_count: number
-          question_answer_counts: Json
-          question_correct_counts: Json
-          score_histogram: Json
-          total_finished: number
-          total_questions: number
-          total_score: number
-          updated_at: string
-        }
-        Insert: {
-          game_date: string
-          perfect_count?: number
-          question_answer_counts?: Json
-          question_correct_counts?: Json
-          score_histogram?: Json
-          total_finished?: number
-          total_questions?: number
-          total_score?: number
-          updated_at?: string
-        }
-        Update: {
-          game_date?: string
-          perfect_count?: number
-          question_answer_counts?: Json
-          question_correct_counts?: Json
-          score_histogram?: Json
-          total_finished?: number
-          total_questions?: number
-          total_score?: number
-          updated_at?: string
-        }
-        Relationships: []
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      admin_find_account: {
+        Args: { _email: string }
+        Returns: {
+          email: string
+          user_id: string
+        }[]
+      }
       admin_save_puzzle: {
         Args: { _content: Json; _metadata: Json; _puzzle_id: string }
         Returns: Json
@@ -1190,10 +922,6 @@ export type Database = {
           _won: boolean
         }
         Returns: boolean
-      }
-      count_own_anonymous_sessions: {
-        Args: { _device_id: string; _device_token: string }
-        Returns: number
       }
       create_custom_puzzle: {
         Args: {
@@ -1243,9 +971,20 @@ export type Database = {
           outcome: string
         }[]
       }
+      delete_local_account: { Args: { _user_id: string }; Returns: undefined }
+      delete_my_account: { Args: never; Returns: boolean }
       device_has_importable_history: {
         Args: { _device_id: string }
         Returns: boolean
+      }
+      ensure_account: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          global_user_id: string
+          user_id: string
+        }[]
       }
       finalize_game_session: {
         Args: {
@@ -1283,6 +1022,14 @@ export type Database = {
         Returns: Json
       }
       get_custom_puzzle_stats: { Args: { _share_id: string }; Returns: Json }
+      get_luck_report: {
+        Args: {
+          _device_id?: string
+          _device_token?: string
+          _puzzle_id: string
+        }
+        Returns: Json
+      }
       get_my_favorites: { Args: never; Returns: Json }
       get_own_completed_sessions: {
         Args: { _device_id?: string; _device_token?: string; _format?: string }
@@ -1307,10 +1054,6 @@ export type Database = {
           longest_streak: number
         }[]
       }
-      get_luck_report: {
-        Args: { _device_id?: string; _device_token?: string; _puzzle_id: string }
-        Returns: Json
-      }
       get_puzzle_report: { Args: { _puzzle_id: string }; Returns: Json }
       get_puzzle_stats: { Args: { _puzzle_id: string }; Returns: Json }
       get_streak_admin_summary: {
@@ -1326,7 +1069,13 @@ export type Database = {
         Args: { _device_id: string; _device_token: string; _puzzle_id: string }
         Returns: boolean
       }
-      has_role: { Args: { _role: string; _user_id: string }; Returns: boolean }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       import_guest_history: {
         Args: { _device_id: string; _device_token: string }
         Returns: {
@@ -1334,16 +1083,26 @@ export type Database = {
           sessions_claimed: number
         }[]
       }
-      increment_puzzle_aggregate: {
-        Args: {
-          _first_solve?: string
-          _mistakes: number
-          _puzzle_id: string
-          _time_seconds: number
-          _won: boolean
-        }
-        Returns: undefined
+      luck_eligible_paths: {
+        Args: { _puzzle_id: string }
+        Returns: {
+          device_id: string
+          path: Json
+          session_id: string
+          user_id: string
+        }[]
       }
+      my_account: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          global_user_id: string
+          user_id: string
+        }[]
+      }
+      ping: { Args: never; Returns: boolean }
+      rainbow_uid: { Args: never; Returns: string }
       record_bonus_rainbow: {
         Args: {
           _active_time_seconds: number
@@ -1396,14 +1155,13 @@ export type Database = {
         Args: { _device_id: string; _device_token: string; _puzzle_id: string }
         Returns: boolean
       }
-      resolve_onboarding: {
+      resolve_device_import: {
         Args: { _device_id?: string; _device_token?: string }
         Returns: {
           current_streak: number
           games_played: number
           longest_streak: number
           outcome: string
-          status: string
         }[]
       }
       session_capability_ok: {
@@ -1413,6 +1171,17 @@ export type Database = {
       set_custom_puzzle_favorite: {
         Args: { _favorite: boolean; _share_id: string }
         Returns: Json
+      }
+      skill_score: {
+        Args: {
+          _format: string
+          _found_rainbow: boolean
+          _mistakes: number
+          _rainbow_source: string
+          _solve_order: Json
+          _won: boolean
+        }
+        Returns: number
       }
       start_beta_playtest: {
         Args: {
@@ -1438,28 +1207,17 @@ export type Database = {
         }
         Returns: string
       }
-      submit_custom_puzzle_result:
-        | {
-            Args: {
-              _device_id: string
-              _device_token: string
-              _share_id: string
-              _total_guesses: number
-              _won: boolean
-            }
-            Returns: boolean
-          }
-        | {
-            Args: {
-              _device_id: string
-              _device_token: string
-              _run_id: string
-              _share_id: string
-              _total_guesses: number
-              _won: boolean
-            }
-            Returns: boolean
-          }
+      submit_custom_puzzle_result: {
+        Args: {
+          _device_id: string
+          _device_token: string
+          _run_id: string
+          _share_id: string
+          _total_guesses: number
+          _won: boolean
+        }
+        Returns: boolean
+      }
       touch_game_session: {
         Args: {
           _active_time_seconds: number
@@ -1607,12 +1365,10 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: ["admin", "moderator"],
     },
   },
 } as const
+

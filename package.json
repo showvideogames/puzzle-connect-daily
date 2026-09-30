@@ -31,7 +31,10 @@
     "e2e:headed": "playwright test --config e2e/playwright.config.ts --headed",
     "e2e:debug": "playwright test --config e2e/playwright.config.ts --debug",
     "e2e:ui": "playwright test --config e2e/playwright.config.ts --ui",
-    "e2e:report": "playwright show-report e2e/.artifacts/report"
+    "e2e:report": "playwright show-report e2e/.artifacts/report",
+    "db:manifest": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/manifest.ts",
+    "db:teardown-sql": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/teardown-sql.ts",
+    "db:rehearse-reset": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/rehearse-beta-reset.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

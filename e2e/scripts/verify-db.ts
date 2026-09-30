@@ -47,12 +47,27 @@ async function actAs(db: PGlite, userId: string | null): Promise<void> {
 
 function pgliteSeedBackend(db: PGlite): SeedBackend {
   return {
-    async createAccount(email) {
-      const result = await db.query<{ id: string }>(
+    async createAccount(email, _password, globalUserId) {
+      // A Rainbow account is an auth user + a custom:platform identity +
+      // the accounts row ensure_account() derives from it. The stubbed auth
+      // schema holds the first two; the real RPC creates the third, exactly
+      // as the client does after a sign-in.
+      const user = await db.query<{ id: string }>(
         "insert into auth.users (email) values ($1) returning id",
         [email]
       );
-      return result.rows[0].id;
+      const userId = user.rows[0].id;
+      await db.query(
+        "insert into auth.identities (user_id, provider, provider_id, identity_data) values ($1, 'custom:platform', $2, $3::jsonb)",
+        [userId, globalUserId, JSON.stringify({ sub: globalUserId, email })]
+      );
+      await actAs(db, userId);
+      const account = await db.query<{ global_user_id: string }>("select * from public.ensure_account()");
+      await actAs(db, null);
+      if (account.rows[0]?.global_user_id !== globalUserId) {
+        throw new Error(`ensure_account() did not link ${email} to ${globalUserId}`);
+      }
+      return userId;
     },
     async grantAdmin(userId) {
       await db.query("insert into public.user_roles (user_id, role) values ($1, 'admin')", [userId]);
@@ -537,6 +552,15 @@ const CHECKS: Check[] = [
         "select user_id from public.user_roles where role = 'admin' limit 1"
       );
       const adminId = admin.rows[0].user_id;
+      // Sessions written straight into the table (this is a throwaway
+      // in-process database) still have to name a real device: the baseline
+      // gave game_sessions.device_id a foreign key to device_identities.
+      async function ensureDevice(deviceId: string) {
+        await db.query(
+          "insert into public.device_identities (device_id, token_hash) values ($1, 'verify-db') on conflict (device_id) do nothing",
+          [deviceId]
+        );
+      }
       async function insertSession(opts: {
         userId?: string | null;
         deviceId: string;
@@ -544,6 +568,7 @@ const CHECKS: Check[] = [
         numbers?: number[];
         oldStylePrompt?: boolean;
       }) {
+        await ensureDevice(opts.deviceId);
         const s = await db.query<{ id: string }>(
           `insert into public.game_sessions
              (puzzle_id, user_id, device_id, status, won, mistakes, completed_at, is_official, format, solve_order)
@@ -577,6 +602,7 @@ const CHECKS: Check[] = [
       // A "loss" with three categories solved cannot happen in play (the only
       // words left would be the last category, which is then correct), so a
       // row that says so is misrecorded and must not count.
+      await ensureDevice("three-solved-loss");
       const misrecorded = await db.query<{ id: string }>(
         `insert into public.game_sessions
            (puzzle_id, device_id, status, won, mistakes, completed_at, is_official, format, solve_order)
@@ -627,6 +653,11 @@ const CHECKS: Check[] = [
       // ---- 500 eligible players --------------------------------------------
       // 488 more perfect Yellow→Red solves, written straight into the tables
       // (this is an in-process throwaway database) to reach exactly 500.
+      await db.query(
+        `insert into public.device_identities (device_id, token_hash)
+         select 'bulk-' || n, 'verify-db' from generate_series(1, 488) as n
+         on conflict (device_id) do nothing`
+      );
       await db.query(
         `with s as (
            insert into public.game_sessions

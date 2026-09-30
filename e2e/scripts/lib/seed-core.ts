@@ -21,9 +21,23 @@ import { ACCOUNTS, CUSTOM_PUZZLES, OFFICIAL_PUZZLES } from "../../fixtures/catal
 import { customContent, officialContent, officialMetadata } from "../../fixtures/payloads.ts";
 import type { SeedManifest } from "../../fixtures/manifest.ts";
 
+/**
+ * The shared-identity id a fixture account is linked to. Real ones are WorkOS
+ * ids (`user_` + 26 characters); these are recognisably fake, satisfy the
+ * accounts.global_user_id format check, and are stable per fixture key.
+ */
+export function fixtureGlobalUserId(key: string): string {
+  const stem = key.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+  return `user_E2E${stem}${"0".repeat(Math.max(0, 23 - stem.length))}`;
+}
+
 export interface SeedBackend {
-  /** Creates a confirmed account and returns its auth user id. */
-  createAccount(email: string, password: string): Promise<string>;
+  /**
+   * Creates a confirmed RAINBOW account — an auth user, its `custom:platform`
+   * identity carrying `globalUserId`, and the accounts row ensure_account()
+   * derives from that identity — and returns the auth user id.
+   */
+  createAccount(email: string, password: string, globalUserId: string): Promise<string>;
   /** Gives an account the `admin` role. */
   grantAdmin(userId: string): Promise<void>;
   /** Calls admin_save_puzzle as `adminUserId`. Returns the puzzle id. */
@@ -61,7 +75,7 @@ export async function seedFixtures(
   };
 
   for (const account of Object.values(ACCOUNTS)) {
-    const id = await backend.createAccount(account.email, account.password);
+    const id = await backend.createAccount(account.email, account.password, fixtureGlobalUserId(account.key));
     if (account.isAdmin) await backend.grantAdmin(id);
     manifest.accounts[account.key] = {
       key: account.key,

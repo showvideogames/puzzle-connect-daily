@@ -1,0 +1,7 @@
+{
+  "_comment": "Objects the Phase 2 READ-ONLY comparison finds in the live shared project that are Rainbow's but appear in neither the launch manifest nor the beta-era inventory (created by hand in the dashboard). Empty until that comparison is run. Names beginning with xw_, cv_ or wtf_ are refused by the generator.",
+  "tables": [],
+  "functions": [{ "name": "increment_puzzle_aggregate", "args": "_puzzle_id text, _won boolean, _mistakes integer, _time_seconds integer, _first_solve text" }],
+  "types": [],
+  "storagePolicies": []
+}

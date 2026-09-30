@@ -5,21 +5,20 @@
  *   * `npm run e2e:reset`     → a real local Supabase Postgres (needs Docker)
  *   * `npm run e2e:db:verify` → PGlite, in-process (no Docker)
  *
- * The order is not "run the migrations". It is:
+ * The order is:
  *
  *   1. reset             wipe `public`, restore Supabase's bootstrap grants
- *   2. pre-git tables    six tables that were created outside git
- *   3. migrations…       every file in supabase/migrations, filename order,
- *                        with (4) spliced in at the right moment
- *   4. pre-git columns   eight columns added outside git, applied once the
- *                        tables exist and before the first migration that
- *                        reads them
- *   5. pre-git policies  RLS for the three pre-git tables no migration owns
+ *                        (real stack only — PGlite starts genuinely empty)
+ *   2. stubs             auth schema + roles (PGlite only)
+ *   3. migrations…       every file in supabase/migrations, filename order
  *
- * Steps 2, 4 and 5 exist because a clean database plus this repository's
- * migrations is NOT the production schema — see e2e/schema/010_pre_git_tables.sql
- * for the full explanation. Encoding that here, once, is what makes "clean
- * checkout → documented commands → same result" true.
+ * That is the whole plan. Since the launch baseline (0001_rainbow_baseline.sql)
+ * a clean database plus this repository's migrations IS the schema — the
+ * six pre-git tables and eight pre-git columns that used to be spliced in
+ * here are part of the baseline, and the `e2e/schema/0x0_pre_git_*.sql`
+ * files are gone. Every run of this plan is therefore also the proof that
+ * a completely blank Supabase project can become Rainbow/Mini from
+ * repository-controlled files alone.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -28,13 +27,6 @@ import { E2E_DIR, REPO_ROOT } from "../../env.ts";
 
 export const MIGRATIONS_DIR = path.join(REPO_ROOT, "supabase", "migrations");
 export const SCHEMA_DIR = path.join(E2E_DIR, "schema");
-
-/**
- * The pre-git columns land immediately before the first migration whose
- * filename sorts at or after this one — `20260917120000_puzzle_content_versioning`
- * is the first that reads them.
- */
-const COLUMNS_BEFORE_MIGRATION = "20260917120000";
 
 export interface SqlStep {
   /** Human label for progress output and error messages. */
@@ -84,24 +76,12 @@ export function buildSchemaPlan(options: SchemaPlanOptions): SqlStep[] {
     });
   }
 
-  steps.push({ label: "pre-git tables", sql: readSchemaFile("010_pre_git_tables.sql") });
-
-  let columnsApplied = false;
   for (const file of migrationFiles()) {
-    if (!columnsApplied && file >= COLUMNS_BEFORE_MIGRATION) {
-      columnsApplied = true;
-      steps.push({ label: "pre-git columns", sql: readSchemaFile("020_pre_git_columns.sql") });
-    }
     steps.push({
       label: `migration ${file}`,
       sql: readFileSync(path.join(MIGRATIONS_DIR, file), "utf8"),
     });
   }
-  if (!columnsApplied) {
-    steps.push({ label: "pre-git columns", sql: readSchemaFile("020_pre_git_columns.sql") });
-  }
-
-  steps.push({ label: "pre-git policies", sql: readSchemaFile("030_pre_git_policies.sql") });
 
   return steps;
 }
