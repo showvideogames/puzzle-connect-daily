@@ -9,9 +9,11 @@
  *    page flow until the row leaves (so the board doesn't jump down to make
  *    room for it), is a one-tile-row .solved-bar, and doesn't scale while
  *    it merges;
- *  - the bar's pop is part of the merge — it starts as the bar fades in,
- *    with no pause in between — and only once it has finished (on the final
- *    solve) does the celebration start;
+ *  - as in NYT Connections, the tiles finish gathering and the completed
+ *    row holds a beat; THEN the bar swaps in solid and pops — and only once
+ *    the pop has finished (on the final solve) does the celebration start;
+ *  - the tile grid is a layer above the solved bars, so an animated tile
+ *    never disappears behind one;
  *  - nothing dims and re-brightens mid-solve;
  *  - reduced motion skips all of it.
  *
@@ -50,6 +52,7 @@ import { GameBoard } from "@/components/GameBoard";
 import {
   gatherIntoFirstRow,
   SOLVE_BAR_FADE_MS,
+  SOLVE_GATHER_HOLD_MS,
   SOLVE_GATHER_MS,
   SOLVE_POP_MS,
   SOLVE_SETTLE_MS,
@@ -217,8 +220,8 @@ describe("gatherIntoFirstRow", () => {
 describe.each([
   ["Full", fullPuzzle, 4],
   ["Mini", miniPuzzle, 3],
-] as const)("%s board: gather, then merge-and-pop, then settle", (_name, puzzle, columns) => {
-  it("plays the beats in order: the bar merges in place and pops in one gesture", async () => {
+] as const)("%s board: gather, hold, then swap-and-pop", (_name, puzzle, columns) => {
+  it("plays the beats in order: the row gathers and holds, then the bar swaps in and pops", async () => {
     setReducedMotion(false);
     const { container } = renderBoard(puzzle);
     await act(async () => {});
@@ -242,9 +245,15 @@ describe.each([
     expect(bar(group.category).style.opacity).toBe("0");
     for (const w of gridWords(container)) expect(tileButton(container, w).className).not.toMatch(/(^|\s)opacity-50/);
 
-    // Beat 2 — merge and pop together: the one-row bar fades in over the
-    // row and is already popping; the tiles fade out beneath it.
+    // The gathered row holds a beat: still the dark tiles, no bar, no pop.
     await advance(SOLVE_GATHER_MS);
+    expect(bar(group.category).style.opacity).toBe("0");
+    expect(bar(group.category).className).not.toContain("animate-solved-pop");
+    for (const w of group.words) expect(tileWrapper(container, w).style.opacity).toBe("");
+
+    // Beat 2 — swap and pop: the one-row bar is made solid over the row and
+    // pops; the tiles vanish beneath it.
+    await advance(SOLVE_GATHER_HOLD_MS);
     const merging = bar(group.category);
     expect(merging.className).toContain("solved-bar");
     expect(merging.style.position).toBe("absolute");
@@ -282,7 +291,7 @@ describe("the final solve", () => {
     const { container } = renderBoard(miniPuzzle);
     await act(async () => {});
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    const full = CHECKING_MS + SOLVE_GATHER_MS + Math.max(SOLVE_POP_MS, SOLVE_BAR_FADE_MS + SOLVE_SETTLE_MS);
+    const full = CHECKING_MS + SOLVE_GATHER_MS + SOLVE_GATHER_HOLD_MS + Math.max(SOLVE_POP_MS, SOLVE_BAR_FADE_MS + SOLVE_SETTLE_MS);
 
     for (const g of miniPuzzle.groups.slice(0, 2)) {
       await submit(container, g.words);
@@ -346,5 +355,29 @@ describe("the Rainbow bar shares the category bars' footprint", () => {
 
     expect(box(solved)).toContain("solved-bar");
     expect(box(rainbow).filter((c) => c !== "w-full")).toEqual(box(solved).filter((c) => c !== "w-full"));
+  });
+});
+
+describe("animated tiles draw in front of solved bars", () => {
+  it("puts the tile grid on a layer above the solved-bar list", async () => {
+    setReducedMotion(true);
+    const { container } = renderBoard(fullPuzzle);
+    await act(async () => {});
+    await submit(container, fullPuzzle.groups[0].words);
+    await act(async () => {});
+
+    const list = container.querySelector(".board-bars") as HTMLElement;
+    const tile = container.querySelector("div[data-word]") as HTMLElement;
+    // The grid's wrapper: the nearest positioned ancestor of the grid that is
+    // a sibling of the bar list.
+    const gridLayer = Array.from(list.parentElement!.children).find((el) => el !== list && el.contains(tile)) as HTMLElement;
+    const z = (el: HTMLElement) => Number(/(?:^|\s)z-\[(\d+)\]/.exec(el.className)?.[1] ?? NaN);
+    expect(list.className).toMatch(/(^|\s)relative(\s|$)/);
+    expect(gridLayer.className).toMatch(/(^|\s)relative(\s|$)/);
+    expect(z(gridLayer)).toBeGreaterThan(z(list));
+    // And nothing between the tile and that layer clips it.
+    for (let el: HTMLElement | null = tile; el && el !== gridLayer; el = el.parentElement) {
+      expect(String(el.className)).not.toMatch(/overflow-(hidden|clip)/);
+    }
   });
 });

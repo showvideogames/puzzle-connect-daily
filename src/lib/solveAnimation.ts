@@ -1,40 +1,43 @@
 /**
- * Timings for GameBoard's correct-guess solve animation, in four beats:
+ * Timings for GameBoard's correct-guess solve animation. Modelled on NYT
+ * Connections' own solve (measured frame by frame from a recording): two
+ * tightly linked but clearly separate beats.
  *
  *   1. GATHER — the guessed tiles swap into the top row of the board (only
- *      the tiles that have to move do; see gatherIntoFirstRow below).
- *   2. MERGE + POP — one gesture. The solved bar fades in exactly over
- *      that row (a solved bar is exactly one tile row tall and the full
- *      board wide, index.css .solved-bar) while the gathered tiles fade out
- *      beneath it. As it fades in it grows from just under its size into a
- *      small overshoot and settles (.animate-solved-pop), so the merge and
- *      the "category locked in" pop read as one landing, never as a
- *      finished bar that then dips and pops again.
- *   3. SETTLE — as the merge finishes, the row leaves the grid and the bar
+ *      the tiles that have to move do; see gatherIntoFirstRow below), and
+ *      the completed dark row holds for a moment (NYT: ~90ms).
+ *   2. SWAP + POP — the row is replaced, almost instantly, by its solved
+ *      bar: solid, exactly one tile row (index.css .solved-bar), with no
+ *      slow fade. The bar punches outward to a clear overshoot and settles
+ *      straight to its exact size (.animate-solved-pop; NYT: peak ~100ms
+ *      after the swap, settled ~220ms after it). Its words land with it.
+ *   3. SETTLE — as the swap completes the row leaves the grid and the bar
  *      takes its place in the page (the pop carries on uninterrupted).
  *      Because the bar is the row's size, the rest of the board has nothing
- *      to close up; any leftover difference (a very long answer line)
- *      glides rather than jumps.
+ *      to close up; any leftover difference glides rather than jumps.
  *
  * Reduced motion skips all of it: the bar simply appears and the row goes.
  */
 export const SOLVE_GATHER_MS = 380;
-export const SOLVE_BAR_FADE_MS = 200;
 /**
- * The bar's pop, starting with the merge. Must match .animate-solved-pop in
- * index.css: 0.97 → 1.03 → 1. Small on purpose — at 1.03 a full-width phone
- * bar reaches only ~5px past each edge of the row.
+ * Extra hold before the swap, on top of the gather's own slow finish (its
+ * easing spends its last ~100ms all but still). Together they give NYT's
+ * ~90–100ms of a visibly complete row — short, so the two beats still read
+ * as cause and effect.
  */
-export const SOLVE_POP_MS = 420;
+export const SOLVE_GATHER_HOLD_MS = 40;
+/** The swap itself: how fast the bar becomes solid over the row. Must stay short — the bar should not visibly fade. */
+export const SOLVE_BAR_FADE_MS = 60;
+/** The tiles disappear under the bar just as fast. */
+export const SOLVE_TILE_FADE_MS = 60;
 /**
- * The gathered tiles fade out faster than the bar fades in over them, so the
- * tiles' own words are gone before the bar's text arrives (no two sets of
- * words ghosting over each other).
+ * The bar's pop, from the swap. Must match .animate-solved-pop in index.css:
+ * 0.985 → 1.07 → 1, quick out and quick back.
  */
-export const SOLVE_TILE_FADE_MS = 140;
+export const SOLVE_POP_MS = 260;
 export const SOLVE_SETTLE_MS = 320;
 /** Must match .animate-solved-content-land in index.css. */
-export const SOLVE_CONTENT_LAND_MS = 360;
+export const SOLVE_CONTENT_LAND_MS = 260;
 /** Shared easing for the gather and settle slides. */
 export const SOLVE_EASE = "cubic-bezier(0.2, 0, 0, 1)";
 

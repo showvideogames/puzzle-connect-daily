@@ -43,6 +43,7 @@ import {
   gatherIntoFirstRow,
   SOLVE_BAR_FADE_MS,
   SOLVE_EASE,
+  SOLVE_GATHER_HOLD_MS,
   SOLVE_GATHER_MS,
   SOLVE_POP_MS,
   SOLVE_SETTLE_MS,
@@ -90,8 +91,8 @@ interface RevealState {
   //  pending   — just solved; the bar is mounted out of the page flow and
   //              invisible, and the board hasn't moved yet.
   //  gathering — the guessed tiles are swapping into the top row.
-  //  appearing — the bar fades in over that row, already popping; the tiles
-  //              fade beneath it.
+  //  appearing — the bar swaps in over that row (solid within a few frames)
+  //              and pops; the tiles vanish beneath it.
   //  settling  — the pop finishes; the row has left the grid and anything
   //              the bar didn't exactly replace glides into place.
   phase: "pending" | "gathering" | "appearing" | "settling";
@@ -584,7 +585,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }
     setPhase("gathering");
 
-    const barAt = gathers ? SOLVE_GATHER_MS : 0;
+    // The swap comes once the gathered row is complete and has held a beat.
+    const barAt = gathers ? SOLVE_GATHER_MS + SOLVE_GATHER_HOLD_MS : 0;
     const settleAt = barAt + SOLVE_BAR_FADE_MS;
     revealTimersRef.current = [
       // Beat 2 — merge: the bar fades in over the gathered row.
@@ -1309,10 +1311,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           index.css), so a row becoming a bar leaves the board below where
           it was. pt-2 keeps the unsolved board exactly where it always sat,
           and is where the first bar lands — right on top of the first row.
-          relative + z-[1]: the bar of a category mid-solve-animation is
-          positioned against this list, and must draw over the tile row it
-          replaces (.board-bars is a size container, which gives it its own
-          layer). */}
+          relative: the bar of a category mid-solve-animation is positioned
+          against this list. z-[1]: one layer below the tile grid (z-[2]), so
+          animated tiles draw in front of solved bars. */}
       <div
         ref={barsListRef}
         className={`board-bars relative z-[1] pt-2 ${
@@ -1398,7 +1399,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* Word grid. Stays mounted (empty) through the settle beat of the
           final solve, so its height can glide to zero like any other settle. */}
       {(remainingWords.length > 0 || reveal !== null) && (
-        <div ref={gridWrapperRef} className="relative">
+        // relative z-[2]: the grid is its own layer ABOVE the solved-bar
+        // list (z-[1], which .board-bars' size containment makes a layer of
+        // its own anyway). A tile that lifts or pops past its box — the
+        // checking bounce, the selection pop, a gathering tile — draws in
+        // front of a solved bar instead of disappearing behind it. Nothing in
+        // the solve animation needs a bar above a visible tile: the gathered
+        // tiles are gone by the time their bar shows.
+        <div ref={gridWrapperRef} className="relative z-[2]">
           {/* Columns come from the format (4 on Full, 3 on Mini) as an inline
               grid-template rather than a `grid-cols-N` class, because Tailwind
               only emits the classes it can see in the source and a computed
