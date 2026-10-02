@@ -22,14 +22,14 @@ interface SolvedGroupProps {
   //    The bar is invisible and taken OUT of the page flow (absolute, with
   //    no top set, so it sits exactly where it will end up and at the full
   //    board width) — the board below doesn't move to make room for it yet.
-  //  - "appearing": same place, swapped in solid over the gathered row at
-  //    its normal size (the row it covers is exactly its size, see
-  //    .solved-bar); its text lands (.animate-solved-content-land).
-  //  - "arrived": production's arrival pop plays (.animate-solved-arrival).
+  //  - "arrived": same place, swapped in solid over the gathered row (the
+  //    row it covers is exactly its size, see .solved-bar), popping from
+  //    that frame (.animate-solved-arrival) while its text lands
+  //    (.animate-solved-content-land).
   //  - "settling": back in the page flow in the same spot (not used by the
   //    current sequence, which settles straight to normal rendering).
   // undefined = normal rendering (animate-group-appear entrance if `animate`).
-  reveal?: "pending" | "appearing" | "arrived" | "settling";
+  reveal?: "pending" | "arrived" | "settling";
 }
 
 // forwardRef so GameBoard can reach this bar's DOM node during the solve
@@ -40,9 +40,9 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
 ) {
   const colors = groupColors[group.difficulty] || groupColors[1];
   const revealing = reveal !== undefined;
-  const floating = reveal === "pending" || reveal === "appearing" || reveal === "arrived";
-  const contentLand = reveal === "appearing" || reveal === "arrived" || reveal === "settling" ? "animate-solved-content-land" : "";
-  // Production's arrival pop, once the swapped-in bar has held a beat.
+  const floating = reveal === "pending" || reveal === "arrived";
+  const contentLand = reveal === "arrived" || reveal === "settling" ? "animate-solved-content-land" : "";
+  // Production's arrival pop, from the swap frame itself.
   const popping = reveal === "arrived";
   const displayWords = alphabetizeCompleted
     ? [...group.words].sort((a, b) => a.localeCompare(b))
@@ -81,7 +81,7 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
               // No transition: the swap is a single frame (see
               // lib/solveAnimation.ts). The pop and the text landing are
               // what move.
-              opacity: reveal === "appearing" || reveal === "arrived" ? 1 : 0,
+              opacity: reveal === "arrived" ? 1 : 0,
             }
           : undefined
       }

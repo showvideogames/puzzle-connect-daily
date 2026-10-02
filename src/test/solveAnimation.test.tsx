@@ -51,7 +51,6 @@ vi.mock("@/lib/analytics", () => ({ trackEvent: () => {} }));
 import { GameBoard } from "@/components/GameBoard";
 import {
   gatherIntoFirstRow,
-  SOLVE_ARRIVAL_PAUSE_MS,
   SOLVE_GATHER_HOLD_MS,
   SOLVE_GATHER_MS,
   SOLVE_POP_MS,
@@ -251,30 +250,30 @@ describe.each([
     expect(bar(group.category).className).not.toContain("animate-solved-arrival");
     for (const w of group.words) expect(tileWrapper(container, w).style.opacity).toBe("");
 
-    // Beat 2 — swap: the one-row bar is made solid over the row, at its
-    // normal size (no pop yet); the tiles vanish beneath it.
+    // Beat 2 — swap + pop: the one-row bar is made solid over the row and
+    // starts its pop on the same frame; the tiles vanish beneath it.
     await advance(SOLVE_GATHER_HOLD_MS);
     const merging = bar(group.category);
     expect(merging.className).toContain("solved-bar");
     expect(merging.style.position).toBe("absolute");
     expect(merging.style.opacity).toBe("1");
-    expect(merging.className).not.toContain("animate-solved-arrival");
+    expect(merging.className).toContain("animate-solved-arrival");
     for (const w of group.words) expect(tileWrapper(container, w).style.opacity).toBe("0");
     // A discrete swap: neither the bar nor the tiles crossfade.
     expect(merging.style.transition).toBe("");
     for (const w of group.words) expect(tileWrapper(container, w).style.transition).toBe("");
+    // Its text lands inside the pop, not before it.
     expect(screen.getByText(group.category).className).toContain("animate-solved-content-land");
 
-    // Then production's arrival pop, after production's pause.
-    await advance(SOLVE_ARRIVAL_PAUSE_MS);
+    // The tiles stay hidden under the bar through the pop.
+    await advance(SOLVE_POP_MS / 2);
     expect(bar(group.category)).toBe(merging);
     expect(merging.className).toContain("animate-solved-arrival");
-    // The tiles stay hidden under the bar through the pop.
     for (const w of group.words) expect(tileWrapper(container, w).style.opacity).toBe("0");
 
     // Nothing re-renders the board while the card pops: just before the
     // pop ends the hidden row is still in the grid and the bar still floats.
-    await advance(SOLVE_POP_MS - 20);
+    await advance(SOLVE_POP_MS / 2 - 20);
     expect(bar(group.category)).toBe(merging);
     expect(merging.style.position).toBe("absolute");
     for (const w of group.words) expect(tileWrapper(container, w)).not.toBeNull();
@@ -302,7 +301,7 @@ describe("the final solve", () => {
     const { container } = renderBoard(miniPuzzle);
     await act(async () => {});
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    const full = CHECKING_MS + SOLVE_GATHER_MS + SOLVE_GATHER_HOLD_MS + SOLVE_ARRIVAL_PAUSE_MS + SOLVE_POP_MS + SOLVE_SETTLE_MS;
+    const full = CHECKING_MS + SOLVE_GATHER_MS + SOLVE_GATHER_HOLD_MS + SOLVE_POP_MS + SOLVE_SETTLE_MS;
 
     for (const g of miniPuzzle.groups.slice(0, 2)) {
       await submit(container, g.words);
@@ -314,7 +313,7 @@ describe("the final solve", () => {
     expect(screen.queryByText(/perfect game/i)).toBeNull();
     // The last row is the whole board, so there is nothing to gather: the bar
     // merges and pops straight away — and the celebration waits for it.
-    await advance(SOLVE_ARRIVAL_PAUSE_MS);
+    await advance(10);
     expect(bar(last.category).className).toContain("animate-solved-arrival");
     expect(screen.queryByText(/perfect game/i)).toBeNull();
     await advance(SOLVE_POP_MS);
