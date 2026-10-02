@@ -1,5 +1,5 @@
 /**
- * Rainbow Bot report — the client side of public.get_puzzle_report.
+ * Lucky Bot report — the client side of public.get_puzzle_report.
  *
  * The function returns aggregates only (counts and histograms), so this
  * module's job is to fetch that JSON and turn it into sentences: what the
@@ -28,6 +28,12 @@ export interface PuzzleReport {
   players_with_wrong_guess: number;
   rainbow_in_game: number;
   rainbow_post_game: number;
+  /** Finishers who found the Rainbow at any point. */
+  rainbow_found: number;
+  /** …during play, before solving any category. */
+  rainbow_first: number;
+  /** …through the post-game prompt, after the board was finished. */
+  rainbow_last: number;
   /** Keyed by the colour name the client writes into solve_order:
    *  "orange" (Yellow), "green", "blue", "red". */
   first_solved: Record<string, number>;
@@ -47,6 +53,9 @@ export async function fetchPuzzleReport(puzzleId: string): Promise<PuzzleReport 
     players_with_wrong_guess: num(raw.players_with_wrong_guess),
     rainbow_in_game: num(raw.rainbow_in_game),
     rainbow_post_game: num(raw.rainbow_post_game),
+    rainbow_found: num(raw.rainbow_found),
+    rainbow_first: num(raw.rainbow_first),
+    rainbow_last: num(raw.rainbow_last),
     first_solved: numRecord(raw.first_solved),
     score_counts: numRecord(raw.score_counts),
     common_wrong_guesses: Array.isArray(raw.common_wrong_guesses)
@@ -152,13 +161,56 @@ export function describeWrongGuess(words: readonly string[], puzzle: Puzzle): Wr
   return { parts, isRainbowSet, unknown };
 }
 
+/**
+ * The wrong guesses worth listing: never the Rainbow's own words, which is
+ * a find, not a mistake. get_puzzle_report already leaves those out
+ * (migration 20260929000000); this keeps a report from before that change,
+ * or from a puzzle whose Rainbow was edited since, from listing one.
+ */
+export function listedWrongGuesses(report: PuzzleReport, puzzle: Puzzle): WrongGuessSummary[] {
+  return report.common_wrong_guesses.filter((g) => !describeWrongGuess(g.words, puzzle).isRainbowSet);
+}
+
+/**
+ * "Perfect" (a win with no mistakes) and "made at least one wrong guess"
+ * as percentages of the same finishers. Every finisher is exactly one of
+ * the two, so the wrong-guess share is everyone who was not perfect and the
+ * two always add up to 100, rounding included.
+ */
+export function perfectAndWrongPct(report: Pick<PuzzleReport, "total_players" | "perfect">): {
+  perfectPct: number;
+  wrongPct: number;
+} {
+  if (report.total_players <= 0) return { perfectPct: 0, wrongPct: 0 };
+  const perfectPct = Math.round((Math.min(report.perfect, report.total_players) / report.total_players) * 100);
+  return { perfectPct, wrongPct: 100 - perfectPct };
+}
+
+/**
+ * How the Rainbow's finders found it — first (during play, before solving
+ * any category) or last (through the post-game prompt) — as percentages of
+ * the players who FOUND it, not of all finishers ("N% found the Rainbow"
+ * uses all finishers). When every finder is one or the other, which the
+ * current game guarantees, the two add up to 100, rounding included; an
+ * older find at some other point in play is left out of both rather than
+ * forced into one. null when nobody has found it.
+ */
+export function rainbowFirstLastPct(
+  report: Pick<PuzzleReport, "rainbow_found" | "rainbow_first" | "rainbow_last">
+): { firstPct: number; lastPct: number } | null {
+  const found = report.rainbow_found;
+  if (found <= 0) return null;
+  const first = Math.min(Math.max(report.rainbow_first, 0), found);
+  const last = Math.min(Math.max(report.rainbow_last, 0), found - first);
+  const firstPct = Math.round((first / found) * 100);
+  const lastPct = first + last === found ? 100 - firstPct : Math.round((last / found) * 100);
+  return { firstPct, lastPct };
+}
+
 /** One plain sentence for a wrong guess. */
 export function wrongGuessSentence(guess: WrongGuessSummary, puzzle: Puzzle): string {
   const d = describeWrongGuess(guess.words, puzzle);
   const who = guess.players === 1 ? "1 player" : `${guess.players} players`;
-  if (d.isRainbowSet) {
-    return `${who} submitted the Rainbow words as a normal category. That is the trap working.`;
-  }
   if (d.parts.length === 0) return `${who} tried this one.`;
   const pieces = d.parts.map((p) => `${p.count} from ${p.category}`);
   const list = pieces.length <= 1 ? pieces[0] : `${pieces.slice(0, -1).join(", ")} and ${pieces[pieces.length - 1]}`;

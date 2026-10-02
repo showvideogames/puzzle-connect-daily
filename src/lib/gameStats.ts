@@ -199,35 +199,89 @@ export async function recordBonusRainbowAttempt(params: {
   guessedAt: string;
   activeTimeSeconds: number;
   groupsSolved: number;
-}): Promise<void> {
+}, options: { retry?: boolean } = {}): Promise<"saved" | "refused" | "failed"> {
+  // retry: false sends once, as the Mini always has; see its call in GameBoard.
+  const attempts = options.retry === false ? 1 : BONUS_WRITE_RETRY_DELAYS_MS.length + 1;
+  // A Full game's answer is sent at Submit and kept in the browser until
+  // this returns "saved" or "refused"; a "failed" one is sent again on the
+  // next visit (see GameBoard's deliverPromptAnswer). An answer is still
+  // lost if the player never returns on that browser, or clears its data,
+  // before it gets through.
+  //
+  // Every prompt submission is part of the player's Luck path, so a write
+  // lost to a brief network error is retried. Safe to repeat: the function
+  // recognises the same submission (same guessedAt, words and result) and
+  // stores it once, and it picks the saved guess number itself — guessNumber
+  // is only a floor — so a try after a refresh can no longer collide with an
+  // earlier one and be dropped (migration 20260928000000).
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, BONUS_WRITE_RETRY_DELAYS_MS[attempt - 1]));
+    try {
+      const { deviceId, deviceToken } = await getIdentity();
+      // One function call does both writes: the bonus guess event and the
+      // session summary. It is the ONLY producer of
+      // attempt_type = 'bonus_rainbow' in the system, and record_guess_events
+      // forces 'normal' for everything else, so that value is a trustworthy
+      // record of explicit intent rather than something a client can assert.
+      //
+      // The function also enforces what the client used to be trusted with:
+      // the session must be COMPLETED (the prompt only exists after the board
+      // finishes), and a Rainbow already found in normal play cannot have its
+      // rainbow_source rewritten to post_game.
+      const { data, error } = await supabase.rpc("record_bonus_rainbow", {
+        _session_id: params.sessionId,
+        _device_id: deviceId,
+        _device_token: deviceToken,
+        _guess_number: params.guessNumber,
+        _words: params.words,
+        _correct: params.correct,
+        _guessed_at: params.guessedAt,
+        _active_time_seconds: params.activeTimeSeconds,
+        _groups_solved: params.groupsSolved,
+      });
+      // A refusal (false: not this player's session, not finished, or the
+      // game already has its answer) is an answer, not a network failure —
+      // retrying cannot change it.
+      if (!error) return data === false ? "refused" : "saved";
+      console.error("Failed to record bonus Rainbow attempt:", error);
+    } catch (err) {
+      console.error("recordBonusRainbowAttempt error:", err);
+    }
+  }
+  return "failed";
+}
+
+/**
+ * Whether this player's official Full game for a puzzle already has a
+ * post-game Rainbow answer on the server. Needed for games answered by an
+ * older version of the app, which kept no record of the answer in the
+ * browser: without this check a reopened game would offer the prompt again.
+ * null when the server could not be asked; the row's found flag says
+ * whether that earlier answer was right.
+ */
+export async function fetchSavedPromptAnswer(
+  puzzleId: string
+): Promise<{ answered: boolean; found: boolean } | null> {
   try {
     const { deviceId, deviceToken } = await getIdentity();
-    // One function call does both writes: the bonus guess event and the
-    // session summary. It is the ONLY producer of
-    // attempt_type = 'bonus_rainbow' in the system, and record_guess_events
-    // forces 'normal' for everything else, so that value is a trustworthy
-    // record of explicit intent rather than something a client can assert.
-    //
-    // The function also enforces what the client used to be trusted with:
-    // the session must be COMPLETED (the prompt only exists after the board
-    // finishes), and a Rainbow already found in normal play cannot have its
-    // rainbow_source rewritten to post_game.
-    const { error } = await supabase.rpc("record_bonus_rainbow", {
-      _session_id: params.sessionId,
+    const { data, error } = await supabase.rpc("get_own_completed_sessions", {
       _device_id: deviceId,
       _device_token: deviceToken,
-      _guess_number: params.guessNumber,
-      _words: params.words,
-      _correct: params.correct,
-      _guessed_at: params.guessedAt,
-      _active_time_seconds: params.activeTimeSeconds,
-      _groups_solved: params.groupsSolved,
+      _format: "full",
     });
-    if (error) console.error("Failed to record bonus Rainbow attempt:", error);
-  } catch (err) {
-    console.error("recordBonusRainbowAttempt error:", err);
+    if (error || !Array.isArray(data)) return null;
+    const row = (data as unknown as OwnCompletedSession[]).find((r) => r.puzzle_id === puzzleId);
+    return {
+      answered: row?.bonus_rainbow_attempted === true,
+      found: row?.bonus_rainbow_attempted === true && row?.found_rainbow === true,
+    };
+  } catch {
+    return null;
   }
 }
+
+/** Waits between retries of a failed post-game Rainbow write. */
+const BONUS_WRITE_RETRY_DELAYS_MS = [1000, 3000];
 
 /**
  * Does a COMPLETED, OFFICIAL result already exist for this puzzle + identity?

@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { describeWrongGuess, scoreStanding, wrongGuessSentence, categoryForSolveKey } from "@/lib/puzzleReport";
+import {
+  describeWrongGuess,
+  scoreStanding,
+  wrongGuessSentence,
+  categoryForSolveKey,
+  listedWrongGuesses,
+  perfectAndWrongPct,
+  rainbowFirstLastPct,
+  type PuzzleReport,
+} from "@/lib/puzzleReport";
 import type { Puzzle } from "@/lib/types";
 
 const puzzle: Puzzle = {
@@ -47,9 +56,37 @@ describe("wrongGuessSentence", () => {
       .toBe("1 player: 2 from Parts of the Leg, 1 from Ugly ___ and 1 from Adore.");
   });
 
-  it("calls out the Rainbow trap", () => {
-    expect(wrongGuessSentence({ ...base, words: ["CALF", "CUB", "DUCKLING", "FAWN"], players: 3 }, puzzle))
-      .toBe("3 players submitted the Rainbow words as a normal category. That is the trap working.");
+});
+
+describe("listedWrongGuesses", () => {
+  const base = { words: [] as string[], players: 1, one_away: false, rainbow_attempt: false, almost_rainbow: false };
+  // Finding the Rainbow is a find, not a mistake.
+  it("never lists the Rainbow's own words, in any order or case, and keeps every real wrong guess", () => {
+    const report = {
+      common_wrong_guesses: [
+        { ...base, words: ["CALF", "FANCY", "FOOT", "HIP"], players: 3 },
+        { ...base, words: ["fawn", "CUB", "Duckling", "CALF"], players: 2 },
+        { ...base, words: ["ANGEL", "BRAVE", "CRY", "QUAD"], players: 1 },
+      ],
+    } as PuzzleReport;
+    expect(listedWrongGuesses(report, puzzle).map((g) => g.words[0])).toEqual(["CALF", "ANGEL"]);
+  });
+
+  it("keeps a guess that is only one word away from the Rainbow", () => {
+    const report = { common_wrong_guesses: [{ ...base, words: ["CALF", "CUB", "DUCKLING", "FANCY"], players: 1 }] } as PuzzleReport;
+    expect(listedWrongGuesses(report, puzzle)).toHaveLength(1);
+  });
+});
+
+describe("perfectAndWrongPct", () => {
+  it("describes the same finishers, so the two always add up to 100", () => {
+    expect(perfectAndWrongPct({ total_players: 13, perfect: 8 })).toEqual({ perfectPct: 62, wrongPct: 38 });
+    expect(perfectAndWrongPct({ total_players: 3, perfect: 1 })).toEqual({ perfectPct: 33, wrongPct: 67 });
+    expect(perfectAndWrongPct({ total_players: 4, perfect: 4 })).toEqual({ perfectPct: 100, wrongPct: 0 });
+  });
+
+  it("is zero for zero finishers", () => {
+    expect(perfectAndWrongPct({ total_players: 0, perfect: 0 })).toEqual({ perfectPct: 0, wrongPct: 0 });
   });
 });
 
@@ -85,5 +122,25 @@ describe("categoryForSolveKey", () => {
     expect(categoryForSolveKey("orange", puzzle)?.category).toBe("MLB Teams Singular");
     expect(categoryForSolveKey("red", puzzle)?.category).toBe("Adore");
     expect(categoryForSolveKey("purple", puzzle)).toBeUndefined();
+  });
+});
+
+describe("rainbowFirstLastPct", () => {
+  // "First" and "last" are shares of the players who FOUND the Rainbow.
+  it("splits the finders, not all finishers — everyone who found it found it first", () => {
+    expect(rainbowFirstLastPct({ rainbow_found: 13, rainbow_first: 13, rainbow_last: 0 })).toEqual({ firstPct: 100, lastPct: 0 });
+  });
+
+  it("adds up to 100 for a mixed first/last split, rounding included", () => {
+    expect(rainbowFirstLastPct({ rainbow_found: 3, rainbow_first: 2, rainbow_last: 1 })).toEqual({ firstPct: 67, lastPct: 33 });
+    expect(rainbowFirstLastPct({ rainbow_found: 7, rainbow_first: 3, rainbow_last: 4 })).toEqual({ firstPct: 43, lastPct: 57 });
+  });
+
+  it("is null when nobody found it", () => {
+    expect(rainbowFirstLastPct({ rainbow_found: 0, rainbow_first: 0, rainbow_last: 0 })).toBeNull();
+  });
+
+  it("leaves an older find at some other point in play out of both, rather than forcing it into one", () => {
+    expect(rainbowFirstLastPct({ rainbow_found: 4, rainbow_first: 2, rainbow_last: 1 })).toEqual({ firstPct: 50, lastPct: 25 });
   });
 });
