@@ -806,6 +806,53 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     prevGotRainbow.current = state.gotRainbow;
   }, [state.gotRainbow]);
 
+  // Finding the Rainbow mid-game adds its bar to the solved-bar list — a
+  // whole tile row plus a gap — which used to drop the board below by that
+  // much in a single frame before the curtain drew the bar in. Instead, the
+  // list grows into its new height over the settle beat, so the board and
+  // the controls glide down while the curtain plays. The list's size is
+  // remembered after every render so the "before" height is always at hand;
+  // the trigger is the same false→true flip that starts the curtain above.
+  const barsListRef = useRef<HTMLDivElement | null>(null);
+  const barsListSizeRef = useRef<{ height: number; margin: number } | null>(null);
+  const rainbowGlideSeenRef = useRef(state.gotRainbow);
+  useLayoutEffect(() => {
+    const list = barsListRef.current;
+    if (!list) return;
+    // Mid-glide (the game re-renders every second for its timer): leave the
+    // glide alone; its natural height is already the remembered one.
+    if (list.style.height) {
+      rainbowGlideSeenRef.current = state.gotRainbow;
+      return;
+    }
+    const size = { height: list.getBoundingClientRect().height, margin: parseFloat(getComputedStyle(list).marginBottom) || 0 };
+    const prev = barsListSizeRef.current;
+    barsListSizeRef.current = size;
+    const found = state.gotRainbow && !rainbowGlideSeenRef.current;
+    rainbowGlideSeenRef.current = state.gotRainbow;
+    if (!found || !prev || prefersReducedMotion()) return;
+    // Start from exactly the old height AND old bottom gap (the list may
+    // gain its gap to the grid in this same render), so everything below is
+    // where it was, then glide both to their new values.
+    if (size.height + size.margin - (prev.height + prev.margin) < 0.5) return;
+    const transition = `height ${SOLVE_SETTLE_MS}ms ${SOLVE_EASE}, margin-bottom ${SOLVE_SETTLE_MS}ms ${SOLVE_EASE}`;
+    list.style.overflow = "hidden";
+    list.style.transition = "none";
+    list.style.height = `${prev.height}px`;
+    list.style.marginBottom = `${prev.margin}px`;
+    void list.offsetHeight;
+    list.style.transition = transition;
+    list.style.height = `${size.height}px`;
+    list.style.marginBottom = `${size.margin}px`;
+    window.setTimeout(() => {
+      if (list.style.transition !== transition) return;
+      list.style.transition = "";
+      list.style.height = "";
+      list.style.marginBottom = "";
+      list.style.overflow = "";
+    }, SOLVE_SETTLE_MS + 60);
+  });
+
   useEffect(() => {
     if (bonusRainbowCorrect === true) {
       // Reveal animation already ran off the state.gotRainbow flip above —
@@ -1267,6 +1314,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           replaces (.board-bars is a size container, which gives it its own
           layer). */}
       <div
+        ref={barsListRef}
         className={`board-bars relative z-[1] pt-2 ${
           isMiniBoard
             ? `board-bars-square space-y-2 ${barsInFlow ? "mb-2" : ""}`

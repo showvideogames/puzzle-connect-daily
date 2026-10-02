@@ -324,3 +324,29 @@ describe("reduced motion", () => {
     for (const w of group.words) expect(tileWrapper(container, w)).toBeNull();
   });
 });
+
+describe("the Rainbow bar shares the category bars' footprint", () => {
+  it("uses the same one-row sizing, padding and corner radius as a solved category bar", async () => {
+    const { SolvedGroup } = await import("@/components/SolvedGroup");
+    const { RainbowRevealBar } = await import("@/components/RainbowRevealBar");
+    const { resolveTheme } = await import("@/lib/themes");
+    const box = (el: Element) =>
+      String(el.className).split(/\s+/).filter((c) => /^(solved-bar|w-full|rounded-|p[xy]-)/.test(c)).sort();
+
+    const solved = render(<SolvedGroup group={fullPuzzle.groups[0]} />).container.firstElementChild!;
+    const rainbow = render(
+      <RainbowRevealBar
+        categoryName="Rainbow"
+        categoryEmoji={null}
+        theme={resolveTheme(undefined, 4)}
+        words={["y1", "g1", "b1", "r1"]}
+        textClass="text-white"
+        background="linear-gradient(90deg, red, blue)"
+        curtain
+      />
+    ).container.firstElementChild!;
+
+    expect(box(solved)).toContain("solved-bar");
+    expect(box(rainbow).filter((c) => c !== "w-full")).toEqual(box(solved).filter((c) => c !== "w-full"));
+  });
+});
