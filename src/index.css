@@ -295,8 +295,7 @@ html {
   .animate-tile-checking { animation: none; }
   .animate-group-appear { animation: none; }
   .animate-solved-content-land { animation: none; }
-  .animate-solved-pop { animation: none; }
-  .animate-solved-pop::after { animation: none; }
+  .animate-solved-arrival { animation: none; }
   /* Same treatment as .rainbow-tile-static below, applied directly to
      .rainbow-tile since a reduced-motion OS preference should look the
      same as turning the Rainbow Animation setting off. */
@@ -408,55 +407,21 @@ html {
   justify-content: center;
 }
 
-/* ── Solved category bar "pop" (solve animation, the swap) ──
-   The bar's "category locked in" payoff: NYT's choreography (the gathered
-   row swaps for a solid bar in a single frame) with the original Rainbow
-   Categories feel — the whole card popping OUT toward you as one rigid
-   object, not stretching.
-
-   - It arrives compressed (0.95), so the pop starts the instant the bar
-     replaces the row — there is no moment at full size before it moves,
-     and no dip after it has looked finished.
-   - It pushes out to a mostly-uniform 1.04 wide / 1.055 tall, lifts 2px
-     and casts a deeper shadow at the peak (~135ms): the depth comes from
-     elevation as much as size. 1.04 wide keeps a full-width phone card
-     ~5px clear of each screen edge with its rounded ends showing; the lift
-     and extra height stay inside the gap to the row above (6px Full / 8px
-     Mini at phone size).
-   - Then a spring-like settle: a hair under (0.995) and home to exactly 1,
-     shadow gone, by 420ms.
-
-   Must match SOLVE_POP_MS in lib/solveAnimation.ts. */
-@keyframes solved-bar-pop {
-  0% { transform: translateY(0) scale(0.95); animation-timing-function: cubic-bezier(0.2, 0.9, 0.35, 1); }
-  32% { transform: translateY(-2px) scale(1.04, 1.055); animation-timing-function: cubic-bezier(0.45, 0, 0.35, 1); }
-  64% { transform: translateY(0) scale(0.995); animation-timing-function: cubic-bezier(0.35, 0, 0.3, 1); }
-  100% { transform: translateY(0) scale(1); }
+/* ── Solved category bar "arrival" pop — the production animation ──
+   Transplanted unchanged from production (main 7317a57, index.css): same
+   keyframes, duration and easing. Sam's call after comparing recordings:
+   the strong 95% → 108% swing, with its distinct wind-up, is the pop to
+   keep. In the solve animation it plays after the clean swap, once the bar
+   has held at its normal size for production's ARRIVAL_PAUSE_MS (80ms) —
+   see SOLVE_ARRIVAL_PAUSE_MS / SOLVE_POP_MS in lib/solveAnimation.ts. */
+@keyframes solved-category-arrival-pop {
+  0% { transform: scale(0.95); }
+  45% { transform: scale(1.08); }
+  100% { transform: scale(1); }
 }
-.animate-solved-pop {
-  animation: solved-bar-pop 0.42s both;
+.animate-solved-arrival {
+  animation: solved-category-arrival-pop 0.48s ease-in-out both;
   transform-origin: center;
-}
-/* The elevation shadow lives on its own layer and only its OPACITY is
-   animated, on the same curve as the pop: the browser draws the blurred
-   shadow once instead of re-rasterising an animated box-shadow every frame
-   (which, measured, stalled the first pop after a cold start). The bar is
-   absolutely positioned whenever it pops, so it anchors this layer. */
-.animate-solved-pop::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  box-shadow: 0 12px 26px rgba(20, 16, 12, 0.24), 0 4px 8px rgba(20, 16, 12, 0.12);
-  opacity: 0;
-  animation: solved-bar-pop-shadow 0.42s both;
-}
-@keyframes solved-bar-pop-shadow {
-  0% { opacity: 0.1; animation-timing-function: cubic-bezier(0.2, 0.9, 0.35, 1); }
-  32% { opacity: 1; animation-timing-function: cubic-bezier(0.45, 0, 0.35, 1); }
-  64% { opacity: 0.15; animation-timing-function: cubic-bezier(0.35, 0, 0.3, 1); }
-  100% { opacity: 0; }
 }
 
 /* ── Solved category bar: text "lands" (solve animation, merge → pop) ──

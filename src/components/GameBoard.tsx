@@ -41,6 +41,7 @@ import { categorySwatches } from "@/lib/categoryPalette";
 import { formatActiveTime } from "@/lib/activeTimer";
 import {
   gatherIntoFirstRow,
+  SOLVE_ARRIVAL_PAUSE_MS,
   SOLVE_EASE,
   SOLVE_GATHER_HOLD_MS,
   SOLVE_GATHER_MS,
@@ -91,10 +92,11 @@ interface RevealState {
   //              invisible, and the board hasn't moved yet.
   //  gathering — the guessed tiles are swapping into the top row.
   //  appearing — the bar swaps in over that row, solid in the very frame
-  //              the tiles vanish, and pops.
+  //              the tiles vanish, at its normal size.
+  //  arrived   — the production arrival pop plays on it.
   //  settling  — the pop finishes; the row has left the grid and anything
   //              the bar didn't exactly replace glides into place.
-  phase: "pending" | "gathering" | "appearing" | "settling";
+  phase: "pending" | "gathering" | "appearing" | "arrived" | "settling";
 }
 
 // One queued FLIP ("first, last, invert, play") slide of the grid, applied by
@@ -587,9 +589,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     // The swap comes once the gathered row is complete and has held a beat.
     const barAt = gathers ? SOLVE_GATHER_MS + SOLVE_GATHER_HOLD_MS : 0;
     revealTimersRef.current = [
-      // Beat 2 — swap and pop: the bar replaces the gathered row in one frame
-      // and pops, still floating over the (now hidden) row.
+      // Beat 2 — swap: the bar replaces the gathered row in one frame, solid
+      // and at its normal size, floating over the (now hidden) row.
       setTimeout(() => setPhase("appearing"), barAt),
+      // Then production's arrival pop, after production's pause.
+      setTimeout(() => setPhase("arrived"), barAt + SOLVE_ARRIVAL_PAUSE_MS),
       // Beat 3 — settle, once the pop has finished: release the hold (the row
       // leaves the grid) and put the bar into the page flow in the same spot,
       // in one render. Deliberately NOT during the pop: removing the row is a
@@ -612,7 +616,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         releaseRevealHold();
         setPhase(null);
         if (isWonRef.current) revealVictory(true, VICTORY_HOLD_AFTER_SOLVE_MS);
-      }, barAt + SOLVE_POP_MS),
+      }, barAt + SOLVE_ARRIVAL_PAUSE_MS + SOLVE_POP_MS),
     ];
   }, [reveal, remainingWords, format.columns, setWordOrder, releaseRevealHold, revealVictory]);
 
@@ -1436,7 +1440,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 rainbowTextShadow={theme.textShadow}
                 rainbowAnimated={showRainbow}
                 isMatched={matchedWords.includes(word)}
-                fadingForReveal={isRevealingWord && reveal?.phase === "appearing"}
+                // Hidden from the swap until the row leaves the grid, through
+                // the bar's pause and pop.
+                fadingForReveal={isRevealingWord && (reveal?.phase === "appearing" || reveal?.phase === "arrived")}
                 isChecking={checkingWords.includes(word)}
                 checkingIndex={checkingStagger[word] ?? 0}
                 onClick={() => handleTileClick(word)}
