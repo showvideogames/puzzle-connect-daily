@@ -576,8 +576,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       setReveal((r) => (r && r.groupIdx === thisGroup ? (phase ? { ...r, phase } : null) : r));
 
     // Beat 1 — gather. Only the tiles that have to swap move; if the category
-    // is already the top row there is nothing to gather and the bar comes in
-    // straight away.
+    // is already the top row there is nothing to gather.
     const gathered = gatherIntoFirstRow(remainingWords, reveal.words, format.columns);
     const gathers = gathered.some((w, i) => w !== remainingWords[i]);
     if (gathers) {
@@ -586,8 +585,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }
     setPhase("gathering");
 
-    // The swap comes once the gathered row is complete and has held a beat.
-    const barAt = gathers ? SOLVE_GATHER_MS + SOLVE_GATHER_HOLD_MS : 0;
+    // The swap comes once the row is complete and has held, perfectly still,
+    // long enough to see the four words together — whether they gathered or
+    // were already the top row.
+    const barAt = (gathers ? SOLVE_GATHER_MS : 0) + SOLVE_GATHER_HOLD_MS;
     revealTimersRef.current = [
       // Beat 2 — swap: the bar replaces the gathered row in one frame, solid
       // and at its normal size, floating over the (now hidden) row.
