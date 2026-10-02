@@ -2,7 +2,6 @@ import { forwardRef } from "react";
 import { PuzzleGroup } from "@/lib/types";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { CategoryEmojiInline } from "./CategoryEmojiInline";
-import { SOLVE_BAR_FADE_MS } from "@/lib/solveAnimation";
 
 const groupColors: Record<number, { bg: string; text: string }> = {
   1: { bg: "bg-group-1", text: "text-group-1-fg" },
@@ -80,8 +79,10 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
               right: 0,
               zIndex: 10,
               pointerEvents: "none",
+              // No transition: the swap is a single frame (see
+              // lib/solveAnimation.ts). The pop and the text landing are
+              // what move.
               opacity: reveal === "appearing" ? 1 : 0,
-              transition: `opacity ${SOLVE_BAR_FADE_MS}ms ease-out`,
             }
           : undefined
       }

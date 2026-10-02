@@ -2,7 +2,6 @@ import { useState, useRef, useCallback, useEffect, useLayoutEffect, forwardRef }
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { categorySwatches } from "@/lib/categoryPalette";
 import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
-import { SOLVE_TILE_FADE_MS } from "@/lib/solveAnimation";
 
 const DOUBLE_TAP_DELAY_MS = 250;
 
@@ -173,8 +172,9 @@ interface WordTileProps {
   // setting.
   rainbowAnimated?: boolean;
   // True once this tile's category has gathered into the top row and its
-  // solved bar is fading in over it: the tile fades out underneath (keeping
-  // its layout space, so nothing reflows until the row is removed).
+  // solved bar has swapped in over it: the tile is hidden that same frame —
+  // no fade, so it never ghosts through the bar — while keeping its layout
+  // space, so nothing reflows until the row is removed.
   fadingForReveal?: boolean;
   // True while this tile is part of a guess in the shared "checking" suspense
   // phase — plays a staggered bounce (checkingIndex sets the stagger order).
@@ -454,7 +454,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       className={`relative [container-type:inline-size] ${isChecking ? "animate-tile-checking" : ""}`}
       style={{
         touchAction: arrangeTiles ? "none" : "manipulation",
-        ...(fadingForReveal ? { opacity: 0, transition: `opacity ${SOLVE_TILE_FADE_MS}ms ease-out` } : {}),
+        ...(fadingForReveal ? { opacity: 0 } : {}),
         ...(isChecking ? { animationDelay: `${checkingIndex * 0.07}s` } : {}),
       }}
     >

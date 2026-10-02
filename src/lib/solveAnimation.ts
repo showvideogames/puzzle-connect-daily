@@ -6,11 +6,15 @@
  *   1. GATHER — the guessed tiles swap into the top row of the board (only
  *      the tiles that have to move do; see gatherIntoFirstRow below), and
  *      the completed dark row holds for a moment (NYT: ~90ms).
- *   2. SWAP + POP — the row is replaced, almost instantly, by its solved
- *      bar: solid, exactly one tile row (index.css .solved-bar), with no
- *      slow fade. The bar punches outward to a clear overshoot and settles
- *      straight to its exact size (.animate-solved-pop; NYT: peak ~100ms
- *      after the swap, settled ~220ms after it). Its words land with it.
+ *   2. SWAP + POP — the row is replaced, in a single frame, by its solved
+ *      bar: tiles hidden and the bar fully opaque in the same render, no
+ *      opacity transition on either (any crossfade, even 60ms, showed up in
+ *      recordings as tiles ghosting through a translucent bar). The bar is
+ *      exactly one tile row (index.css .solved-bar). It punches outward to
+ *      a clear overshoot and settles straight to its exact size
+ *      (.animate-solved-pop; NYT: peak ~100ms after the swap, settled
+ *      ~220ms after it). Its words start invisible and land into the solid
+ *      bar during the pop.
  *   3. SETTLE — as the swap completes the row leaves the grid and the bar
  *      takes its place in the page (the pop carries on uninterrupted).
  *      Because the bar is the row's size, the rest of the board has nothing
@@ -26,13 +30,14 @@ export const SOLVE_GATHER_MS = 380;
  * as cause and effect.
  */
 export const SOLVE_GATHER_HOLD_MS = 40;
-/** The swap itself: how fast the bar becomes solid over the row. Must stay short — the bar should not visibly fade. */
-export const SOLVE_BAR_FADE_MS = 60;
-/** The tiles disappear under the bar just as fast. */
-export const SOLVE_TILE_FADE_MS = 60;
+/**
+ * From the swap to the row leaving the grid (the settle). The swap itself is
+ * a single frame; this is only how long the hidden tiles stay in the layout.
+ */
+export const SOLVE_SWAP_MS = 60;
 /**
  * The bar's pop, from the swap. Must match .animate-solved-pop in index.css:
- * 0.985 → 1.07 → 1, quick out and quick back.
+ * a little more of it spent growing (peak ~120ms in) than settling.
  */
 export const SOLVE_POP_MS = 260;
 export const SOLVE_SETTLE_MS = 320;

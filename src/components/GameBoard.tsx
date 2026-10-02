@@ -41,7 +41,7 @@ import { categorySwatches } from "@/lib/categoryPalette";
 import { formatActiveTime } from "@/lib/activeTimer";
 import {
   gatherIntoFirstRow,
-  SOLVE_BAR_FADE_MS,
+  SOLVE_SWAP_MS,
   SOLVE_EASE,
   SOLVE_GATHER_HOLD_MS,
   SOLVE_GATHER_MS,
@@ -91,8 +91,8 @@ interface RevealState {
   //  pending   — just solved; the bar is mounted out of the page flow and
   //              invisible, and the board hasn't moved yet.
   //  gathering — the guessed tiles are swapping into the top row.
-  //  appearing — the bar swaps in over that row (solid within a few frames)
-  //              and pops; the tiles vanish beneath it.
+  //  appearing — the bar swaps in over that row, solid in the very frame
+  //              the tiles vanish, and pops.
   //  settling  — the pop finishes; the row has left the grid and anything
   //              the bar didn't exactly replace glides into place.
   phase: "pending" | "gathering" | "appearing" | "settling";
@@ -587,7 +587,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
     // The swap comes once the gathered row is complete and has held a beat.
     const barAt = gathers ? SOLVE_GATHER_MS + SOLVE_GATHER_HOLD_MS : 0;
-    const settleAt = barAt + SOLVE_BAR_FADE_MS;
+    const settleAt = barAt + SOLVE_SWAP_MS;
     revealTimersRef.current = [
       // Beat 2 — merge: the bar fades in over the gathered row.
       setTimeout(() => setPhase("appearing"), barAt),

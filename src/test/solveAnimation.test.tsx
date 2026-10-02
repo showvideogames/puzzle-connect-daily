@@ -51,7 +51,7 @@ vi.mock("@/lib/analytics", () => ({ trackEvent: () => {} }));
 import { GameBoard } from "@/components/GameBoard";
 import {
   gatherIntoFirstRow,
-  SOLVE_BAR_FADE_MS,
+  SOLVE_SWAP_MS,
   SOLVE_GATHER_HOLD_MS,
   SOLVE_GATHER_MS,
   SOLVE_POP_MS,
@@ -260,12 +260,15 @@ describe.each([
     expect(merging.style.opacity).toBe("1");
     expect(merging.className).toContain("animate-solved-pop");
     for (const w of group.words) expect(tileWrapper(container, w).style.opacity).toBe("0");
+    // A discrete swap: neither the bar nor the tiles crossfade.
+    expect(merging.style.transition).toBe("");
+    for (const w of group.words) expect(tileWrapper(container, w).style.transition).toBe("");
     expect(screen.getByText(group.category).className).toContain("animate-solved-content-land");
 
     // Beat 3 — settle, straight after the merge (no pause). The row has left
     // the grid and the bar is in the page flow, still the same pop on the
     // same element; everything else is still on the board.
-    await advance(SOLVE_BAR_FADE_MS);
+    await advance(SOLVE_SWAP_MS);
     const settling = bar(group.category);
     expect(settling).toBe(merging);
     for (const w of group.words) expect(tileWrapper(container, w)).toBeNull();
@@ -291,7 +294,7 @@ describe("the final solve", () => {
     const { container } = renderBoard(miniPuzzle);
     await act(async () => {});
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    const full = CHECKING_MS + SOLVE_GATHER_MS + SOLVE_GATHER_HOLD_MS + Math.max(SOLVE_POP_MS, SOLVE_BAR_FADE_MS + SOLVE_SETTLE_MS);
+    const full = CHECKING_MS + SOLVE_GATHER_MS + SOLVE_GATHER_HOLD_MS + Math.max(SOLVE_POP_MS, SOLVE_SWAP_MS + SOLVE_SETTLE_MS);
 
     for (const g of miniPuzzle.groups.slice(0, 2)) {
       await submit(container, g.words);
@@ -303,7 +306,7 @@ describe("the final solve", () => {
     expect(screen.queryByText(/perfect game/i)).toBeNull();
     // The last row is the whole board, so there is nothing to gather: the bar
     // merges and pops straight away — and the celebration waits for it.
-    await advance(SOLVE_BAR_FADE_MS);
+    await advance(SOLVE_SWAP_MS);
     expect(bar(last.category).className).toContain("animate-solved-pop");
     expect(screen.queryByText(/perfect game/i)).toBeNull();
     await advance(SOLVE_SETTLE_MS);
