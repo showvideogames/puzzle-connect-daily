@@ -407,21 +407,22 @@ html {
   justify-content: center;
 }
 
-/* ── Solved category bar "pop" (solve animation, after the merge) ──
-   The bar's own "category locked in" moment, played once the gathered
-   tiles have faded away beneath it. A gentle dip, a clear overshoot, then
-   it settles. It starts and ends at exactly the bar's size, so there is no
-   jump at either end (an earlier version started at 0.95, which read as the
-   bar snapping smaller for a frame). 480ms: must match SOLVE_POP_MS in
-   lib/solveAnimation.ts. */
+/* ── Solved category bar "pop" (solve animation, part of the merge) ──
+   The bar's "category locked in" moment, as one gesture with the merge: it
+   starts while the bar is still fading in over the gathered tiles, entering
+   just under its size, easing straight into a small overshoot, then
+   settling at exactly its size. It never shows at full size and then dips
+   (an earlier version did, which read as finished → retract → pop). The
+   overshoot is kept small for such a wide element: 1.03 puts a full-width
+   phone bar only ~5px past each edge of the row. 420ms: must match
+   SOLVE_POP_MS in lib/solveAnimation.ts. */
 @keyframes solved-bar-pop {
-  0% { transform: scale(1); }
-  18% { transform: scale(0.96); }
-  55% { transform: scale(1.08); }
+  0% { transform: scale(0.97); animation-timing-function: cubic-bezier(0.25, 0.6, 0.4, 1); }
+  52% { transform: scale(1.03); animation-timing-function: cubic-bezier(0.45, 0, 0.35, 1); }
   100% { transform: scale(1); }
 }
 .animate-solved-pop {
-  animation: solved-bar-pop 0.48s ease-in-out both;
+  animation: solved-bar-pop 0.42s both;
   transform-origin: center;
 }
 

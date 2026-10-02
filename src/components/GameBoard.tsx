@@ -45,7 +45,6 @@ import {
   SOLVE_EASE,
   SOLVE_GATHER_MS,
   SOLVE_POP_MS,
-  SOLVE_POP_PAUSE_MS,
   SOLVE_SETTLE_MS,
 } from "@/lib/solveAnimation";
 
@@ -91,9 +90,10 @@ interface RevealState {
   //  pending   — just solved; the bar is mounted out of the page flow and
   //              invisible, and the board hasn't moved yet.
   //  gathering — the guessed tiles are swapping into the top row.
-  //  appearing — the bar fades in over that row; the tiles fade beneath it.
-  //  settling  — the bar pops; the row has left the grid and anything the
-  //              bar didn't exactly replace glides into place.
+  //  appearing — the bar fades in over that row, already popping; the tiles
+  //              fade beneath it.
+  //  settling  — the pop finishes; the row has left the grid and anything
+  //              the bar didn't exactly replace glides into place.
   phase: "pending" | "gathering" | "appearing" | "settling";
 }
 
@@ -585,7 +585,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     setPhase("gathering");
 
     const barAt = gathers ? SOLVE_GATHER_MS : 0;
-    const settleAt = barAt + SOLVE_BAR_FADE_MS + SOLVE_POP_PAUSE_MS;
+    const settleAt = barAt + SOLVE_BAR_FADE_MS;
     revealTimersRef.current = [
       // Beat 2 — merge: the bar fades in over the gathered row.
       setTimeout(() => setPhase("appearing"), barAt),
@@ -609,7 +609,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       setTimeout(() => {
         setPhase(null);
         if (isWonRef.current) revealVictory(true, VICTORY_HOLD_AFTER_SOLVE_MS);
-      }, settleAt + Math.max(SOLVE_POP_MS, SOLVE_SETTLE_MS)),
+      }, Math.max(barAt + SOLVE_POP_MS, settleAt + SOLVE_SETTLE_MS)),
     ];
   }, [reveal, remainingWords, format.columns, setWordOrder, releaseRevealHold, revealVictory]);
 

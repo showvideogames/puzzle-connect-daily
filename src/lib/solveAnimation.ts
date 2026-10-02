@@ -3,26 +3,29 @@
  *
  *   1. GATHER — the guessed tiles swap into the top row of the board (only
  *      the tiles that have to move do; see gatherIntoFirstRow below).
- *   2. MERGE — the solved bar fades in exactly over that row, while the
- *      gathered tiles fade out beneath it. A solved bar is exactly one tile
- *      row tall and the full board wide (index.css .solved-bar), so it
- *      covers the four tiles and the gaps between them, nothing more.
- *   3. POP — once the tiles are gone, a short pause, then the bar's own
- *      distinct "category locked in" pop (.animate-solved-pop).
- *   4. SETTLE — at the same moment the row leaves the grid and the bar
- *      takes its place in the page. Because the bar is the row's size, the
- *      rest of the board has nothing to close up; any leftover difference
- *      (a very long answer line, a Rainbow bar above) glides rather than
- *      jumps.
+ *   2. MERGE + POP — one gesture. The solved bar fades in exactly over
+ *      that row (a solved bar is exactly one tile row tall and the full
+ *      board wide, index.css .solved-bar) while the gathered tiles fade out
+ *      beneath it. As it fades in it grows from just under its size into a
+ *      small overshoot and settles (.animate-solved-pop), so the merge and
+ *      the "category locked in" pop read as one landing, never as a
+ *      finished bar that then dips and pops again.
+ *   3. SETTLE — as the merge finishes, the row leaves the grid and the bar
+ *      takes its place in the page (the pop carries on uninterrupted).
+ *      Because the bar is the row's size, the rest of the board has nothing
+ *      to close up; any leftover difference (a very long answer line)
+ *      glides rather than jumps.
  *
  * Reduced motion skips all of it: the bar simply appears and the row goes.
  */
 export const SOLVE_GATHER_MS = 380;
 export const SOLVE_BAR_FADE_MS = 200;
-/** Pause between the merge finishing and the pop, so the pop reads on its own. */
-export const SOLVE_POP_PAUSE_MS = 80;
-/** Must match .animate-solved-pop in index.css. */
-export const SOLVE_POP_MS = 480;
+/**
+ * The bar's pop, starting with the merge. Must match .animate-solved-pop in
+ * index.css: 0.97 → 1.03 → 1. Small on purpose — at 1.03 a full-width phone
+ * bar reaches only ~5px past each edge of the row.
+ */
+export const SOLVE_POP_MS = 420;
 /**
  * The gathered tiles fade out faster than the bar fades in over them, so the
  * tiles' own words are gone before the bar's text arrives (no two sets of

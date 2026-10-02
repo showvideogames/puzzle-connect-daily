@@ -23,12 +23,12 @@ interface SolvedGroupProps {
   //    The bar is invisible and taken OUT of the page flow (absolute, with
   //    no top set, so it sits exactly where it will end up and at the full
   //    board width) — the board below doesn't move to make room for it yet.
-  //  - "appearing": same place, fading in over the gathered row while its
-  //    text settles in (.animate-solved-content-land). The bar covers the
-  //    row exactly (see .solved-bar) and doesn't move or scale while it
-  //    merges.
-  //  - "settling": back in the page flow in the same spot, doing its pop
-  //    (.animate-solved-pop). The text animation carries on uninterrupted.
+  //  - "appearing": same place, fading in over the gathered row while it
+  //    pops (.animate-solved-pop: just under size → small overshoot → size)
+  //    and its text settles in (.animate-solved-content-land). The bar
+  //    covers the row exactly (see .solved-bar).
+  //  - "settling": back in the page flow in the same spot; the pop and the
+  //    text animation carry on uninterrupted.
   // undefined = normal rendering (animate-group-appear entrance if `animate`).
   reveal?: "pending" | "appearing" | "settling";
 }
@@ -43,7 +43,9 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
   const revealing = reveal !== undefined;
   const floating = reveal === "pending" || reveal === "appearing";
   const contentLand = reveal === "appearing" || reveal === "settling" ? "animate-solved-content-land" : "";
-  const popping = reveal === "settling";
+  // The pop starts with the merge and runs on through the settle — same
+  // element, same class, so it is one uninterrupted animation.
+  const popping = reveal === "appearing" || reveal === "settling";
   const displayWords = alphabetizeCompleted
     ? [...group.words].sort((a, b) => a.localeCompare(b))
     : group.words;
@@ -68,8 +70,8 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
         !revealing && animate ? "animate-group-appear" : ""
       } ${popping ? "animate-solved-pop" : ""}`}
       style={
-        popping
-          // Drawn above its neighbours while the pop briefly overshoots them.
+        reveal === "settling"
+          // Drawn above its neighbours while the pop finishes.
           ? { position: "relative", zIndex: 1 }
           : floating
           ? {
