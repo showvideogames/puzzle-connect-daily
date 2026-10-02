@@ -407,20 +407,21 @@ html {
   justify-content: center;
 }
 
-/* ── Solved category bar "arrival" pop — the production animation ──
-   Transplanted unchanged from production (main 7317a57, index.css): same
-   keyframes, duration and easing. Sam's call after comparing recordings:
-   the strong 95% → 108% swing, with its distinct wind-up, is the pop to
-   keep. In the solve animation it plays after the clean swap, once the bar
-   has held at its normal size for production's ARRIVAL_PAUSE_MS (80ms) —
-   see SOLVE_ARRIVAL_PAUSE_MS / SOLVE_POP_MS in lib/solveAnimation.ts. */
+/* ── Solved category bar "arrival" pop — production's animation, slowed ──
+   Production's keyframe shape and easing (main 7317a57: 0.95 → 1.08 → 1,
+   480ms, ease-in-out), in Sam's experiment: a bigger peak (1.12) and half
+   speed (960ms), so the card visibly pulls back, comes well toward you and
+   settles. Only this pop is slowed — the gather, hold and swap before it
+   are unchanged. It plays after the clean swap, once the bar has held at
+   its normal size for production's ARRIVAL_PAUSE_MS (80ms) — see
+   SOLVE_ARRIVAL_PAUSE_MS / SOLVE_POP_MS in lib/solveAnimation.ts. */
 @keyframes solved-category-arrival-pop {
   0% { transform: scale(0.95); }
-  45% { transform: scale(1.08); }
+  45% { transform: scale(1.12); }
   100% { transform: scale(1); }
 }
 .animate-solved-arrival {
-  animation: solved-category-arrival-pop 0.48s ease-in-out both;
+  animation: solved-category-arrival-pop 0.96s ease-in-out both;
   transform-origin: center;
 }
 

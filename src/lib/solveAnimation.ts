@@ -12,7 +12,7 @@
  *      recordings as tiles ghosting through a translucent bar). The bar is
  *      exactly one tile row (index.css .solved-bar). It holds at its normal
  *      size for a beat, then plays the production arrival pop unchanged
- *      (.animate-solved-arrival: 0.95 → 1.08 → 1 over 480ms). Its words
+ *      (.animate-solved-arrival: 0.95 → 1.12 → 1 over 960ms). Its words
  *      land as it swaps in.
  *   3. SETTLE — once the pop has finished, the row leaves the grid and the
  *      bar takes its place in the page, in the same spot (never mid-pop:
@@ -35,8 +35,11 @@ export const SOLVE_GATHER_HOLD_MS = 40;
  * ARRIVAL_PAUSE_MS, then plays production's arrival pop.
  */
 export const SOLVE_ARRIVAL_PAUSE_MS = 80;
-/** Production's ARRIVAL_POP_MS. Must match .animate-solved-arrival in index.css. */
-export const SOLVE_POP_MS = 480;
+/**
+ * Production's ARRIVAL_POP_MS (480) at half speed — Sam's experiment to let
+ * the pop breathe. Must match .animate-solved-arrival in index.css.
+ */
+export const SOLVE_POP_MS = 960;
 export const SOLVE_SETTLE_MS = 320;
 /** Must match .animate-solved-content-land in index.css. */
 export const SOLVE_CONTENT_LAND_MS = 260;
