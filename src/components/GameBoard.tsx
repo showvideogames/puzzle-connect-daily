@@ -41,7 +41,6 @@ import { categorySwatches } from "@/lib/categoryPalette";
 import { formatActiveTime } from "@/lib/activeTimer";
 import {
   gatherIntoFirstRow,
-  SOLVE_SWAP_MS,
   SOLVE_EASE,
   SOLVE_GATHER_HOLD_MS,
   SOLVE_GATHER_MS,
@@ -587,13 +586,23 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
     // The swap comes once the gathered row is complete and has held a beat.
     const barAt = gathers ? SOLVE_GATHER_MS + SOLVE_GATHER_HOLD_MS : 0;
-    const settleAt = barAt + SOLVE_SWAP_MS;
     revealTimersRef.current = [
-      // Beat 2 — merge: the bar fades in over the gathered row.
+      // Beat 2 — swap and pop: the bar replaces the gathered row in one frame
+      // and pops, still floating over the (now hidden) row.
       setTimeout(() => setPhase("appearing"), barAt),
-      // Beats 3 and 4 — pop and settle: release the hold (the row leaves the
-      // grid) and put the bar into the page flow in the same spot, in one
-      // render; the bar pops while anything else glides into place.
+      // Beat 3 — settle, once the pop has finished: release the hold (the row
+      // leaves the grid) and put the bar into the page flow in the same spot,
+      // in one render. Deliberately NOT during the pop: removing the row is a
+      // React render plus layout measuring, and doing it mid-pop stalled
+      // frames (~90ms measured) so the card froze and then jumped. The bar
+      // is the row's exact size, so waiting costs nothing visible; anything
+      // it didn't exactly replace glides into place from here on its own.
+      //
+      // This is also the moment the FINAL category has fully landed: if the
+      // game is won, un-gate the celebration now so confetti, sound,
+      // haptics, streak and results all start together. isWonRef is read at
+      // fire time, so it can't be stale, and input is locked during the
+      // reveal, so a non-final group's timer can never see a later win.
       setTimeout(() => {
         gridFlipRef.current = {
           before: measure(Object.keys(wordTileRefs.current).filter((w) => !groupWords.has(w))),
@@ -601,17 +610,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           gridBottom: gridWrapperRef.current?.getBoundingClientRect().bottom,
         };
         releaseRevealHold();
-        setPhase("settling");
-      }, settleAt),
-      // Done. This is also the moment the FINAL category has fully landed: if
-      // the game is won, un-gate the celebration now so confetti, sound,
-      // haptics, streak and results all start together. isWonRef is read at
-      // fire time, so it can't be stale, and input is locked during the
-      // reveal, so a non-final group's timer can never see a later win.
-      setTimeout(() => {
         setPhase(null);
         if (isWonRef.current) revealVictory(true, VICTORY_HOLD_AFTER_SOLVE_MS);
-      }, Math.max(barAt + SOLVE_POP_MS, settleAt + SOLVE_SETTLE_MS)),
+      }, barAt + SOLVE_POP_MS),
     ];
   }, [reveal, remainingWords, format.columns, setWordOrder, releaseRevealHold, revealVictory]);
 

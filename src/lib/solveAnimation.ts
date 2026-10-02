@@ -10,13 +10,14 @@
  *      bar: tiles hidden and the bar fully opaque in the same render, no
  *      opacity transition on either (any crossfade, even 60ms, showed up in
  *      recordings as tiles ghosting through a translucent bar). The bar is
- *      exactly one tile row (index.css .solved-bar). It punches outward to
- *      a clear overshoot and settles straight to its exact size
- *      (.animate-solved-pop; NYT: peak ~100ms after the swap, settled
- *      ~220ms after it). Its words start invisible and land into the solid
- *      bar during the pop.
- *   3. SETTLE — as the swap completes the row leaves the grid and the bar
- *      takes its place in the page (the pop carries on uninterrupted).
+ *      exactly one tile row (index.css .solved-bar). It arrives compressed
+ *      and pops out toward the viewer as one rigid card — scale, lift and
+ *      shadow together, the feel of the original Rainbow Categories pop —
+ *      then settles to its exact size (.animate-solved-pop). Its words
+ *      start arriving straight away as it pops.
+ *   3. SETTLE — once the pop has finished, the row leaves the grid and the
+ *      bar takes its place in the page, in the same spot (never mid-pop:
+ *      that render stalled frames and made the card freeze, then jump).
  *      Because the bar is the row's size, the rest of the board has nothing
  *      to close up; any leftover difference glides rather than jumps.
  *
@@ -31,15 +32,11 @@ export const SOLVE_GATHER_MS = 380;
  */
 export const SOLVE_GATHER_HOLD_MS = 40;
 /**
- * From the swap to the row leaving the grid (the settle). The swap itself is
- * a single frame; this is only how long the hidden tiles stay in the layout.
- */
-export const SOLVE_SWAP_MS = 60;
-/**
  * The bar's pop, from the swap. Must match .animate-solved-pop in index.css:
- * a little more of it spent growing (peak ~120ms in) than settling.
+ * arrives compressed, pops out toward the viewer (peak ~135ms in, with a
+ * lift and a deeper shadow), then a spring-like settle to exactly its size.
  */
-export const SOLVE_POP_MS = 260;
+export const SOLVE_POP_MS = 420;
 export const SOLVE_SETTLE_MS = 320;
 /** Must match .animate-solved-content-land in index.css. */
 export const SOLVE_CONTENT_LAND_MS = 260;

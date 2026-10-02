@@ -296,6 +296,7 @@ html {
   .animate-group-appear { animation: none; }
   .animate-solved-content-land { animation: none; }
   .animate-solved-pop { animation: none; }
+  .animate-solved-pop::after { animation: none; }
   /* Same treatment as .rainbow-tile-static below, applied directly to
      .rainbow-tile since a reduced-motion OS preference should look the
      same as turning the Rainbow Animation setting off. */
@@ -408,47 +409,72 @@ html {
 }
 
 /* ── Solved category bar "pop" (solve animation, the swap) ──
-   The bar's "category locked in" moment, modelled on NYT Connections: the
-   gathered row is replaced by a solid bar that punches outward and settles
-   straight to its exact size — no dip after it looks finished.
+   The bar's "category locked in" payoff: NYT's choreography (the gathered
+   row swaps for a solid bar in a single frame) with the original Rainbow
+   Categories feel — the whole card popping OUT toward you as one rigid
+   object, not stretching.
 
-   The punch is mostly VERTICAL, like a card popping toward you: 1.10 tall
-   but only 1.025 wide. A full-width phone bar has ~12px of screen either
-   side; a uniform scale strong enough to feel like NYT's turned it into an
-   edge-to-edge banner for a frame. 1.025 wide keeps it ~7px clear of each
-   screen edge with its rounded ends showing, and 1.10 tall stays inside the
-   gaps to the rows above and below (6px Full / 8px Mini at phone size).
+   - It arrives compressed (0.95), so the pop starts the instant the bar
+     replaces the row — there is no moment at full size before it moves,
+     and no dip after it has looked finished.
+   - It pushes out to a mostly-uniform 1.04 wide / 1.055 tall, lifts 2px
+     and casts a deeper shadow at the peak (~135ms): the depth comes from
+     elevation as much as size. 1.04 wide keeps a full-width phone card
+     ~5px clear of each screen edge with its rounded ends showing; the lift
+     and extra height stay inside the gap to the row above (6px Full / 8px
+     Mini at phone size).
+   - Then a spring-like settle: a hair under (0.995) and home to exactly 1,
+     shadow gone, by 420ms.
 
-   Time is weighted toward the outward half so the eye can see it grow:
-   eased out to the peak at ~120ms, then a quicker settle to exactly 1 by
-   260ms. It starts just under size, so the swap reads as the row turning
-   into the bar. 260ms: must match SOLVE_POP_MS in lib/solveAnimation.ts. */
+   Must match SOLVE_POP_MS in lib/solveAnimation.ts. */
 @keyframes solved-bar-pop {
-  0% { transform: scale(0.99, 0.97); animation-timing-function: cubic-bezier(0.3, 0.45, 0.45, 1); }
-  46% { transform: scale(1.025, 1.1); animation-timing-function: cubic-bezier(0.5, 0, 0.3, 1); }
-  100% { transform: scale(1, 1); }
+  0% { transform: translateY(0) scale(0.95); animation-timing-function: cubic-bezier(0.2, 0.9, 0.35, 1); }
+  32% { transform: translateY(-2px) scale(1.04, 1.055); animation-timing-function: cubic-bezier(0.45, 0, 0.35, 1); }
+  64% { transform: translateY(0) scale(0.995); animation-timing-function: cubic-bezier(0.35, 0, 0.3, 1); }
+  100% { transform: translateY(0) scale(1); }
 }
 .animate-solved-pop {
-  animation: solved-bar-pop 0.26s both;
+  animation: solved-bar-pop 0.42s both;
   transform-origin: center;
+}
+/* The elevation shadow lives on its own layer and only its OPACITY is
+   animated, on the same curve as the pop: the browser draws the blurred
+   shadow once instead of re-rasterising an animated box-shadow every frame
+   (which, measured, stalled the first pop after a cold start). The bar is
+   absolutely positioned whenever it pops, so it anchors this layer. */
+.animate-solved-pop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 12px 26px rgba(20, 16, 12, 0.24), 0 4px 8px rgba(20, 16, 12, 0.12);
+  opacity: 0;
+  animation: solved-bar-pop-shadow 0.42s both;
+}
+@keyframes solved-bar-pop-shadow {
+  0% { opacity: 0.1; animation-timing-function: cubic-bezier(0.2, 0.9, 0.35, 1); }
+  32% { opacity: 1; animation-timing-function: cubic-bezier(0.45, 0, 0.35, 1); }
+  64% { opacity: 0.15; animation-timing-function: cubic-bezier(0.35, 0, 0.3, 1); }
+  100% { opacity: 0; }
 }
 
 /* ── Solved category bar: text "lands" (solve animation, merge → pop) ──
-   Applied to the bar's two text lines. They start invisible and land into
-   the already-solid bar during its pop — never visible during the swap
-   itself — the category name first, the answers line a beat behind. 260ms:
-   must match SOLVE_CONTENT_LAND_MS in lib/solveAnimation.ts. */
+   Applied to the bar's two text lines. They are near-invisible on the swap
+   frame itself and start arriving straight away as the card pops — no
+   blank-card pause — the category name first, the answers line a beat
+   behind. 260ms: must match SOLVE_CONTENT_LAND_MS in lib/solveAnimation.ts. */
 @keyframes solved-content-land {
-  0% { opacity: 0; transform: translateY(5px) scale(0.95); }
-  45% { opacity: 1; transform: translateY(0) scale(1.03); }
+  0% { opacity: 0; transform: translateY(4px) scale(0.96); animation-timing-function: cubic-bezier(0.2, 0.8, 0.4, 1); }
+  28% { opacity: 1; transform: translateY(0) scale(1.02); animation-timing-function: cubic-bezier(0.4, 0, 0.3, 1); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 .animate-solved-content-land {
-  animation: solved-content-land 0.26s cubic-bezier(0.2, 0, 0, 1) 50ms both;
+  animation: solved-content-land 0.26s 16ms both;
   transform-origin: center;
 }
 .animate-solved-content-land + .animate-solved-content-land {
-  animation-delay: 90ms;
+  animation-delay: 40ms;
 }
 
 /* ── Spot the Rainbow button: breathe pulse + shimmer ── */
