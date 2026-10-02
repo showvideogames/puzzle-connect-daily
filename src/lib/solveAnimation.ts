@@ -5,10 +5,7 @@
  *
  *   1. GATHER — the guessed tiles swap into the top row of the board (only
  *      the tiles that have to move do; see gatherIntoFirstRow below), and
- *      the completed dark row then holds completely still for 500ms, so
- *      the player can see the four words together before they become the
- *      bar. The same hold applies when the category is already the top row
- *      and nothing gathers.
+ *      the completed dark row holds for a moment (NYT: ~90ms).
  *   2. SWAP + POP — the row is replaced, in a single frame, by its solved
  *      bar: tiles hidden and the bar fully opaque in the same render, no
  *      opacity transition on either (any crossfade, even 60ms, showed up in
@@ -27,14 +24,12 @@
  */
 export const SOLVE_GATHER_MS = 380;
 /**
- * Sam's experiment: once the four correct words are together in one row
- * (after the gather, or straight after the checking bounce when they were
- * already the top row), the dark row holds completely still for this long
- * before the bar swaps in — a deliberate "there they are" beat. Nothing
- * moves, fades or appears during it. (Was 40ms, which with the gather's
- * slow finish left only ~80ms of visibly complete row.)
+ * Extra hold before the swap, on top of the gather's own slow finish (its
+ * easing spends its last ~100ms all but still). Together they give NYT's
+ * ~90–100ms of a visibly complete row — short, so the two beats still read
+ * as cause and effect.
  */
-export const SOLVE_GATHER_HOLD_MS = 500;
+export const SOLVE_GATHER_HOLD_MS = 40;
 /**
  * After the swap the solid bar holds at its normal size for production's
  * ARRIVAL_PAUSE_MS, then plays production's arrival pop.

@@ -251,14 +251,9 @@ describe.each([
     expect(bar(group.category).className).not.toContain("animate-solved-arrival");
     for (const w of group.words) expect(tileWrapper(container, w).style.opacity).toBe("");
 
-    // ...and is still just the dark row right up to the end of the hold.
-    await advance(SOLVE_GATHER_HOLD_MS - 20);
-    expect(bar(group.category).style.opacity).toBe("0");
-    for (const w of group.words) expect(tileWrapper(container, w).style.opacity).toBe("");
-
     // Beat 2 — swap: the one-row bar is made solid over the row, at its
     // normal size (no pop yet); the tiles vanish beneath it.
-    await advance(20);
+    await advance(SOLVE_GATHER_HOLD_MS);
     const merging = bar(group.category);
     expect(merging.className).toContain("solved-bar");
     expect(merging.style.position).toBe("absolute");
@@ -317,13 +312,8 @@ describe("the final solve", () => {
     await submit(container, last.words);
     await advance(CHECKING_MS);
     expect(screen.queryByText(/perfect game/i)).toBeNull();
-    // The last row is the whole board, so there is nothing to gather — but
-    // the complete row still holds before the bar swaps in.
-    await advance(SOLVE_GATHER_HOLD_MS - 20);
-    expect(bar(last.category).style.opacity).toBe("0");
-    await advance(20);
-    expect(bar(last.category).style.opacity).toBe("1");
-    // Then the bar pops — and the celebration waits for it.
+    // The last row is the whole board, so there is nothing to gather: the bar
+    // merges and pops straight away — and the celebration waits for it.
     await advance(SOLVE_ARRIVAL_PAUSE_MS);
     expect(bar(last.category).className).toContain("animate-solved-arrival");
     expect(screen.queryByText(/perfect game/i)).toBeNull();
