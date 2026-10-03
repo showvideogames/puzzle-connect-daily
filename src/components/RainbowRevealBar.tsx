@@ -22,7 +22,10 @@ interface RainbowRevealBarProps {
  * The Rainbow's own solved bar — shown both when it's revealed as part of the
  * normal board sequence and in the post-game "spot the Rainbow" reveal.
  * Mirrors SolvedGroup's title+emoji rendering so the bonus category and the
- * four standard ones stay visually consistent.
+ * four standard ones stay visually consistent — and its box too: the same
+ * one-tile-row .solved-bar sizing (index.css), padding and corner radius, so
+ * all five finished bars share one footprint. Only the gradient, text colour
+ * and curtain reveal are its own.
  */
 export function RainbowRevealBar({
   categoryName,
@@ -53,7 +56,7 @@ export function RainbowRevealBar({
   const displayWords = alphabetizeCompleted ? [...words].sort((a, b) => a.localeCompare(b)) : words;
   return (
     <div
-      className={`w-full rounded-lg py-3 px-4 text-center ${textClass} ${curtain ? "animate-rainbow-curtain" : ""}`}
+      className={`solved-bar w-full rounded-lg py-2 px-4 text-center ${textClass} ${curtain ? "animate-rainbow-curtain" : ""}`}
       style={{ background, textShadow, clipPath: curtain ? undefined : "inset(0 100% 0 0)" }}
     >
       <div className="font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">

@@ -287,30 +287,14 @@ html {
 }
 .animate-tile-checking { animation: tile-checking 0.4s ease-in-out both; }
 
-/* ── Correct-guess reveal clones ──
-   Portaled to document.body (see GameBoard.tsx), positioned via inline
-   top/left/width/height computed from getBoundingClientRect() — always
-   viewport-relative since position:fixed here has no reparented/transformed
-   ancestor to be captured by. This class only supplies the transition. */
-.tile-reveal-clone {
-  position: fixed;
-  z-index: 60;
-  transition: top 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-              left 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-              width 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-              height 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.22s ease-in,
-              transform 0.22s ease-in;
-  pointer-events: none;
-}
-
 /* Respect reduced-motion — useGame still runs the state machine (with a 0ms
-   suspense and no clone/FLIP path), so logic is unaffected; this just kills
-   the movement for users who ask for it. The clone reveal + grid FLIP already
-   only run in the non-reduced path, so the bar just appears instantly here. */
+   suspense), so logic is unaffected; this just kills the movement for users
+   who ask for it. GameBoard's solve animation (gather, bar fade, settle)
+   only runs in the non-reduced path, so the bar just appears instantly here. */
 @media (prefers-reduced-motion: reduce) {
   .animate-tile-checking { animation: none; }
   .animate-group-appear { animation: none; }
+  .animate-solved-content-land { animation: none; }
   .animate-solved-arrival { animation: none; }
   /* Same treatment as .rainbow-tile-static below, applied directly to
      .rainbow-tile since a reduced-motion OS preference should look the
@@ -394,20 +378,70 @@ html {
   transform-origin: center;
 }
 
-/* ── Solved category bar "arrival" pop (clone-reveal path, beat 2) ──
-   The bar has already faded in at scale 1 during the clone merge (beat 1);
-   this is a separate, clearly-bigger pop played AFTER the clones are gone
-   (see the "arrived" phase timing in GameBoard) so it reads as a distinct
-   "category locked in" moment, not part of the fade. Scale-only — opacity is
-   already 1 by now. */
+/* ── A solved category bar is exactly one tile row ──
+   The list of solved bars (.board-bars, GameBoard) is a size container the
+   width of the board, and works out one tile's height from it the same way
+   the grid does: (board width − the gaps) ÷ columns, then the tile's own
+   shape — 11:10 on a Full board below md, a flat 110px from md up, square
+   on a Mini. So when four tiles merge into their bar, the bar covers the
+   whole row including the gaps between the tiles, and the board below
+   doesn't move. min-height rather than height, so an unusually long answer
+   line (big emoji answers) can still grow the bar instead of overflowing. */
+.board-bars {
+  container-type: inline-size;
+  --board-gap: 6px;
+  --solved-row-h: calc((100cqw - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols) * 10 / 11);
+}
+@media (min-width: 768px) {
+  .board-bars { --solved-row-h: 110px; }
+  .board-bars.board-bars-wide { --board-gap: 12px; }
+}
+.board-bars.board-bars-square {
+  --board-gap: 8px;
+  --solved-row-h: calc((100cqw - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols));
+}
+.solved-bar {
+  min-height: var(--solved-row-h, auto);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* ── Solved category bar "arrival" pop — production's animation, slowed ──
+   Production's keyframe shape and easing (main 7317a57: 0.95 → 1.08 → 1,
+   480ms, ease-in-out), in Sam's experiment: a bigger peak (1.12) and half
+   speed (960ms), so the card visibly pulls back, comes well toward you and
+   settles. Only this pop is slowed — the gather, hold and swap before it
+   are unchanged. It starts on the clean swap's own frame, and the bar's
+   text lands during its outward growth — see SOLVE_POP_MS /
+   SOLVE_CONTENT_LAND_MS in lib/solveAnimation.ts. */
 @keyframes solved-category-arrival-pop {
   0% { transform: scale(0.95); }
-  45% { transform: scale(1.08); }
+  45% { transform: scale(1.12); }
   100% { transform: scale(1); }
 }
 .animate-solved-arrival {
-  animation: solved-category-arrival-pop 0.48s ease-in-out both;
+  animation: solved-category-arrival-pop 0.96s ease-in-out both;
   transform-origin: center;
+}
+
+/* ── Solved category bar: text "lands" (solve animation, inside the pop) ──
+   Applied to the bar's two text lines. They are invisible on the swap frame
+   and come in WITH the card's outward growth, so the pop itself reveals
+   them: the category name starts with the pop and is fully in at 380ms,
+   the answers line 60ms behind — both by the pop's peak (~430ms). No
+   overshoot of their own: the card's pop is the one big movement.
+   380ms: must match SOLVE_CONTENT_LAND_MS in lib/solveAnimation.ts. */
+@keyframes solved-content-land {
+  0% { opacity: 0; transform: translateY(4px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-solved-content-land {
+  animation: solved-content-land 0.38s cubic-bezier(0.3, 0.4, 0.4, 1) both;
+  transform-origin: center;
+}
+.animate-solved-content-land + .animate-solved-content-land {
+  animation-delay: 60ms;
 }
 
 /* ── Spot the Rainbow button: breathe pulse + shimmer ── */
