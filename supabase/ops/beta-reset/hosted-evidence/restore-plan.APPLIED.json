@@ -1,0 +1,198 @@
+{
+  "generatedAt": "2026-10-04T09:00:03.523Z",
+  "from": ".runtime\\phase2\\export-final",
+  "entries": [
+    {
+      "table": "device_identities",
+      "exported": 208,
+      "restored": 208,
+      "transformed": 58,
+      "omitted": 0,
+      "note": "58 pre-credential retired devices given a sentinel token_hash and a derived retirement reason"
+    },
+    {
+      "table": "puzzles",
+      "exported": 133,
+      "restored": 133,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "loaded with current_version_id NULL; pointed at the version after puzzle_versions (below)"
+    },
+    {
+      "table": "puzzle_versions",
+      "exported": 157,
+      "restored": 157,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "puzzle_groups",
+      "exported": 530,
+      "restored": 530,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "puzzle_aggregates",
+      "exported": 68,
+      "restored": 68,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "luck_score_ceilings",
+      "exported": 1,
+      "restored": 1,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "user_roles",
+      "exported": 1,
+      "restored": 1,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "archive_access",
+      "exported": 0,
+      "restored": 0,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "creator_profiles",
+      "exported": 1,
+      "restored": 1,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "custom_puzzles",
+      "exported": 2,
+      "restored": 2,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "custom_puzzle_stats",
+      "exported": 2,
+      "restored": 2,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "custom_puzzle_favorites",
+      "exported": 2,
+      "restored": 2,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "custom_puzzle_results",
+      "exported": 3,
+      "restored": 3,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "game_sessions",
+      "exported": 290,
+      "restored": 290,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "guess_events",
+      "exported": 1522,
+      "restored": 1522,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "hint_events",
+      "exported": 10,
+      "restored": 10,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "user_streaks",
+      "exported": 44,
+      "restored": 44,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "puzzle_ratings",
+      "exported": 50,
+      "restored": 50,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "feedback",
+      "exported": 8,
+      "restored": 8,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "beta_playtests",
+      "exported": 64,
+      "restored": 64,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "beta_feedback",
+      "exported": 1,
+      "restored": 1,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "verbatim"
+    },
+    {
+      "table": "account_onboarding",
+      "exported": 8,
+      "restored": 0,
+      "transformed": 0,
+      "omitted": 8,
+      "note": "obsolete per-account import decision; the baseline decides per device (table dropped)"
+    },
+    {
+      "table": "game_results",
+      "exported": 94,
+      "restored": 0,
+      "transformed": 0,
+      "omitted": 94,
+      "note": "beta-era mirror of completed games; every row is represented by a completed game_sessions row (table dropped)"
+    },
+    {
+      "table": "accounts",
+      "exported": 0,
+      "restored": 0,
+      "transformed": 0,
+      "omitted": 0,
+      "note": "new in the baseline; no WorkOS identities exist yet, so no rows"
+    }
+  ]
+}

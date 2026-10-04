@@ -1,0 +1,130 @@
+[
+  {
+    "version": "20260322052030",
+    "name": "da0ee50f-1705-4d1a-af70-e80b4df6f3f3"
+  },
+  {
+    "version": "20260322053806",
+    "name": "3a43a1bb-c5e8-46da-b33b-ae0708261ee1"
+  },
+  {
+    "version": "20260322054635",
+    "name": "619c236b-e20c-4ee5-86f7-9b231679ec08"
+  },
+  {
+    "version": "20260323045030",
+    "name": "04b85c5a-180c-4c0c-8fdf-ef3074354a2d"
+  },
+  {
+    "version": "20260323051752",
+    "name": "7d2e41b3-6a97-4cad-ab51-02e845279e24"
+  },
+  {
+    "version": "20260704120000",
+    "name": "5638a0fe-0baa-437e-82ea-82fa80cdb1d6"
+  },
+  {
+    "version": "20260731120000",
+    "name": "tighten_game_sessions_insert"
+  },
+  {
+    "version": "20260915231813",
+    "name": "add_puzzles_emoji_puzzle_icon"
+  },
+  {
+    "version": "20260916120000",
+    "name": "add_rainbow_attempt_tracking"
+  },
+  {
+    "version": "20260916150000",
+    "name": "durable_sessions_and_hint_events"
+  },
+  {
+    "version": "20260916220000",
+    "name": "legacy_insert_official_parity"
+  },
+  {
+    "version": "20260916230000",
+    "name": "claim_preserves_existing_official_result"
+  },
+  {
+    "version": "20260917000000",
+    "name": "device_credentials_and_account_onboarding"
+  },
+  {
+    "version": "20260917010000",
+    "name": "global_stats_include_all_players"
+  },
+  {
+    "version": "20260917120000",
+    "name": "puzzle_content_versioning"
+  },
+  {
+    "version": "20260918003000",
+    "name": "revoke_anon_puzzle_writes"
+  },
+  {
+    "version": "20260918010000",
+    "name": "add_puzzle_designer_name"
+  },
+  {
+    "version": "20260918020000",
+    "name": "beta_playtesting"
+  },
+  {
+    "version": "20260918030000",
+    "name": "require_published_puzzle_for_official_session"
+  },
+  {
+    "version": "20260918040000",
+    "name": "add_puzzle_alphabetize_completed"
+  },
+  {
+    "version": "20260919000000",
+    "name": "custom_puzzles"
+  },
+  {
+    "version": "20260919020000",
+    "name": "fix_validate_custom_puzzle_content_array_append"
+  },
+  {
+    "version": "20260920000000",
+    "name": "custom_puzzle_community"
+  },
+  {
+    "version": "20260921000000",
+    "name": "custom_puzzle_counted_replays"
+  },
+  {
+    "version": "20260922000000",
+    "name": "category_emoji"
+  },
+  {
+    "version": "20260923000000",
+    "name": "mini_3x3_format"
+  },
+  {
+    "version": "20260924000000",
+    "name": "mini_optional_rainbow"
+  },
+  {
+    "version": "20260925000000",
+    "name": "fix_resolve_onboarding_ambiguous_status"
+  },
+  {
+    "version": "20260926000000",
+    "name": "category_emoji_hint_only"
+  },
+  {
+    "version": "20260927000000",
+    "name": "puzzle_report"
+  },
+  {
+    "version": "20260928000000",
+    "name": "lucky_bot_skill_and_luck"
+  },
+  {
+    "version": "20260929000000",
+    "name": "lucky_bot_crowd_report_fixes"
+  }
+]

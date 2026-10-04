@@ -54,7 +54,7 @@ Supabase address or another game's table prefix appears in `src/`,
 | Redirect URIs | `https://<supabase-ref>.supabase.co/auth/v1/callback` for every project Rainbow currently uses (add the new one, then remove the old one when moving) |
 | Credentials | the application's client id + secret, held only in the Supabase provider configuration above |
 | API key | local tooling only, short-lived, never stored in the repository |
-| Environment | Phase 1: Staging; launch: Production (after the proof's cleanup) |
+| Environment | Phase 1: Staging; hosted BETA (Phase 2, 2026-10-04): Staging, temporary application `rainbow-categories-beta` (`npm run workos:hosted-beta`); launch: Production (after the proof's cleanup) |
 
 ## Local development and tests
 

@@ -38,7 +38,8 @@
     "db:change-preview": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/change-preview.ts",
     "workos:local": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/workos-local.ts",
     "phase2:hosted": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/hosted-phase2.ts",
-    "phase2:restore": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/phase2-restore.ts"
+    "phase2:restore": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/phase2-restore.ts",
+    "workos:hosted-beta": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/workos-hosted-beta.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

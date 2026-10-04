@@ -267,6 +267,12 @@ mocks pretending to be production.
 
 ## Commands
 
+Phase 2 (hosted beta rebuild) tooling, kept here because it reuses the inventory and schema
+libraries: `npm run phase2:hosted` (inventory, classify, export, deps, compare, smoke, sql), `npm run
+phase2:restore` (plan, local, verify), `npm run workos:hosted-beta`, and `npm run e2e:reset -- --no-seed`.
+They are the only scripts here that can reach the hosted project, and each refuses to write without
+explicit flags and `PHASE2_HOSTED_WRITE=yes`. See `supabase/ops/beta-reset/README.md`.
+
 | Command | What it does |
 | --- | --- |
 | `npm run e2e:install` | download the Chromium build Playwright needs |
@@ -430,6 +436,12 @@ hand, in GitHub's settings, once someone decides to:
 ---
 
 ## Troubleshooting
+
+**"http://127.0.0.1:5183 is already used"** — something is still serving the app on the port,
+usually a `vite preview` left over from an earlier session. The suite deliberately refuses to
+reuse it (a stale bundle once made a run pass and fail against the wrong build), so stop that
+process and run again. While iterating on tests with a server you started yourself, set
+`E2E_REUSE_SERVER=1`.
 
 **`No container runtime found on PATH`** — Docker Desktop is not installed or
 not running. `npm run e2e:db:verify` still works meanwhile.

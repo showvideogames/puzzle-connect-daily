@@ -29,6 +29,7 @@ import path from "node:path";
 import { REPO_ROOT } from "../env.ts";
 import {
   collectInventory,
+  diffInventories,
   renderInventoryMarkdown,
   type Inventory,
   type SqlQueryRunner,
@@ -92,6 +93,7 @@ interface Args {
   command: string;
   projectRef: string | null;
   label: string | null;
+  from: string | null;
   out: string | null;
   file: string | null;
   apply: boolean;
@@ -99,11 +101,12 @@ interface Args {
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { command: "", projectRef: null, label: null, out: null, file: null, apply: false, iMeanIt: false };
+  const args: Args = { command: "", projectRef: null, label: null, from: null, out: null, file: null, apply: false, iMeanIt: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--project-ref") args.projectRef = argv[++i] ?? null;
     else if (a === "--label") args.label = argv[++i] ?? null;
+    else if (a === "--from") args.from = argv[++i] ?? null;
     else if (a === "--out") args.out = argv[++i] ?? null;
     else if (a === "--file") args.file = argv[++i] ?? null;
     else if (a === "--apply") args.apply = true;
@@ -149,7 +152,6 @@ async function inventory(args: Args): Promise<number> {
       union all select user_id, 'user_streaks' from public.user_streaks where user_id is not null
       union all select user_id, 'puzzle_ratings' from public.puzzle_ratings where user_id is not null
       union all select user_id, 'user_roles' from public.user_roles
-      union all select user_id, 'account_onboarding' from public.account_onboarding
       union all select user_id, 'feedback' from public.feedback where user_id is not null
       union all select user_id, 'archive_access' from public.archive_access
       union all select created_by, 'puzzles.created_by' from public.puzzles where created_by is not null
@@ -320,6 +322,214 @@ async function exportData(args: Args): Promise<number> {
   return 0;
 }
 
+// ── deps ─────────────────────────────────────────────────────────────────
+
+/**
+ * Every dependency recorded in pg_depend from an object that is NOT
+ * Rainbow's onto a Rainbow table, function or the app_role type. The
+ * teardown refuses to broaden, so this must be empty before it runs.
+ * Rainbow = everything in public that does not carry a foreign prefix,
+ * minus rls_auto_enable() (project-wide).
+ */
+async function deps(args: Args): Promise<number> {
+  const runner = runnerFor(args);
+  const rows = (await runner.query<{ dependent: string; kind: string; rainbow_object: string; deptype: string }>(`
+    with rainbow as (
+      select c.oid, c.relname as name, 'table' as kind from pg_class c join pg_namespace n on n.oid = c.relnamespace
+       where n.nspname = 'public' and c.relkind in ('r', 'p') and c.relname !~ '^(xw|cv|wtf)_'
+      union all
+      select p.oid, p.proname, 'function' from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.proname !~ '^(xw|cv|wtf)_' and p.proname <> 'rls_auto_enable'
+      union all
+      select t.oid, t.typname, 'type' from pg_type t join pg_namespace n on n.oid = t.typnamespace
+       where n.nspname = 'public' and t.typname = 'app_role'
+    ),
+    deps as (
+      select d.classid::regclass::text as dep_class, d.objid, r.name as rainbow_object, r.kind, d.deptype
+        from pg_depend d join rainbow r on r.oid = d.refobjid
+       where d.deptype in ('n', 'a')
+    )
+    select rainbow_object, kind, deptype,
+           case dep_class
+             when 'pg_policy' then (select 'policy "' || pol.polname || '" on ' || rc.relname from pg_policy pol join pg_class rc on rc.oid = pol.polrelid where pol.oid = deps.objid)
+             when 'pg_constraint' then (select 'constraint ' || con.conname || ' on ' || rc.relname from pg_constraint con join pg_class rc on rc.oid = con.conrelid where con.oid = deps.objid)
+             when 'pg_trigger' then (select 'trigger ' || tg.tgname || ' on ' || rc.relname from pg_trigger tg join pg_class rc on rc.oid = tg.tgrelid where tg.oid = deps.objid)
+             when 'pg_proc' then (select 'function ' || pr.proname from pg_proc pr where pr.oid = deps.objid)
+             when 'pg_class' then (select 'relation ' || rc.relname from pg_class rc where rc.oid = deps.objid)
+             when 'pg_attrdef' then (select 'default on ' || rc.relname from pg_attrdef ad join pg_class rc on rc.oid = ad.adrelid where ad.oid = deps.objid)
+             when 'pg_rewrite' then (select 'view ' || rc.relname from pg_rewrite rw join pg_class rc on rc.oid = rw.ev_class where rw.oid = deps.objid)
+             else dep_class end as dependent
+      from deps order by 1, 4
+  `)).rows;
+  const foreign = rows.filter((r) => r.dependent && /(^| )(xw_|cv_|wtf_)|on (xw|cv|wtf)_/.test(r.dependent));
+  console.log(`dependencies onto Rainbow objects: ${rows.length}; from NON-Rainbow objects: ${foreign.length}`);
+  for (const r of foreign) console.log(`  ${r.dependent} -> ${r.kind} ${r.rainbow_object} (deptype ${r.deptype})`);
+  if (args.label) writeJson(path.join(EVIDENCE_DIR, args.label, "dependencies-from-non-rainbow.json"), { scannedAt: new Date().toISOString(), total: rows.length, fromNonRainbow: foreign });
+  return foreign.length === 0 ? 0 : 1;
+}
+
+// ── compare ──────────────────────────────────────────────────────────────
+
+/**
+ * After the rebuild: (1) Rainbow's objects on the hosted project must equal
+ * the committed manifest; (2) nothing else may have changed between the
+ * `before` and `after` inventories except what the owner approved.
+ */
+function compare(args: Args): number {
+  const before = args.from ?? "before";
+  const after = args.label ?? "after";
+  const read = <T>(label: string, file: string) => JSON.parse(readFileSync(path.join(EVIDENCE_DIR, label, file), "utf8")) as T;
+  const invB = read<Inventory>(before, "inventory.json");
+  const invA = read<Inventory>(after, "inventory.json");
+  const manifest = JSON.parse(readFileSync(MANIFEST, "utf8")) as Inventory;
+  const foreign = (name: string) => FOREIGN_PREFIXES.some((p) => name.startsWith(p));
+  const lines: string[] = [];
+  let problems = 0;
+
+  // 1. Rainbow vs manifest (public objects; storage is compared separately because
+  //    the manifest was read from a stack without the storage service).
+  const rainbowAfter: Inventory = {
+    ...invA,
+    tables: invA.tables.filter((t) => !foreign(t.name)),
+    functions: invA.functions.filter((f) => !foreign(f.name) && f.name !== "rls_auto_enable"),
+    types: invA.types.filter((t) => !foreign(t.name)),
+    storage: manifest.storage,
+    extensions: manifest.extensions,
+    views: invA.views.filter((v) => !foreign(v)),
+    sequences: invA.sequences.filter((s) => !foreign(s)),
+  };
+  const manifestDiff = diffInventories(manifest, rainbowAfter);
+  lines.push(`## Rainbow objects on the hosted project vs the committed manifest`, "", manifestDiff.length ? manifestDiff.map((d) => `- ${d}`).join("\n") : "- identical: 22 tables, 59 functions, 25 policies, every column, constraint, index, trigger, policy and grant", "");
+  problems += manifestDiff.length;
+
+  // 2. Non-Rainbow objects before vs after.
+  const strip = (t: Inventory["tables"][number]) => JSON.stringify({ ...t, policies: undefined });
+  const policiesOf = (t: Inventory["tables"][number]) => t.policies.map((p) => p.name).sort();
+  const foreignDiffs: string[] = [];
+  for (const tb of invB.tables.filter((t) => foreign(t.name))) {
+    const ta = invA.tables.find((t) => t.name === tb.name);
+    if (!ta) { foreignDiffs.push(`table ${tb.name}: MISSING after`); continue; }
+    if (strip(ta) !== strip(tb)) foreignDiffs.push(`table ${tb.name}: structure/grants/triggers differ`);
+    const removed = policiesOf(tb).filter((p) => !policiesOf(ta).includes(p));
+    const added = policiesOf(ta).filter((p) => !policiesOf(tb).includes(p));
+    for (const p of removed) foreignDiffs.push(`table ${tb.name}: policy removed "${p}"`);
+    for (const p of added) foreignDiffs.push(`table ${tb.name}: policy ADDED "${p}"`);
+  }
+  for (const ta of invA.tables.filter((t) => foreign(t.name))) if (!invB.tables.some((t) => t.name === ta.name)) foreignDiffs.push(`table ${ta.name}: NEW after`);
+  const fnKeyOf = (f: { name: string; args: string }) => `${f.name}(${f.args})`;
+  const foreignFns = (inv: Inventory) => inv.functions.filter((f) => foreign(f.name) || f.name === "rls_auto_enable");
+  for (const fb of foreignFns(invB)) {
+    const fa = foreignFns(invA).find((f) => fnKeyOf(f) === fnKeyOf(fb));
+    if (!fa) foreignDiffs.push(`function ${fnKeyOf(fb)}: MISSING after`);
+    else if (JSON.stringify(fa) !== JSON.stringify(fb)) foreignDiffs.push(`function ${fnKeyOf(fb)}: definition/grants differ`);
+  }
+  for (const fa of foreignFns(invA)) if (!foreignFns(invB).some((f) => fnKeyOf(f) === fnKeyOf(fa))) foreignDiffs.push(`function ${fnKeyOf(fa)}: NEW after`);
+  const approved = new Set([
+    `table cv_puzzles: policy removed "Admins can manage cv puzzles"`,
+    `table cv_wordbank: policy removed "Admins can manage cv wordbank"`,
+    `table wtf_games: policy removed "Admins can manage wtf games"`,
+  ]);
+  const unexplained = foreignDiffs.filter((d) => !approved.has(d));
+  lines.push(`## Non-Rainbow objects, before vs after`, "", foreignDiffs.length ? foreignDiffs.map((d) => `- ${d}${approved.has(d) ? " (owner-approved, step 0)" : " **UNEXPLAINED**"}`).join("\n") : "- no difference", "", `Unexplained differences: ${unexplained.length}`, "");
+  problems += unexplained.length;
+
+  // 3. Row counts of non-Rainbow tables, auth users, storage, ledger.
+  const cB = read<{ table: string; rows: number }[]>(before, "counts.json");
+  const cA = read<{ table: string; rows: number }[]>(after, "counts.json");
+  const countDiffs = cB.filter((b) => foreign(b.table)).map((b) => ({ ...b, after: cA.find((a) => a.table === b.table)?.rows ?? -1 })).filter((x) => x.after !== x.rows);
+  lines.push(`## Non-Rainbow row counts`, "", countDiffs.length ? countDiffs.map((x) => `- ${x.table}: ${x.rows} -> ${x.after}`).join("\n") : `- unchanged (${cB.filter((b) => foreign(b.table)).length} tables)`, "");
+  problems += countDiffs.length;
+  const uB = read<{ users: { id: string }[] }>(before, "auth.json").users.map((u) => u.id).sort();
+  const uA = read<{ users: { id: string }[] }>(after, "auth.json").users.map((u) => u.id).sort();
+  const sameUsers = JSON.stringify(uB) === JSON.stringify(uA);
+  lines.push(`## Auth users`, "", sameUsers ? `- unchanged: the same ${uA.length} user ids` : `- **CHANGED**: ${uB.length} before, ${uA.length} after`, "");
+  if (!sameUsers) problems++;
+  const sB = read<{ bucket_id: string; objects: number; bytes: number }[]>(before, "storage-objects.json");
+  const sA = read<{ bucket_id: string; objects: number; bytes: number }[]>(after, "storage-objects.json");
+  const sameStorage = JSON.stringify(sB) === JSON.stringify(sA) && JSON.stringify(invB.storage.buckets) === JSON.stringify(invA.storage.buckets);
+  lines.push(`## Storage`, "", sameStorage ? `- objects and buckets unchanged: ${sA.map((s) => `${s.bucket_id} ${s.objects} objects`).join(", ")}` : `- **CHANGED**: before ${JSON.stringify(sB)} after ${JSON.stringify(sA)}`, `- policies on storage.objects after: ${invA.storage.policies.map((p) => `"${p.name}"`).join(", ") || "none"}`, "");
+  if (!sameStorage) problems++;
+  const ledger = read<{ version: string; name: string }[]>(after, "ledger.json");
+  lines.push(`## Migration ledger after`, "", ledger.map((l) => `- ${l.version} ${l.name}`).join("\n"), "");
+
+  const md = `# Hosted comparison: ${before} -> ${after}\n\nGenerated ${new Date().toISOString()}.\n\n${lines.join("\n")}\nProblems: ${problems}\n`;
+  writeFileSync(path.join(EVIDENCE_DIR, after, "comparison.md"), md, "utf8");
+  console.log(md);
+  return problems === 0 ? 0 : 1;
+}
+
+// ── smoke ────────────────────────────────────────────────────────────────
+
+/**
+ * What the client does, against the hosted project, with the publishable key
+ * only (RAINBOW_HOSTED_ANON_KEY in the shell): a guest mints a device,
+ * starts and finishes today's puzzle, reads stats; an unauthenticated caller
+ * gets the expected answers from the account layer. The test rows are
+ * removed again at the end.
+ */
+async function smoke(args: Args): Promise<number> {
+  const runner = runnerFor(args);
+  const anon = (process.env.RAINBOW_HOSTED_ANON_KEY ?? "").trim();
+  if (!anon) throw new Error("RAINBOW_HOSTED_ANON_KEY (the publishable key) is required in the shell");
+  const base = `https://${args.projectRef}.supabase.co`;
+  const rpc = async (name: string, body: Record<string, unknown> = {}, token?: string) => {
+    const res = await fetch(`${base}/rest/v1/rpc/${name}`, { method: "POST", headers: { apikey: anon, Authorization: `Bearer ${token ?? anon}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const text = await res.text();
+    return { status: res.status, json: text ? JSON.parse(text) : null };
+  };
+  const results: string[] = [];
+  const ok = (name: string, pass: boolean, detail: string) => { results.push(`| ${name} | ${pass ? "pass" : "**FAIL**"} | ${detail} |`); return pass; };
+  let all = true;
+
+  const ping = await rpc("ping");
+  all = ok("ping()", ping.status === 200 && ping.json === true, `HTTP ${ping.status}`) && all;
+  // Both account-layer RPCs are granted to authenticated only; an anonymous
+  // caller must be refused by the grant (401/403), never answered.
+  const resolve = await rpc("resolve_device_import", { _device_id: null, _device_token: null });
+  all = ok("resolve_device_import() as anon is refused", resolve.status === 401 || resolve.status === 403, `HTTP ${resolve.status}`) && all;
+  const ensure = await rpc("ensure_account");
+  all = ok("ensure_account() as anon", ensure.status === 401 || ensure.status === 403 || ensure.json?.[0]?.outcome === "not_signed_in", `HTTP ${ensure.status} ${JSON.stringify(ensure.json).slice(0, 80)}`) && all;
+  const archive = await rpc("get_archive_puzzles");
+  all = ok("get_archive_puzzles()", archive.status === 200 && Array.isArray(archive.json) && archive.json.length > 0, `${Array.isArray(archive.json) ? archive.json.length : "?"} puzzles`) && all;
+
+  // The latest published Full puzzle (the beta content need not have one dated today).
+  const puzzleRes = await fetch(`${base}/rest/v1/puzzles?select=id,title,format,date&format=eq.full&is_published=eq.true&order=date.desc&limit=1`, { headers: { apikey: anon, Authorization: `Bearer ${anon}` } });
+  const puzzles = (await puzzleRes.json()) as { id: string; title: string; format: string; date: string }[];
+  const full = Array.isArray(puzzles) ? puzzles[0] : undefined;
+  all = ok("published puzzles readable as anon", puzzleRes.status === 200 && !!full, full ? `latest Full: ${full.title} (${full.date})` : `HTTP ${puzzleRes.status}`) && all;
+
+  const device = await rpc("create_device_identity");
+  const dev = device.json?.[0] as { device_id: string; device_token: string } | undefined;
+  all = ok("create_device_identity()", !!dev?.device_id && !!dev?.device_token, dev ? "device minted" : `HTTP ${device.status}`) && all;
+  let sessionId: string | null = null;
+  if (dev && full) {
+    const created = await rpc("create_game_session", { _puzzle_id: full.id, _device_id: dev.device_id, _device_token: dev.device_token, _entry_context: "daily" });
+    sessionId = typeof created.json === "string" ? created.json : null;
+    all = ok("create_game_session() as a guest", !!sessionId, sessionId ? "session created" : `HTTP ${created.status} ${JSON.stringify(created.json).slice(0, 80)}`) && all;
+    const own = await rpc("get_own_completed_sessions", { _device_id: dev.device_id, _device_token: dev.device_token, _format: "full" });
+    all = ok("get_own_completed_sessions() for the new device", own.status === 200 && Array.isArray(own.json) && own.json.length === 0, `HTTP ${own.status}, ${Array.isArray(own.json) ? own.json.length : "?"} rows`) && all;
+    const stats = await rpc("get_puzzle_stats", { _puzzle_id: full.id });
+    all = ok("get_puzzle_stats() for today's puzzle", stats.status === 200, `HTTP ${stats.status}`) && all;
+  } else {
+    results.push(`| guest session flow | skipped | ${full ? "no device" : "no published Full puzzle"} |`);
+  }
+
+  // Clean up the smoke rows (Rainbow's own tables only).
+  if (dev) {
+    const cleanup = await runner.query<{ sessions: number; devices: number }>(`
+      with s as (delete from public.game_sessions where device_id = '${dev.device_id}' returning 1),
+           d as (delete from public.device_identities where device_id = '${dev.device_id}' returning 1)
+      select (select count(*) from s)::int as sessions, (select count(*) from d)::int as devices
+    `);
+    results.push(`| cleanup | done | removed ${cleanup.rows[0].sessions} session(s), ${cleanup.rows[0].devices} device |`);
+  }
+
+  const md = `# Hosted smoke (publishable key, as the client)\n\nRun ${new Date().toISOString()}.\n\n| check | result | detail |\n|---|---|---|\n${results.join("\n")}\n\nAll passed: ${all}\n`;
+  if (args.label) writeFileSync(path.join(EVIDENCE_DIR, args.label, "hosted-smoke.md"), md, "utf8");
+  console.log(md);
+  return all ? 0 : 1;
+}
+
 // ── sql ──────────────────────────────────────────────────────────────────
 
 async function sql(args: Args): Promise<number> {
@@ -351,6 +561,9 @@ async function main(): Promise<number> {
     case "inventory": return inventory(args);
     case "classify": return classify(args);
     case "export": return exportData(args);
+    case "deps": return deps(args);
+    case "compare": return compare(args);
+    case "smoke": return smoke(args);
     case "sql": return sql(args);
     default:
       console.error("usage: npm run phase2:hosted -- --project-ref <ref> inventory --label <l> | classify --label <l> | export --out <dir> | sql --file <f> [--apply --i-mean-the-hosted-beta-project]");

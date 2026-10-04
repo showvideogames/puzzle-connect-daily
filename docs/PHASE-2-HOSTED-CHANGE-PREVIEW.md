@@ -1,7 +1,10 @@
 # Phase 2 preview: every change the beta reset would make to the shared hosted project
 
-Status: **PREVIEW ONLY. Nothing here has been run against the hosted project.**
-Phase 2 needs a separate, explicit approval from Deb after the Phase 1 review.
+Status: **EXECUTED on 2026-10-04** (approved by Deb after the Phase 1 review, with one change: the beta
+data was KEPT as a one-time salvage instead of being discarded). What actually ran, the evidence and the
+before/after comparison are in `supabase/ops/beta-reset/hosted-evidence/` (`before/`, `pre-apply/`,
+`after/`, the applied teardown and the applied restore plan). The text below is the preview as reviewed;
+where reality differed it is noted in the Phase 2 report in the planning repository.
 
 Target: the shared beta Supabase project (`zmauemcjcrdrgfjzkvgd`), which Rainbow/Mini share
 with CrossPuns (objects prefixed `xw_`) and which still holds `cv_*` / `wtf_*` leftovers.
