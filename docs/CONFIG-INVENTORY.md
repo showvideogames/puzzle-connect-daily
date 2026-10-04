@@ -29,7 +29,7 @@ Supabase address or another game's table prefix appears in `src/`,
 |---|---|---|
 | Custom OIDC provider `custom:platform` | issuer = the AuthKit domain; client id + secret of Rainbow's WorkOS application; scopes `openid email profile`; PKCE on | installed by tooling, never by hand; the secret lives nowhere else |
 | Site URL | `https://rainbowcategories.com` | |
-| Redirect allow-list | `https://rainbowcategories.com/auth/callback` (plus preview URLs while testing) | the only page that completes a sign-in |
+| Redirect allow-list | `https://rainbowcategories.com/auth/callback` AND `https://www.rainbowcategories.com/auth/callback` (the client sends `window.location.origin`, and the live origin is the `www` host; the bare domain redirects to it), plus the exact `/auth/callback` of every preview deployment used for sign-in testing. GoTrue matches exactly and falls back to the Site URL otherwise (found live on 2026-10-04). Managed with `npm run workos:hosted-beta -- allow-callback --url …` | the only page that completes a sign-in |
 | Confirm email | ON | GoTrue may auto-link a shared sign-in to an existing confirmed same-email user; never to an unconfirmed one |
 | Anonymous sign-ins | OFF | |
 | Manual identity linking | OFF | |
