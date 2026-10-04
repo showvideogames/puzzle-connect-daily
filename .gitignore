@@ -50,3 +50,4 @@ e2e/supabase/.branches/
 playwright-report/
 test-results/
 e2e/supabase/snippets/
+.vercel
