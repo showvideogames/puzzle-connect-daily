@@ -78,10 +78,11 @@ interface Extras {
 }
 
 function parseArgs(argv: string[]) {
-  const args = { keep: null as string | null, out: DEFAULT_OUT };
+  const args = { keep: null as string | null, out: DEFAULT_OUT, live: null as string | null };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--keep-auth-users") args.keep = argv[++i] ?? null;
     else if (argv[i] === "--out") args.out = path.resolve(argv[++i] ?? DEFAULT_OUT);
+    else if (argv[i] === "--live-inventory") args.live = argv[++i] ?? null;
   }
   return args;
 }
@@ -101,7 +102,18 @@ export function buildTeardown(
   beta: Inventory,
   extras: Extras,
   keepAuthUsers: string[],
-  mode: "rehearsal" | "apply"
+  mode: "rehearsal" | "apply",
+  /**
+   * The LIVE project's inventory (npm run phase2:hosted -- inventory), when
+   * generating for a real reset. It adds nothing to the set of TABLES,
+   * FUNCTIONS or TYPES — those stay list-driven — but a policy, trigger or
+   * foreign key that the live project holds on a Rainbow table under a name
+   * the lists do not know (a hand-made rename, a reconstructed policy) is
+   * dropped by its real name, so the function drops that follow cannot be
+   * blocked by it. Found on 2026-10-04: the live trigger puzzles_updated_at
+   * versus the inventories' update_puzzles_updated_at.
+   */
+  live: Inventory | null = null
 ): string {
   const tables = new Set<string>();
   const functions = new Map<string, string>(); // "name(args)" -> args
@@ -204,11 +216,21 @@ export function buildTeardown(
       for (const tr of t.triggers) triggers.add(`drop trigger if exists ${q(tr.name)} on public.${q(t.name)};`);
     }
   }
+  // The live names on exactly those tables, if a live inventory was given.
+  for (const t of live?.tables ?? []) {
+    if (!tables.has(t.name)) continue;
+    for (const p of t.policies) policies.add(`drop policy if exists ${q(p.name)} on public.${q(t.name)};`);
+    for (const tr of t.triggers) triggers.add(`drop trigger if exists ${q(tr.name)} on public.${q(t.name)};`);
+  }
   for (const s of [...policies].sort()) say(s);
   for (const s of [...triggers].sort()) say(s);
   say(``);
 
   say(`-- 3. Foreign keys between Rainbow tables, so the tables below can be dropped in any order without cascade.`);
+  for (const t of live?.tables ?? []) {
+    if (!tables.has(t.name)) continue;
+    for (const c of t.constraints) if (c.type === "f") fks.push({ table: t.name, name: c.name });
+  }
   const seenFk = new Set<string>();
   for (const fk of fks.sort((a, b) => `${a.table}.${a.name}`.localeCompare(`${b.table}.${b.name}`))) {
     const key = `${fk.table}.${fk.name}`;
@@ -279,8 +301,10 @@ function main(): number {
   const extras = existsSync(EXTRAS) ? (JSON.parse(readFileSync(EXTRAS, "utf8")) as Extras) : {};
 
   mkdirSync(args.out, { recursive: true });
-  const rehearsal = buildTeardown(manifest, beta, extras, keep as string[], "rehearsal");
-  const apply = buildTeardown(manifest, beta, extras, keep as string[], "apply");
+  const live = args.live ? (JSON.parse(readFileSync(args.live, "utf8")) as Inventory) : null;
+  if (live) console.log(`Using the live inventory ${args.live} for policy, trigger and foreign-key names on Rainbow tables.`);
+  const rehearsal = buildTeardown(manifest, beta, extras, keep as string[], "rehearsal", live);
+  const apply = buildTeardown(manifest, beta, extras, keep as string[], "apply", live);
   writeFileSync(path.join(args.out, "10_teardown.REHEARSAL.sql"), rehearsal, "utf8");
   writeFileSync(path.join(args.out, "10_teardown.sql"), apply, "utf8");
   console.log(`Wrote ${path.join(args.out, "10_teardown.REHEARSAL.sql")} and 10_teardown.sql`);

@@ -89,6 +89,13 @@ ${error instanceof Error ? error.message : String(error)}
     await client.end();
   }
 
+  if (process.argv.includes("--no-seed")) {
+    // A blank baseline with no fixtures: what the Phase 2 restore rehearsal
+    // loads the hosted export into (npm run phase2:restore).
+    console.log("\nReady: blank baseline, no fixtures (--no-seed).\n");
+    return 0;
+  }
+
   console.log("Seeding fixtures…");
   const manifest = await seedFixtures(createSupabaseSeedBackend(config), {
     apiUrl: config.apiUrl,
