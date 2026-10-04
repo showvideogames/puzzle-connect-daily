@@ -219,18 +219,8 @@ export async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   ).toBeLessThanOrEqual(overflow.clientWidth + 1);
 }
 
-/** Signs in through the real Admin login form. */
-export async function signInAsAdmin(
-  page: Page,
-  credentials: { email: string; password: string }
-): Promise<void> {
-  await page.goto("/admin");
-  await expect(page.getByRole("heading", { name: "Admin Login" })).toBeVisible();
-  await page.getByLabel("Email", { exact: true }).fill(credentials.email);
-  await page.getByLabel("Password", { exact: true }).fill(credentials.password);
-  await page.getByRole("button", { name: "Sign In", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Puzzle Admin" })).toBeVisible({ timeout: 20_000 });
-}
+// Signing in lives in support/auth.ts: there is no login form to drive any
+// more, a test hands the app a real session from the local GoTrue instead.
 
 /** The localStorage progress blob for one attempt, or null. */
 export async function readProgress(page: Page, storageId: string): Promise<Record<string, unknown> | null> {

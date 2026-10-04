@@ -16,7 +16,7 @@ import CreatorProfilePage from "./pages/CreatorProfile.tsx";
 import { MiniDaily, MiniArchivePuzzle } from "./pages/Mini.tsx";
 import MiniArchive from "./pages/MiniArchive.tsx";
 import Favorites from "./pages/Favorites.tsx";
-import ResetPassword from "./pages/ResetPassword.tsx";
+import AuthCallback from "./pages/AuthCallback.tsx";
 import Privacy from "./pages/Privacy.tsx";
 import Terms from "./pages/Terms.tsx";
 import HowToPlay from "./pages/HowToPlay.tsx";
@@ -79,7 +79,11 @@ const App = () => (
           {LuckyBotFixtures && (
             <Route path="/__fixtures/lucky-bot" element={<Suspense fallback={null}><LuckyBotFixtures /></Suspense>} />
           )}
-          <Route path="/reset-password" element={<ResetPassword />} />
+          {/* The only page that completes a sign-in: the shared sign-in page
+              sends the browser back here with a one-time code (see
+              lib/platformSignIn.ts). It renders inside OnboardingGate like
+              everything else, so the gate re-checks once the session exists. */}
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/how-to-play" element={<HowToPlay />} />

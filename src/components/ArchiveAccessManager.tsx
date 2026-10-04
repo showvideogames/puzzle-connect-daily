@@ -42,13 +42,16 @@ export function ArchiveAccessManager() {
     setGranting(true);
 
     try {
-      // Find user by email using a function call
-      const { data, error } = await supabase.functions.invoke("admin-find-user", {
-        body: { email: grantEmail.trim() },
+      // Look the person up among Rainbow ACCOUNTS (admin-only RPC). It never
+      // searches the project's whole auth user pool, so while the Supabase
+      // project is shared another game's users are invisible here.
+      const { data: found, error } = await supabase.rpc("admin_find_account", {
+        _email: grantEmail.trim(),
       });
+      const data = (Array.isArray(found) ? found[0] : found) as { user_id?: string } | null;
 
       if (error || !data?.user_id) {
-        toast.error(data?.error || "User not found. They must sign up first.");
+        toast.error(error?.message || "No Rainbow account with that email. They must sign in once first.");
         setGranting(false);
         return;
       }

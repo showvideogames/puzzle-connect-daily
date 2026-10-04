@@ -86,8 +86,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply every migration to a clean database and seed it
+      - name: Build the baseline on a blank database and seed it
         run: npm run e2e:db:verify
+
+      # The launch plan's portability proof: the generated teardown drops
+      # every Rainbow object and nothing of another tenant's, and the
+      # baseline then rebuilds to exactly the committed ownership manifest.
+      - name: Rehearse the beta reset against a simulated shared project
+        run: npm run db:rehearse-reset
 
   browser:
     name: Browser suite (local Supabase)
@@ -131,6 +137,12 @@ jobs:
 
       - name: Apply the schema from scratch and seed the fixtures
         run: npm run e2e:reset
+
+      # The database the browser suite is about to test must be exactly the
+      # committed ownership manifest: an object created outside git, or a
+      # migration that forgot a grant or a policy, fails here.
+      - name: Check the ownership manifest against the built database
+        run: npm run db:manifest -- --check
 
       # A pull request always gets the whole critical suite — it is small by
       # design. The manual trigger can ask for just the smoke subset when

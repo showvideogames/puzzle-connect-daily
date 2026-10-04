@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { signOutOfRainbow } from "@/lib/platformSignIn";
 import { GameBoard } from "@/components/GameBoard";
 import { GameHeader } from "@/components/GameHeader";
 import { PuzzleModeBadge } from "@/components/PuzzleModeBadge";
@@ -176,7 +177,7 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
         onHintClick={handleHeaderHintClick}
         showHint={true}
         user={user ?? null}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={() => signOutOfRainbow()}
         simplifiedIcons
         // Matches the board's own wideBoard width below (840px) instead of
         // the narrower 512px default — simplifiedIcons alone only controls
@@ -326,7 +327,7 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
         showMenuLinks
         onHowToPlayClick={() => setActiveModal("help")}
         user={user ?? null}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={() => signOutOfRainbow()}
       />
       <FeedbackModal
         open={activeModal === "feedback"}

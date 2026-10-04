@@ -34,6 +34,10 @@ dist-ssr
 # project survived here in the first place.
 supabase/.temp/
 
+# Local-only runtime state for the manual sign-in smoke test: the local
+# WorkOS application's client secret (see e2e/scripts/workos-local.ts).
+.runtime/
+
 # End-to-end testing (see e2e/README.md)
 # .env.e2e is GENERATED from the local Supabase stack's own demo keys by
 # `npm run e2e:up`. The ! rule below keeps the committed example file, which
@@ -46,3 +50,4 @@ e2e/supabase/.branches/
 playwright-report/
 test-results/
 e2e/supabase/snippets/
+.vercel

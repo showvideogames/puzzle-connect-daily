@@ -6,6 +6,7 @@ import { StatsModal } from "./StatsModal";
 import { SettingsModal } from "./SettingsModal";
 import { FeedbackModal } from "./FeedbackModal";
 import { supabase } from "@/integrations/supabase/client";
+import { signOutOfRainbow } from "@/lib/platformSignIn";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { todaysLogo } from "@/lib/themes";
 import type { User as AuthUser } from "@supabase/supabase-js";
@@ -92,7 +93,7 @@ export function MinimalHeader() {
           >
             <Settings className="w-5 h-5 text-muted-foreground" />
           </button>
-          <PlayerAuth user={user} onSignOut={() => supabase.auth.signOut()} />
+          <PlayerAuth user={user} onSignOut={() => signOutOfRainbow()} />
         </div>
       </header>
 

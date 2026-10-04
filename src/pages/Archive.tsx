@@ -1,6 +1,7 @@
 import { useState, useEffect, Fragment, type ReactNode } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { signOutOfRainbow } from "@/lib/platformSignIn";
 import { GameHeader } from "@/components/GameHeader";
 import { TutorialModal } from "@/components/TutorialModal";
 import { StatsModal } from "@/components/StatsModal";
@@ -598,7 +599,7 @@ export default function Archive() {
         onHowToPlayClick={() => setActiveModal("help")}
         onSettingsClick={() => setActiveModal("settings")}
         user={user}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={() => signOutOfRainbow()}
         simplifiedIcons
       />
     </>
@@ -623,7 +624,7 @@ export default function Archive() {
         showMenuLinks
         onHowToPlayClick={() => setActiveModal("help")}
         user={user}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={() => signOutOfRainbow()}
       />
       <FeedbackModal
         open={activeModal === "feedback"}

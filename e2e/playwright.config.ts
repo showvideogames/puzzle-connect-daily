@@ -106,7 +106,12 @@ export default defineConfig({
     // result from dist-e2e so the production `dist/` is never overwritten.
     command: "npm run e2e:app",
     url: config.appUrl,
-    reuseExistingServer: !process.env.CI,
+    // Never reuse a server that happens to be on the port: a preview left over
+    // from an earlier session serves a STALE bundle, and the suite would pass or
+    // fail against the wrong build without saying so (it did, on 2026-09-30).
+    // e2e:app binds with --strictPort, so a leftover server now makes the run
+    // fail loudly instead. Set E2E_REUSE_SERVER=1 while iterating on tests.
+    reuseExistingServer: process.env.E2E_REUSE_SERVER === "1",
     timeout: 180_000,
     stdout: "pipe",
     stderr: "pipe",

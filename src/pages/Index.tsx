@@ -23,6 +23,7 @@ import { FULL_FORMAT, progressStorageId, rainbowHerringFor, type PuzzleFormat } 
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
 import { supabase } from "@/integrations/supabase/client";
+import { signOutOfRainbow } from "@/lib/platformSignIn";
 import type { User } from "@supabase/supabase-js";
 
 const TUTORIAL_SEEN_KEY = "tutorial-seen";
@@ -214,7 +215,7 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
   }, [closeModal]);
 
   const handleSignOut = useCallback(() => {
-    supabase.auth.signOut();
+    signOutOfRainbow();
   }, []);
 
   const handleSmallHint = useCallback(() => {

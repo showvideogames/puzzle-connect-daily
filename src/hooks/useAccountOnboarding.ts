@@ -7,24 +7,33 @@ import {
   getDeviceToken,
   resetDeviceIdentity,
 } from "@/lib/gameStats";
+import { ensureAccount } from "@/lib/platformSignIn";
 
 /**
  * The one-time "Bring your progress with you?" decision, driven entirely by
- * server state.
+ * server state — and, since the launch baseline, asked once per DEVICE
+ * rather than once per account.
  *
- * This deliberately does NOT try to work out whether an auth event was a
- * signup or a sign-in. That inference was the source of the old flow's
- * silent failures: the event type varies by provider and redirect shape, and
- * a client-side "already prompted" flag is lost on a new device and can be
- * set by an error path. Instead every authenticated load asks the server
- * "is there an unresolved decision for me?", and the server — which created
- * the account's row and owns the one-shot compare-and-swap — answers.
+ * Every authenticated load asks the server two things:
  *
- * While the answer is "pending with real history", normal gameplay must not
- * begin: the account would start accumulating its own sessions and streak
- * before the import it is about to be offered. The database enforces that
- * (create_game_session refuses a pending account); this hook is what makes it
- * a coherent experience rather than a silent failure.
+ *   1. ensure_account      is this session a Rainbow account? (creates the
+ *                          accounts row on first sight; an auth user that did
+ *                          not come through the shared sign-in is signed out
+ *                          locally and stays a guest)
+ *   2. resolve_device_import  does THIS browser's device still owe the
+ *                          import decision? The server, which owns the device
+ *                          row and its one-way retirement, answers.
+ *
+ * While the answer is "import available", normal gameplay must not begin:
+ * the account would start accumulating its own sessions and streak before
+ * the import it is about to be offered. The database enforces that
+ * (create_game_session refuses a Rainbow account on a live device with guest
+ * history); this hook is what makes it a coherent experience rather than a
+ * silent failure.
+ *
+ * Asking per device is what lets a phone that also played as a guest get its
+ * own question, and what stops guest games played after a sign-out from
+ * being stranded when the same person signs in again.
  */
 export type OnboardingPhase =
   /** Still asking the server. Brief, and shows a spinner. */
@@ -57,15 +66,8 @@ export type OnboardingPhase =
       degraded: boolean;
     };
 
-/** PostgREST's "no such function in the schema cache". */
-function isMissingFunction(error: { code?: string; message?: string } | null): boolean {
-  if (!error) return false;
-  return error.code === "PGRST202" || /does not exist/i.test(error.message ?? "");
-}
-
 interface ResolveRow {
   outcome: string;
-  status: string | null;
   games_played: number | null;
   current_streak: number | null;
   longest_streak: number | null;
@@ -84,7 +86,7 @@ export function useAccountOnboarding() {
       //
       // All three failures mean the same thing to the player, so they get the
       // same honest answer rather than three behaviours:
-      //   * PGRST202 — the migration has not landed yet (cutover window)
+      //   * PGRST202 — the function is not in the schema (deploy window)
       //   * a network/database error — transient
       //   * a null identity — this browser cannot keep one (private mode,
       //     blocked storage), so it can never hold a credential
@@ -107,23 +109,34 @@ export function useAccountOnboarding() {
       if (!user) {
         // An anonymous player with a credential already in hand still needs
         // to know whether the server is actually reachable — otherwise the
-        // first thing they'd learn is a finished game that never saved. One
-        // cheap call, which doubles as the probe for the cutover window.
-        const { error: probeError } = await supabase.rpc("count_own_anonymous_sessions", {
-          _device_id: identity.deviceId,
-          _device_token: identity.deviceToken,
-        });
+        // first thing they'd learn is a finished game that never saved.
+        const { error: probeError } = await supabase.rpc("ping");
         setState({ phase: probeError ? "saving_unavailable" : "ready" });
         return;
       }
 
-      const { data, error } = await supabase.rpc("resolve_onboarding", {
+      // A session exists. Is it a Rainbow account? (In a shared Supabase
+      // project an auth user can exist without being one.) ensure_account
+      // creates the row on first sign-in; not_platform_linked signs the
+      // session out locally, which fires SIGNED_OUT and re-runs this check
+      // as a guest.
+      const account = await ensureAccount();
+      if (!account.ok || !account.account) {
+        setState({ phase: account.reason === "not_platform_linked" ? "ready" : "saving_unavailable" });
+        return;
+      }
+      // The email shown in the import prompt is the account's CURRENT one,
+      // from the server. Never user.email: GoTrue does not refresh it after
+      // a change at the shared provider.
+      const accountEmail = account.account.email ?? null;
+
+      const { data, error } = await supabase.rpc("resolve_device_import", {
         _device_id: identity.deviceId,
         _device_token: identity.deviceToken,
       });
 
       if (error) {
-        // Same reasoning: we cannot tell whether this account owes a decision,
+        // Same reasoning: we cannot tell whether this device owes a decision,
         // so we must not start account-owned gameplay — but the puzzle is
         // still perfectly playable, so let them play unsaved.
         setState({ phase: "saving_unavailable" });
@@ -138,24 +151,23 @@ export function useAccountOnboarding() {
             gamesPlayed: row.games_played ?? 0,
             currentStreak: row.current_streak ?? 0,
             longestStreak: row.longest_streak ?? 0,
-            email: user.email ?? null,
+            email: accountEmail,
             degraded: false,
           });
           return;
         case "credential_invalid":
-          // Fails closed server-side: the account is still pending, so the
-          // one-time opportunity has NOT been spent. Offer the explicit
+          // Fails closed server-side: nothing was consumed. Offer the explicit
           // choice rather than silently resolving it away.
           setState({
             phase: "decision",
             gamesPlayed: 0,
             currentStreak: 0,
             longestStreak: 0,
-            email: user.email ?? null,
+            email: accountEmail,
             degraded: true,
           });
           return;
-        case "already_resolved":
+        case "already_decided":
         case "no_guest_history":
         case "unauthenticated":
           setState({ phase: "ready" });
@@ -184,8 +196,8 @@ export function useAccountOnboarding() {
       void check();
     });
 
-    // Saving restores itself without a reload: the migration lands, or the
-    // connection comes back, and the next focus or online event picks it up.
+    // Saving restores itself without a reload: the connection comes back,
+    // and the next focus or online event picks it up.
     const recheck = () => void check();
     window.addEventListener("focus", recheck);
     window.addEventListener("online", recheck);
@@ -198,7 +210,7 @@ export function useAccountOnboarding() {
   }, [check]);
 
   /**
-   * After either decision the source identity is retired server-side, so this
+   * After either decision the source device is retired server-side, so this
    * browser must mint a fresh one before it writes any more gameplay —
    * otherwise every subsequent write would fail its device check.
    */
@@ -217,8 +229,8 @@ export function useAccountOnboarding() {
       _device_token: getDeviceToken(),
     });
     const row = (Array.isArray(data) ? data[0] : data) as { outcome?: string } | null;
-    if (error || !row || (row.outcome !== "imported" && row.outcome !== "already_resolved")) {
-      // Left pending on purpose: a failed import must not consume the
+    if (error || !row || (row.outcome !== "imported" && row.outcome !== "already_decided")) {
+      // Left undecided on purpose: a failed import must not consume the
       // opportunity. Re-checking shows the choice again.
       await check();
       return;
@@ -233,7 +245,7 @@ export function useAccountOnboarding() {
       _device_token: getDeviceToken(),
     });
     const row = (Array.isArray(data) ? data[0] : data) as { outcome?: string } | null;
-    if (error || !row || (row.outcome !== "started_fresh" && row.outcome !== "already_resolved")) {
+    if (error || !row || (row.outcome !== "started_fresh" && row.outcome !== "already_decided")) {
       await check();
       return;
     }

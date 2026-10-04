@@ -8,6 +8,7 @@ import { PuzzleModeBadge } from "@/components/PuzzleModeBadge";
 import { getBetaPuzzles } from "@/lib/puzzles";
 import { Puzzle } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
+import { signOutOfRainbow } from "@/lib/platformSignIn";
 import type { User } from "@supabase/supabase-js";
 
 function formatDate(dateStr: string): string {
@@ -46,7 +47,7 @@ export default function BetaLibrary() {
         onSettingsClick={() => {}}
         showHint={false}
         user={user}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={() => signOutOfRainbow()}
         simplifiedIcons
         wideHeader
       />

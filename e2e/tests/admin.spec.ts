@@ -1,10 +1,12 @@
 /**
- * The Admin builder, driven through the real local authentication flow.
+ * The Admin builder, driven with a real local session.
  *
- * No token is injected and no session is faked: the tests type the fixture
- * admin's email and password into the real form, GoTrue issues a real JWT,
- * and `admin_save_puzzle` checks `has_role(auth.uid(), 'admin')` server-side
- * exactly as it does in production. A broken admin gate fails these tests.
+ * Rainbow's only sign-in is the shared sign-in page, which refuses automated
+ * browsers, so the tests obtain a genuine GoTrue JWT for the fixture admin
+ * from the LOCAL stack and hand it to the app (see support/auth.ts). Nothing
+ * server-side is faked: `admin_save_puzzle` checks
+ * `has_role(rainbow_uid(), 'admin')` exactly as it does in production, and a
+ * broken admin gate or a missing Rainbow account row fails these tests.
  *
  * Authored puzzles are dated outside the fixture window and left as Drafts,
  * so nothing these tests create can appear on a public page or in either
@@ -12,7 +14,7 @@
  */
 
 import { expect, test } from "../support/fixtures.ts";
-import { signInAsAdmin } from "../support/game.ts";
+import { signInAs, signInAsAdmin } from "../support/auth.ts";
 import { ADMIN_AUTHORING, FULL_VERSION_SANDBOX } from "../fixtures/catalog.ts";
 import type { Page } from "@playwright/test";
 
@@ -46,7 +48,14 @@ const sizeSelector = (page: Page) => page.getByRole("group", { name: "Puzzle siz
 const styleSelector = (page: Page) => page.getByRole("group", { name: "Puzzle style" });
 
 test.describe("Admin", () => {
-  test("an admin can sign in through the real login form @smoke", async ({ page, seed }) => {
+  test("the admin page offers only the shared sign-in, and an admin session reaches the builder @smoke", async ({ page, seed }) => {
+    // With accounts switched off in the test build (no discovery URL) the
+    // page says so instead of showing a button; either way there is no
+    // password form to type into any more.
+    await page.goto("/admin");
+    await expect(page.getByRole("heading", { name: "Admin Login" })).toBeVisible();
+    await expect(page.getByLabel("Password", { exact: true })).toHaveCount(0);
+
     await signInAsAdmin(page, seed.accounts.admin);
     await expect(page.getByRole("heading", { name: "Create a Puzzle" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
@@ -54,9 +63,7 @@ test.describe("Admin", () => {
 
   test("a non-admin account is refused", async ({ page, seed }) => {
     await page.goto("/admin");
-    await page.getByLabel("Email", { exact: true }).fill(seed.accounts.player.email);
-    await page.getByLabel("Password", { exact: true }).fill(seed.accounts.player.password);
-    await page.getByRole("button", { name: "Sign In", exact: true }).click();
+    await signInAs(page, seed.accounts.player);
     await expect(page.getByText("You don't have admin access.")).toBeVisible({ timeout: 20_000 });
   });
 

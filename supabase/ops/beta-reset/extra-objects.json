@@ -1,0 +1,20 @@
+{
+  "_comment": "Objects the Phase 2 READ-ONLY comparison (npm run phase2:hosted -- classify, 2026-10-04) found in the live shared project that are Rainbow's but appear in neither the launch manifest nor the beta-era inventory. Names beginning with xw_, cv_ or wtf_ are refused by the generator. NOT listed on purpose: rls_auto_enable() (a project-wide event-trigger function behind the ensure_rls trigger; not Rainbow's) and the private bucket custom-emoji-backup-20260918 (content; storage objects are never touched).",
+  "tables": [],
+  "functions": [
+    {
+      "name": "increment_puzzle_aggregate",
+      "args": "_puzzle_id text, _won boolean, _mistakes integer, _time_seconds numeric, _first_solve text",
+      "_why": "production-only leftover (the live signature has numeric, not integer)"
+    },
+    {
+      "name": "has_role",
+      "args": "_user_id uuid, _role text",
+      "_why": "a hand-made text overload used by the live Rainbow policies and admin functions; the baseline defines has_role(uuid, app_role)"
+    }
+  ],
+  "types": [],
+  "storagePolicies": [
+    "Authenticated users can manage custom-emoji"
+  ]
+}

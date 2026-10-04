@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { signOutOfRainbow } from "@/lib/platformSignIn";
 import type { User, Session } from "@supabase/supabase-js";
 
 export function useAuth() {
@@ -81,6 +82,8 @@ export function useAuth() {
     setAdminLoading(true);
 
     const loadAdminRole = async () => {
+      // has_role answers for a RAINBOW account only (rainbow_uid inside), so
+      // an auth user without a Rainbow account is never an admin here.
       const { data, error } = await supabase.rpc("has_role", {
         _user_id: user.id,
         _role: "admin",
@@ -106,17 +109,11 @@ export function useAuth() {
     };
   }, [user?.id]);
 
-  const signIn = (email: string, password: string) =>
-    supabase.auth.signInWithPassword({ email, password });
-
-  const signOut = () => supabase.auth.signOut({ scope: "local" });
-
   return {
     user,
     session,
     loading: authLoading || adminLoading,
     isAdmin,
-    signIn,
-    signOut,
+    signOut: signOutOfRainbow,
   };
 }

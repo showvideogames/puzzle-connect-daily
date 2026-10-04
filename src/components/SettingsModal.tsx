@@ -5,6 +5,7 @@ import { GameSettings } from "@/lib/settings";
 import { Link } from "react-router-dom";
 import { BookOpen, Archive as ArchiveIcon, Grid2x2, Star, X } from "lucide-react";
 import { PlayerAuth } from "./PlayerAuth";
+import { ACCOUNTS_ENABLED } from "@/lib/platformSignIn";
 import { FULL_FORMAT, MINI_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 import type { User as AuthUser } from "@supabase/supabase-js";
 
@@ -186,6 +187,7 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                         Favorites
                       </Link>
                     )}
+                    {(user || ACCOUNTS_ENABLED) && (
                     <div className="flex items-center gap-3 px-2 py-1.5">
                       {/* PlayerAuth's own icon button keeps working exactly
                           as before (unchanged click target) — forceOpen only
@@ -220,6 +222,7 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                         {user ? "Account" : "Sign In"}
                       </button>
                     </div>
+                    )}
                   </div>
                 )}
                 {items.map((item) => (

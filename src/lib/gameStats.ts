@@ -314,25 +314,9 @@ export async function hasOfficialResult(puzzleId: string): Promise<boolean> {
       _device_token: deviceToken,
     });
 
-    // Deploy-order insurance. This code REQUIRES the durable-session
-    // migration; if it ever runs against a database that has not had it
-    // applied, the function does not exist. Silently returning false there
-    // would be the dangerous direction: every completion would look like a
-    // first attempt, so replays would duplicate Played and re-run the streak.
-    // Falling back to the pre-migration semantics — where any session row DID
-    // mean an official completed result — preserves the old, correct
-    // behavior instead.
-    if (isMissingSchemaError(error)) {
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id ?? null;
-      const legacy = userId
-        ? await supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId)
-            .or(`user_id.eq.${userId},device_id.eq.${deviceId}`).limit(1).maybeSingle()
-        : await supabase.from("game_sessions").select("id").eq("puzzle_id", puzzleId)
-            .eq("device_id", deviceId).limit(1).maybeSingle();
-      return !!legacy.data;
-    }
-
+    // No table-read fallback any more: the RPC is part of the baseline every
+    // deployment is built from, and a direct game_sessions read could never
+    // answer for a guest (anonymous rows are not readable by policy).
     if (error) {
       console.error("hasOfficialResult failed:", error);
       return false;

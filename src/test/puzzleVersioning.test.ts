@@ -231,7 +231,7 @@ beforeEach(async () => {
   db.tables.game_results = [];
   db.tables.user_streaks = [];
   db.tables.device_identities = [];
-  db.tables.account_onboarding = [];
+  db.tables.accounts = [];
   db.tables.puzzle_aggregates = [];
   db.tables.puzzles = [];
   db.tables.puzzle_groups = [];
@@ -1100,9 +1100,6 @@ describe("Q. onboarding and import invariants under versioning", () => {
 
     // A brand-new account signs in and chooses Add My Progress.
     db.signIn("new-account");
-    db.tables.account_onboarding = [
-      { user_id: "new-account", status: "pending", source_device_id: null, decided_at: null },
-    ];
     const { data: imported } = await db.rpc("import_guest_history", {
       _device_id: localStorage.getItem("rc-device-id"),
       _device_token: localStorage.getItem("rc-device-token"),
@@ -1128,9 +1125,6 @@ describe("Q. onboarding and import invariants under versioning", () => {
     view.unmount();
 
     db.signIn("new-account");
-    db.tables.account_onboarding = [
-      { user_id: "new-account", status: "pending", source_device_id: null, decided_at: null },
-    ];
     await db.rpc("import_guest_history", {
       _device_id: localStorage.getItem("rc-device-id"),
       _device_token: localStorage.getItem("rc-device-token"),

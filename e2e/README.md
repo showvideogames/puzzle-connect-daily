@@ -111,50 +111,67 @@ a developer's ordinary local stack.
 outside the default range. `supabase --workdir e2e` cannot reach production
 because there is nothing there to reach it with.
 
-### Why the schema is applied by hand instead of `supabase db reset`
+### The schema is the repository's migrations, and nothing else
 
-**A clean database plus this repository's migrations is not the production
-schema.** Six tables (`game_sessions`, `guess_events`, `user_streaks`,
-`puzzle_ratings`, `puzzle_aggregates`, `feedback`) and eight columns on
-`puzzles`/`puzzle_groups` were created in Lovable's editor and were never
-written as migrations — the migrations only ever `ALTER` them. The first
-migration that touches `game_sessions` fails on a truly empty database.
-
-So `e2e/scripts/lib/schema.ts` owns the order:
+Since the launch baseline, **a clean database plus `supabase/migrations/` IS
+the schema.** `e2e/scripts/lib/schema.ts` owns the order, and it is short:
 
 1. `000_reset.sql` — drop `public`, recreate it, restore Supabase's bootstrap
-   grants, clear `auth.users`
-2. `010_pre_git_tables.sql` — the six tables, with RLS enabled
-3. every file in `supabase/migrations/`, in filename order …
-4. … with `020_pre_git_columns.sql` spliced in just before
-   `20260917120000`, the first migration that reads those columns
-5. `030_pre_git_policies.sql` — RLS for the three pre-git tables no migration
-   defines
+   grants, clear `auth.users` (real stack only)
+2. `e2e/schema/pglite/000_supabase_stubs.sql` — GoTrue's `auth` schema, the
+   client roles and Supabase's default privileges (PGlite only; **never**
+   applied to the real stack, where GoTrue owns those)
+3. every file in `supabase/migrations/`, in filename order — today
+   `0001_rainbow_baseline.sql` and `0002_rainbow_storage.sql`
 
-Both backends (the real stack and PGlite) use that same plan, so they cannot
-drift. The one difference is `e2e/schema/pglite/000_supabase_stubs.sql`, which
-stands in for GoTrue's `auth` schema and is **never** applied to the real
-stack.
+Both backends use that same plan, so they cannot drift. Every run of it is
+also the proof the launch plan asks for: a completely blank Supabase becomes
+a working Rainbow/Mini backend from repository-controlled files alone.
 
-> **Known gap, stated plainly:** production's live RLS for `puzzle_ratings`,
-> `puzzle_aggregates` and `feedback` is not in git and could not be read while
-> this was written. `030_pre_git_policies.sql` reconstructs it from how the
-> app uses each table and from the recorded security audit. If production ever
-> turns out to differ, fix it there and here — do not loosen a test to match.
+The six tables and eight columns that Lovable's editor once created outside
+git are part of the baseline now. The reconstruction files that used to be
+spliced in here are kept for history under
+`supabase/beta-era-migrations/pre-git/`.
+
+### The ownership manifest
+
+`supabase/rainbow-owned-objects.json` (and its readable twin
+`RAINBOW-OWNED-OBJECTS.md`) is generated from `pg_catalog` on the local stack
+after the baseline is applied: every table, column, constraint, index,
+function, trigger, policy and grant Rainbow owns. `npm run db:manifest --
+--check` fails when the database no longer matches it, and CI runs that. It
+is also the only input to the scoped teardown used by the beta reset
+(`npm run db:teardown-sql`), which `npm run db:rehearse-reset` proves in
+process against a simulated shared project every run.
 
 ### How authentication works
 
-There is no fake session and no injected token.
+Rainbow's only sign-in is the shared sign-in service (WorkOS AuthKit), whose
+hosted page refuses automated browsers by design. **The suite never drives
+it.** What it does instead keeps everything server-side real:
 
 * `npm run e2e:reset` creates the fixture accounts through **GoTrue's admin
-  API**, already email-confirmed.
+  API**, already email-confirmed, attaches the `custom:platform` identity a
+  real shared sign-in would have left in `auth.identities`, then signs in and
+  calls `ensure_account()` — so each fixture is a genuine Rainbow account
+  (`public.accounts` row) created by the real RPC.
 * The admin account is made an admin by a row in `public.user_roles` — the
   same thing a real deployment does out of band.
-* The seed then **signs in as that admin with its real password** and calls
-  `admin_save_puzzle` over PostgREST, exactly as the Admin page does. The
-  RPC's own `has_role(auth.uid(), 'admin')` check therefore runs at seed time:
-  a broken admin gate fails the seed, not just the tests.
-* `admin.spec.ts` types the same email and password into the real login form.
+* The seed then **signs in as that admin** and calls `admin_save_puzzle` over
+  PostgREST, exactly as the Admin page does. The RPC's own
+  `has_role(rainbow_uid(), 'admin')` check therefore runs at seed time: a
+  broken admin gate, or a missing account row, fails the seed.
+* A test that needs a signed-in browser asks the **local GoTrue** for a real
+  session (password grant — the local stack keeps the email provider on for
+  exactly this; the hosted project does not) and hands it to the app in
+  localStorage the way a completed `/auth/callback` would, then reloads. See
+  `e2e/support/auth.ts`. The JWT is genuine, so `rainbow_uid()`,
+  `ensure_account()` and every policy run as in production.
+* The built app has accounts **switched off** (`VITE_PLATFORM_DISCOVERY_URL`
+  empty), so no test can accidentally leave for the hosted page. The sign-in
+  glue itself (reachability check, callback handling, token hygiene) is
+  covered by `src/test/platformSignIn.test.ts`; the real round trip is a
+  manual smoke test (`docs/WORKOS-LOCAL-SMOKE.md`).
 
 ### The fixtures
 
@@ -250,6 +267,12 @@ mocks pretending to be production.
 
 ## Commands
 
+Phase 2 (hosted beta rebuild) tooling, kept here because it reuses the inventory and schema
+libraries: `npm run phase2:hosted` (inventory, classify, export, deps, compare, smoke, sql), `npm run
+phase2:restore` (plan, local, verify), `npm run workos:hosted-beta`, and `npm run e2e:reset -- --no-seed`.
+They are the only scripts here that can reach the hosted project, and each refuses to write without
+explicit flags and `PHASE2_HOSTED_WRITE=yes`. See `supabase/ops/beta-reset/README.md`.
+
 | Command | What it does |
 | --- | --- |
 | `npm run e2e:install` | download the Chromium build Playwright needs |
@@ -264,7 +287,12 @@ mocks pretending to be production.
 | `npm run e2e:debug` | the Playwright inspector, step by step |
 | `npm run e2e:ui` | Playwright's interactive UI mode |
 | `npm run e2e:report` | open the last HTML report |
-| `npm run e2e:db:verify` | migrations + seed on in-process Postgres (no Docker) |
+| `npm run e2e:db:verify` | baseline + seed + checks on in-process Postgres (no Docker) |
+| `npm run db:manifest` | regenerate the ownership manifest from the local stack (`-- --check` to verify instead) |
+| `npm run db:teardown-sql` | generate the scoped beta-reset teardown from the manifest (needs `--keep-auth-users <file>`) |
+| `npm run db:rehearse-reset` | rehearse the beta reset in process against a simulated shared project (no Docker) |
+| `npm run db:change-preview` | the object-level diff between the beta-era schema and the baseline, as Markdown |
+| `npm run workos:local` | register/wire the shared sign-in into the LOCAL stack for the manual smoke test |
 
 `e2e:reset` and `e2e:seed` are idempotent: they clear first, so running either
 twice gives the same result.
@@ -336,28 +364,29 @@ solved bar.
 
 ### Not covered yet
 
-* **Account import.** *Start Fresh* is covered; **Add My Progress** — the
-  branch that actually moves anonymous history onto an account — is not. The
-  fixtures and the sign-in helper it needs are already here.
+* **The shared sign-in round trip itself** (leaving for the hosted page and
+  coming back through `/auth/callback` with a real code). Deliberately: the
+  hosted page refuses automated browsers. Manual smoke test only.
 * Beta playtesting (`/beta`), creator profiles, favourites while signed in,
-  password reset, and the `/create` authoring flow.
+  and the `/create` authoring flow.
+
+Account import is now covered on both branches (*Start Fresh* and *Add My
+Progress*), as are "an auth user that is not a Rainbow account stays a
+guest" and self-service account deletion — see `persistence.spec.ts`.
 
 ### Next cases, in the order worth writing them
 
-1. **Add My Progress.** The mirror of the Start Fresh test: play as a guest,
-   sign in with a fresh account, choose *Add My Progress*, then assert the
-   anonymous sessions now carry that `user_id` and the streak moved with
-   them. The highest-value gap — it is the one path that rewrites history.
-2. **A losing game.** Four wrong guesses: the loss headline, the revealed
+1. **A losing game.** Four wrong guesses: the loss headline, the revealed
    board, and a share grid that reports what actually happened.
-3. **Creating a custom puzzle through `/create`,** then opening the link it
+2. **Creating a custom puzzle through `/create`,** then opening the link it
    produces. The one public authoring flow with no coverage at all.
-4. **Hints.** Small and Full hint, their once-only rule, the view-only state
+3. **Hints.** Small and Full hint, their once-only rule, the view-only state
    after the game resolves, and the `💡`/`🔦` share rows.
-5. **Signed-in favourites** on a custom puzzle, and `/favorites`.
-6. **The Beta area** (`/beta`, `/beta/:id`) — unlisted, so nothing else
+4. **Signed-in favourites** on a custom puzzle, and `/favorites`.
+5. **The Beta area** (`/beta`, `/beta/:id`) — unlisted, so nothing else
    protects it.
-7. **Password reset**, using the local mail catcher on port 54424.
+6. **A second device.** Two browser contexts, one account: the second gets
+   its own import question, the first's history is visible on both.
 
 ---
 
@@ -407,6 +436,12 @@ hand, in GitHub's settings, once someone decides to:
 ---
 
 ## Troubleshooting
+
+**"http://127.0.0.1:5183 is already used"** — something is still serving the app on the port,
+usually a `vite preview` left over from an earlier session. The suite deliberately refuses to
+reuse it (a stale bundle once made a run pass and fail against the wrong build), so stop that
+process and run again. While iterating on tests with a server you started yourself, set
+`E2E_REUSE_SERVER=1`.
 
 **`No container runtime found on PATH`** — Docker Desktop is not installed or
 not running. `npm run e2e:db:verify` still works meanwhile.

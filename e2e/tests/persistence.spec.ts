@@ -8,6 +8,9 @@
  */
 
 import { expect, gotoApp, test } from "../support/fixtures.ts";
+import { loadE2eConfig } from "../env.ts";
+import { attachPlatformIdentity, setPlatformIdentityEmail } from "../scripts/lib/seed-supabase.ts";
+import { signInAs, storedSession } from "../support/auth.ts";
 import {
   discoverRainbow,
   mistakesRemaining,
@@ -171,22 +174,15 @@ test.describe("Guest identity", () => {
     expect(sessions.data![0].puzzle_id).toBe(seed.official.fullRainbow.id);
   });
 
+  // The import decision is asked once per DEVICE, and every test context is
+  // a fresh browser with a fresh device, so the shared player fixture can be
+  // reused by every one of these tests — no throwaway accounts needed.
+
   test("signing in and choosing Start Fresh leaves the guest's games unclaimed", async ({
     page,
+    seed,
     admin,
-  }, testInfo) => {
-    // A BRAND-NEW account, created for this run.
-    //
-    // The import decision is a server-owned one-shot: once an account has
-    // answered it, `resolve_onboarding` never asks again. Reusing the shared
-    // player fixture would make this test pass exactly once per seed and
-    // fail on every retry — so it brings its own account and removes it
-    // afterwards.
-    const email = `e2e-import-${testInfo.workerIndex}-${Date.now()}@rainbow.test`;
-    const password = "e2e-import-password";
-    const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-    expect(created.error, created.error?.message).toBeNull();
-
+  }) => {
     await gotoApp(page, "/");
     await expect(tiles(page)).toHaveCount(16);
     await solveCategory(page, FULL_RAINBOW.groups[0]);
@@ -196,16 +192,10 @@ test.describe("Guest identity", () => {
       .poll(async () => (await admin.from("game_sessions").select("id").eq("device_id", deviceId!)).data?.length)
       .toBe(1);
 
-    // Sign in through the real UI: Settings → Menu → Sign In.
-    await page.getByRole("button", { name: "Settings and menu" }).click();
-    await page.getByRole("button", { name: "Sign In", exact: true }).click();
-    const signInDialog = page.getByRole("dialog", { name: "Sign In" });
-    await signInDialog.getByLabel("Email", { exact: true }).fill(email);
-    await signInDialog.getByLabel("Password", { exact: true }).fill(password);
-    await signInDialog.getByRole("button", { name: "Sign In", exact: true }).click();
-
-    // The server owns this decision and asks on every authenticated load —
-    // see useAccountOnboarding. It must ASK, not assume.
+    // A session from the local GoTrue, handed to the app as the callback
+    // would. The server owns the decision and asks on every authenticated
+    // load — see useAccountOnboarding. It must ASK, not assume.
+    await signInAs(page, seed.accounts.player);
     await expect(page.getByText("Bring your progress with you?")).toBeVisible({ timeout: 20_000 });
     await page.getByRole("button", { name: "Start Fresh" }).click();
 
@@ -220,7 +210,181 @@ test.describe("Guest identity", () => {
     expect(after.data ?? []).toHaveLength(1);
     expect(after.data![0].user_id, "declining the import must not claim the guest's session").toBeNull();
 
-    // Leave the disposable database as this test found it.
+    // The device is retired with the decision recorded against the account,
+    // and the browser continues on a fresh one.
+    const device = await admin.from("device_identities").select("retired_reason, claimed_by").eq("device_id", deviceId!).single();
+    expect(device.data).toMatchObject({ retired_reason: "started_fresh", claimed_by: seed.accounts.player.id });
+    const nextDevice = await page.evaluate(() => window.localStorage.getItem("rc-device-id"));
+    expect(nextDevice).not.toBe(deviceId);
+  });
+
+  test("Add My Progress moves the guest's games onto the account, in place", async ({
+    page,
+    seed,
+    admin,
+  }) => {
+    await gotoApp(page, "/");
+    await expect(tiles(page)).toHaveCount(16);
+    await solveCategory(page, FULL_RAINBOW.groups[0]);
+
+    const deviceId = await page.evaluate(() => window.localStorage.getItem("rc-device-id"));
+    await expect
+      .poll(async () => (await admin.from("game_sessions").select("id").eq("device_id", deviceId!)).data?.length)
+      .toBe(1);
+    const before = await admin.from("game_sessions").select("id").eq("device_id", deviceId!);
+    const sessionId = before.data![0].id;
+
+    await signInAs(page, seed.accounts.player);
+    await expect(page.getByText("Bring your progress with you?")).toBeVisible({ timeout: 20_000 });
+    await page.getByRole("button", { name: "Add My Progress" }).click();
+    await expect(tiles(page)).toHaveCount(12, { timeout: 20_000 });
+
+    // Same row, same id, now owned by the account; the device is retired as
+    // imported and names the account that took it.
+    const after = await admin.from("game_sessions").select("id, user_id, device_id").eq("id", sessionId).single();
+    expect(after.data).toMatchObject({ id: sessionId, user_id: seed.accounts.player.id, device_id: deviceId });
+    const device = await admin.from("device_identities").select("retired_reason, claimed_by").eq("device_id", deviceId!).single();
+    expect(device.data).toMatchObject({ retired_reason: "imported", claimed_by: seed.accounts.player.id });
+
+    // And the account is a Rainbow account, linked to its shared identity.
+    const account = await admin.from("accounts").select("global_user_id").eq("user_id", seed.accounts.player.id).single();
+    expect(account.data?.global_user_id).toMatch(/^user_/);
+  });
+
+  test("an email changed at the shared sign-in is the account's email on the next sign-in, on the same account", async ({
+    page,
+    admin,
+  }, testInfo) => {
+    // Staging smoke case S6, replayed without the hosted page: a throwaway
+    // Rainbow account signs in, plays, changes its address at the shared
+    // provider, and signs in again. GoTrue then refreshes the identity and
+    // leaves auth.users.email alone; the app must show the identity's
+    // address, keep the same link, create no second account and move no
+    // history.
+    const stamp = `${testInfo.workerIndex}-${Date.now()}`;
+    const email = `e2e-rename-${stamp}@rainbow.test`;
+    const renamed = `e2e-renamed-${stamp}@rainbow.test`;
+    const password = "e2e-rename-password";
+    const globalUserId = `user_E2ERENAME${testInfo.workerIndex}${Date.now()}`;
+    const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+    expect(created.error, created.error?.message).toBeNull();
+    const userId = created.data!.user!.id;
+    await attachPlatformIdentity(loadE2eConfig().dbUrl, userId, email, globalUserId);
+
+    await gotoApp(page, "/");
+    await signInAs(page, { email, password });
+    await expect(tiles(page)).toHaveCount(16);
+    await solveCategory(page, FULL_RAINBOW.groups[0]);
+    await expect
+      .poll(async () => (await admin.from("game_sessions").select("id").eq("user_id", userId)).data?.length)
+      .toBe(1);
+
+    await setPlatformIdentityEmail(loadE2eConfig().dbUrl, userId, renamed);
+    // The password grant still keys on the auth user's (stale) email: that
+    // IS GoTrue's row, and exactly why Rainbow must not display it.
+    await signInAs(page, { email, password });
+
+    await page.getByRole("button", { name: "Settings and menu" }).click();
+    await page.getByRole("button", { name: "Account", exact: true }).last().click();
+    await expect(page.getByTestId("account-email")).toHaveText(renamed);
+
+    const linked = await admin.from("accounts").select("user_id, global_user_id").eq("global_user_id", globalUserId);
+    expect(linked.data, "exactly one account, still the same auth user").toEqual([{ user_id: userId, global_user_id: globalUserId }]);
+    const owned = await admin.from("game_sessions").select("user_id").eq("user_id", userId);
+    expect(owned.data, "history ownership must not move with the email").toHaveLength(1);
+    const stale = await admin.auth.admin.getUserById(userId);
+    expect(stale.data.user?.email, "auth.users.email stays stale; Rainbow must not rely on it").toBe(email);
+
+    await admin.auth.admin.deleteUser(userId);
+  });
+
+  test("an auth user that did not come through the shared sign-in is not a Rainbow account", async ({
+    page,
+    admin,
+  }, testInfo) => {
+    // The shared-project case: an auth user exists (another game's admin, a
+    // stray signup) with no custom:platform identity. Rainbow must sign it
+    // out locally and carry on as a guest — never create an account for it.
+    const email = `e2e-foreign-${testInfo.workerIndex}-${Date.now()}@rainbow.test`;
+    const password = "e2e-foreign-password";
+    const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+    expect(created.error, created.error?.message).toBeNull();
+
+    await gotoApp(page, "/");
+    await signInAs(page, { email, password });
+
+    // Still a guest: no account menu, the board plays, and the session the
+    // test injected is gone again.
+    await expect(tiles(page)).toHaveCount(16);
+    await expect(page.getByRole("button", { name: "Account" })).toHaveCount(0);
+    await expect.poll(() => storedSession(page)).toBeNull();
+    const account = await admin.from("accounts").select("user_id").eq("user_id", created.data!.user!.id);
+    expect(account.data ?? []).toHaveLength(0);
+
     await admin.auth.admin.deleteUser(created.data!.user!.id);
+  });
+
+  test("Delete account anonymises the account's games and keeps the site-wide count", async ({
+    page,
+    admin,
+  }, testInfo) => {
+    // A throwaway RAINBOW account for this run (deletion is destructive):
+    // an auth user plus the custom:platform identity a real shared sign-in
+    // would have left, attached the same way the seeder does it.
+    const email = `e2e-delete-${testInfo.workerIndex}-${Date.now()}@rainbow.test`;
+    const password = "e2e-delete-password";
+    const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+    expect(created.error, created.error?.message).toBeNull();
+    const userId = created.data!.user!.id;
+    const globalUserId = `user_E2EDELETE${testInfo.workerIndex}${Date.now()}`;
+    await attachPlatformIdentity(loadE2eConfig().dbUrl, userId, email, globalUserId);
+
+    await gotoApp(page, "/");
+    await signInAs(page, { email, password });
+    await expect(tiles(page)).toHaveCount(16);
+    await solveCategory(page, FULL_RAINBOW.groups[0]);
+    await expect
+      .poll(async () => (await admin.from("game_sessions").select("id").eq("user_id", userId)).data?.length)
+      .toBe(1);
+    const sessionId = (await admin.from("game_sessions").select("id").eq("user_id", userId)).data![0].id;
+
+    // The account menu lives in Settings → Menu (the text button opens the
+    // same dropdown as the person icon).
+    await page.getByRole("button", { name: "Settings and menu" }).click();
+    // Two controls answer to "Account" there: the person icon and the text
+    // button beside it. Either opens the same dropdown; take the text one.
+    await page.getByRole("button", { name: "Account", exact: true }).last().click();
+    await page.getByRole("button", { name: "Delete account…" }).click();
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(page.getByText("Your Rainbow Categories account was deleted.")).toBeVisible({ timeout: 20_000 });
+
+    // The row stays for site-wide counting, but belongs to nobody now.
+    const row = await admin.from("game_sessions").select("user_id, device_id").eq("id", sessionId).single();
+    expect(row.data).toEqual({ user_id: null, device_id: null });
+    expect((await admin.from("accounts").select("user_id").eq("user_id", userId)).data).toHaveLength(0);
+    const users = await admin.auth.admin.getUserById(userId);
+    expect(users.data.user, "the auth user must be gone").toBeNull();
+    await expect.poll(() => storedSession(page)).toBeNull();
+
+    // Staging smoke case S7, second half: the same shared identity signs in
+    // again. GoTrue creates a NEW auth user for the subject, carrying
+    // whatever email the provider reports now (the old row's email is
+    // irrelevant, it is gone). Rainbow makes one clean, empty account.
+    const againEmail = email.replace("e2e-delete-", "e2e-deleted-again-");
+    const again = await admin.auth.admin.createUser({ email: againEmail, password, email_confirm: true });
+    expect(again.error, again.error?.message).toBeNull();
+    const secondId = again.data!.user!.id;
+    expect(secondId).not.toBe(userId);
+    await attachPlatformIdentity(loadE2eConfig().dbUrl, secondId, againEmail, globalUserId);
+    await signInAs(page, { email: againEmail, password });
+
+    const linked = await admin.from("accounts").select("user_id").eq("global_user_id", globalUserId);
+    expect(linked.data, "exactly one account, on the new auth user").toEqual([{ user_id: secondId }]);
+    expect((await admin.from("game_sessions").select("id").eq("user_id", secondId)).data, "a fresh account owns no games").toHaveLength(0);
+    await page.getByRole("button", { name: "Settings and menu" }).click();
+    await page.getByRole("button", { name: "Account", exact: true }).last().click();
+    await expect(page.getByTestId("account-email")).toHaveText(againEmail);
+
+    await admin.auth.admin.deleteUser(secondId);
   });
 });

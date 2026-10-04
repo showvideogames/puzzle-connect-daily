@@ -5,6 +5,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SEO } from "@/components/SEO";
 import { CommunityPuzzleCard } from "@/components/CommunityPuzzleCard";
 import { supabase } from "@/integrations/supabase/client";
+import { signOutOfRainbow } from "@/lib/platformSignIn";
 import { getMyFavorites, type FavoritePuzzleCard } from "@/lib/customPuzzles";
 import type { User } from "@supabase/supabase-js";
 
@@ -29,7 +30,7 @@ export default function Favorites() {
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       <SEO title="Favorites — Rainbow Connect" description="Your favorite custom puzzles." path="/favorites" noIndex />
-      <GameHeader user={user ?? null} onSignOut={() => supabase.auth.signOut()} simplifiedIcons wideHeader />
+      <GameHeader user={user ?? null} onSignOut={() => signOutOfRainbow()} simplifiedIcons wideHeader />
       <div className="w-full max-w-[840px] border-b border-border mb-4" />
 
       <main className="w-full max-w-[840px] px-4 flex-1">

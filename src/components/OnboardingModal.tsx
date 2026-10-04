@@ -27,7 +27,7 @@ export function OnboardingModal({
   onStartFresh,
 }: OnboardingModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="onboarding-decision">
       <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
       <div className="relative bg-card rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4 animate-pop">
         {degraded ? (
