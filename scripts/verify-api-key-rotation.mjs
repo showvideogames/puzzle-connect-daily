@@ -6,7 +6,9 @@
  *
  *   SUPABASE_ACCESS_TOKEN=… node scripts/verify-api-key-rotation.mjs [--expect=<stage>]
  *
- *   stages: baseline | function-deployed | site-switched | legacy-disabled | revoked
+ *   stages, in order: baseline | site-switched | function-deployed | legacy-disabled | revoked
+ *   (the site switches first: the current function already accepts the new key,
+ *   while the new function refuses the legacy key the current site sends)
  *
  * Uses only PUBLIC keys: the publishable key and the legacy `anon` key.
  * The legacy service_role key and every secret key are never fetched.
@@ -49,14 +51,14 @@ probe("P2", "publishable key reads a public table", await status(`${API}/rest/v1
 
 // P3: the legacy anon key used AS AN API KEY (what disabling legacy keys turns off).
 const p3 = legacyAnon ? await status(`${API}/auth/v1/settings`, { headers: { apikey: legacyAnon } }) : "absent";
-probe("P3", "legacy anon key accepted as an API key", p3, { baseline: "ok", "function-deployed": "ok", "site-switched": "ok", "legacy-disabled": "refused", revoked: "refused" });
+probe("P3", "legacy anon key accepted as an API key", p3, { baseline: "ok", "site-switched": "ok", "function-deployed": "ok", "legacy-disabled": "refused", revoked: "refused" });
 
 // P4: a token signed by the legacy secret, presented as a session with the
 // new key (what revoking the secret turns off). The legacy anon key is such a token.
 const p4 = legacyAnon
   ? await status(`${API}/rest/v1/puzzle_aggregates?select=puzzle_id&limit=1`, { headers: { apikey: publishable, authorization: `Bearer ${legacyAnon}` } })
   : "absent";
-probe("P4", "token signed by the legacy secret accepted", p4, { baseline: "ok", "function-deployed": "ok", "site-switched": "ok", "legacy-disabled": "record", revoked: "refused" });
+probe("P4", "token signed by the legacy secret accepted", p4, { baseline: "ok", "site-switched": "ok", "function-deployed": "ok", "legacy-disabled": "record", revoked: "refused" });
 
 // P5/P6: the feedback function. A body with no captcha token is refused with
 // 400 "Captcha token required" after the caller check and before any insert.
@@ -71,7 +73,7 @@ async function fn(headers) {
   return res.status === 400 && body.error === "Captcha token required" ? "reached-function" : res.status;
 }
 probe("P5", "feedback function reachable the way the site calls it (publishable key, signed out)", await fn({ apikey: publishable, authorization: `Bearer ${publishable}` }), { all: "reached-function" });
-probe("P6", "feedback function with the legacy anon key", legacyAnon ? await fn({ apikey: legacyAnon, authorization: `Bearer ${legacyAnon}` }) : "absent", { baseline: "reached-function", "function-deployed": "refused", "site-switched": "refused", "legacy-disabled": "refused", revoked: "refused" });
+probe("P6", "feedback function with the legacy anon key", legacyAnon ? await fn({ apikey: legacyAnon, authorization: `Bearer ${legacyAnon}` }) : "absent", { baseline: "reached-function", "site-switched": "reached-function", "function-deployed": "refused", "legacy-disabled": "refused", revoked: "refused" });
 
 // P7: which key the live site ships.
 let shipped = "unknown";
@@ -85,12 +87,12 @@ try {
 } catch {
   // stays unknown
 }
-probe("P7", "key in the live site's code", shipped, { baseline: "legacy", "function-deployed": "legacy", "site-switched": "publishable", "legacy-disabled": "publishable", revoked: "publishable" });
+probe("P7", "key in the live site's code", shipped, { baseline: "legacy", "site-switched": "publishable", "function-deployed": "publishable", "legacy-disabled": "publishable", revoked: "publishable" });
 
 // P8: the legacy secret's state.
 const keys = await management("/config/auth/signing-keys");
 const legacy = (keys.keys ?? keys).find((k) => k.algorithm === "HS256");
-probe("P8", "legacy HS256 signing secret", legacy?.status ?? "absent", { baseline: "previously_used", "function-deployed": "previously_used", "site-switched": "previously_used", "legacy-disabled": "previously_used", revoked: "revoked" });
+probe("P8", "legacy HS256 signing secret", legacy?.status ?? "absent", { baseline: "previously_used", "site-switched": "previously_used", "function-deployed": "previously_used", "legacy-disabled": "previously_used", revoked: "revoked" });
 
 // Normalise HTTP codes to ok / refused for comparison.
 const norm = (v) => (typeof v === "number" ? (accepted(v) ? "ok" : v === 401 || v === 403 ? "refused" : `http-${v}`) : v);
