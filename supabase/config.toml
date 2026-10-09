@@ -1,1 +1,8 @@
 project_id = "zmauemcjcrdrgfjzkvgd"
+
+# The platform's JWT check stays on in front of the function, which then
+# applies its own, stricter caller checks (current API keys only, sessions
+# confirmed with Supabase Auth). See supabase/functions/submit-feedback/core.ts
+# and scripts/check-feedback-function.mjs.
+[functions.submit-feedback]
+verify_jwt = true
