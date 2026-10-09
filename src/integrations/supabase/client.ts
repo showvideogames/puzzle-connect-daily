@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
+import { renewingFetch, type Renewed } from '@/lib/renewingFetch';
 
 // The ONLY place the Supabase project is named: two environment values.
 // Moving Rainbow to another project means changing them and nothing else.
@@ -9,7 +10,16 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// An expired sign-in pass is renewed and the request retried once, as the same
+// user, so a device with a wrong clock never sees "JWT expired"
+// (lib/renewingFetch.ts).
+async function renewSession(): Promise<Renewed | null> {
+  const { data } = await supabase.auth.refreshSession();
+  return data.session ? { token: data.session.access_token, userId: data.session.user?.id ?? null } : null;
+}
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  global: { fetch: renewingFetch(renewSession) },
   auth: {
     storage: localStorage,
     // Explicit rather than the library's derived default, so the key is
