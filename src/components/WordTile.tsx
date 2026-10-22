@@ -94,37 +94,37 @@ function getLongestWord(word: string): string {
   return parts.reduce((a, b) => (countVisibleChars(b) > countVisibleChars(a) ? b : a), parts[0] ?? "");
 }
 
-// Fluid base font-size for normal (non-emoji) tile text — mirrors the CSS
-// container-query clamp() applied in the button's className below
-// (text-[clamp(9px,15.5cqw,33px)], with [container-type:inline-size] on the
-// tile's own wrapper) so this JS-side measurement always starts from the
-// same size that's actually rendered. Deriving it from the TILE'S OWN
-// rendered width (not the viewport) is what keeps text-to-tile proportion
-// constant everywhere, including desktop — where the board's width
-// plateaus at a max-width independent of the viewport, so a viewport-based
-// formula would have kept text capped far below where it should be.
-function getBaseFontSizePx(tileOuterWidthPx: number): number {
-  return Math.min(33, Math.max(9, 0.155 * tileOuterWidthPx));
-}
-
 // Regular text tiles render at normal size and simply wrap to extra lines —
 // font-size only shrinks as a last resort, when the single longest word in
 // the phrase can't fit on its own line at normal size within the tile's
 // actual measured width. Words/phrases that already fit are left untouched.
-function computeShrunkFontSize(longestWord: string, availableWidthPx: number, defaultPx: number): string | undefined {
-  if (!longestWord || availableWidthPx <= 0) return undefined;
+//
+// Returns the shrink as a fraction of the normal size (applied as `em`
+// against the button's own font-size), never an absolute px value, and
+// measures at the size the button ACTUALLY renders (`button` is its
+// computed style). Every tile's normal size comes from the CSS
+// text-[clamp(9px,15.5cqw,33px)] on the button; this function used to
+// re-derive that size from a JS copy of the formula and return px, so any
+// time the two disagreed — the CSS container size lagging the JS-measured
+// width, a transform (the drag lift's scale) inflating
+// getBoundingClientRect, a browser resolving cqw differently — a "shrunk"
+// long word could land LARGER than the short words around it. As an `em`
+// fraction below 1 it can only ever be smaller.
+function computeFitScale(longestWord: string, availableWidthPx: number, button: CSSStyleDeclaration): number | undefined {
+  const basePx = parseFloat(button.fontSize);
+  if (!longestWord || availableWidthPx <= 0 || !(basePx > 0)) return undefined;
   const ctx = getMeasureCtx();
-  ctx.font = `700 ${defaultPx}px "Inter Variable", "Inter", sans-serif`;
+  ctx.font = `${button.fontWeight} ${basePx}px ${button.fontFamily}`;
   const upper = longestWord.toUpperCase();
-  const letterSpacingPx = defaultPx * 0.025; // matches tracking-wide
+  const letterSpacingPx = parseFloat(button.letterSpacing) || 0; // tracking-wide, resolved to px
   const rawWidth = ctx.measureText(upper).width + letterSpacingPx * Math.max(countVisibleChars(upper) - 1, 0);
   // Leave a comfort margin inside the tile so a borderline word (e.g.
   // "CONDITIONING") shrinks slightly rather than rendering edge-to-edge
   // against the border. Also absorbs sub-pixel canvas-vs-layout differences.
   const target = availableWidthPx * 0.92;
   if (rawWidth <= target) return undefined;
-  const shrunkPx = Math.max((target / rawWidth) * defaultPx, 8);
-  return `${shrunkPx}px`;
+  const scale = Math.max(target / rawWidth, 8 / basePx);
+  return scale < 1 ? Math.round(scale * 1000) / 1000 : undefined;
 }
 
 interface WordTileProps {
@@ -254,7 +254,9 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
     : undefined;
 
   const textRef = useRef<HTMLSpanElement>(null);
-  const [autoFontSize, setAutoFontSize] = useState<string | undefined>(undefined);
+  // Fraction of the tile's normal font-size the text needs to fit (see
+  // computeFitScale); undefined when it already fits at normal size.
+  const [fitScale, setFitScale] = useState<number | undefined>(undefined);
 
   useLayoutEffect(() => {
     if (isEmojiPuzzle || isImage) return;
@@ -267,26 +269,28 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       // w-full span to its own width; measuring the span would then hide the
       // overflow, leave the word unshrunk, and let it render off-center. The
       // button's content box is stable, so the overflow is detected reliably.
+      // clientWidth is a layout size, so transforms — the drag lift's scale,
+      // the press-down shrink, entrance animations — never skew it: a
+      // lifted tile measures exactly as it does at rest.
       const cs = getComputedStyle(btn);
       const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
       const available = btn.clientWidth - padX;
-      // Outer (border-box) width — matches what the CSS container query on
-      // the wrapper actually sizes against, since the wrapper has no
-      // padding/border of its own.
-      const outerWidth = btn.getBoundingClientRect().width;
-      const longest = getLongestWord(word);
-      setAutoFontSize(computeShrunkFontSize(longest, available, getBaseFontSizePx(outerWidth)));
+      setFitScale(computeFitScale(getLongestWord(word), available, cs));
     };
 
     measure();
-    window.addEventListener("resize", measure);
+    // Re-measure whenever the tile itself changes size — not just the
+    // window — since the board can resize a tile without a window resize.
+    const resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => measure()) : null;
+    if (resizeObserver) resizeObserver.observe(btn);
+    else window.addEventListener("resize", measure);
 
-    // The canvas ruler in computeShrunkFontSize measures with "Inter
-    // Tight", which is a web font that loads asynchronously. If the first
-    // measure() runs before it finishes downloading, the ruler falls back
-    // to a differently-proportioned system font and can mis-estimate the
-    // real width. Re-measure once fonts are ready so the shrink is
-    // computed against the font that actually renders.
+    // The canvas ruler in computeFitScale measures with the tile's web font,
+    // which loads asynchronously. If the first measure() runs before it
+    // finishes downloading, the ruler falls back to a differently-
+    // proportioned system font and can mis-estimate the real width.
+    // Re-measure once fonts are ready so the shrink is computed against the
+    // font that actually renders.
     let cancelled = false;
     if (typeof document !== "undefined" && document.fonts?.ready) {
       document.fonts.ready.then(() => {
@@ -296,6 +300,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
 
     return () => {
       cancelled = true;
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", measure);
     };
   }, [word, isEmojiPuzzle, isImage]);
@@ -634,8 +639,9 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         ) : (
           // Wraps only at word boundaries (no mid-word hyphenation) — phrases
           // are free to wrap to as many lines as they need at normal size.
-          // autoFontSize only kicks in when the longest word measures wider
-          // than the tile itself, as a last-resort shrink.
+          // fitScale only kicks in when the longest word measures wider than
+          // the tile itself, as a last-resort shrink — in em, so it is always
+          // a fraction of the normal size every other tile uses.
           <span
             ref={textRef}
             className="w-full"
@@ -643,7 +649,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
               wordBreak: "normal",
               overflowWrap: "normal",
               lineHeight: 1.2,
-              ...(autoFontSize ? { fontSize: autoFontSize } : {}),
+              ...(fitScale ? { fontSize: `${fitScale}em` } : {}),
             }}
           >
             {word}
