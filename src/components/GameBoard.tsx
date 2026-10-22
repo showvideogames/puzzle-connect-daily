@@ -16,6 +16,7 @@ import { ResultGrid, ResultCellKind, ResultRow } from "./ResultGrid";
 import { PuzzleModeBadge } from "./PuzzleModeBadge";
 import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown, RotateCcw } from "lucide-react";
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import { flushSync } from "react-dom";
 import { useImagePreload } from "@/hooks/useImagePreload";
 import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
@@ -106,6 +107,23 @@ interface GridFlip {
   raise?: Set<string>; // tiles drawn above the others while they move
   gridBottom?: number; // the grid's old bottom edge, so its height glides too
 }
+
+// Arrange Tiles: one drag in progress. Positions are viewport pixels; slot
+// boxes are relative to the tiles' offset parent, indexed by grid position.
+interface TileDrag {
+  word: string;
+  x: number; // latest pointer position
+  y: number;
+  grabX: number; // where on the tile it was picked up
+  grabY: number;
+  startOrder: string[]; // the order to restore if the drag is cancelled
+  slots: ({ left: number; top: number; right: number; bottom: number } | null)[];
+}
+
+// How long the other tiles take to slide aside, and the dragged tile to
+// settle into its slot once released.
+const DRAG_SLIDE_MS = 180;
+const DRAG_SETTLE_MS = 200;
 
 function prefersReducedMotion(): boolean {
   try {
@@ -318,8 +336,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     handleDragStart,
     handleDragOver,
     handleDrop,
-    handleTouchDragMove,
-    handleTouchDragEnd,
     alreadyGuessed,
     isOfficialAttemptRef,
     lockedByOfficialResult,
@@ -672,6 +688,213 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       }
     }
   }, [remainingWords]);
+
+  // ── Arrange Tiles drag ──
+  // The dragged tile itself lifts and follows the pointer (an inline
+  // translate on its wrapper, measured from its CURRENT grid slot), so the
+  // slot it belongs in is simply left empty — that empty slot is the gap.
+  // Where the tile goes is decided exactly as before: hovering another
+  // tile's slot hands that tile to useGame's handleDragOver, which moves the
+  // dragged word to that index and shifts the words between. Everything
+  // that moves because of that glides (FLIP) rather than jumping.
+  // Release settles the tile into its slot; a cancel puts the board back in
+  // the order it had when the drag began, then settles the same way.
+  const dragRef = useRef<TileDrag | null>(null);
+  const dragSlideBeforeRef = useRef<Record<string, DOMRect> | null>(null);
+  const settleRef = useRef<{ el: HTMLElement; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const slideTokensRef = useRef(new WeakMap<HTMLElement, number>());
+  const [liftedWord, setLiftedWord] = useState<string | null>(null);
+  // Latest values for the drag callbacks, which stay stable so the tiles
+  // don't re-render on every move.
+  const remainingWordsRef = useRef(remainingWords);
+  remainingWordsRef.current = remainingWords;
+  const dragActionsRef = useRef({ handleDragStart, handleDragOver, handleDrop, setWordOrder });
+  dragActionsRef.current = { handleDragStart, handleDragOver, handleDrop, setWordOrder };
+
+  // A tile's wrapper element. Falls back to the DOM because wordTileRefs is
+  // emptied by the per-puzzle reset effect just after mount and only refills
+  // on the next render — so a drag straight after the board appears would
+  // otherwise find no tile.
+  const tileEl = useCallback((word: string): HTMLElement | null => {
+    return wordTileRefs.current[word]
+      ?? gridWrapperRef.current?.querySelector<HTMLElement>(`[data-word="${CSS.escape(word)}"]`)
+      ?? null;
+  }, []);
+
+  // Keeps the lifted tile under the pointer, relative to wherever its slot
+  // is right now.
+  const placeLiftedTile = useCallback(() => {
+    const drag = dragRef.current;
+    const el = drag && tileEl(drag.word);
+    const parent = el?.offsetParent as HTMLElement | null | undefined;
+    if (!drag || !el || !parent) return;
+    const p = parent.getBoundingClientRect();
+    const slotLeft = p.left + parent.clientLeft + el.offsetLeft;
+    const slotTop = p.top + parent.clientTop + el.offsetTop;
+    el.style.transform = `translate(${drag.x - drag.grabX - slotLeft}px, ${drag.y - drag.grabY - slotTop}px)`;
+  }, [tileEl]);
+
+  // Where every tile but the dragged one is on screen right now (mid-glide
+  // included), for the slide after the order changes.
+  const measureOtherTiles = useCallback((dragged: string) => {
+    const rects: Record<string, DOMRect> = {};
+    if (prefersReducedMotion()) return rects;
+    remainingWordsRef.current.forEach((w) => {
+      const el = tileEl(w);
+      if (w !== dragged && el) rects[w] = el.getBoundingClientRect();
+    });
+    return rects;
+  }, [tileEl]);
+
+  // Ends a settle early (a new drag started) or on schedule.
+  const finishSettle = useCallback(() => {
+    const settle = settleRef.current;
+    if (!settle) return;
+    settleRef.current = null;
+    clearTimeout(settle.timer);
+    settle.el.style.transition = "";
+    settle.el.style.transform = "";
+    settle.el.style.zIndex = "";
+  }, []);
+
+  const settleLiftedTile = useCallback((word: string) => {
+    const el = tileEl(word);
+    setLiftedWord(null);
+    if (!el) return;
+    if (prefersReducedMotion()) {
+      el.style.transition = "";
+      el.style.transform = "";
+      el.style.zIndex = "";
+      return;
+    }
+    el.style.transition = `transform ${DRAG_SETTLE_MS}ms ${SOLVE_EASE}`;
+    el.style.transform = "";
+    settleRef.current = { el, timer: setTimeout(finishSettle, DRAG_SETTLE_MS + 40) };
+  }, [finishSettle, tileEl]);
+
+  const handleTileDragStart = useCallback((word: string, x: number, y: number) => {
+    finishSettle();
+    const el = tileEl(word);
+    if (!el) return;
+    const order = [...remainingWordsRef.current];
+    // Every slot's box, by grid index, relative to the tiles' offset parent.
+    // Layout boxes (offset*), not on-screen ones, so a tile still gliding
+    // can't make its slot read as somewhere else.
+    const slots = order.map((w) => {
+      const t = tileEl(w);
+      return t ? { left: t.offsetLeft, top: t.offsetTop, right: t.offsetLeft + t.offsetWidth, bottom: t.offsetTop + t.offsetHeight } : null;
+    });
+    const rect = el.getBoundingClientRect();
+    dragRef.current = { word, x, y, grabX: x - rect.left, grabY: y - rect.top, startOrder: order, slots };
+    el.style.transition = "none";
+    el.style.zIndex = "30";
+    placeLiftedTile();
+    flushSync(() => {
+      dragActionsRef.current.handleDragStart(word);
+      setLiftedWord(word);
+    });
+  }, [finishSettle, placeLiftedTile, tileEl]);
+
+  const handleTileDragMove = useCallback((x: number, y: number) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    drag.x = x;
+    drag.y = y;
+    const el = tileEl(drag.word);
+    const parent = el?.offsetParent as HTMLElement | null | undefined;
+    if (parent) {
+      const p = parent.getBoundingClientRect();
+      const px = x - p.left - parent.clientLeft;
+      const py = y - p.top - parent.clientTop;
+      const index = drag.slots.findIndex((s) => s && px >= s.left && px < s.right && py >= s.top && py < s.bottom);
+      const target = index >= 0 ? remainingWordsRef.current[index] : undefined;
+      if (target && target !== drag.word) {
+        dragSlideBeforeRef.current = measureOtherTiles(drag.word);
+        // Committed synchronously so the next move already sees the new order.
+        flushSync(() => dragActionsRef.current.handleDragOver(target));
+      }
+    }
+    placeLiftedTile();
+  }, [measureOtherTiles, placeLiftedTile, tileEl]);
+
+  const handleTileDragEnd = useCallback(() => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    dragRef.current = null;
+    dragActionsRef.current.handleDrop();
+    settleLiftedTile(drag.word);
+  }, [settleLiftedTile]);
+
+  const handleTileDragCancel = useCallback(() => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const current = remainingWordsRef.current;
+    if (current.length !== drag.startOrder.length || current.some((w, i) => w !== drag.startOrder[i])) {
+      dragSlideBeforeRef.current = measureOtherTiles(drag.word);
+      flushSync(() => dragActionsRef.current.setWordOrder(drag.startOrder));
+    }
+    dragRef.current = null;
+    dragActionsRef.current.handleDrop();
+    settleLiftedTile(drag.word);
+  }, [measureOtherTiles, settleLiftedTile]);
+
+  // The slide for a drag's reorder: every other tile glides from where it
+  // was on screen to its new slot, and the lifted tile is re-anchored to its
+  // own new slot so it stays under the pointer.
+  useLayoutEffect(() => {
+    const before = dragSlideBeforeRef.current;
+    if (!before) return;
+    dragSlideBeforeRef.current = null;
+    const moved = Object.keys(before)
+      .map((w) => ({ w, el: tileEl(w) }))
+      .filter((m): m is { w: string; el: HTMLElement } => !!m.el);
+    // Drop any glide still in flight first, so the reading below is the new
+    // slot itself rather than part-way along the old glide.
+    moved.forEach(({ el }) => {
+      if (!el.style.transform) return;
+      el.style.transition = "none";
+      el.style.transform = "";
+    });
+    const transition = `transform ${DRAG_SLIDE_MS}ms ${SOLVE_EASE}`;
+    const playing: HTMLElement[] = [];
+    moved.forEach(({ w, el }) => {
+      const after = el.getBoundingClientRect();
+      const dx = before[w].left - after.left;
+      const dy = before[w].top - after.top;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      playing.push(el);
+    });
+    placeLiftedTile();
+    if (playing.length === 0) return;
+    void gridWrapperRef.current?.offsetWidth;
+    playing.forEach((el) => {
+      const token = (slideTokensRef.current.get(el) ?? 0) + 1;
+      slideTokensRef.current.set(el, token);
+      el.style.transition = transition;
+      el.style.transform = "";
+      setTimeout(() => {
+        if (slideTokensRef.current.get(el) === token) el.style.transition = "";
+      }, DRAG_SLIDE_MS + 40);
+    });
+  }, [remainingWords, placeLiftedTile, tileEl]);
+
+  // If the board locks mid-drag (a guess submitted with another finger),
+  // let go of the tile where it is so it can't fight the solve animation.
+  const tilesLocked = state.isComplete || matchedWords.length > 0 || reveal !== null || isChecking;
+  useEffect(() => {
+    if (!tilesLocked || !dragRef.current) return;
+    const { word } = dragRef.current;
+    dragRef.current = null;
+    handleDrop();
+    const el = tileEl(word);
+    if (el) {
+      el.style.transition = "";
+      el.style.transform = "";
+      el.style.zIndex = "";
+    }
+    setLiftedWord(null);
+  }, [tilesLocked, handleDrop, tileEl]);
 
   useEffect(() => clearRevealTimers, [clearRevealTimers]);
   useEffect(() => clearVictoryTimers, [clearVictoryTimers]);
@@ -1454,13 +1677,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 tileColor={tileColors[word] ?? null}
                 onColorChange={setTileColor}
                 draggable={arrangeTiles}
-                onDragStart={handleDragStart}
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-                onTouchDragMove={handleTouchDragMove}
+                onDragStart={handleTileDragStart}
+                onDragMove={handleTileDragMove}
+                onDragEnd={handleTileDragEnd}
+                onDragCancel={handleTileDragCancel}
+                isLifted={liftedWord === word}
                 column={(index % format.columns) + 1}
                 format={format}
-                onTouchDragEnd={handleTouchDragEnd}
                 isEmojiPuzzle={puzzle.isEmojiPuzzle ?? false}
                 colorPaletteMode={colorPaletteMode}
                 isPaintMode={colorPaletteMode && paletteMode !== "select"}

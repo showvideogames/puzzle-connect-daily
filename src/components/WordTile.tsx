@@ -1,9 +1,18 @@
-import { useState, useRef, useCallback, useEffect, useLayoutEffect, forwardRef } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, forwardRef, type PointerEvent as ReactPointerEvent } from "react";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { categorySwatches } from "@/lib/categoryPalette";
 import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 
 const DOUBLE_TAP_DELAY_MS = 250;
+
+// Arrange Tiles: how far a press has to travel before it becomes a drag
+// rather than a tap.
+const DRAG_THRESHOLD_PX = 8;
+
+// The lifted look of a tile being dragged: a little larger than its
+// neighbours, with a soft shadow beneath it.
+const LIFT_SCALE = 1.06;
+const LIFT_SHADOW = "0 14px 28px -8px rgb(0 0 0 / 0.30), 0 6px 12px -4px rgb(0 0 0 / 0.18)";
 
 // bg: a soft pastel wash of the category's color (index.css's .tile-paint-N,
 // which mixes the same --group-N variable the SOLVED category bars use with
@@ -138,11 +147,18 @@ interface WordTileProps {
   tileColor?: string | null;
   onColorChange?: (word: string, color: string | null) => void;
   draggable?: boolean;
-  onDragStart?: (word: string) => void;
-  onDragOver?: (word: string) => void;
-  onDrop?: () => void;
-  onTouchDragMove?: (x: number, y: number) => void;
-  onTouchDragEnd?: () => void;
+  // Arrange Tiles drag, for mouse and touch alike. The board owns where the
+  // tile goes; the tile only reports the press. onDragStart fires once the
+  // press has moved past DRAG_THRESHOLD_PX (a shorter press is a tap), then
+  // onDragMove for every move, then exactly one of onDragEnd (released) or
+  // onDragCancel (pointer cancelled, window lost focus, or Escape).
+  onDragStart?: (word: string, x: number, y: number) => void;
+  onDragMove?: (x: number, y: number) => void;
+  onDragEnd?: () => void;
+  onDragCancel?: () => void;
+  // True while this tile is the one being dragged: it lifts (scale + shadow)
+  // and lets the pointer through to the board beneath it.
+  isLifted?: boolean;
   column?: number;
   /**
    * The format of the board this tile sits on. Single source of truth for
@@ -203,10 +219,10 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   onColorChange,
   draggable = false,
   onDragStart,
-  onDragOver,
-  onDrop,
-  onTouchDragMove,
-  onTouchDragEnd,
+  onDragMove,
+  onDragEnd,
+  onDragCancel,
+  isLifted = false,
   column = 1,
   format = FULL_FORMAT,
   isEmojiPuzzle = false,
@@ -224,8 +240,13 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // without tracking a target separately.
   const lastTapRef = useRef<number>(0);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const isTouchDragging = useRef(false);
-  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  // Set once a press turns into a drag, so the click the browser may still
+  // fire on release doesn't also toggle the tile's selection.
+  const suppressClickRef = useRef(false);
+  // Detaches the window listeners of the press in progress, if any.
+  const endPressRef = useRef<(() => void) | null>(null);
+  const dragHandlersRef = useRef({ onDragStart, onDragMove, onDragEnd, onDragCancel });
+  dragHandlersRef.current = { onDragStart, onDragMove, onDragEnd, onDragCancel };
 
   const isImage = isCustomEmoji(word);
   const emojiFontSize = isEmojiPuzzle && !isImage
@@ -279,51 +300,75 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
     };
   }, [word, isEmojiPuzzle, isImage]);
 
-  useEffect(() => {
-    const el = buttonRef.current;
-    if (!el || !arrangeTiles) return;
+  // Arrange Tiles press tracking, via pointer events so mouse and touch take
+  // the same path. The listeners go on the window, not the button: the lifted
+  // tile ignores the pointer (so the board can see what's beneath it), and a
+  // drag can wander outside the tile anyway.
+  const handlePointerDown = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!arrangeTiles || !draggable || disabled || !e.isPrimary || e.button !== 0) return;
+    endPressRef.current?.();
+    suppressClickRef.current = false;
+    const pointerId = e.pointerId;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let dragging = false;
 
-    const handleTouchStart = (e: TouchEvent) => {
-      const touch = e.touches[0];
-      touchStartPos.current = { x: touch.clientX, y: touch.clientY };
-      isTouchDragging.current = false;
+    const endPress = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleCancel);
+      window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("blur", handleBlur);
+      endPressRef.current = null;
+      // Backstop: if no click follows the drag, don't let the flag swallow a
+      // later keyboard activation of this tile.
+      if (dragging) window.setTimeout(() => { suppressClickRef.current = false; }, 300);
     };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      if (!touchStartPos.current) return;
-      const touch = e.touches[0];
-      const dx = Math.abs(touch.clientX - touchStartPos.current.x);
-      const dy = Math.abs(touch.clientY - touchStartPos.current.y);
-
-      if (!isTouchDragging.current && dx < 8 && dy < 8) return;
-
-      isTouchDragging.current = true;
-      e.preventDefault();
-      onDragStart?.(word);
-      onTouchDragMove?.(touch.clientX, touch.clientY);
+    const cancel = () => {
+      endPress();
+      if (dragging) dragHandlersRef.current.onDragCancel?.();
     };
-
-    const handleTouchEnd = () => {
-      if (isTouchDragging.current) {
-        onTouchDragEnd?.();
+    function handleMove(ev: PointerEvent) {
+      if (ev.pointerId !== pointerId) return;
+      if (!dragging) {
+        if (Math.abs(ev.clientX - startX) < DRAG_THRESHOLD_PX && Math.abs(ev.clientY - startY) < DRAG_THRESHOLD_PX) return;
+        dragging = true;
+        suppressClickRef.current = true;
+        dragHandlersRef.current.onDragStart?.(word, ev.clientX, ev.clientY);
       }
-      isTouchDragging.current = false;
-      touchStartPos.current = null;
-    };
+      ev.preventDefault();
+      dragHandlersRef.current.onDragMove?.(ev.clientX, ev.clientY);
+    }
+    function handleUp(ev: PointerEvent) {
+      if (ev.pointerId !== pointerId) return;
+      endPress();
+      if (dragging) dragHandlersRef.current.onDragEnd?.();
+    }
+    function handleCancel(ev: PointerEvent) {
+      if (ev.pointerId === pointerId) cancel();
+    }
+    function handleKey(ev: KeyboardEvent) {
+      if (ev.key === "Escape" && dragging) cancel();
+    }
+    function handleBlur() {
+      cancel();
+    }
 
-    el.addEventListener("touchstart", handleTouchStart, { passive: true });
-    el.addEventListener("touchmove", handleTouchMove, { passive: false });
-    el.addEventListener("touchend", handleTouchEnd, { passive: true });
+    window.addEventListener("pointermove", handleMove, { passive: false });
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleCancel);
+    window.addEventListener("keydown", handleKey);
+    window.addEventListener("blur", handleBlur);
+    endPressRef.current = endPress;
+  }, [arrangeTiles, draggable, disabled, word]);
 
-    return () => {
-      el.removeEventListener("touchstart", handleTouchStart);
-      el.removeEventListener("touchmove", handleTouchMove);
-      el.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, [arrangeTiles, word, onDragStart, onTouchDragMove, onTouchDragEnd]);
+  useEffect(() => () => endPressRef.current?.(), []);
 
   const handleClick = useCallback(() => {
-    if (isTouchDragging.current) return;
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
 
     // Color Palette Mode or not using color features at all — plain
     // selection, no double-tap tracking needed.
@@ -454,6 +499,10 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       className={`relative [container-type:inline-size] ${isChecking ? "animate-tile-checking" : ""}`}
       style={{
         touchAction: arrangeTiles ? "none" : "manipulation",
+        // The board positions a lifted tile with an inline transform on
+        // this wrapper; letting the pointer through lets it see the tile
+        // slot beneath.
+        ...(isLifted ? { pointerEvents: "none" as const, willChange: "transform" } : {}),
         ...(fadingForReveal ? { opacity: 0 } : {}),
         ...(isChecking ? { animationDelay: `${checkingIndex * 0.07}s` } : {}),
       }}
@@ -469,22 +518,23 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         // unaffected: Tab moves focus without a mousedown, and Enter/Space
         // activation doesn't dispatch one either, so the ring still shows
         // for keyboard navigation exactly as before. Skipped in arrangeTiles
-        // mode — native HTML5 drag (draggable=true) starts from this same
-        // mousedown, and preventDefault-ing it there would silently break
-        // drag-to-reorder.
+        // mode, which keeps its long-standing mouse behaviour unchanged.
         onMouseDown={arrangeTiles ? undefined : (e) => e.preventDefault()}
+        onPointerDown={handlePointerDown}
         disabled={disabled}
         aria-pressed={isSelected}
-        draggable={arrangeTiles && draggable}
-        onDragStart={() => onDragStart?.(word)}
-        onDragOver={(e) => { e.preventDefault(); onDragOver?.(word); }}
-        onDrop={onDrop}
-        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "!p-2" : "text-[clamp(9px,15.5cqw,33px)]"}
+        // A lifted tile drops the press-down shrink (active:scale-95), which
+        // would otherwise hold for the whole drag and cancel out the lift.
+        className={`${baseClasses} ${isLifted ? stateClasses.replace("active:scale-95", "") : stateClasses} w-full ${isEmojiPuzzle ? "!p-2" : "text-[clamp(9px,15.5cqw,33px)]"}
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
           focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
         style={{
           ...(emojiFontSize ? { fontSize: emojiFontSize } : {}),
           ...(themedRainbow ? { background: rainbowGradient, textShadow: rainbowTextShadow } : {}),
+          // `scale` (not `transform`) so it composes with the tile's own
+          // selection scale; the button's transition-all eases the lift in
+          // and back out on release.
+          ...(isLifted ? { scale: String(LIFT_SCALE), boxShadow: LIFT_SHADOW } : {}),
         }}
       >
         {/* Category-color inset ring — only on a GENUINE Rainbow tile
