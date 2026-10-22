@@ -12,7 +12,16 @@ const DRAG_THRESHOLD_PX = 8;
 // The lifted look of a tile being dragged: a little larger than its
 // neighbours, with a soft shadow beneath it.
 const LIFT_SCALE = 1.06;
-const LIFT_SHADOW = "0 14px 28px -8px rgb(0 0 0 / 0.30), 0 6px 12px -4px rgb(0 0 0 / 0.18)";
+// A short drag can still count as a tap to the browser (it stayed within the
+// browser's own tap tolerance), so it fires a click on release — aimed at
+// where the finger first went down. By then the drag has moved another tile
+// into that spot, so the click must be ignored whichever tile it lands on,
+// not just on the dragged one. Shared by every tile for that reason; a new
+// press clears it, so a real tap right after a drag still selects at once.
+let ignoreClicksUntil = 0;
+const IGNORE_CLICKS_AFTER_DRAG_MS = 600;
+
+const LIFT_SHADOW ="0 14px 28px -8px rgb(0 0 0 / 0.30), 0 6px 12px -4px rgb(0 0 0 / 0.18)";
 
 // bg: a soft pastel wash of the category's color (index.css's .tile-paint-N,
 // which mixes the same --group-N variable the SOLVED category bars use with
@@ -240,9 +249,6 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // without tracking a target separately.
   const lastTapRef = useRef<number>(0);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  // Set once a press turns into a drag, so the click the browser may still
-  // fire on release doesn't also toggle the tile's selection.
-  const suppressClickRef = useRef(false);
   // Detaches the window listeners of the press in progress, if any.
   const endPressRef = useRef<(() => void) | null>(null);
   const dragHandlersRef = useRef({ onDragStart, onDragMove, onDragEnd, onDragCancel });
@@ -310,9 +316,10 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // tile ignores the pointer (so the board can see what's beneath it), and a
   // drag can wander outside the tile anyway.
   const handlePointerDown = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
+    // A new press is a new gesture: any click from here on is a real tap.
+    ignoreClicksUntil = 0;
     if (!arrangeTiles || !draggable || disabled || !e.isPrimary || e.button !== 0) return;
     endPressRef.current?.();
-    suppressClickRef.current = false;
     const pointerId = e.pointerId;
     const startX = e.clientX;
     const startY = e.clientY;
@@ -325,9 +332,9 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       window.removeEventListener("keydown", handleKey);
       window.removeEventListener("blur", handleBlur);
       endPressRef.current = null;
-      // Backstop: if no click follows the drag, don't let the flag swallow a
-      // later keyboard activation of this tile.
-      if (dragging) window.setTimeout(() => { suppressClickRef.current = false; }, 300);
+      // Keep ignoring clicks briefly after the drag; after that, a keyboard
+      // activation (which has no press) works normally again.
+      if (dragging) ignoreClicksUntil = performance.now() + IGNORE_CLICKS_AFTER_DRAG_MS;
     };
     const cancel = () => {
       endPress();
@@ -338,7 +345,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       if (!dragging) {
         if (Math.abs(ev.clientX - startX) < DRAG_THRESHOLD_PX && Math.abs(ev.clientY - startY) < DRAG_THRESHOLD_PX) return;
         dragging = true;
-        suppressClickRef.current = true;
+        ignoreClicksUntil = Infinity;
         dragHandlersRef.current.onDragStart?.(word, ev.clientX, ev.clientY);
       }
       ev.preventDefault();
@@ -370,8 +377,8 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   useEffect(() => () => endPressRef.current?.(), []);
 
   const handleClick = useCallback(() => {
-    if (suppressClickRef.current) {
-      suppressClickRef.current = false;
+    if (performance.now() < ignoreClicksUntil) {
+      ignoreClicksUntil = 0;
       return;
     }
 
