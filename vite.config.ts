@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import fs from "fs";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
-import { MINI_ICONS, RAINBOW_ICONS, type AppIconKey } from "./src/lib/appIcons";
+import { MINI_HOME_TITLE, MINI_ICONS, RAINBOW_HOME_TITLE, RAINBOW_ICONS, type AppIconKey } from "./src/lib/appIcons";
 
 /**
  * The end-to-end build mode ("e2e") must never be able to reach production.
@@ -46,7 +46,7 @@ function assertLocalSupabase(mode: string, env: Record<string, string>) {
 
 /**
  * Writes dist/mini.html: the built index.html with Mini's favicon, Apple touch
- * icon and manifest in place of Rainbow's. vercel.json serves it for /mini and
+ * icon, manifest and home-screen name in place of Rainbow's. vercel.json serves it for /mini and
  * /mini/*, so a phone saving Mini to its home screen reads Mini's icons straight
  * from the HTML. Fails the build if index.html's icon tags drift from
  * src/lib/appIcons.ts rather than shipping a half-swapped page.
@@ -65,6 +65,11 @@ function miniHtml(): Plugin {
         }
         html = html.replace(from, `href="${MINI_ICONS[key]}"`);
       }
+      const title = `content="${RAINBOW_HOME_TITLE}" data-app-title`;
+      if (!html.includes(title)) {
+        throw new Error(`mini-html: index.html has no ${title}; update src/lib/appIcons.ts`);
+      }
+      html = html.replace(title, `content="${MINI_HOME_TITLE}" data-app-title`);
       fs.writeFileSync(path.join(dir, "mini.html"), html);
     },
   };
