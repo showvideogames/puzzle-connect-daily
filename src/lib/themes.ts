@@ -84,11 +84,11 @@ export function resolveTheme(
 }
 
 // ── Holiday header logo ──────────────────────────────────────────────────────
-// On its day, the header wordmark ("/rainbow-connect-logo.png") is swapped for
+// On its day, the header wordmark ("/rainbow-categories-logo.webp") is swapped for
 // a holiday version site-wide. Date-based (local time) so it's independent of
 // which puzzle is loaded. Add more holidays by extending todaysLogo().
 
-const DEFAULT_LOGO = "/rainbow-connect-logo.png";
+const DEFAULT_LOGO = "/rainbow-categories-logo.webp";
 const JULY4_LOGO = "/AmericanFlagLogo.png";
 
 /** True on July 4th in the viewer's local time. */

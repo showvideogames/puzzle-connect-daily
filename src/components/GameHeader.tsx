@@ -5,7 +5,7 @@ import { todaysLogo, isJuly4 } from "@/lib/themes";
 import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 import type { User as AuthUser } from "@supabase/supabase-js";
 
-const STACKED_LOGO = "/rainbow-connect-logo-stacked.png";
+const STACKED_LOGO = "/rainbow-categories-logo-stacked.webp";
 
 interface GameHeaderProps {
   /** Omit on pages with no stats to show, and the stats icon is not rendered. */
@@ -86,25 +86,25 @@ export function GameHeader({
           // Holiday override applies to both sizes — there's no stacked
           // variant of the flag logo, so it isn't part of the mobile/desktop
           // swap below; this one <img> just keeps today's existing behavior.
-          <img src={todaysLogo()} alt="Rainbow Connect" className="h-[clamp(11px,3.7vw,40px)] min-[360px]:h-[clamp(11px,4.3vw,40px)] w-auto" />
+          <img src={todaysLogo()} alt="Rainbow Categories" className="h-[clamp(11px,3.7vw,40px)] min-[360px]:h-[clamp(11px,4.3vw,40px)] w-auto" />
         ) : (
           <>
-            {/* Logo sizing. The one-line wordmark is ~8.4:1, so at any
+            {/* Logo sizing. The one-line wordmark is ~8:1, so at any
                 legible height it is far wider than a phone header can spare
                 (3-4 44px tap targets plus the Create pill leave ~100px at
                 320px). Below md the header therefore uses the compact stacked
-                wordmark (~2.4:1) at 32px tall (about 77px wide), which fits at
+                wordmark (~2.5:1) at 32px tall (about 77px wide), which fits at
                 every width down to 320px while staying the dominant element.
                 md-lg uses the one-line wordmark at 36px; lg+ keeps the larger
                 stacked wordmark. Aspect ratio is always preserved (w-auto). */}
             <img
               src={STACKED_LOGO}
-              alt="Rainbow Connect"
+              alt="Rainbow Categories"
               className="block md:hidden lg:block w-[128px] max-w-none shrink-0 h-auto lg:w-auto lg:h-14"
             />
             <img
               src={todaysLogo()}
-              alt="Rainbow Connect"
+              alt="Rainbow Categories"
               className="hidden md:block lg:hidden h-9 w-auto"
             />
           </>
