@@ -1,5 +1,7 @@
 {
   "rewrites": [
+    { "source": "/mini", "destination": "/mini.html" },
+    { "source": "/mini/(.*)", "destination": "/mini.html" },
     { "source": "/(.*)", "destination": "/" }
   ],
   "headers": [

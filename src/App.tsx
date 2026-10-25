@@ -22,6 +22,7 @@ import Terms from "./pages/Terms.tsx";
 import HowToPlay from "./pages/HowToPlay.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import { OnboardingGate } from "@/components/OnboardingGate";
+import { AppIconSync } from "@/components/AppIconSync";
 
 // Dev-only visual fixtures. import.meta.env.DEV is statically false in a
 // production build, so this lazy import (and the whole fixture module) is
@@ -38,6 +39,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <AppIconSync />
         <OnboardingGate>
         <Routes>
           <Route path="/" element={<Index />} />
