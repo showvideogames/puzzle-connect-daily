@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useGamePageTheme } from "@/hooks/useGamePageTheme";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { signOutOfRainbow } from "@/lib/platformSignIn";
@@ -37,6 +38,7 @@ type ModalName = "help" | "settings" | "feedback" | "stats" | null;
  * and moving between the two URLs never resets anything.
  */
 export default function CustomPuzzle() {
+  useGamePageTheme();
   const { shareId, shortCode } = useParams<{ shareId?: string; shortCode?: string }>();
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -141,6 +143,7 @@ export default function CustomPuzzle() {
         user={user ?? null}
         onSignOut={() => signOutOfRainbow()}
         simplifiedIcons
+        showCreateLink={false}
         wideHeader
       />
       <div className="w-full max-w-[840px] border-b border-border mb-3" />
@@ -210,6 +213,7 @@ export default function CustomPuzzle() {
         onSettingsChange={handleSettingsChange}
         onOpenFeedback={() => setActiveModal("feedback")}
         showMenuLinks
+        showCreateLink
         onHowToPlayClick={() => setActiveModal("help")}
         user={user ?? null}
         onSignOut={() => signOutOfRainbow()}

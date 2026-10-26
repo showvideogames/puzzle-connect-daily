@@ -7,6 +7,7 @@ import { GameBoard } from "@/components/GameBoard";
 import { LandingScreen } from "@/components/LandingScreen";
 import { PlayerAuth } from "@/components/PlayerAuth";
 import { useImagePreload } from "@/hooks/useImagePreload";
+import { useGamePageTheme } from "@/hooks/useGamePageTheme";
 import { hasInProgressGame } from "@/hooks/useGame";
 import { isCustomEmoji, customEmojiUrl } from "@/lib/customEmoji";
 import { StatsModal } from "@/components/StatsModal";
@@ -155,16 +156,7 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
     document.documentElement.classList.toggle("dark", settings.darkMode);
   }, [settings.darkMode]);
 
-  // Layout refresh (preview): the Full Daily only. Mini renders this same
-  // page, so everything new is keyed on this one flag and Mini is untouched.
-  // The class swaps the light theme's warm cream for a white page with
-  // neutral greys (index.css); dark mode is unaffected.
-  const refreshLayout = format.id === "full";
-  useEffect(() => {
-    if (!refreshLayout) return;
-    document.documentElement.classList.add("layout-refresh");
-    return () => document.documentElement.classList.remove("layout-refresh");
-  }, [refreshLayout]);
+  useGamePageTheme();
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -289,10 +281,10 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
         user={user}
         onSignOut={handleSignOut}
         variant="minimal"
-        // Full: Create a Puzzle moves into the menu (SettingsModal).
-        showCreateLink={!refreshLayout}
+        // Create a Puzzle lives in the menu instead (SettingsModal).
+        showCreateLink={false}
       />
-      <div className={`w-full max-w-[840px] border-b border-divider ${refreshLayout ? "mb-4 md:mb-5" : "mb-2"}`} />
+      <div className={`w-full max-w-[840px] border-b border-divider mb-4 md:mb-5`} />
 
       {/* Silly goose toast — shown when hint tapped after puzzle complete */}
       {showSillyGoose && (
@@ -341,7 +333,6 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
           onHintClick={handleHeaderHintClick}
           onComplete={() => setIsPuzzleComplete(true)}
           variant="dailyHomepage"
-          refreshLayout={refreshLayout}
           key={format.id}
           // Removed per feedback: the Rainbow/4-Groups badge read as
           // needless clutter floating over the Daily homepage board.
@@ -375,7 +366,7 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
         onOpenFeedback={() => setActiveModal("feedback")}
         showMenuLinks
         onHowToPlayClick={() => openModal("help")}
-        showCreateLink={refreshLayout}
+        showCreateLink
         user={user}
         onSignOut={handleSignOut}
       />

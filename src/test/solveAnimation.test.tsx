@@ -376,7 +376,7 @@ describe("animated tiles draw in front of solved bars", () => {
     await submit(container, fullPuzzle.groups[0].words);
     await act(async () => {});
 
-    const list = container.querySelector(".board-bars") as HTMLElement;
+    const list = container.querySelector("[data-testid=solved-bars]") as HTMLElement;
     const tile = container.querySelector("div[data-word]") as HTMLElement;
     // The grid's wrapper: the nearest positioned ancestor of the grid that is
     // a sibling of the bar list.

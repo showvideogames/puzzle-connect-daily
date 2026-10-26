@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useGamePageTheme } from "@/hooks/useGamePageTheme";
 import { FlaskConical, ChevronLeft, MessageSquarePlus, RotateCcw } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +34,7 @@ function betaStorageKey(puzzle: Pick<Puzzle, "id" | "format">) {
 }
 
 export default function BetaPuzzle() {
+  useGamePageTheme();
   const { puzzleId } = useParams<{ puzzleId: string }>();
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -132,6 +134,7 @@ export default function BetaPuzzle() {
         user={user ?? null}
         onSignOut={() => signOutOfRainbow()}
         simplifiedIcons
+        showCreateLink={false}
         wideHeader
       />
       <div className="w-full max-w-[840px] border-b border-border mb-3" />
@@ -228,6 +231,7 @@ export default function BetaPuzzle() {
         onSettingsChange={handleSettingsChange}
         onOpenFeedback={() => setActiveModal("feedback")}
         showMenuLinks
+        showCreateLink
         onHowToPlayClick={() => setActiveModal("help")}
         user={user ?? null}
         onSignOut={() => signOutOfRainbow()}
