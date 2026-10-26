@@ -1,6 +1,7 @@
 import type { ResolvedTheme } from "@/lib/themes";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { CategoryEmojiInline } from "./CategoryEmojiInline";
+import { useFitBarText } from "@/hooks/useFitBarText";
 
 interface RainbowRevealBarProps {
   categoryName: string | null | undefined;
@@ -16,6 +17,8 @@ interface RainbowRevealBarProps {
   background: string;
   textShadow?: string;
   curtain: boolean;
+  /** Refreshed Full Daily layout: same text sizing and fit as SolvedGroup's. */
+  fitText?: boolean;
 }
 
 /**
@@ -38,6 +41,7 @@ export function RainbowRevealBar({
   background,
   textShadow,
   curtain,
+  fitText = false,
 }: RainbowRevealBarProps) {
   const customName = (categoryName ?? "").trim();
   const title = customName || theme.label;
@@ -54,12 +58,14 @@ export function RainbowRevealBar({
   // it's never duplicated.
   const emoji = hideExplicit ? "" : explicitEmoji || (customName ? "" : theme.emoji);
   const displayWords = alphabetizeCompleted ? [...words].sort((a, b) => a.localeCompare(b)) : words;
+  const fitRef = useFitBarText<HTMLDivElement>(fitText, `${title}|${emoji}|${displayWords.join("|")}`);
   return (
     <div
+      ref={fitRef}
       className={`solved-bar w-full rounded-lg py-2 px-4 text-center ${textClass} ${curtain ? "animate-rainbow-curtain" : ""}`}
       style={{ background, textShadow, clipPath: curtain ? undefined : "inset(0 100% 0 0)" }}
     >
-      <div className="font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
+      <div className="solved-bar-title font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">
         {title}
         {emoji && (
           <>
@@ -68,7 +74,7 @@ export function RainbowRevealBar({
           </>
         )}
       </div>
-      <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-1 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
+      <div className="solved-bar-answers text-[13px] md:text-[15px] font-[575] leading-tight mt-1 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5">
         {displayWords.map((w, i) => (
           <span key={`${w}-${i}`} className="inline-flex items-center gap-x-1">
             {i > 0 && <span aria-hidden="true">·</span>}

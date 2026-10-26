@@ -433,6 +433,26 @@ html {
   justify-content: center;
 }
 
+/* ── Refreshed Full Daily: one type scale for every revealed category ──
+   The four category bars, the Rainbow bar and the Spot-the-Rainbow prompt
+   all share these sizes. They scale with the board's width (cqw of the
+   .board-bars container) so the text fills the row-tall card at every
+   width, capped near the tile words' own size on desktop. --bar-fit
+   (useFitBarText) shrinks one bar's text only when a long title or answer
+   line would otherwise make that bar taller than its tile row. */
+html.layout-refresh .solved-bar {
+  padding: 6px 10px;
+}
+html.layout-refresh .solved-bar-title {
+  font-size: calc(clamp(15px, 5.6cqw, 30px) * var(--bar-fit, 1));
+  line-height: 1.1;
+}
+html.layout-refresh .solved-bar-answers {
+  font-size: calc(clamp(12px, 4.2cqw, 21px) * var(--bar-fit, 1));
+  line-height: 1.2;
+  margin-top: 0.3em;
+}
+
 /* ── Solved category bar "arrival" pop — production's animation, slowed ──
    Production's keyframe shape and easing (main 7317a57: 0.95 → 1.08 → 1,
    480ms, ease-in-out), in Sam's experiment: a bigger peak (1.12) and half

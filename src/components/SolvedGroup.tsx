@@ -1,4 +1,5 @@
-import { forwardRef } from "react";
+import { forwardRef, useCallback } from "react";
+import { useFitBarText } from "@/hooks/useFitBarText";
 import { PuzzleGroup } from "@/lib/types";
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { CategoryEmojiInline } from "./CategoryEmojiInline";
@@ -30,12 +31,14 @@ interface SolvedGroupProps {
   //    current sequence, which settles straight to normal rendering).
   // undefined = normal rendering (animate-group-appear entrance if `animate`).
   reveal?: "pending" | "arrived" | "settling";
+  /** Refreshed Full Daily layout: larger text, shrunk only to keep long content inside the row (useFitBarText). */
+  fitText?: boolean;
 }
 
 // forwardRef so GameBoard can reach this bar's DOM node during the solve
 // animation.
 export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function SolvedGroup(
-  { group, alphabetizeCompleted = true, animate, reveal },
+  { group, alphabetizeCompleted = true, animate, reveal, fitText = false },
   ref
 ) {
   const colors = groupColors[group.difficulty] || groupColors[1];
@@ -57,9 +60,16 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
   // as part of the answer, e.g. "___ 💬" on a "HIGH ___" category. It never
   // touches the category NAME, so an emoji typed into the name still shows.
   const explicitEmoji = group.categoryEmojiHintOnly ? "" : (group.categoryEmoji ?? "").trim();
+  const fitRef = useFitBarText<HTMLDivElement>(fitText, `${group.category}|${explicitEmoji}|${displayWords.join("|")}`);
+  // GameBoard's forwarded ref and the text-fit ref share the one node.
+  const setRefs = useCallback((el: HTMLDivElement | null) => {
+    fitRef.current = el;
+    if (typeof ref === "function") ref(el);
+    else if (ref) ref.current = el;
+  }, [ref, fitRef]);
   return (
     <div
-      ref={ref}
+      ref={setRefs}
       // solved-bar: one tile row tall (index.css), with its text centred.
       // py-2, not more: the row height does the spacing, and on the
       // narrowest phones (320px) a Full row is only ~60px tall — any more
@@ -89,7 +99,7 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
       {/* Category title is the payoff/reveal on each card — noticeably
           larger and heavier than the answer line, and shares the puzzle
           tile's typeface (Inter) to visually connect the two. */}
-      <div className={`font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide ${contentLand}`}>
+      <div className={`solved-bar-title font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide ${contentLand}`}>
         {group.category}
         {explicitEmoji && (
           <>
@@ -100,7 +110,7 @@ export const SolvedGroup = forwardRef<HTMLDivElement, SolvedGroupProps>(function
       </div>
       {/* Answers stay clearly secondary: smaller, lighter weight, and a
           touch more breathing room below the title (~4px via mt-1). */}
-      <div className={`text-[13px] md:text-[15px] font-[575] leading-tight mt-1 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5 ${contentLand}`}>
+      <div className={`solved-bar-answers text-[13px] md:text-[15px] font-[575] leading-tight mt-1 flex items-center justify-center flex-wrap gap-x-1 gap-y-0.5 ${contentLand}`}>
         {displayWords.map((w, i) => (
           <span key={`${w}-${i}`} className="inline-flex items-center gap-x-1">
             {/* Middot separator between answers (not before the first one) —

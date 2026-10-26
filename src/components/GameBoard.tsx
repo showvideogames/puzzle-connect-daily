@@ -1486,8 +1486,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             animate-rainbow-breathe animate-rainbow-shimmer`}
           style={{ background: theme.gradient, textShadow: theme.textShadow }}
         >
-          <div className="font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">{theme.spotPrompt}</div>
-          <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-0.5">Find one word from each group</div>
+          <div className="solved-bar-title font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">{theme.spotPrompt}</div>
+          <div className="solved-bar-answers text-[13px] md:text-[15px] font-[575] leading-tight mt-0.5">Find one word from each group</div>
         </button>
         )
       ) : (
@@ -1502,6 +1502,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           background={rainbowCardBg}
           textShadow={rainbowCardTextShadow}
           curtain={rainbowVisible}
+          fitText={refreshLayout}
         />
       )
   ) : null;
@@ -1519,7 +1520,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // text), so the invisible copy goes — never two copies of its words.
   const realBarShown = rainbowInSlot || (!!rainbowEndCard && bonusRainbowCorrect !== null);
   const rainbowSlot = lockedFullResult && !state.gotRainbow ? null : (
-    <div className="grid mb-2 md:mb-3 [&>*]:[grid-area:1/1]" data-testid="rainbow-slot">
+    // board-bars: the same size container and one-tile-row height rule as
+    // the solved bars below, so the slot, the instruction's space and the
+    // Rainbow bar are exactly as tall as an ordinary category bar; the gap
+    // under it is the board's own tile gap.
+    <div
+      className="board-bars board-bars-wide grid mb-1.5 md:mb-3 [&>*]:[grid-area:1/1]"
+      style={{ "--board-cols": format.columns } as import("react").CSSProperties}
+      data-testid="rainbow-slot"
+    >
       {rainbowHerring && !realBarShown && (
         <div aria-hidden="true" className="invisible pointer-events-none">
           <RainbowRevealBar
@@ -1532,6 +1541,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             textClass={rainbowCardTextClass}
             background="transparent"
             curtain
+            fitText
           />
         </div>
       )}
@@ -1557,6 +1567,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           background={rainbowCardBg}
           textShadow={rainbowCardTextShadow}
           curtain={rainbowVisible}
+          fitText={refreshLayout}
         />
       ) : rainbowEndCard}
     </div>
@@ -1652,7 +1663,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           animated tiles draw in front of solved bars. */}
       <div
         ref={barsListRef}
-        className={`board-bars relative z-[1] pt-2 ${
+        className={`board-bars relative z-[1] ${refreshLayout ? "" : "pt-2"} ${
           isMiniBoard
             ? `board-bars-square space-y-2 ${barsInFlow ? "mb-2" : ""}`
             : `space-y-1.5 ${barsInFlow ? "mb-1.5" : ""} ${useWideBoard ? `board-bars-wide md:space-y-3 ${barsInFlow ? "md:mb-3" : ""}` : ""}`
@@ -1673,11 +1684,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               background={rainbowCardBg}
               textShadow={rainbowCardTextShadow}
               curtain={rainbowVisible}
+              fitText={refreshLayout}
             />
           ) : (
             <SolvedGroup
               key={slot.groupIdx}
               group={puzzle.groups[slot.groupIdx]}
+              fitText={refreshLayout}
               alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
               // animate-group-appear is only for bars that DIDN'T go through the
               // solve animation (reduced-motion path, loss cascade). Animated
