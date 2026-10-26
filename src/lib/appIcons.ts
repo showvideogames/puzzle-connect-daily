@@ -12,26 +12,32 @@
  *     HTML itself;
  *   - AppIconSync swaps the hrefs on in-app navigation between the games.
  *
- * Bump ICON_VERSION whenever any icon file changes so browsers refetch.
+ * Icon files live in public/icons/ under names ending in the first 8 hex
+ * characters of their SHA-256, so a changed image always gets a new URL.
+ * Safari keeps its own favicon store and does not reliably refetch when only
+ * a ?v= query changes, which is why the old fixed names kept showing stale
+ * art. When an icon changes: add the new file under its new hashed name,
+ * update the hrefs here, the tags in index.html, the manifests, and the
+ * legacy redirects in vercel.json (src/test/appIcons.test.ts checks all of
+ * it). The manifests themselves keep stable URLs (installed apps are tied to
+ * them); bump MANIFEST_VERSION when their content changes.
  */
-export const ICON_VERSION = "20261025";
+export const MANIFEST_VERSION = "20261025b";
 
 export type AppIconKey = "icon32" | "ico" | "apple" | "manifest";
 
-const v = `?v=${ICON_VERSION}`;
-
 export const RAINBOW_ICONS: Record<AppIconKey, string> = {
-  icon32: `/favicon-32x32.png${v}`,
-  ico: `/favicon.ico${v}`,
-  apple: `/apple-touch-icon.png${v}`,
-  manifest: `/site.webmanifest${v}`,
+  icon32: "/icons/rainbow-favicon-32x32-2cbde970.png",
+  ico: "/icons/rainbow-favicon-07c6f0f1.ico",
+  apple: "/icons/rainbow-apple-touch-icon-e5ee3a28.png",
+  manifest: `/site.webmanifest?v=${MANIFEST_VERSION}`,
 };
 
 export const MINI_ICONS: Record<AppIconKey, string> = {
-  icon32: `/mini-favicon-32x32.png${v}`,
-  ico: `/mini-favicon.ico${v}`,
-  apple: `/mini-apple-touch-icon.png${v}`,
-  manifest: `/mini.webmanifest${v}`,
+  icon32: "/icons/mini-favicon-32x32-646d7866.png",
+  ico: "/icons/mini-favicon-f4546936.ico",
+  apple: "/icons/mini-apple-touch-icon-50ebe6fa.png",
+  manifest: `/mini.webmanifest?v=${MANIFEST_VERSION}`,
 };
 
 export const RAINBOW_HOME_TITLE = "🌈 Categories";

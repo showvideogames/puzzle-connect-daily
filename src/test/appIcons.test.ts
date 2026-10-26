@@ -4,6 +4,7 @@
  * the mini.html build step swaps out.
  */
 import { describe, expect, it } from "vitest";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import {
@@ -61,5 +62,48 @@ describe("app icons", () => {
     expect(hrefs()).toEqual(Object.values(MINI_ICONS));
     applyAppIcons(RAINBOW_ICONS);
     expect(hrefs()).toEqual(Object.values(RAINBOW_ICONS));
+  });
+
+  const publicDir = path.resolve(__dirname, "../../public");
+  const iconPath = (href: string) => path.join(publicDir, href.split("?")[0]);
+  const manifestIcons = (file: string): string[] =>
+    JSON.parse(fs.readFileSync(path.join(publicDir, file), "utf8")).icons.map((i: { src: string }) => i.src);
+
+  it("every icon file is named after its own content hash, with no ?v= needed", () => {
+    const hrefs = [
+      ...[RAINBOW_ICONS, MINI_ICONS].flatMap((set) => [set.icon32, set.ico, set.apple]),
+      ...manifestIcons("site.webmanifest"),
+      ...manifestIcons("mini.webmanifest"),
+    ];
+    for (const href of hrefs) {
+      const m = href.match(/^\/icons\/[a-z0-9-]+-([0-9a-f]{8})\.(png|ico)$/);
+      expect(m, href).not.toBeNull();
+      const hash = crypto.createHash("sha256").update(fs.readFileSync(iconPath(href))).digest("hex").slice(0, 8);
+      expect(hash, href).toBe(m![1]);
+    }
+  });
+
+  it("Rainbow and Mini never share an icon file", () => {
+    const rainbow = [RAINBOW_ICONS.icon32, RAINBOW_ICONS.ico, RAINBOW_ICONS.apple, ...manifestIcons("site.webmanifest")];
+    const mini = [MINI_ICONS.icon32, MINI_ICONS.ico, MINI_ICONS.apple, ...manifestIcons("mini.webmanifest")];
+    for (const href of rainbow) expect(href).toContain("/icons/rainbow-");
+    for (const href of mini) expect(href).toContain("/icons/mini-");
+  });
+
+  it("root fallbacks are Rainbow's art, and legacy icon URLs redirect to real current files", () => {
+    const bytes = (p: string) => fs.readFileSync(p);
+    expect(bytes(path.join(publicDir, "favicon.ico")).equals(bytes(iconPath(RAINBOW_ICONS.ico)))).toBe(true);
+    expect(bytes(path.join(publicDir, "apple-touch-icon.png")).equals(bytes(iconPath(RAINBOW_ICONS.apple)))).toBe(true);
+
+    const vercel = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../vercel.json"), "utf8"));
+    const redirects: { source: string; destination: string }[] = vercel.redirects;
+    for (const legacy of ["/favicon.svg", "/favicon-32x32.png", "/apple-touch-icon-precomposed.png", "/mini-favicon.ico"]) {
+      expect(redirects.some((r) => r.source === legacy), legacy).toBe(true);
+    }
+    for (const r of redirects) {
+      expect(fs.existsSync(iconPath(r.destination)), `${r.source} -> ${r.destination}`).toBe(true);
+      expect(fs.existsSync(path.join(publicDir, r.source)), `${r.source} still exists, so the redirect hides it`).toBe(false);
+      expect(r.destination.includes("/icons/mini-")).toBe(r.source.startsWith("/mini-"));
+    }
   });
 });
