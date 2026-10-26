@@ -136,6 +136,55 @@ function computeFitScale(longestWord: string, availableWidthPx: number, button: 
   return scale < 1 ? Math.round(scale * 1000) / 1000 : undefined;
 }
 
+// Split long words (the refreshed Full Daily only — see splitLongWords). The
+// tile's normal side padding (tile-base px-2), and the smaller padding a split
+// word gets so its two halves can stay at a readable size.
+const TILE_PAD_X = 8;
+const SPLIT_PAD_X = 3;
+const MIN_TILE_FONT_PX = 8;
+// A single word that would have to shrink below this share of the normal
+// tile size to fit on one line is split instead, when that reads larger.
+const SPLIT_BELOW_SCALE = 0.7;
+
+function measureTextWidth(text: string, button: CSSStyleDeclaration): number {
+  const ctx = getMeasureCtx();
+  ctx.font = `${button.fontWeight} ${parseFloat(button.fontSize)}px ${button.fontFamily}`;
+  const upper = text.toUpperCase();
+  const letterSpacingPx = parseFloat(button.letterSpacing) || 0;
+  return ctx.measureText(upper).width + letterSpacingPx * Math.max(countVisibleChars(upper) - 1, 0);
+}
+
+/**
+ * For a single word that would otherwise shrink to a much smaller size than
+ * its neighbours, or not fit at all (e.g. IDENTIFICATION on a phone): the
+ * most even two-line hyphenated split, and the size both halves fit at.
+ * Returns undefined when the word fits on one line at a comfortable size, or
+ * when splitting would not read larger — those tiles render as before.
+ */
+function computeSplitFit(
+  word: string,
+  tileInnerWidthPx: number,
+  button: CSSStyleDeclaration
+): { parts: [string, string]; scale: number | undefined } | undefined {
+  const basePx = parseFloat(button.fontSize);
+  const chars = Array.from(word);
+  if (/s/.test(word.trim()) || chars.length < 8 || !(basePx > 0) || tileInnerWidthPx <= 0) return undefined;
+  const floor = MIN_TILE_FONT_PX / basePx;
+  const oneLineScale = ((tileInnerWidthPx - 2 * TILE_PAD_X) * 0.92) / measureTextWidth(word, button);
+  if (oneLineScale >= SPLIT_BELOW_SCALE) return undefined;
+  let best: { parts: [string, string]; width: number } | undefined;
+  for (let i = 3; i <= chars.length - 3; i++) {
+    const parts: [string, string] = [chars.slice(0, i).join(""), chars.slice(i).join("")];
+    const width = Math.max(measureTextWidth(parts[0] + "-", button), measureTextWidth(parts[1], button));
+    if (!best || width < best.width) best = { parts, width };
+  }
+  if (!best) return undefined;
+  const target = (tileInnerWidthPx - 2 * SPLIT_PAD_X) * 0.92;
+  const scale = Math.max(Math.min(1, target / best.width), floor);
+  if (scale <= Math.max(oneLineScale, floor)) return undefined;
+  return { parts: best.parts, scale: scale < 1 ? Math.round(scale * 1000) / 1000 : undefined };
+}
+
 interface WordTileProps {
   word: string;
   isSelected: boolean;
@@ -210,6 +259,12 @@ interface WordTileProps {
   // the flat 110px height Full/wideBoard tiles get there. Defaults to false
   // so Full's existing aspect ratio is untouched.
   squareTiles?: boolean;
+  /**
+   * A single word too long to fit even at the smallest size is split over two
+   * lines with a hyphen instead of being clipped (computeSplitFit). Off by
+   * default: only the refreshed Full Daily turns it on for now.
+   */
+  splitLongWords?: boolean;
 }
 
 export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordTile({
@@ -242,6 +297,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   isChecking = false,
   checkingIndex = 0,
   squareTiles = false,
+  splitLongWords = false,
 }, forwardedRef) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   // Timestamp of this tile's own last tap — each WordTile instance gets its
@@ -263,6 +319,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // Fraction of the tile's normal font-size the text needs to fit (see
   // computeFitScale); undefined when it already fits at normal size.
   const [fitScale, setFitScale] = useState<number | undefined>(undefined);
+  const [splitParts, setSplitParts] = useState<[string, string] | undefined>(undefined);
 
   useLayoutEffect(() => {
     if (isEmojiPuzzle || isImage) return;
@@ -279,6 +336,18 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       // the press-down shrink, entrance animations — never skew it: a
       // lifted tile measures exactly as it does at rest.
       const cs = getComputedStyle(btn);
+      if (splitLongWords) {
+        // Decided from the tile's full inner width and fixed paddings, never
+        // the current padding, which a split itself changes.
+        const split = computeSplitFit(word, btn.clientWidth, cs);
+        setSplitParts(split?.parts);
+        if (split) {
+          setFitScale(split.scale);
+          return;
+        }
+        setFitScale(computeFitScale(getLongestWord(word), btn.clientWidth - 2 * TILE_PAD_X, cs));
+        return;
+      }
       const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
       const available = btn.clientWidth - padX;
       setFitScale(computeFitScale(getLongestWord(word), available, cs));
@@ -309,7 +378,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       resizeObserver?.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [word, isEmojiPuzzle, isImage]);
+  }, [word, isEmojiPuzzle, isImage, splitLongWords]);
 
   // Arrange Tiles press tracking, via pointer events so mouse and touch take
   // the same path. The listeners go on the window, not the button: the lifted
@@ -542,6 +611,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
           focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
         style={{
           ...(emojiFontSize ? { fontSize: emojiFontSize } : {}),
+          ...(splitParts ? { paddingLeft: SPLIT_PAD_X, paddingRight: SPLIT_PAD_X } : {}),
           ...(themedRainbow ? { background: rainbowGradient, textShadow: rainbowTextShadow } : {}),
           // `scale` (not `transform`) so it composes with the tile's own
           // selection scale; the button's transition-all eases the lift in
@@ -659,7 +729,17 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
               ...(fitScale ? { fontSize: `${fitScale}em` } : {}),
             }}
           >
-            {word}
+            {splitParts ? (
+              <>
+                <span aria-hidden="true">
+                  {splitParts[0]}-<br />
+                  {splitParts[1]}
+                </span>
+                <span className="sr-only">{word}</span>
+              </>
+            ) : (
+              word
+            )}
           </span>
         )}
       </button>

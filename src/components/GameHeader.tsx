@@ -43,6 +43,8 @@ interface GameHeaderProps {
    * no control and removes none.
    */
   format?: PuzzleFormat;
+  /** The desktop "+ Create a Puzzle" pill. Off where the page's menu carries Create instead. */
+  showCreateLink?: boolean;
 }
 
 export function GameHeader({
@@ -57,6 +59,7 @@ export function GameHeader({
   simplifiedIcons = false,
   wideHeader = false,
   format = FULL_FORMAT,
+  showCreateLink = true,
 }: GameHeaderProps) {
   const isMinimal = variant === "minimal";
   const hideExtraIcons = isMinimal || simplifiedIcons;
@@ -119,7 +122,7 @@ export function GameHeader({
             three utility icons have room; Create stays reachable from the
             page-level "Create Your Own" CTA and Settings > Menu. Prominent but
             compact: the Ink primary-button colors, a real link. */}
-        <Link
+        {showCreateLink && <Link
           to="/create"
           aria-label="Create a puzzle"
           className="hidden sm:inline-flex items-center justify-center shrink-0 whitespace-nowrap h-9 px-3.5 mr-1
@@ -128,7 +131,7 @@ export function GameHeader({
             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           + Create a Puzzle
-        </Link>
+        </Link>}
         {showHint && (
           <button
             onClick={onHintClick}

@@ -267,9 +267,16 @@ interface GameBoardProps {
   onStatsOpenChange?: (open: boolean) => void;
   /** Custom mode only. Called by the post-completion Replay button. */
   onReplay?: () => void;
+  /**
+   * Layout refresh preview (Full Daily only — Index passes it for Full, never
+   * Mini). The instruction and the Rainbow share one reserved slot above the
+   * board, the paint palette moves below the controls, and Guess History is
+   * narrower. Rules, scoring, saving and animations are untouched.
+   */
+  refreshLayout?: boolean;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", wideBoard = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, onHintsViewOnlyChange, showModeBadge = true, entryContext = "daily_home", betaMode = false, customMode = false, statsOpen: statsOpenProp, onStatsOpenChange, onReplay }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", wideBoard = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, onHintsViewOnlyChange, showModeBadge = true, entryContext = "daily_home", betaMode = false, customMode = false, statsOpen: statsOpenProp, onStatsOpenChange, onReplay, refreshLayout = false }: GameBoardProps) {
   const isDailyHomepage = variant === "dailyHomepage";
   // Drives the board's own desktop width/tile-gap classes below — true for
   // the daily homepage itself, or any other context that explicitly opted
@@ -457,12 +464,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const boardSlots = useMemo(() => {
     const slots: ({ kind: "group"; groupIdx: number } | { kind: "rainbow" })[] =
       state.solvedGroups.map((groupIdx) => ({ kind: "group" as const, groupIdx }));
-    if (state.gotRainbow && rainbowHerring) {
+    // The refreshed layout shows the Rainbow in its own reserved slot above
+    // the board instead, so finding it never adds a row here.
+    if (state.gotRainbow && rainbowHerring && !refreshLayout) {
       const insertAt = Math.min(state.rainbowSolveIndex ?? 0, slots.length);
       slots.splice(insertAt, 0, { kind: "rainbow" as const });
     }
     return slots;
-  }, [state.solvedGroups, state.gotRainbow, state.rainbowSolveIndex, rainbowHerring]);
+  }, [state.solvedGroups, state.gotRainbow, state.rainbowSolveIndex, rainbowHerring, refreshLayout]);
 
   // Shared "checking guess" suspense: which tiles are animating, and their
   // stagger order (by grid position, so the bounce reads as a left-to-right
@@ -1445,7 +1454,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     boardSlots.some(
       (s) => s.kind === "rainbow" || !(reveal && reveal.groupIdx === s.groupIdx && reveal.phase !== "settling"),
     ) ||
-    (showEndState && !state.gotRainbow && !!rainbowHerring);
+    (showEndState && !state.gotRainbow && !!rainbowHerring && !refreshLayout);
 
   // The solved-rainbow reveal card (both the direct-guess and Spot the
   // Rainbow paths below) isn't itself gated by the Rainbow Animation
@@ -1456,6 +1465,159 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const rainbowCardBg = rainbowCardStatic ? "var(--rainbow-static-gradient)" : theme.gradient;
   const rainbowCardTextClass = rainbowCardStatic ? "text-[#292825]" : "text-white";
   const rainbowCardTextShadow = rainbowCardStatic ? undefined : theme.textShadow;
+
+  // After the game, when the Rainbow wasn't found during play: the "spot
+  // the Rainbow" prompt, then (once answered) the revealed Rainbow. Not on a
+  // board locked by a result this browser holds no copy of
+  // (lockedByOfficialResult): the prompt would score a Rainbow onto an empty
+  // local game whose outcome is unknown here. Classic layout: the last item
+  // in the solved-bar list. Refreshed layout: the reserved Rainbow slot.
+  const rainbowEndCard = showEndState && !lockedFullResult && !state.gotRainbow && rainbowHerring ? (
+      bonusRainbowCorrect === null ? (
+        // Hidden for the moment it takes to confirm with the server that
+        // a reopened game has not already used its prompt.
+        promptCheckPending ? null : (
+        <button
+          onClick={() => {
+            if (!promptAnsweredRef.current) setShowSpotModal(true);
+          }}
+          className={`w-full rounded-lg ${refreshLayout ? "h-full py-2" : "py-3"} px-4 text-center text-white
+            hover:opacity-90 transition-opacity active:scale-[0.99]
+            animate-rainbow-breathe animate-rainbow-shimmer`}
+          style={{ background: theme.gradient, textShadow: theme.textShadow }}
+        >
+          <div className="solved-bar-title font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">{theme.spotPrompt}</div>
+          <div className="solved-bar-answers text-[13px] md:text-[15px] font-[575] leading-tight mt-0.5">Find one word from each group</div>
+        </button>
+        )
+      ) : (
+        <RainbowRevealBar
+          categoryName={puzzle.rainbowCategoryName}
+          categoryEmoji={puzzle.rainbowCategoryEmoji}
+          categoryEmojiHintOnly={puzzle.rainbowCategoryEmojiHintOnly}
+          theme={theme}
+          words={rainbowHerring}
+          alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
+          textClass={rainbowCardTextClass}
+          background={rainbowCardBg}
+          textShadow={rainbowCardTextShadow}
+          curtain={rainbowVisible}
+          fitText={refreshLayout}
+        />
+      )
+  ) : null;
+
+  // ── Refreshed layout: one shared space for the instruction and the Rainbow ──
+  // Before the Rainbow is found the space shows the instruction; the found
+  // Rainbow bar (or, after the game, the "spot the Rainbow" prompt and its
+  // reveal) then takes that same space instead of adding a row, so the board
+  // below never moves. The space is sized by an invisible copy of THIS
+  // puzzle's own Rainbow bar — its real name and all of its answers — stacked
+  // in the same grid cell, so it is always exactly tall enough.
+  const rainbowInSlot = !!rainbowHerring && state.gotRainbow;
+  const slotTaken = rainbowInSlot || !!rainbowEndCard || state.isComplete;
+  // Once the real bar is showing it sizes the slot itself (same box, same
+  // text), so the invisible copy goes — never two copies of its words.
+  const realBarShown = rainbowInSlot || (!!rainbowEndCard && bonusRainbowCorrect !== null);
+  const rainbowSlot = lockedFullResult && !state.gotRainbow ? null : (
+    // board-bars: the same size container and one-tile-row height rule as
+    // the solved bars below, so the slot, the instruction's space and the
+    // Rainbow bar are exactly as tall as an ordinary category bar; the gap
+    // under it is the board's own tile gap.
+    <div
+      className="board-bars board-bars-wide grid mb-1.5 md:mb-3 [&>*]:[grid-area:1/1]"
+      style={{ "--board-cols": format.columns } as import("react").CSSProperties}
+      data-testid="rainbow-slot"
+    >
+      {rainbowHerring && !realBarShown && (
+        <div aria-hidden="true" className="invisible pointer-events-none">
+          <RainbowRevealBar
+            categoryName={puzzle.rainbowCategoryName}
+            categoryEmoji={puzzle.rainbowCategoryEmoji}
+            categoryEmojiHintOnly={puzzle.rainbowCategoryEmojiHintOnly}
+            theme={theme}
+            words={rainbowHerring}
+            alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
+            textClass={rainbowCardTextClass}
+            background="transparent"
+            curtain
+            fitText
+          />
+        </div>
+      )}
+      {/* One line at every width: the size follows the viewport (the board
+          is the viewport minus its gutters below md), so the full sentence
+          always fits without wrapping or scrolling. */}
+      <p
+        aria-hidden={slotTaken || undefined}
+        className={`self-center text-center font-sans font-bold text-foreground whitespace-nowrap leading-tight
+          text-[clamp(12px,4.15vw,30px)] md:text-[28px] transition-opacity duration-300 ${slotTaken ? "opacity-0" : ""}`}
+      >
+        Select {SELECTION_COUNT_WORD[format.answersPerCategory] ?? format.answersPerCategory} words that share a connection.
+      </p>
+      {rainbowInSlot && rainbowHerring ? (
+        <RainbowRevealBar
+          categoryName={puzzle.rainbowCategoryName}
+          categoryEmoji={puzzle.rainbowCategoryEmoji}
+          categoryEmojiHintOnly={puzzle.rainbowCategoryEmojiHintOnly}
+          theme={theme}
+          words={rainbowHerring}
+          alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
+          textClass={rainbowCardTextClass}
+          background={rainbowCardBg}
+          textShadow={rainbowCardTextShadow}
+          curtain={rainbowVisible}
+          fitText={refreshLayout}
+        />
+      ) : rainbowEndCard}
+    </div>
+  );
+
+  // Color Palette Mode buttons. Classic layout: directly under the
+  // instruction and ABOVE the solved bars, so solving a category never moves
+  // it. Refreshed layout: below the Shuffle/Deselect/Submit row instead, so
+  // neither turning the setting on nor switching modes can move the grid.
+  const paletteRow = colorPaletteMode && remainingWords.length > 0 ? (
+      <div className={`flex items-center justify-center gap-2 ${refreshLayout ? "mt-4" : "mb-3"}`}>
+        <button
+          onClick={() => setPaletteMode("select")}
+          className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
+            ${paletteMode === "select"
+              ? "bg-foreground text-background ring-2 ring-foreground ring-offset-2 ring-offset-background"
+              : "bg-secondary hover:bg-secondary/80"
+            }`}
+          aria-label="Select mode"
+        >
+          <MousePointer2 className="w-5 h-5" />
+        </button>
+        {/* One swatch per colour THIS FORMAT uses, in difficulty order —
+            Full gets Yellow/Green/Blue/Red, Mini gets Green/Blue/Red.
+            categorySwatches() is the shared list WordTile's double-tap
+            picker also renders, so the two colouring interfaces can never
+            drift apart; see categoryPalette.ts for why the fills are the
+            solved-bar CSS variables rather than hardcoded hexes. */}
+        {categorySwatches(format).map(({ color, label, swatchClass }) => (
+          <button
+            key={color}
+            onClick={() => setPaletteMode(color)}
+            className={`w-10 h-10 rounded-lg ${swatchClass} hover:scale-110 transition-all
+              ${paletteMode === color ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+            aria-label={`${label} paint`}
+          />
+        ))}
+        <button
+          onClick={() => setPaletteMode("eraser")}
+          className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
+            ${paletteMode === "eraser"
+              ? "bg-foreground text-background ring-2 ring-foreground ring-offset-2 ring-offset-background"
+              : "bg-secondary hover:bg-secondary/80"
+            }`}
+          aria-label="Eraser"
+        >
+          <Eraser className="w-5 h-5" />
+        </button>
+      </div>
+  ) : null;
 
   return (
     <>
@@ -1475,54 +1637,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           <PuzzleModeBadge isRainbow={!!rainbowHerring} groupCount={format.categoryCount} />
         </div>
       )}
-      <p className="text-center font-sans text-[clamp(13px,4.2vw,16px)] font-bold tracking-wide text-foreground mb-2">
-        Select {SELECTION_COUNT_WORD[format.answersPerCategory] ?? format.answersPerCategory} words that share a connection!
-      </p>
-
-      {/* Color Palette Mode buttons. Fixed position: directly under the
-          instruction and ABOVE the solved bars, so solving a category never
-          moves it. Order: instruction, palette, solved bars, remaining board. */}
-      {colorPaletteMode && remainingWords.length > 0 && (
-        <div className="flex items-center justify-center gap-2 mb-3">
-          <button
-            onClick={() => setPaletteMode("select")}
-            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
-              ${paletteMode === "select"
-                ? "bg-foreground text-background ring-2 ring-foreground ring-offset-2 ring-offset-background"
-                : "bg-secondary hover:bg-secondary/80"
-              }`}
-            aria-label="Select mode"
-          >
-            <MousePointer2 className="w-5 h-5" />
-          </button>
-          {/* One swatch per colour THIS FORMAT uses, in difficulty order —
-              Full gets Yellow/Green/Blue/Red, Mini gets Green/Blue/Red.
-              categorySwatches() is the shared list WordTile's double-tap
-              picker also renders, so the two colouring interfaces can never
-              drift apart; see categoryPalette.ts for why the fills are the
-              solved-bar CSS variables rather than hardcoded hexes. */}
-          {categorySwatches(format).map(({ color, label, swatchClass }) => (
-            <button
-              key={color}
-              onClick={() => setPaletteMode(color)}
-              className={`w-10 h-10 rounded-lg ${swatchClass} hover:scale-110 transition-all
-                ${paletteMode === color ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
-              aria-label={`${label} paint`}
-            />
-          ))}
-          <button
-            onClick={() => setPaletteMode("eraser")}
-            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
-              ${paletteMode === "eraser"
-                ? "bg-foreground text-background ring-2 ring-foreground ring-offset-2 ring-offset-background"
-                : "bg-secondary hover:bg-secondary/80"
-              }`}
-            aria-label="Eraser"
-          >
-            <Eraser className="w-5 h-5" />
-          </button>
-        </div>
+      {refreshLayout ? rainbowSlot : (
+        <p className="text-center font-sans text-[clamp(13px,4.2vw,16px)] font-bold tracking-wide text-foreground mb-2">
+          Select {SELECTION_COUNT_WORD[format.answersPerCategory] ?? format.answersPerCategory} words that share a connection!
+        </p>
       )}
+
+      {!refreshLayout && paletteRow}
 
       {/* Compact board wrapper — Mini only (see isMiniBoard above). Caps the
           solved bars, Rainbow reveal bar and tile grid together at ~330px so
@@ -1542,7 +1663,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           animated tiles draw in front of solved bars. */}
       <div
         ref={barsListRef}
-        className={`board-bars relative z-[1] pt-2 ${
+        className={`board-bars relative z-[1] ${refreshLayout ? "" : "pt-2"} ${
           isMiniBoard
             ? `board-bars-square space-y-2 ${barsInFlow ? "mb-2" : ""}`
             : `space-y-1.5 ${barsInFlow ? "mb-1.5" : ""} ${useWideBoard ? `board-bars-wide md:space-y-3 ${barsInFlow ? "md:mb-3" : ""}` : ""}`
@@ -1563,11 +1684,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               background={rainbowCardBg}
               textShadow={rainbowCardTextShadow}
               curtain={rainbowVisible}
+              fitText={refreshLayout}
             />
           ) : (
             <SolvedGroup
               key={slot.groupIdx}
               group={puzzle.groups[slot.groupIdx]}
+              fitText={refreshLayout}
               alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
               // animate-group-appear is only for bars that DIDN'T go through the
               // solve animation (reduced-motion path, loss cascade). Animated
@@ -1584,42 +1707,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           )
         )}
 
-        {/* Not on a board locked by a result this browser holds no copy of
-            (lockedByOfficialResult): the prompt would score a Rainbow onto an
-            empty local game whose outcome is unknown here. */}
-        {showEndState && !lockedFullResult && !state.gotRainbow && rainbowHerring && (
-          bonusRainbowCorrect === null ? (
-            // Hidden for the moment it takes to confirm with the server that
-            // a reopened game has not already used its prompt.
-            promptCheckPending ? null : (
-            <button
-              onClick={() => {
-                if (!promptAnsweredRef.current) setShowSpotModal(true);
-              }}
-              className="w-full rounded-lg py-3 px-4 text-center text-white
-                hover:opacity-90 transition-opacity active:scale-[0.99]
-                animate-rainbow-breathe animate-rainbow-shimmer"
-              style={{ background: theme.gradient, textShadow: theme.textShadow }}
-            >
-              <div className="font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">{theme.spotPrompt}</div>
-              <div className="text-[13px] md:text-[15px] font-[575] leading-tight mt-0.5">Find one word from each group</div>
-            </button>
-            )
-          ) : (
-            <RainbowRevealBar
-              categoryName={puzzle.rainbowCategoryName}
-              categoryEmoji={puzzle.rainbowCategoryEmoji}
-              categoryEmojiHintOnly={puzzle.rainbowCategoryEmojiHintOnly}
-              theme={theme}
-              words={rainbowHerring}
-              alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
-              textClass={rainbowCardTextClass}
-              background={rainbowCardBg}
-              textShadow={rainbowCardTextShadow}
-              curtain={rainbowVisible}
-            />
-          )
-        )}
+        {/* The post-game Rainbow prompt/reveal (see rainbowEndCard). */}
+        {!refreshLayout && rainbowEndCard}
       </div>
 
       {/* Word grid. Stays mounted (empty) through the settle beat of the
@@ -1688,6 +1777,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 colorPaletteMode={colorPaletteMode}
                 isPaintMode={colorPaletteMode && paletteMode !== "select"}
                 squareTiles={isMiniBoard}
+                splitLongWords={refreshLayout}
                 data-word={word}
               />
             );
@@ -1767,8 +1857,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           regardless of whether this live span ever rendered). With no
           second item in this row, the pill is simply centered. */}
       {!wasAlreadyComplete.current && (
-        <div className="mt-4 w-full flex items-center justify-center">
-          <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} />
+        <div className={`${refreshLayout ? "mt-3 md:mt-4" : "mt-4"} w-full flex items-center justify-center`}>
+          <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} plain={refreshLayout} />
         </div>
       )}
 
@@ -1826,6 +1916,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               Submit
             </button>
           </div>
+          {refreshLayout && paletteRow}
           {(colorCodeTiles || colorPaletteMode) && hasAnyColor && (
             // Same w-full md:w-[80%] mx-auto grid-cols-3 gap-2 math as the
             // Shuffle/Deselect All/Submit row above, with the button in the
@@ -1957,19 +2048,32 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
       {/* Guess History */}
       {settings?.guessHistory && incorrectGuesses.length > 0 && (
-        <div className="mt-3 rounded-2xl bg-card border border-border overflow-hidden">
+        // Refreshed layout: a narrower card than the board (as in the
+        // mock-ups), its title left-aligned with the guess count.
+        <div className={refreshLayout
+          ? "mt-5 mx-auto w-[86%] sm:w-[72%] max-w-[600px] rounded-xl bg-card border border-border overflow-hidden"
+          : "mt-3 rounded-2xl bg-card border border-border overflow-hidden"}>
           <button
             onClick={() => setHistoryExpanded((v) => !v)}
             aria-expanded={historyExpanded}
-            className="relative w-full px-4 py-3 text-center hover:bg-secondary/40 transition-colors"
+            className={`relative w-full px-4 py-3 hover:bg-secondary/40 transition-colors ${refreshLayout ? "text-left" : "text-center"}`}
           >
             {/* Centered relative to the full card width — the chevron below
                 is positioned absolutely so it doesn't shift this group off
                 center. */}
+            {refreshLayout ? (
+              <span className="flex items-center gap-2.5 pr-6">
+                <History className="w-5 h-5 text-foreground shrink-0" />
+                <span className="text-sm md:text-base font-semibold text-foreground">
+                  Guess History ({incorrectGuesses.length})
+                </span>
+              </span>
+            ) : (
             <span className="flex items-center justify-center gap-2">
               <History className="w-4 h-4 text-muted-foreground shrink-0" />
               <span className="text-sm font-bold text-foreground">Guess History</span>
             </span>
+            )}
             <ChevronDown
               className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
                 historyExpanded ? "rotate-180" : ""
@@ -1977,7 +2081,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             />
           </button>
           {historyExpanded && (
-            <div className="px-4 pb-3 divide-y divide-border">
+            <div className={refreshLayout ? "mx-4 pt-2 pb-3 border-t border-border divide-y divide-border" : "px-4 pb-3 divide-y divide-border"}>
               {incorrectGuesses.map((g, i) => {
                 const sorted = [...g.words].sort((a, b) => a.localeCompare(b));
                 // Reuse the guess's own stored feedback (set at guess-time in
@@ -1997,14 +2101,20 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                         selection rows — cell width never varies with word
                         length, and grid rows keep every cell the same
                         height even when one wraps to two lines. */}
+                    {/* Refreshed layout: two by two on phones, one row from
+                        sm up (the board's four columns). */}
                     <div
-                      className="grid gap-1"
-                      style={{ gridTemplateColumns: `repeat(${format.answersPerCategory}, minmax(0, 1fr))` }}
+                      className={refreshLayout ? "grid gap-1.5 grid-cols-2 sm:[grid-template-columns:var(--history-cols)]" : "grid gap-1"}
+                      style={refreshLayout
+                        ? ({ "--history-cols": `repeat(${format.answersPerCategory}, minmax(0, 1fr))` } as import("react").CSSProperties)
+                        : { gridTemplateColumns: `repeat(${format.answersPerCategory}, minmax(0, 1fr))` }}
                     >
                       {sorted.map((w, j) => (
                         <span
                           key={`${w}-${j}`}
-                          className="flex items-center justify-center min-w-0 bg-secondary text-foreground rounded-md px-0.5 py-1.5 text-[11px] sm:text-xs md:text-sm font-medium text-center leading-tight"
+                          className={refreshLayout
+                            ? "flex items-center justify-center min-w-0 bg-secondary text-foreground rounded-lg px-1 py-1.5 text-xs md:text-sm font-medium text-center leading-tight"
+                            : "flex items-center justify-center min-w-0 bg-secondary text-foreground rounded-md px-0.5 py-1.5 text-[11px] sm:text-xs md:text-sm font-medium text-center leading-tight"}
                         >
                           {isCustomEmoji(w) ? (
                             <img
