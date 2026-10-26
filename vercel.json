@@ -1,4 +1,20 @@
 {
+  "redirects": [
+    { "source": "/favicon.svg", "destination": "/icons/rainbow-favicon-32x32-2cbde970.png", "permanent": false },
+    { "source": "/favicon-16x16.png", "destination": "/icons/rainbow-favicon-32x32-2cbde970.png", "permanent": false },
+    { "source": "/favicon-32x32.png", "destination": "/icons/rainbow-favicon-32x32-2cbde970.png", "permanent": false },
+    { "source": "/favicon-48x48.png", "destination": "/icons/rainbow-favicon-32x32-2cbde970.png", "permanent": false },
+    { "source": "/favicon-96x96.png", "destination": "/icons/rainbow-icon-192-0e09e6d1.png", "permanent": false },
+    { "source": "/apple-touch-icon-precomposed.png", "destination": "/icons/rainbow-apple-touch-icon-e5ee3a28.png", "permanent": false },
+    { "source": "/apple-touch-icon-180x180.png", "destination": "/icons/rainbow-apple-touch-icon-e5ee3a28.png", "permanent": false },
+    { "source": "/web-app-manifest-192x192.png", "destination": "/icons/rainbow-icon-192-0e09e6d1.png", "permanent": false },
+    { "source": "/web-app-manifest-512x512.png", "destination": "/icons/rainbow-icon-512-f49e2fef.png", "permanent": false },
+    { "source": "/mini-favicon.ico", "destination": "/icons/mini-favicon-f4546936.ico", "permanent": false },
+    { "source": "/mini-favicon-32x32.png", "destination": "/icons/mini-favicon-32x32-646d7866.png", "permanent": false },
+    { "source": "/mini-apple-touch-icon.png", "destination": "/icons/mini-apple-touch-icon-50ebe6fa.png", "permanent": false },
+    { "source": "/mini-web-app-manifest-192x192.png", "destination": "/icons/mini-icon-192-bf5daacd.png", "permanent": false },
+    { "source": "/mini-web-app-manifest-512x512.png", "destination": "/icons/mini-icon-512-322acc10.png", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/mini", "destination": "/mini.html" },
     { "source": "/mini/(.*)", "destination": "/mini.html" },
@@ -15,6 +31,12 @@
       "source": "/(.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|woff|woff2|ttf|otf))",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=86400" }
+      ]
+    },
+    {
+      "source": "/icons/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {

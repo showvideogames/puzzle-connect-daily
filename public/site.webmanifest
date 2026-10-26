@@ -3,13 +3,13 @@
   "short_name": "🌈 Categories",
   "icons": [
     {
-      "src": "/web-app-manifest-192x192.png?v=20261025",
+      "src": "/icons/rainbow-icon-192-0e09e6d1.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/web-app-manifest-512x512.png?v=20261025",
+      "src": "/icons/rainbow-icon-512-f49e2fef.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
