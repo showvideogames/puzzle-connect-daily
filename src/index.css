@@ -173,6 +173,29 @@ html {
     --sidebar-border: 220 10% 22%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+
+  /* Layout refresh preview — the Full Daily page only (Index toggles the
+     class; Mini and every other page never get it). A white page with
+     neutral greys in place of the warm cream, light mode only. The category
+     colours, selected tile and Submit purple are untouched; tiles keep their
+     border and get a slightly firmer shadow so they still read as buttons on
+     white. */
+  html.layout-refresh:not(.dark) {
+    --background: 0 0% 100%;
+    --card: 0 0% 100%;
+    --popover: 0 0% 100%;
+    --secondary: 0 0% 94%;
+    --muted: 0 0% 95%;
+    --accent: 0 0% 94%;
+    --border: 0 0% 88%;
+    --input: 0 0% 88%;
+    --divider: 0 0% 91%;
+    --tile-bg: 0 0% 100%;
+    --tile-border: 0 0% 87%;
+    --action-secondary-bg: 0 0% 93%;
+    --disabled-bg: 0 0% 94%;
+    --disabled-fg: 0 0% 62%;
+  }
 }
 
 @layer base {
@@ -207,6 +230,9 @@ html {
     border: 1px solid hsl(var(--tile-border));
     color: hsl(var(--ink));
     box-shadow: 0 1px 2px rgba(30, 25, 20, 0.04), 0 2px 6px rgba(30, 25, 20, 0.05);
+  }
+  html.layout-refresh:not(.dark) .cloud-tile {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 3px 8px rgba(0, 0, 0, 0.06);
   }
   .dark .cloud-tile {
     background: linear-gradient(145deg, #2c2933, #232029);

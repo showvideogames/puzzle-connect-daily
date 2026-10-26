@@ -53,7 +53,7 @@ test.describe("Public Full — today's puzzle", () => {
 
     test("states the Full instruction and the four-mistake allowance @smoke", async ({ page }) => {
       await expect(
-        page.getByText("Select four words that share a connection!")
+        page.getByText("Select four words that share a connection.")
       ).toBeVisible();
       // The dots are decorative (aria-hidden); the status line is the real
       // announcement of how many mistakes remain.

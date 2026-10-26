@@ -1,9 +1,11 @@
 interface MistakeDotsProps {
   mistakes: number;
   max: number;
+  /** Bare text and dots, no pill (the refreshed Full Daily layout). */
+  plain?: boolean;
 }
 
-export function MistakeDots({ mistakes, max }: MistakeDotsProps) {
+export function MistakeDots({ mistakes, max, plain = false }: MistakeDotsProps) {
   const remaining = max - mistakes;
   return (
     // A quiet metadata pill rather than text/dots floating directly on the
@@ -13,8 +15,10 @@ export function MistakeDots({ mistakes, max }: MistakeDotsProps) {
     // only (dark already gets its separation from the border/bg contrast
     // against the page, and doesn't need an added shadow layer).
     <div
-      className="mx-auto w-fit flex items-center gap-1.5 justify-center rounded-full border border-border bg-card
-        px-4 py-2 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none"
+      className={plain
+        ? "mx-auto w-fit flex items-center gap-1.5 justify-center py-1"
+        : `mx-auto w-fit flex items-center gap-1.5 justify-center rounded-full border border-border bg-card
+        px-4 py-2 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none`}
     >
       <span className="text-sm md:text-base text-slate mr-1">Mistakes remaining:</span>
       <span className="sr-only" role="status">

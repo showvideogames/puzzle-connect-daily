@@ -3,7 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Switch } from "@/components/ui/switch";
 import { GameSettings } from "@/lib/settings";
 import { Link } from "react-router-dom";
-import { BookOpen, Archive as ArchiveIcon, Grid2x2, Star, X } from "lucide-react";
+import { BookOpen, Archive as ArchiveIcon, Grid2x2, PlusCircle, Star, X } from "lucide-react";
 import { PlayerAuth } from "./PlayerAuth";
 import { ACCOUNTS_ENABLED } from "@/lib/platformSignIn";
 import { FULL_FORMAT, MINI_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
@@ -20,6 +20,8 @@ interface SettingsModalProps {
   // Left undefined/false everywhere else so archive's Settings modal is
   // unchanged.
   showMenuLinks?: boolean;
+  /** Adds "Create a Puzzle" to the Menu section — for a page whose header no longer carries the Create pill. */
+  showCreateLink?: boolean;
   onHowToPlayClick?: () => void;
   user?: AuthUser | null;
   onSignOut?: () => void;
@@ -33,7 +35,7 @@ interface SettingsModalProps {
   format?: PuzzleFormat;
 }
 
-export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback, showMenuLinks = false, onHowToPlayClick, user = null, onSignOut, format = FULL_FORMAT }: SettingsModalProps) {
+export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback, showMenuLinks = false, showCreateLink = false, onHowToPlayClick, user = null, onSignOut, format = FULL_FORMAT }: SettingsModalProps) {
   const isMini = format.id === MINI_FORMAT.id;
   // Drives PlayerAuth's forceOpen below, so the "Sign In"/"Account" TEXT
   // (not just PlayerAuth's own icon button) opens the sign-in modal or
@@ -148,6 +150,17 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                       <BookOpen className="w-4 h-4 text-slate" />
                       How to Play
                     </button>
+                    {showCreateLink && (
+                      <Link
+                        to="/create"
+                        onClick={onClose}
+                        className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
+                          hover:bg-secondary transition-colors active:scale-95"
+                      >
+                        <PlusCircle className="w-4 h-4 text-slate" />
+                        Create a Puzzle
+                      </Link>
+                    )}
                     {/* THIS game's archive. On a Mini page it is the Mini
                         archive, and it says so, so the two are never
                         ambiguous when both games are one tap apart. */}
