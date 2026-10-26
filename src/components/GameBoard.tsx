@@ -1777,6 +1777,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 colorPaletteMode={colorPaletteMode}
                 isPaintMode={colorPaletteMode && paletteMode !== "select"}
                 squareTiles={isMiniBoard}
+                splitLongWords={refreshLayout}
                 data-word={word}
               />
             );
