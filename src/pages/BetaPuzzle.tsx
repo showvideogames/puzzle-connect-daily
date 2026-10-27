@@ -137,10 +137,10 @@ export default function BetaPuzzle() {
         showCreateLink={false}
         wideHeader
       />
-      <div className="w-full max-w-[840px] border-b border-border mb-3" />
+      <div className="w-full max-w-[840px] border-b border-border mb-1 md:mb-3" />
 
-      <div className="w-full max-w-[840px] px-4 mb-2">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 sm:gap-2 mt-2">
+      <div className="w-full max-w-[840px] px-4 mb-1 sm:mb-2">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 sm:gap-2 mt-1 sm:mt-2">
           <button
             onClick={() => navigate("/beta")}
             className="w-[68px] sm:w-[88px] shrink-0 inline-flex items-center justify-center gap-0.5 whitespace-nowrap h-8 sm:h-9 rounded-full border border-border bg-card
@@ -151,7 +151,7 @@ export default function BetaPuzzle() {
             Beta
           </button>
           <h1 className="min-w-0 text-center overflow-hidden whitespace-nowrap text-ellipsis
-            font-tile font-bold tracking-tight text-foreground text-[clamp(1.5rem,8vw,2rem)] sm:text-3xl">
+            font-tile font-bold tracking-tight text-foreground text-[clamp(1.375rem,6.5vw,1.75rem)] sm:text-3xl">
             {puzzle?.title?.trim() || "Playtest"}
           </h1>
           <div className="w-[68px] sm:w-[88px] shrink-0" />
@@ -162,11 +162,12 @@ export default function BetaPuzzle() {
             one. Not shown on the not-found state, which has no game to
             disclaim anything about. */}
         {puzzle && !error && (
-          <div className="mt-2 flex items-center justify-center gap-1.5 text-center text-xs sm:text-sm font-medium
+          <div className="mt-1 sm:mt-2 flex items-center justify-center gap-1.5 text-center text-xs sm:text-sm font-medium
             text-amber-800 dark:text-amber-200 bg-amber-100/80 dark:bg-amber-900/30 border border-amber-300/60 dark:border-amber-800/60
             rounded-full px-3 py-1.5 mx-auto w-fit">
             <FlaskConical className="w-3.5 h-3.5 shrink-0" />
-            Playtest Puzzle — Results won't affect your official stats or streak.
+            <span className="sm:hidden">Playtest — won't affect your stats or streak.</span>
+            <span className="hidden sm:inline">Playtest Puzzle — Results won't affect your official stats or streak.</span>
           </div>
         )}
       </div>

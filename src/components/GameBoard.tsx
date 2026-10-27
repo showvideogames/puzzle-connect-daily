@@ -1567,7 +1567,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // content: the label (with its 🌈, if any) and the close button sit together
   // as one group, centred with equal padding on both sides. Rainbow Spotted
   // keeps its rainbow fill as the success message.
-  const pillBase = "relative inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full text-[15px] sm:text-base font-extrabold leading-none animate-fade-up motion-reduce:animate-none";
+  const pillBase = "relative inline-flex h-9 sm:h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full text-[15px] sm:text-base font-extrabold leading-none animate-fade-up motion-reduce:animate-none";
   const purplePill = `${pillBase} border-2 border-[hsl(var(--brand-purple-to))] bg-white text-[hsl(258_68%_48%)] shadow-[0_2px_8px_-3px_rgba(139,92,246,0.45)] dark:bg-card dark:text-[hsl(var(--brand-purple-from))]`;
   const feedbackAnnouncement = !feedbackKind
     ? ""
@@ -1799,7 +1799,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           present only while a message shows — it pushes the mistakes line and
           controls down, and its space goes with it. The board never moves. */}
       {feedbackPill && (
-        <div data-testid="feedback-row" className="mt-3 md:mt-4 flex justify-center">
+        <div data-testid="feedback-row" className="mt-2 md:mt-4 flex justify-center">
           {feedbackPill}
         </div>
       )}
@@ -1818,7 +1818,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           regardless of whether this live span ever rendered). With no
           second item in this row, the pill is simply centered. */}
       {!wasAlreadyComplete.current && (
-        <div className="mt-3 md:mt-4 w-full flex items-center justify-center">
+        <div className="mt-2 md:mt-4 w-full flex items-center justify-center">
           <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} plain />
         </div>
       )}
@@ -1829,11 +1829,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           fixed-width buttons floating narrower than the grid above them. */}
       {!state.isComplete && (
         <>
-          <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-3">
+          <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-2 sm:mt-3">
             <button
               onClick={shuffle}
               disabled={isChecking || reveal !== null}
-              className={`w-full ${isMiniBoard ? "h-12" : "h-14"} rounded-full text-sm md:text-base font-bold transition-colors
+              className={`w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold transition-colors
                 bg-action-secondary-bg text-action-secondary-fg border border-transparent
                 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
                 dark:bg-secondary dark:text-foreground dark:border-border
@@ -1847,7 +1847,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <button
               onClick={handleDeselectAll}
               disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
-              className={`w-full ${isMiniBoard ? "h-12" : "h-14"} rounded-full text-sm md:text-base font-bold transition-colors
+              className={`w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold transition-colors
                 border border-transparent
                 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
                 dark:bg-secondary dark:text-foreground dark:border-border
@@ -1865,7 +1865,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <button
               onClick={handleSubmit}
               disabled={state.selectedWords.length !== format.answersPerCategory || isChecking || reveal !== null}
-              className={`w-full ${isMiniBoard ? "h-12" : "h-14"} rounded-full text-sm md:text-base font-bold text-white transition-all
+              className={`w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold text-white transition-all
                 bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
                 shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]
                 hover:-translate-y-px active:scale-95
@@ -1884,7 +1884,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             // center column only — guarantees this matches one of those
             // buttons' width exactly (not an eyeballed value) while staying
             // centered, rather than sizing its own single-button container.
-            <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-3">
+            <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-2 sm:mt-3">
               <div aria-hidden="true" />
               <button
                 onClick={clearAllColors}

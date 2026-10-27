@@ -533,8 +533,9 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // whichever column that is for this board's width.
   const isRightEdge = column === format.columns;
 
-  // Mobile height is DERIVED from width via aspect-ratio (11:10, i.e. tiles
-  // are ~10% wider than tall) rather than an independently-tuned vw clamp —
+  // Mobile height is DERIVED from width via aspect-ratio (5:4 below md, Mini
+  // included, so the board, feedback and controls fit a phone screen; tiles
+  // are 25% wider than tall) rather than an independently-tuned vw clamp —
   // width already comes from the board grid dividing up the available
   // board width, so deriving height from it guarantees the same tile
   // proportions at every mobile screen width instead of tiles getting
@@ -542,7 +543,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // desktop (md:768px+) keep the previously-approved flat 110px height,
   // unchanged from before this pass (md:aspect-auto hands sizing back to
   // that explicit height there).
-  const baseClasses = `tile-base font-tile ${squareTiles ? "aspect-square" : "aspect-[11/10] md:aspect-auto md:h-[110px]"} font-[700] transition-all duration-150 ease-out relative
+  const baseClasses = `tile-base font-tile ${squareTiles ? "aspect-[5/4] md:aspect-square" : "aspect-[5/4] md:aspect-auto md:h-[110px]"} font-[700] transition-all duration-150 ease-out relative
     ${disabled ? (tileColor || isRainbow || !dimWhenDisabled ? "cursor-default" : "opacity-50 cursor-default") : ""}
   `;
 

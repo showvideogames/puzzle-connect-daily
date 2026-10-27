@@ -32,13 +32,13 @@ function renderHeader() {
 }
 
 describe("shared header", () => {
-  it("logo is 128px wide on mobile (stacked mark, never shrinks), 36px tall on tablet, 56px on desktop, aspect ratio preserved", () => {
+  it("logo is 104px wide on mobile (stacked mark, never shrinks), 36px tall on tablet, 56px on desktop, aspect ratio preserved", () => {
     const { container } = renderHeader();
     const logos = Array.from(container.querySelectorAll("a[aria-label='Home'] img")) as HTMLImageElement[];
     expect(logos).toHaveLength(2);
     const [stacked, oneLine] = logos;
     expect(stacked.getAttribute("src")).toContain("stacked");
-    expect(stacked.className).toContain("w-[128px]"); // mobile
+    expect(stacked.className).toContain("w-[104px]"); // mobile
     expect(stacked.className).toContain("shrink-0");
     expect(stacked.className).toContain("h-auto");
     expect(stacked.className).toContain("md:hidden");

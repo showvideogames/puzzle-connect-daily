@@ -415,15 +415,16 @@ html {
    The list of solved bars (.board-bars, GameBoard) is a size container the
    width of the board, and works out one tile's height from it the same way
    the grid does: (board width − the gaps) ÷ columns, then the tile's own
-   shape — 11:10 on a Full board below md, a flat 110px from md up, square
-   on a Mini. So when four tiles merge into their bar, the bar covers the
+   shape — 5:4 below md (phones, Full and Mini alike), from md up a flat
+   110px on a Full board and square on a Mini. So when four tiles merge into
+   their bar, the bar covers the
    whole row including the gaps between the tiles, and the board below
    doesn't move. min-height rather than height, so an unusually long answer
    line (big emoji answers) can still grow the bar instead of overflowing. */
 .board-bars {
   container-type: inline-size;
   --board-gap: 6px;
-  --solved-row-h: calc((100cqw - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols) * 10 / 11);
+  --solved-row-h: calc((100cqw - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols) * 4 / 5);
 }
 @media (min-width: 768px) {
   .board-bars { --solved-row-h: 110px; }
@@ -431,7 +432,12 @@ html {
 }
 .board-bars.board-bars-square {
   --board-gap: 8px;
-  --solved-row-h: calc((100cqw - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols));
+  --solved-row-h: calc((100cqw - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols) * 4 / 5);
+}
+@media (min-width: 768px) {
+  .board-bars.board-bars-square {
+    --solved-row-h: calc((100cqw - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols));
+  }
 }
 .solved-bar {
   min-height: var(--solved-row-h, auto);

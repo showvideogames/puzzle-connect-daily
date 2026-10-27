@@ -146,7 +146,7 @@ export default function CustomPuzzle() {
         showCreateLink={false}
         wideHeader
       />
-      <div className="w-full max-w-[840px] border-b border-border mb-3" />
+      <div className="w-full max-w-[840px] border-b border-border mb-1 md:mb-3" />
 
       {puzzle && !error ? (
         <CustomPuzzleHeader
