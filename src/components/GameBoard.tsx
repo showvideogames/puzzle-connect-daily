@@ -1515,6 +1515,69 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     </div>
   );
 
+  // ── Notifications: one reserved strip at the top of the game ──
+  // "Rainbow Spotted!", "One away…" (or its Rainbow variant) and "Already
+  // guessed!" show one at a time in a fixed-height strip above the
+  // instruction, so showing or hiding one never moves anything and never
+  // covers the header, instruction or board. The newest kind of event wins:
+  // Already guessed (2s), then One away, then Rainbow Spotted (3s). Timing is
+  // useGame's, unchanged.
+  //
+  // One away belongs to the guess that produced it: it shows only while
+  // every word of that submitted guess is still selected, so deselecting any
+  // of them (one tile, or Deselect All) hides it in that same render, before
+  // useGame's own selection effect clears the flag for good. Only a new
+  // submitted One Away result can set it again.
+  const lastGuess = useMemo(() => {
+    for (let i = state.guessHistory.length - 1; i >= 0; i--) {
+      if (!state.guessHistory[i].isHintMarker) return state.guessHistory[i];
+    }
+    return undefined;
+  }, [state.guessHistory]);
+  const oneAwayGuessStillSelected =
+    !!lastGuess && lastGuess.words.every((w) => state.selectedWords.includes(w));
+  const oneAwayKind = almostRainbow ? "almost" : oneAway ? "plain" : null;
+  const showOneAway = oneAwayKind !== null && oneAwayGuessStillSelected;
+  const dismissOneAway = () => {
+    setAlmostRainbow(false);
+    setOneAway(false);
+  };
+  const notificationPill = "inline-flex max-w-full items-center gap-2 whitespace-nowrap rounded-full text-sm shadow-md animate-fade-up";
+  const notificationStrip = (
+    <div role="status" aria-live="polite" className="h-9 mb-1 flex items-center justify-center" data-testid="notification-strip">
+      {alreadyGuessed ? (
+        <div className={`${notificationPill} bg-foreground text-background px-5 py-1.5 font-semibold`}>
+          {alreadyGuessed === "oneaway" ? "Already guessed — and one away!" : "Already guessed!"}
+        </div>
+      ) : showOneAway ? (
+        <div className={`${notificationPill} bg-foreground text-background pl-5 pr-2 py-1.5 font-semibold`}>
+          {oneAwayKind === "almost" ? theme.almostMessage : "One away…"}
+          <button
+            onClick={dismissOneAway}
+            className="w-6 h-6 rounded-full bg-background/20 hover:bg-background/30 flex items-center justify-center transition-colors active:scale-95"
+            aria-label="Dismiss"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : showRainbowPopup ? (
+        // Animated (or static, per the Rainbow Animation setting) rainbow
+        // fill for the default theme; a themed bonus's gradient is a fixed
+        // image either way. Static uses dark ink text on its softer gradient.
+        <div
+          className={`${notificationPill} px-5 py-1.5 font-bold ${
+            theme.isDefault
+              ? showRainbow ? "rainbow-tile text-white" : "rainbow-tile-static text-[#292825]"
+              : "text-white"
+          }`}
+          style={!theme.isDefault ? { background: theme.gradient, textShadow: theme.textShadow } : undefined}
+        >
+          {theme.spottedMessage}
+        </div>
+      ) : null}
+    </div>
+  );
+
   // Color Palette Mode buttons, below the Shuffle/Deselect/Submit row, so
   // neither turning the setting on nor switching modes can move the grid.
   const paletteRow = colorPaletteMode && remainingWords.length > 0 ? (
@@ -1567,6 +1630,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       ) : (
     <div className={`w-full mx-auto animate-fade-up ${useWideBoard ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
+      {notificationStrip}
       {/* Puzzle-mode badge on its own right-aligned row (opt-in via
           showModeBadge — see its prop doc), then the centered instruction
           directly beneath — stacked (not sharing one row) so both read
@@ -1580,8 +1644,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* The board area: the instruction/Rainbow slot, the solved bars and the
           tile grid. On a Mini it is capped at ~330px so all three share one
           width and stop growing past it; the controls below keep the page
-          width. relative: the notification overlays are placed against it. */}
-      <div className={isMiniBoard ? "relative w-full max-w-[330px] mx-auto" : "relative"}>
+          width. */}
+      <div className={isMiniBoard ? "w-full max-w-[330px] mx-auto" : undefined}>
       {rainbowSlot}
       {/* The solved bars. Spaced exactly like the tile grid (same gaps), and
           each bar is one tile row tall (.board-bars / .solved-bar in
@@ -1694,76 +1758,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* Notifications ("Rainbow Spotted!", "One away…", "Already guessed!").
-          Temporary overlays floating over the bottom of the board area, not
-          rows in the page: showing or hiding one never moves the board, the
-          mistakes indicator or the controls. pointer-events-none, so a tap
-          lands on the tile underneath; only a pill's own dismiss button takes
-          taps. Their timing is useGame's, unchanged. */}
-      <div
-        role="status"
-        aria-live="polite"
-        className="pointer-events-none absolute inset-x-0 bottom-3 z-30 flex flex-col items-center gap-2"
-      >
-        {/* Rainbow Spotted popup — animated (or static, per the Rainbow
-            Animation setting) rainbow-tile for the default theme; themed
-            gradients are already static images and always show regardless
-            of that setting, same as the actual game tiles. Static uses dark
-            ink text (better contrast on that softer gradient); animated and
-            themed keep the original white text. */}
-        {showRainbowPopup && (
-          <div className="flex justify-center animate-fade-up">
-            <div
-              className={`${
-                theme.isDefault
-                  ? showRainbow ? "rainbow-tile text-white" : "rainbow-tile-static text-[#292825]"
-                  : "text-white"
-              } px-6 py-2.5 rounded-full text-sm font-bold shadow-lg`}
-              style={!theme.isDefault ? { background: theme.gradient, textShadow: theme.textShadow } : undefined}
-            >
-              {theme.spottedMessage}
-            </div>
-          </div>
-        )}
-
-        {/* Almost 🌈 takes priority over One Away */}
-        {almostRainbow ? (
-          <div className="flex justify-center animate-fade-up">
-            <div className="bg-foreground text-background pl-5 pr-3 py-2 rounded-full text-sm font-semibold shadow-md flex items-center gap-2">
-              {theme.almostMessage}
-              <button
-                onClick={() => setAlmostRainbow(false)}
-                className="pointer-events-auto w-5 h-5 rounded-full bg-background/20 hover:bg-background/30 flex items-center justify-center transition-colors active:scale-95"
-                aria-label="Dismiss"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-        ) : oneAway ? (
-          <div className="flex justify-center animate-fade-up">
-            <div className="bg-foreground text-background pl-5 pr-3 py-2 rounded-full text-sm font-semibold shadow-md flex items-center gap-2">
-              One away…
-              <button
-                onClick={() => setOneAway(false)}
-                className="pointer-events-auto w-5 h-5 rounded-full bg-background/20 hover:bg-background/30 flex items-center justify-center transition-colors active:scale-95"
-                aria-label="Dismiss"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Already Guessed popup */}
-        {alreadyGuessed && (
-          <div className="flex justify-center animate-fade-up">
-            <div className="bg-foreground text-background px-5 py-2 rounded-full text-sm font-semibold shadow-md">
-              {alreadyGuessed === "oneaway" ? "Already guessed — and one away!" : "Already guessed!"}
-            </div>
-          </div>
-        )}
-      </div>
       </div>
 
       {/* Mistakes dots — hidden when viewing an already-completed puzzle.
