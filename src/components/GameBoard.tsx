@@ -1511,16 +1511,23 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     </div>
   );
 
-  // ── Guess feedback, beside Mistakes Remaining ──
+  // ── Guess feedback, in its own row directly below the board ──
   // After a wrong guess exactly one message shows, read from that guess's own
   // stored result (useGame records it on the attempt at submission, with the
   // existing one-away and near-Rainbow rules): "One Away... 🌈" for a
-  // near-Rainbow guess, "One Away..." for one away, otherwise "Incorrect". It
-  // stays until the player clicks/taps anywhere on the board (which still
-  // does its normal action), presses its ×, or uses Deselect All, and only a
-  // new submission can show one again. A message is armed by a submission in
-  // this visit, so a restored game never reopens its last guess's message.
-  // "Rainbow Spotted!" (3s) and "Already guessed!" (2s) keep useGame's timing.
+  // near-Rainbow guess, "One Away..." for one away, otherwise "Incorrect".
+  //  - One Away (either kind) belongs to the exact set of tiles selected when
+  //    it was triggered — the submitted guess's words, by identity, so a
+  //    shuffle doesn't matter. It goes when that set changes (deselecting a
+  //    tile, Deselect All) or on its ×. A fifth tile can't be added to a full
+  //    selection, so clicking one changes nothing and keeps it; nor do clicks
+  //    on blank space or other controls.
+  //  - Incorrect goes on any click/tap on the board (which still does its
+  //    normal action), its ×, or Deselect All.
+  // Once dismissed, only a new submission can show one again. A message is
+  // armed by a submission in this visit, so a restored game never reopens its
+  // last guess's message. "Rainbow Spotted!" (3s) and "Already guessed!" (2s)
+  // keep useGame's timing.
   const lastGuessIndex = useMemo(() => {
     for (let i = state.guessHistory.length - 1; i >= 0; i--) {
       if (!state.guessHistory[i].isHintMarker) return i;
@@ -1538,10 +1545,21 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     deselectAll();
   }, [dismissFeedback, deselectAll]);
   const lastGuess = lastGuessIndex >= feedbackFrom ? state.guessHistory[lastGuessIndex] : undefined;
-  const guessFeedback: "almost" | "oneaway" | "incorrect" | null =
+  const triggeredFeedback: "almost" | "oneaway" | "incorrect" | null =
     !lastGuess || lastGuess.isCorrect || lastGuess.isRainbow || state.isComplete
       ? null
       : lastGuess.isAlmostRainbow ? "almost" : lastGuess.isOneAway ? "oneaway" : "incorrect";
+  const triggeredSetStillSelected =
+    !!lastGuess &&
+    lastGuess.words.length === state.selectedWords.length &&
+    lastGuess.words.every((w) => state.selectedWords.includes(w));
+  const isOneAwayKind = triggeredFeedback === "almost" || triggeredFeedback === "oneaway";
+  // Hidden in the very render the set changes; the effect makes it final, so
+  // re-selecting the same tiles doesn't bring it back.
+  const guessFeedback = isOneAwayKind && !triggeredSetStillSelected ? null : triggeredFeedback;
+  useEffect(() => {
+    if (isOneAwayKind && !triggeredSetStillSelected) dismissFeedback();
+  }, [isOneAwayKind, triggeredSetStillSelected, dismissFeedback]);
   const feedbackKind = alreadyGuessed ? `already-${alreadyGuessed}` : guessFeedback ?? (showRainbowPopup ? "spotted" : null);
 
   // One visual family: a white pill with a strong purple outline and bold
@@ -1549,8 +1567,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // content: the label (with its 🌈, if any) and the close button sit together
   // as one group, centred with equal padding on both sides. Rainbow Spotted
   // keeps its rainbow fill as the success message.
-  const pillBase = "relative inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full text-[15px] sm:text-base font-extrabold leading-none animate-fade-up motion-reduce:animate-none";
+  const pillBase = "relative inline-flex h-9 sm:h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full text-[15px] sm:text-base font-extrabold leading-none animate-fade-up motion-reduce:animate-none";
   const purplePill = `${pillBase} border-2 border-[hsl(var(--brand-purple-to))] bg-white text-[hsl(258_68%_48%)] shadow-[0_2px_8px_-3px_rgba(139,92,246,0.45)] dark:bg-card dark:text-[hsl(var(--brand-purple-from))]`;
+  const feedbackAnnouncement = !feedbackKind
+    ? ""
+    : alreadyGuessed
+      ? (alreadyGuessed === "oneaway" ? "Already guessed — one away!" : "Already guessed!")
+      : guessFeedback === "incorrect" ? "Incorrect"
+      : guessFeedback === "almost" ? `One Away... ${theme.emoji}`
+      : guessFeedback === "oneaway" ? "One Away..."
+      : theme.spottedMessage;
   const feedbackPill = !feedbackKind ? null : guessFeedback && !alreadyGuessed ? (
     <div className={`${purplePill} gap-2 px-3`} data-testid="guess-feedback">
       {guessFeedback === "incorrect" ? "Incorrect" : guessFeedback === "almost" ? `One Away... ${theme.emoji}` : "One Away..."}
@@ -1586,41 +1612,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     </div>
   );
 
-  // The mistakes row keeps one height. Normally the mistakes label and dots
-  // are centred; with a message they move left and the message sits to their
-  // right, the pair centred within the board's width. When that pair would be
-  // wider than the board, the label shortens to "Mistakes:" (compact). The
-  // mistakes glide between positions (FLIP), or jump under reduced motion.
-  const feedbackRowRef = useRef<HTMLDivElement | null>(null);
-  const mistakesRef = useRef<HTMLDivElement | null>(null);
-  const mistakesLeftRef = useRef<number | null>(null);
-  // 0 = "Mistakes remaining:", 1 = "Mistakes:", 2 = dots only (label still announced).
-  const [mistakesFit, setMistakesFit] = useState(0);
-  const compactMistakes = mistakesFit > 0;
-  useLayoutEffect(() => {
-    const row = feedbackRowRef.current;
-    const mistakes = mistakesRef.current;
-    if (!row || !mistakes) return;
-    const overflows = row.scrollWidth > row.clientWidth + 0.5;
-    if (feedbackKind && overflows && mistakesFit < 2) {
-      setMistakesFit(mistakesFit + 1);
-      return;
-    }
-    if (!feedbackKind && mistakesFit > 0) {
-      setMistakesFit(0);
-      return;
-    }
-    row.dataset.overflow = overflows ? "true" : "false";
-    const left = mistakes.getBoundingClientRect().left;
-    const before = mistakesLeftRef.current;
-    mistakesLeftRef.current = left;
-    if (before === null || Math.abs(before - left) < 0.5 || prefersReducedMotion()) return;
-    mistakes.style.transition = "none";
-    mistakes.style.transform = `translateX(${before - left}px)`;
-    void mistakes.offsetWidth;
-    mistakes.style.transition = `transform 240ms ${SOLVE_EASE}`;
-    mistakes.style.transform = "";
-  }, [feedbackKind, mistakesFit]);
 
   // Color Palette Mode buttons, below the Shuffle/Deselect/Submit row, so
   // neither turning the setting on nor switching modes can move the grid.
@@ -1687,10 +1678,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* The board area: the instruction/Rainbow slot, the solved bars and the
           tile grid. On a Mini it is capped at ~330px so all three share one
           width and stop growing past it; the controls below keep the page
-          width. Any click or tap on it (tile, bar or gap, by pointer or
-          keyboard) dismisses the guess feedback, in the capture phase, so the
-          click still does its normal job. */}
-      <div onClickCapture={dismissFeedback} className={isMiniBoard ? "w-full max-w-[330px] mx-auto" : undefined}>
+          width. While "Incorrect" shows, any click or tap on it (tile, bar or
+          gap, by pointer or keyboard) dismisses it, in the capture phase, so
+          the click still does its normal job. */}
+      <div onClickCapture={guessFeedback === "incorrect" ? dismissFeedback : undefined} className={isMiniBoard ? "w-full max-w-[330px] mx-auto" : undefined}>
       {rainbowSlot}
       {/* The solved bars. Spaced exactly like the tile grid (same gaps), and
           each bar is one tile row tall (.board-bars / .solved-bar in
@@ -1804,6 +1795,19 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       )}
       </div>
 
+      {/* Guess feedback: a centred row of its own directly below the board,
+          present only while a message shows — it pushes the mistakes line and
+          controls down, and its space goes with it. The board never moves. */}
+      {feedbackPill && (
+        <div data-testid="feedback-row" className="mt-2 md:mt-4 flex justify-center">
+          {feedbackPill}
+        </div>
+      )}
+      {/* Announced through a region that is always present. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {feedbackAnnouncement}
+      </div>
+
       {/* Mistakes dots — hidden when viewing an already-completed puzzle.
           The running solve time is never shown during active play (on any
           format) — timing itself, persistence, hidden-tab pausing and
@@ -1814,18 +1818,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           regardless of whether this live span ever rendered). With no
           second item in this row, the pill is simply centered. */}
       {!wasAlreadyComplete.current && (
-        // One fixed height with or without a message; never wraps. Its width
-        // is the board's (Mini's capped board included).
-        <div
-          ref={feedbackRowRef}
-          data-testid="feedback-row"
-          className={`mt-3 md:mt-4 w-full h-11 mx-auto flex flex-nowrap items-center justify-center ${compactMistakes ? "gap-2" : "gap-3"} ${isMiniBoard ? "max-w-[330px]" : ""}`}
-        >
-          <div ref={mistakesRef} className="shrink-0">
-            <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} plain compact={compactMistakes} dotsOnly={mistakesFit > 1} />
-          </div>
-          {/* The message's own live region (the mistakes count has its own). */}
-          <div role="status" aria-live="polite" className="contents">{feedbackPill}</div>
+        <div className="mt-2 md:mt-4 w-full flex items-center justify-center">
+          <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} plain />
         </div>
       )}
 
@@ -1835,11 +1829,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           fixed-width buttons floating narrower than the grid above them. */}
       {!state.isComplete && (
         <>
-          <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-3">
+          <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-2 sm:mt-3">
             <button
               onClick={shuffle}
               disabled={isChecking || reveal !== null}
-              className={`w-full ${isMiniBoard ? "h-12" : "h-14"} rounded-full text-sm md:text-base font-bold transition-colors
+              className={`w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold transition-colors
                 bg-action-secondary-bg text-action-secondary-fg border border-transparent
                 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
                 dark:bg-secondary dark:text-foreground dark:border-border
@@ -1853,7 +1847,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <button
               onClick={handleDeselectAll}
               disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
-              className={`w-full ${isMiniBoard ? "h-12" : "h-14"} rounded-full text-sm md:text-base font-bold transition-colors
+              className={`w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold transition-colors
                 border border-transparent
                 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
                 dark:bg-secondary dark:text-foreground dark:border-border
@@ -1871,7 +1865,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             <button
               onClick={handleSubmit}
               disabled={state.selectedWords.length !== format.answersPerCategory || isChecking || reveal !== null}
-              className={`w-full ${isMiniBoard ? "h-12" : "h-14"} rounded-full text-sm md:text-base font-bold text-white transition-all
+              className={`w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold text-white transition-all
                 bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
                 shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]
                 hover:-translate-y-px active:scale-95
@@ -1890,7 +1884,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             // center column only — guarantees this matches one of those
             // buttons' width exactly (not an eyeballed value) while staying
             // centered, rather than sizing its own single-button container.
-            <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-3">
+            <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-2 sm:mt-3">
               <div aria-hidden="true" />
               <button
                 onClick={clearAllColors}

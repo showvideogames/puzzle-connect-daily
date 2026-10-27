@@ -188,7 +188,7 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
         // separate, width-only flag (see GameHeader.tsx's prop doc).
         wideHeader
       />
-      <div className="w-full max-w-[840px] border-b border-border mb-3" />
+      <div className="w-full max-w-[840px] border-b border-border mb-1 md:mb-3" />
 
       {showSillyGoose && (
         <div className="w-full max-w-lg px-2 mb-2 animate-fade-up">
@@ -212,14 +212,14 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
           size (w-[68px]/[88px] below) — it's the row, not the buttons, that
           stretches; the title's minmax(0,1fr) middle column absorbs all of
           the extra width. */}
-      <div className="w-full max-w-[840px] px-4 mb-2">
+      <div className="w-full max-w-[840px] px-4 mb-1 sm:mb-2">
         {/* Top row: nav buttons + puzzle title share one row, using a
             fixed-width | flexible-center | fixed-width grid so the two
             buttons are pixel-identical regardless of label length and the
             title gets whatever horizontal space is left between them —
             never the other way around. Both buttons keep the exact same
             height/padding/radius/font-size; only the fill color differs. */}
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 sm:gap-2 mt-2">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 sm:gap-2 mt-1 sm:mt-2">
           <button
             onClick={handleBackToArchive}
             className="w-[68px] sm:w-[88px] shrink-0 inline-flex items-center justify-center gap-0.5 whitespace-nowrap h-8 sm:h-9 rounded-full border border-border bg-card
@@ -235,7 +235,7 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
               text-ellipsis below would never kick in and this column would
               just push the row (and the right-hand button) wider instead. */}
           <h1 className="min-w-0 text-center overflow-hidden whitespace-nowrap text-ellipsis
-            font-tile font-bold tracking-tight text-foreground text-[clamp(1.75rem,9vw,2.25rem)] sm:text-4xl md:text-5xl">
+            font-tile font-bold tracking-tight text-foreground text-[clamp(1.5rem,7vw,1.875rem)] sm:text-4xl md:text-5xl">
             {heroLabel}
           </h1>
 
@@ -266,7 +266,7 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
             "| segment" to the next line rather than stranding a bare
             separator. */}
         {puzzle && (
-          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mt-1.5 sm:mt-2 text-center text-sm sm:text-base font-medium text-slate">
+          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mt-0.5 sm:mt-2 text-center text-sm sm:text-base font-medium text-slate">
             <span className="whitespace-nowrap">by {puzzle.designerName}</span>
             {trimmedTitle && (
               <span className="whitespace-nowrap border-l border-border pl-2">{puzzleDateStr}</span>

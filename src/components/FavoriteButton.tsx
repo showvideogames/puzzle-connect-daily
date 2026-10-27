@@ -7,6 +7,12 @@ interface FavoriteButtonProps {
   onToggle: () => void;
   /** Small polite status line ("Saved on this device"). Its row is always reserved so nothing shifts. */
   note?: string | null;
+  /**
+   * Below sm (phones) the button is a 36px star-and-count pill (the label is
+   * screen-reader-only) whose brief note floats beneath it instead of
+   * reserving a row; from sm up it is the standard fixed-width button.
+   */
+  responsive?: boolean;
 }
 
 /**
@@ -14,14 +20,14 @@ interface FavoriteButtonProps {
  * toggling never shifts the layout; state is exposed with aria-pressed and
  * the visible label ("Favorite" / "Favorited") is the accessible name.
  */
-export function FavoriteButton({ favorited, count, onToggle, note }: FavoriteButtonProps) {
+export function FavoriteButton({ favorited, count, onToggle, note, responsive = false }: FavoriteButtonProps) {
   return (
-    <div className="flex flex-col items-center">
+    <div className={`flex flex-col items-center ${responsive ? "relative sm:static" : ""}`}>
       <button
         type="button"
         onClick={onToggle}
         aria-pressed={favorited}
-        className={`inline-flex items-center justify-center gap-1.5 w-[9.75rem] h-9 rounded-full border text-sm font-semibold
+        className={`inline-flex items-center justify-center gap-1.5 ${responsive ? "min-w-9 px-3 sm:w-[9.75rem] sm:px-0" : "w-[9.75rem]"} h-9 rounded-full border text-sm font-semibold
           transition-colors active:scale-95
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background
           ${favorited
@@ -32,15 +38,21 @@ export function FavoriteButton({ favorited, count, onToggle, note }: FavoriteBut
           aria-hidden="true"
           className={`w-4 h-4 shrink-0 ${favorited ? "fill-amber-500 text-amber-500" : "text-muted-foreground"}`}
         />
-        <span>{favorited ? "Favorited" : "Favorite"}</span>
+        <span className={responsive ? "sr-only sm:not-sr-only" : undefined}>{favorited ? "Favorited" : "Favorite"}</span>
         {count > 0 && (
           <span className="tabular-nums text-muted-foreground font-medium">
-            <span aria-hidden="true">·</span> {count}
+            <span aria-hidden="true" className={responsive ? "hidden sm:inline" : undefined}>· </span>{count}
             <span className="sr-only"> {count === 1 ? "favorite" : "favorites"}</span>
           </span>
         )}
       </button>
-      <p role="status" aria-live="polite" className="h-4 mt-0.5 text-[11px] leading-4 text-muted-foreground">
+      <p
+        role="status"
+        aria-live="polite"
+        className={responsive
+          ? "pointer-events-none absolute left-1/2 top-full -translate-x-1/2 whitespace-nowrap sm:static sm:translate-x-0 sm:h-4 mt-0.5 text-[11px] leading-4 text-muted-foreground"
+          : "h-4 mt-0.5 text-[11px] leading-4 text-muted-foreground"}
+      >
         {note ?? ""}
       </p>
     </div>

@@ -34,17 +34,20 @@ test.describe("Public Mini — today's puzzle", () => {
     await expect(tiles(page)).toHaveCount(9);
   });
 
-  test("is nine square tiles in three columns @smoke @responsive", async ({ page }) => {
+  test("is nine tiles in three columns, square from tablet width up @smoke @responsive", async ({ page }) => {
     expect(await boardColumnCount(page)).toBe(3);
 
     const onBoard = (await tiles(page).allInnerTexts()).map((t) => t.trim()).sort();
     expect(onBoard).toEqual(MINI_RAINBOW.groups.flatMap((g) => g.words).sort());
 
-    // Square, not the Full board's wider tile. Measured, not screenshotted:
-    // the aspect ratio is the actual product rule ("nine square tiles").
+    // Measured, not screenshotted: square from md (768px) up; on phones 5:4
+    // (like the Full board there), so the board, feedback and controls fit
+    // above the fold.
     const box = await tile(page, MINI_RAINBOW.wordOrder[0]).boundingBox();
     expect(box).not.toBeNull();
-    expect(Math.abs(box!.width - box!.height)).toBeLessThanOrEqual(2);
+    const viewport = page.viewportSize()!;
+    const expectedHeight = viewport.width >= 768 ? box!.width : box!.width * 0.8;
+    expect(Math.abs(box!.height - expectedHeight)).toBeLessThanOrEqual(2);
 
     await expectNoHorizontalOverflow(page);
   });

@@ -83,7 +83,7 @@ export function GameHeader({
   const iconGlyphClass = hideExtraIcons ? "w-6 h-6 sm:w-[30px] sm:h-[30px]" : "w-4 h-4 sm:w-5 sm:h-5 text-slate";
   const iconStrokeWidth = hideExtraIcons ? 2.5 : undefined;
   return (
-    <header className={`flex items-center w-full mx-auto py-3 gap-0.5 sm:gap-2 ${isWide ? "max-w-[840px] px-2 sm:px-3 md:px-0" : "max-w-lg px-1.5 sm:px-2"}`}>
+    <header className={`flex items-center w-full mx-auto py-1.5 md:py-3 gap-0.5 sm:gap-2 ${isWide ? "max-w-[840px] px-2 sm:px-3 md:px-0" : "max-w-lg px-1.5 sm:px-2"}`}>
       <Link to="/" className="active:scale-95 transition-transform shrink-0" aria-label="Home">
         {isJuly4() ? (
           // Holiday override applies to both sizes — there's no stacked
@@ -99,11 +99,14 @@ export function GameHeader({
                 wordmark (~2.5:1) at 32px tall (about 77px wide), which fits at
                 every width down to 320px while staying the dominant element.
                 md-lg uses the one-line wordmark at 36px; lg+ keeps the larger
-                stacked wordmark. Aspect ratio is always preserved (w-auto). */}
+                stacked wordmark. Aspect ratio is always preserved (w-auto).
+                Phones use a 104px-wide stacked mark and tighter vertical
+                padding (py-1.5) so the board, feedback and controls fit above
+                the fold; the 44px icon tap targets set the header's height. */}
             <img
               src={STACKED_LOGO}
               alt="Rainbow Categories"
-              className="block md:hidden lg:block w-[128px] max-w-none shrink-0 h-auto lg:w-auto lg:h-14"
+              className="block md:hidden lg:block w-[104px] max-w-none shrink-0 h-auto lg:w-auto lg:h-14"
             />
             <img
               src={todaysLogo()}
