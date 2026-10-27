@@ -318,10 +318,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     releaseRevealHold,
     setWordOrder,
     fireWinCelebration,
-    oneAway,
-    setOneAway,
-    almostRainbow,
-    setAlmostRainbow,
     rainbowWords,
     showRainbowPopup,
     matchedWords,
@@ -1419,7 +1415,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           onClick={() => {
             if (!promptAnsweredRef.current) setShowSpotModal(true);
           }}
-          className={`w-full rounded-lg h-full py-2 px-4 text-center text-white
+          className={`w-full rounded-lg h-full py-1 px-4 text-center text-white
             hover:opacity-90 transition-opacity active:scale-[0.99]
             animate-rainbow-breathe animate-rainbow-shimmer`}
           style={{ background: theme.gradient, textShadow: theme.textShadow }}
@@ -1515,161 +1511,116 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     </div>
   );
 
-  // ── Notifications: a compact overlay in a safe gap on the board ──
-  // "Rainbow Spotted!", "One away…" (or its Rainbow variant) and "Already
-  // guessed!" show one at a time, floating over the remaining unsolved board
-  // rather than taking space of their own, so showing or hiding one never
-  // moves anything. The newest kind of event wins: Already guessed (2s), then
-  // One away, then Rainbow Spotted (3s). Timing is useGame's, unchanged.
-  //
-  // One away belongs to the guess that produced it: it shows only while
-  // every word of that submitted guess is still selected, so deselecting any
-  // of them (one tile, or Deselect All) hides it in that same render, before
-  // useGame's own selection effect clears the flag for good. Only a new
-  // submitted One Away result can set it again.
-  const lastGuess = useMemo(() => {
+  // ── Guess feedback, beside Mistakes Remaining ──
+  // After a wrong guess exactly one message shows, read from that guess's own
+  // stored result (useGame records it on the attempt at submission, with the
+  // existing one-away and near-Rainbow rules): "One Away... 🌈" for a
+  // near-Rainbow guess, "One Away..." for one away, otherwise "Incorrect". It
+  // stays until the player clicks/taps anywhere on the board (which still
+  // does its normal action), presses its ×, or uses Deselect All, and only a
+  // new submission can show one again. A message is armed by a submission in
+  // this visit, so a restored game never reopens its last guess's message.
+  // "Rainbow Spotted!" (3s) and "Already guessed!" (2s) keep useGame's timing.
+  const lastGuessIndex = useMemo(() => {
     for (let i = state.guessHistory.length - 1; i >= 0; i--) {
-      if (!state.guessHistory[i].isHintMarker) return state.guessHistory[i];
+      if (!state.guessHistory[i].isHintMarker) return i;
     }
-    return undefined;
+    return -1;
   }, [state.guessHistory]);
-  const oneAwayGuessStillSelected =
-    !!lastGuess && lastGuess.words.every((w) => state.selectedWords.includes(w));
-  const oneAwayKind = almostRainbow ? "almost" : oneAway ? "plain" : null;
-  // Development only (stripped from production builds): ?__notification=oneaway
-  // or =spotted shows that notification on demand, so its placement can be
-  // checked in board states play cannot produce, such as one unsolved row.
-  const forcedNotification = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("__notification") : null;
-  const showOneAway = (oneAwayKind !== null && oneAwayGuessStillSelected) || forcedNotification === "oneaway";
-  const showSpotted = showRainbowPopup || forcedNotification === "spotted";
-  const dismissOneAway = () => {
-    setAlmostRainbow(false);
-    setOneAway(false);
-  };
-  const notificationKind = alreadyGuessed
-    ? `already-${alreadyGuessed}`
-    : showOneAway ? `oneaway-${oneAwayKind}` : showSpotted ? "spotted" : null;
+  const [feedbackFrom, setFeedbackFrom] = useState(Number.POSITIVE_INFINITY);
+  const dismissFeedback = useCallback(() => setFeedbackFrom(Number.POSITIVE_INFINITY), []);
+  const handleSubmit = useCallback(() => {
+    setFeedbackFrom(state.guessHistory.length);
+    submitGuess();
+  }, [state.guessHistory.length, submitGuess]);
+  const handleDeselectAll = useCallback(() => {
+    dismissFeedback();
+    deselectAll();
+  }, [dismissFeedback, deselectAll]);
+  const lastGuess = lastGuessIndex >= feedbackFrom ? state.guessHistory[lastGuessIndex] : undefined;
+  const guessFeedback: "almost" | "oneaway" | "incorrect" | null =
+    !lastGuess || lastGuess.isCorrect || lastGuess.isRainbow || state.isComplete
+      ? null
+      : lastGuess.isAlmostRainbow ? "almost" : lastGuess.isOneAway ? "oneaway" : "incorrect";
+  const feedbackKind = alreadyGuessed ? `already-${alreadyGuessed}` : guessFeedback ?? (showRainbowPopup ? "spotted" : null);
 
-  // Where the pill goes is measured, never a fixed percentage. Every piece of
-  // text it could cover — tile words (wrapped or split lines included), solved
-  // bars, the instruction/Rainbow slot, the mistakes line and the controls —
-  // is an obstacle within the pill's own width. The pill takes the free band
-  // between unsolved rows nearest the middle of the remaining board (it may
-  // sit over the blank edges of tiles); with no inner band tall enough, the
-  // nearest free band at the board's outer edge. Nothing is enlarged to make
-  // room for it.
-  const boardColumnRef = useRef<HTMLDivElement | null>(null);
-  const boardAreaRef = useRef<HTMLDivElement | null>(null);
-  const notificationRef = useRef<HTMLDivElement | null>(null);
-  const [notificationTop, setNotificationTop] = useState<number | null>(null);
-  const placeNotification = useCallback(() => {
-    const area = boardAreaRef.current;
-    const pill = notificationRef.current;
-    const column = boardColumnRef.current;
-    const grid = gridWrapperRef.current;
-    if (!area || !pill || !column || !grid) return;
-    const areaRect = area.getBoundingClientRect();
-    const { width: W, height: H } = pill.getBoundingClientRect();
-    const left = areaRect.left + (areaRect.width - W) / 2;
-    const right = left + W;
-    const tiles = Array.from(grid.querySelectorAll<HTMLElement>("[data-word] button"));
-    if (tiles.length === 0) return;
-    const tileRects = tiles.map((t) => t.getBoundingClientRect());
-    const gridTop = Math.min(...tileRects.map((r) => r.top));
-    const gridBottom = Math.max(...tileRects.map((r) => r.bottom));
-    const gridMid = (gridTop + gridBottom) / 2;
-    const visible = (el: Element) => {
-      const cs = getComputedStyle(el);
-      return cs.visibility !== "hidden" && cs.opacity !== "0" && !el.closest("[aria-hidden=true]");
-    };
-    const PAD = 3;
-    const obstacles = Array.from(
-      column.querySelectorAll<HTMLElement>(
-        "[data-tile-text], [data-word] button img, .solved-bar > *, [data-testid=rainbow-slot] p, [data-notification-obstacle]",
-      ),
-    )
-      .filter((el) => !pill.contains(el) && visible(el))
-      .map((el) => el.getBoundingClientRect())
-      .filter((r) => r.height > 0 && r.right > left && r.left < right)
-      .map((r) => [r.top - PAD, r.bottom + PAD] as [number, number])
-      .sort((a, b) => a[0] - b[0]);
-    // Free vertical bands across the remaining board and its outer edges.
-    const searchTop = gridTop - H * 2;
-    const searchBottom = gridBottom + H * 2;
-    const bands: [number, number][] = [];
-    let cursor = searchTop;
-    for (const [t, b] of obstacles) {
-      if (b <= cursor) continue;
-      if (t > cursor) bands.push([cursor, Math.min(t, searchBottom)]);
-      cursor = Math.max(cursor, b);
-      if (cursor >= searchBottom) break;
-    }
-    if (cursor < searchBottom) bands.push([cursor, searchBottom]);
-    const centre = ([t, b]: [number, number]) => (t + b) / 2;
-    const edgeDistance = (band: [number, number]) =>
-      Math.min(Math.abs(centre(band) - gridTop), Math.abs(centre(band) - gridBottom));
-    const fits = bands.filter(([t, b]) => b - t >= H);
-    const inner = fits.filter((band) => centre(band) > gridTop && centre(band) < gridBottom);
-    const pick = inner.length
-      ? inner.sort((a, b) => Math.abs(centre(a) - gridMid) - Math.abs(centre(b) - gridMid))[0]
-      : fits.sort((a, b) => edgeDistance(a) - edgeDistance(b))[0];
-    // Nowhere fits at all (not seen in practice): straddle the board's bottom edge.
-    const y = pick ? centre(pick) - H / 2 : gridBottom - H / 2;
-    setNotificationTop(Math.round(y - areaRect.top));
-  }, []);
+  // One visual family: a white pill with a strong purple outline and bold
+  // purple lettering (the Submit button's purple). The pill is sized to its
+  // content: the label (with its 🌈, if any) and the close button sit together
+  // as one group, centred with equal padding on both sides. Rainbow Spotted
+  // keeps its rainbow fill as the success message.
+  const pillBase = "relative inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full text-[15px] sm:text-base font-extrabold leading-none animate-fade-up motion-reduce:animate-none";
+  const purplePill = `${pillBase} border-2 border-[hsl(var(--brand-purple-to))] bg-white text-[hsl(258_68%_48%)] shadow-[0_2px_8px_-3px_rgba(139,92,246,0.45)] dark:bg-card dark:text-[hsl(var(--brand-purple-from))]`;
+  const feedbackPill = !feedbackKind ? null : guessFeedback && !alreadyGuessed ? (
+    <div className={`${purplePill} gap-2 px-3`} data-testid="guess-feedback">
+      {guessFeedback === "incorrect" ? "Incorrect" : guessFeedback === "almost" ? `One Away... ${theme.emoji}` : "One Away..."}
+      {/* 28px circle, with a 44px invisible tap area around it. */}
+      <button
+        onClick={dismissFeedback}
+        aria-label="Dismiss"
+        className="relative shrink-0 w-7 h-7 rounded-full flex items-center justify-center
+          bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))] text-white
+          before:absolute before:-inset-2 before:content-[''] active:scale-95 transition-transform
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        <X className="w-4 h-4" strokeWidth={3} />
+      </button>
+    </div>
+  ) : alreadyGuessed ? (
+    <div className={`${purplePill} px-3.5`} data-testid="guess-feedback">
+      {alreadyGuessed === "oneaway" ? "Already guessed — one away!" : "Already guessed!"}
+    </div>
+  ) : (
+    // Animated (or static, per the Rainbow Animation setting) rainbow fill for
+    // the default theme; a themed bonus's gradient is a fixed image either way.
+    <div
+      data-testid="guess-feedback"
+      className={`${pillBase} px-3.5 shadow-md ${
+        theme.isDefault
+          ? showRainbow ? "rainbow-tile text-white" : "rainbow-tile-static text-[#292825]"
+          : "text-white"
+      }`}
+      style={!theme.isDefault ? { background: theme.gradient, textShadow: theme.textShadow } : undefined}
+    >
+      {theme.spottedMessage}
+    </div>
+  );
+
+  // The mistakes row keeps one height. Normally the mistakes label and dots
+  // are centred; with a message they move left and the message sits to their
+  // right, the pair centred within the board's width. When that pair would be
+  // wider than the board, the label shortens to "Mistakes:" (compact). The
+  // mistakes glide between positions (FLIP), or jump under reduced motion.
+  const feedbackRowRef = useRef<HTMLDivElement | null>(null);
+  const mistakesRef = useRef<HTMLDivElement | null>(null);
+  const mistakesLeftRef = useRef<number | null>(null);
+  // 0 = "Mistakes remaining:", 1 = "Mistakes:", 2 = dots only (label still announced).
+  const [mistakesFit, setMistakesFit] = useState(0);
+  const compactMistakes = mistakesFit > 0;
   useLayoutEffect(() => {
-    if (!notificationKind) {
-      setNotificationTop(null);
+    const row = feedbackRowRef.current;
+    const mistakes = mistakesRef.current;
+    if (!row || !mistakes) return;
+    const overflows = row.scrollWidth > row.clientWidth + 0.5;
+    if (feedbackKind && overflows && mistakesFit < 2) {
+      setMistakesFit(mistakesFit + 1);
       return;
     }
-    placeNotification();
-    window.addEventListener("resize", placeNotification);
-    return () => window.removeEventListener("resize", placeNotification);
-  }, [notificationKind, remainingWords, state.solvedGroups.length, placeNotification]);
-
-  const notificationPill = "pointer-events-none inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-full text-sm leading-5 shadow-md";
-  const notificationOverlay = notificationKind ? (
-    <div
-      ref={notificationRef}
-      role="status"
-      aria-live="polite"
-      data-testid="notification-overlay"
-      className="pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 max-w-full"
-      style={{ top: notificationTop ?? 0, visibility: notificationTop === null ? "hidden" : "visible" }}
-    >
-      {alreadyGuessed ? (
-        <div className={`${notificationPill} bg-foreground text-background px-4 py-1 font-semibold`}>
-          {alreadyGuessed === "oneaway" ? "Already guessed — and one away!" : "Already guessed!"}
-        </div>
-      ) : showOneAway ? (
-        <div className={`${notificationPill} bg-foreground text-background pl-4 pr-1 py-1 font-semibold`}>
-          {oneAwayKind === "almost" ? theme.almostMessage : "One away…"}
-          {/* The one part of the overlay that takes taps. */}
-          <button
-            onClick={dismissOneAway}
-            className="pointer-events-auto w-5 h-5 rounded-full bg-background/20 hover:bg-background/30 flex items-center justify-center transition-colors active:scale-95"
-            aria-label="Dismiss"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </div>
-      ) : (
-        // Animated (or static, per the Rainbow Animation setting) rainbow
-        // fill for the default theme; a themed bonus's gradient is a fixed
-        // image either way. Static uses dark ink text on its softer gradient.
-        <div
-          className={`${notificationPill} px-4 py-1 font-bold ${
-            theme.isDefault
-              ? showRainbow ? "rainbow-tile text-white" : "rainbow-tile-static text-[#292825]"
-              : "text-white"
-          }`}
-          style={!theme.isDefault ? { background: theme.gradient, textShadow: theme.textShadow } : undefined}
-        >
-          {theme.spottedMessage}
-        </div>
-      )}
-    </div>
-  ) : null;
+    if (!feedbackKind && mistakesFit > 0) {
+      setMistakesFit(0);
+      return;
+    }
+    row.dataset.overflow = overflows ? "true" : "false";
+    const left = mistakes.getBoundingClientRect().left;
+    const before = mistakesLeftRef.current;
+    mistakesLeftRef.current = left;
+    if (before === null || Math.abs(before - left) < 0.5 || prefersReducedMotion()) return;
+    mistakes.style.transition = "none";
+    mistakes.style.transform = `translateX(${before - left}px)`;
+    void mistakes.offsetWidth;
+    mistakes.style.transition = `transform 240ms ${SOLVE_EASE}`;
+    mistakes.style.transform = "";
+  }, [feedbackKind, mistakesFit]);
 
   // Color Palette Mode buttons, below the Shuffle/Deselect/Submit row, so
   // neither turning the setting on nor switching modes can move the grid.
@@ -1722,7 +1673,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-    <div ref={boardColumnRef} className={`w-full mx-auto animate-fade-up ${useWideBoard ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
+    <div className={`w-full mx-auto animate-fade-up ${useWideBoard ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
       {/* Puzzle-mode badge on its own right-aligned row (opt-in via
           showModeBadge — see its prop doc), then the centered instruction
           directly beneath — stacked (not sharing one row) so both read
@@ -1736,8 +1687,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* The board area: the instruction/Rainbow slot, the solved bars and the
           tile grid. On a Mini it is capped at ~330px so all three share one
           width and stop growing past it; the controls below keep the page
-          width. relative: the notification overlay is placed against it. */}
-      <div ref={boardAreaRef} className={isMiniBoard ? "relative w-full max-w-[330px] mx-auto" : "relative"}>
+          width. Any click or tap on it (tile, bar or gap, by pointer or
+          keyboard) dismisses the guess feedback, in the capture phase, so the
+          click still does its normal job. */}
+      <div onClickCapture={dismissFeedback} className={isMiniBoard ? "w-full max-w-[330px] mx-auto" : undefined}>
       {rainbowSlot}
       {/* The solved bars. Spaced exactly like the tile grid (same gaps), and
           each bar is one tile row tall (.board-bars / .solved-bar in
@@ -1849,7 +1802,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           </div>
         </div>
       )}
-      {notificationOverlay}
       </div>
 
       {/* Mistakes dots — hidden when viewing an already-completed puzzle.
@@ -1862,8 +1814,18 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           regardless of whether this live span ever rendered). With no
           second item in this row, the pill is simply centered. */}
       {!wasAlreadyComplete.current && (
-        <div data-notification-obstacle className={`mt-3 md:mt-4 w-full flex items-center justify-center`}>
-          <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} plain />
+        // One fixed height with or without a message; never wraps. Its width
+        // is the board's (Mini's capped board included).
+        <div
+          ref={feedbackRowRef}
+          data-testid="feedback-row"
+          className={`mt-3 md:mt-4 w-full h-11 mx-auto flex flex-nowrap items-center justify-center ${compactMistakes ? "gap-2" : "gap-3"} ${isMiniBoard ? "max-w-[330px]" : ""}`}
+        >
+          <div ref={mistakesRef} className="shrink-0">
+            <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} plain compact={compactMistakes} dotsOnly={mistakesFit > 1} />
+          </div>
+          {/* The message's own live region (the mistakes count has its own). */}
+          <div role="status" aria-live="polite" className="contents">{feedbackPill}</div>
         </div>
       )}
 
@@ -1873,7 +1835,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           fixed-width buttons floating narrower than the grid above them. */}
       {!state.isComplete && (
         <>
-          <div data-notification-obstacle className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-3">
+          <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-3">
             <button
               onClick={shuffle}
               disabled={isChecking || reveal !== null}
@@ -1889,7 +1851,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               Shuffle
             </button>
             <button
-              onClick={deselectAll}
+              onClick={handleDeselectAll}
               disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
               className={`w-full ${isMiniBoard ? "h-12" : "h-14"} rounded-full text-sm md:text-base font-bold transition-colors
                 border border-transparent
@@ -1907,7 +1869,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               Deselect All
             </button>
             <button
-              onClick={submitGuess}
+              onClick={handleSubmit}
               disabled={state.selectedWords.length !== format.answersPerCategory || isChecking || reveal !== null}
               className={`w-full ${isMiniBoard ? "h-12" : "h-14"} rounded-full text-sm md:text-base font-bold text-white transition-all
                 bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]

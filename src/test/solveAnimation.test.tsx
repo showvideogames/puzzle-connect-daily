@@ -343,7 +343,10 @@ describe("reduced motion", () => {
 });
 
 describe("the Rainbow bar shares the category bars' footprint", () => {
-  it("uses the same one-row sizing, padding and corner radius as a solved category bar", async () => {
+  // Same box and corner radius as a solved category bar, plus the
+  // solved-bar-rainbow modifier that makes it 80% of an ordinary bar's height
+  // (index.css); it lives in its own slot, never in the solved-bar list.
+  it("uses the same sizing, padding and corner radius as a solved category bar, at 80% height", async () => {
     const { SolvedGroup } = await import("@/components/SolvedGroup");
     const { RainbowRevealBar } = await import("@/components/RainbowRevealBar");
     const { resolveTheme } = await import("@/lib/themes");
@@ -364,7 +367,8 @@ describe("the Rainbow bar shares the category bars' footprint", () => {
     ).container.firstElementChild!;
 
     expect(box(solved)).toContain("solved-bar");
-    expect(box(rainbow).filter((c) => c !== "w-full")).toEqual(box(solved).filter((c) => c !== "w-full"));
+    expect(box(rainbow)).toContain("solved-bar-rainbow");
+    expect(box(rainbow).filter((c) => c !== "w-full" && c !== "solved-bar-rainbow")).toEqual(box(solved).filter((c) => c !== "w-full"));
   });
 });
 
