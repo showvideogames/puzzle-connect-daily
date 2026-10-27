@@ -62,7 +62,7 @@ export function RainbowRevealBar({
   return (
     <div
       ref={fitRef}
-      className={`solved-bar w-full rounded-lg py-2 px-4 text-center ${textClass} ${curtain ? "animate-rainbow-curtain" : ""}`}
+      className={`solved-bar solved-bar-rainbow w-full rounded-lg py-2 px-4 text-center ${textClass} ${curtain ? "animate-rainbow-curtain" : ""}`}
       style={{ background, textShadow, clipPath: curtain ? undefined : "inset(0 100% 0 0)" }}
     >
       <div className="solved-bar-title font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">

@@ -450,6 +450,18 @@ html {
 html.layout-refresh .solved-bar {
   padding: 6px 10px;
 }
+/* The Rainbow's bar (and the instruction space reserved for it) is 80% of an
+   ordinary category bar's height: its vertical padding is trimmed first, and
+   useFitBarText shrinks a long name or answer line only if it still doesn't
+   fit. It sits in its own slot above the board, never in the solved-bar list,
+   so the solve animation's one-tile-row rule for ordinary bars is unchanged. */
+.board-bars .solved-bar.solved-bar-rainbow {
+  min-height: calc(var(--solved-row-h) * 0.8);
+}
+html.layout-refresh .solved-bar.solved-bar-rainbow {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
 html.layout-refresh .solved-bar-title {
   font-size: calc(clamp(15px, 5.6cqw, 30px) * var(--bar-fit, 1));
   line-height: 1.1;
