@@ -106,7 +106,7 @@ async function renderPage() {
       </MemoryRouter>
     </HelmetProvider>
   );
-  await screen.findByText("Select four words that share a connection!");
+  await screen.findByText("Select four words that share a connection.");
   return { shareId, view };
 }
 

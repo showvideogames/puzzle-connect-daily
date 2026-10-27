@@ -231,6 +231,13 @@ html {
     color: hsl(var(--ink));
     box-shadow: 0 1px 2px rgba(30, 25, 20, 0.04), 0 2px 6px rgba(30, 25, 20, 0.05);
   }
+  /* A long tile word split over two lines (WordTile's splitLongWords): the
+     hyphen is generated, not part of the word's text, and has empty alt text
+     so screen readers read the word whole. */
+  .tile-split-head::after {
+    content: "-";
+    content: "-" / "";
+  }
   html.layout-refresh:not(.dark) .cloud-tile {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 3px 8px rgba(0, 0, 0, 0.06);
   }

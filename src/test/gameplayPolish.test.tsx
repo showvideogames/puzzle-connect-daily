@@ -286,30 +286,33 @@ describe("colour palette stays put as categories are solved", () => {
 
   const before = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
-  it("keeps instruction, palette, solved bars, board in that order after every solve", async () => {
+  it("keeps instruction, solved bars, board, controls, palette in that order after every solve", async () => {
     const { container } = renderBoard();
     await settle();
 
+    // The palette sits below the Shuffle/Deselect/Submit row, outside the
+    // board, so neither solving a category nor switching modes can move it
+    // relative to the board.
     const instruction = () => screen.getByText(/select four words that share a connection/i);
     const palette = () => screen.getByLabelText("Select mode").parentElement as HTMLElement;
-    const paletteTop = () => palette().getBoundingClientRect().top;
+    const submitButton = () => screen.getByRole("button", { name: /^submit$/i });
 
-    expect(before(instruction(), palette())).toBe(true);
-    expect(before(palette(), tileButton(container, "y1"))).toBe(true);
+    expect(before(instruction(), tileButton(container, "y1"))).toBe(true);
+    expect(before(tileButton(container, "y1"), submitButton())).toBe(true);
+    expect(before(submitButton(), palette())).toBe(true);
 
     for (const [i, g] of puzzle.groups.slice(0, 3).entries()) {
       const paletteNodeBefore = palette();
       await solveGroup(container, g.words);
-      // The very same node, still directly after the instruction...
+      // The very same node, still below the controls...
       expect(palette()).toBe(paletteNodeBefore);
-      expect(before(instruction(), palette())).toBe(true);
-      // ...and before every solved bar and before the remaining board.
+      expect(before(submitButton(), palette())).toBe(true);
+      // ...with the solved bar above the remaining board.
       const bar = screen.getByText(g.category.toUpperCase(), { exact: false });
-      expect(before(palette(), bar)).toBe(true);
+      expect(before(instruction(), bar)).toBe(true);
       const remaining = puzzle.groups[i + 1].words[0];
       expect(before(bar, tileButton(container, remaining))).toBe(true);
-      expect(before(palette(), tileButton(container, remaining))).toBe(true);
-      void paletteTop;
+      expect(before(tileButton(container, remaining), palette())).toBe(true);
     }
   });
 });

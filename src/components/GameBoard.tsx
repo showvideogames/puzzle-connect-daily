@@ -267,16 +267,9 @@ interface GameBoardProps {
   onStatsOpenChange?: (open: boolean) => void;
   /** Custom mode only. Called by the post-completion Replay button. */
   onReplay?: () => void;
-  /**
-   * Layout refresh preview (Full Daily only — Index passes it for Full, never
-   * Mini). The instruction and the Rainbow share one reserved slot above the
-   * board, the paint palette moves below the controls, and Guess History is
-   * narrower. Rules, scoring, saving and animations are untouched.
-   */
-  refreshLayout?: boolean;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", wideBoard = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, onHintsViewOnlyChange, showModeBadge = true, entryContext = "daily_home", betaMode = false, customMode = false, statsOpen: statsOpenProp, onStatsOpenChange, onReplay, refreshLayout = false }: GameBoardProps) {
+export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", wideBoard = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, onHintsViewOnlyChange, showModeBadge = true, entryContext = "daily_home", betaMode = false, customMode = false, statsOpen: statsOpenProp, onStatsOpenChange, onReplay }: GameBoardProps) {
   const isDailyHomepage = variant === "dailyHomepage";
   // Drives the board's own desktop width/tile-gap classes below — true for
   // the daily homepage itself, or any other context that explicitly opted
@@ -459,19 +452,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     [puzzle.theme, format.categoryCount]
   );
 
-  // Renders solved groups and the rainbow reveal in actual solve order,
-  // instead of always pinning the rainbow to the top of the list.
-  const boardSlots = useMemo(() => {
-    const slots: ({ kind: "group"; groupIdx: number } | { kind: "rainbow" })[] =
-      state.solvedGroups.map((groupIdx) => ({ kind: "group" as const, groupIdx }));
-    // The refreshed layout shows the Rainbow in its own reserved slot above
-    // the board instead, so finding it never adds a row here.
-    if (state.gotRainbow && rainbowHerring && !refreshLayout) {
-      const insertAt = Math.min(state.rainbowSolveIndex ?? 0, slots.length);
-      slots.splice(insertAt, 0, { kind: "rainbow" as const });
-    }
-    return slots;
-  }, [state.solvedGroups, state.gotRainbow, state.rainbowSolveIndex, rainbowHerring, refreshLayout]);
+  // The solved category bars, in solve order. The Rainbow is never one of
+  // them: it has its own reserved slot above the board (rainbowSlot), so
+  // finding it never adds a row here.
+  const boardSlots = useMemo(
+    () => state.solvedGroups.map((groupIdx) => ({ kind: "group" as const, groupIdx })),
+    [state.solvedGroups],
+  );
 
   // Shared "checking guess" suspense: which tiles are animating, and their
   // stagger order (by grid position, so the bounce reads as a left-to-right
@@ -1043,52 +1030,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     prevGotRainbow.current = state.gotRainbow;
   }, [state.gotRainbow]);
 
-  // Finding the Rainbow mid-game adds its bar to the solved-bar list — a
-  // whole tile row plus a gap — which used to drop the board below by that
-  // much in a single frame before the curtain drew the bar in. Instead, the
-  // list grows into its new height over the settle beat, so the board and
-  // the controls glide down while the curtain plays. The list's size is
-  // remembered after every render so the "before" height is always at hand;
-  // the trigger is the same false→true flip that starts the curtain above.
-  const barsListRef = useRef<HTMLDivElement | null>(null);
-  const barsListSizeRef = useRef<{ height: number; margin: number } | null>(null);
-  const rainbowGlideSeenRef = useRef(state.gotRainbow);
-  useLayoutEffect(() => {
-    const list = barsListRef.current;
-    if (!list) return;
-    // Mid-glide (the game re-renders every second for its timer): leave the
-    // glide alone; its natural height is already the remembered one.
-    if (list.style.height) {
-      rainbowGlideSeenRef.current = state.gotRainbow;
-      return;
-    }
-    const size = { height: list.getBoundingClientRect().height, margin: parseFloat(getComputedStyle(list).marginBottom) || 0 };
-    const prev = barsListSizeRef.current;
-    barsListSizeRef.current = size;
-    const found = state.gotRainbow && !rainbowGlideSeenRef.current;
-    rainbowGlideSeenRef.current = state.gotRainbow;
-    if (!found || !prev || prefersReducedMotion()) return;
-    // Start from exactly the old height AND old bottom gap (the list may
-    // gain its gap to the grid in this same render), so everything below is
-    // where it was, then glide both to their new values.
-    if (size.height + size.margin - (prev.height + prev.margin) < 0.5) return;
-    const transition = `height ${SOLVE_SETTLE_MS}ms ${SOLVE_EASE}, margin-bottom ${SOLVE_SETTLE_MS}ms ${SOLVE_EASE}`;
-    list.style.overflow = "hidden";
-    list.style.transition = "none";
-    list.style.height = `${prev.height}px`;
-    list.style.marginBottom = `${prev.margin}px`;
-    void list.offsetHeight;
-    list.style.transition = transition;
-    list.style.height = `${size.height}px`;
-    list.style.marginBottom = `${size.margin}px`;
-    window.setTimeout(() => {
-      if (list.style.transition !== transition) return;
-      list.style.transition = "";
-      list.style.height = "";
-      list.style.marginBottom = "";
-      list.style.overflow = "";
-    }, SOLVE_SETTLE_MS + 60);
-  });
 
   useEffect(() => {
     if (bonusRainbowCorrect === true) {
@@ -1451,10 +1392,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // the list need the gap that separates it from the grid, so the board
   // doesn't shift the moment a merge starts.
   const barsInFlow =
-    boardSlots.some(
-      (s) => s.kind === "rainbow" || !(reveal && reveal.groupIdx === s.groupIdx && reveal.phase !== "settling"),
-    ) ||
-    (showEndState && !state.gotRainbow && !!rainbowHerring && !refreshLayout);
+    boardSlots.some((s) => !(reveal && reveal.groupIdx === s.groupIdx && reveal.phase !== "settling"));
 
   // The solved-rainbow reveal card (both the direct-guess and Spot the
   // Rainbow paths below) isn't itself gated by the Rainbow Animation
@@ -1481,7 +1419,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           onClick={() => {
             if (!promptAnsweredRef.current) setShowSpotModal(true);
           }}
-          className={`w-full rounded-lg ${refreshLayout ? "h-full py-2" : "py-3"} px-4 text-center text-white
+          className={`w-full rounded-lg h-full py-2 px-4 text-center text-white
             hover:opacity-90 transition-opacity active:scale-[0.99]
             animate-rainbow-breathe animate-rainbow-shimmer`}
           style={{ background: theme.gradient, textShadow: theme.textShadow }}
@@ -1502,7 +1440,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           background={rainbowCardBg}
           textShadow={rainbowCardTextShadow}
           curtain={rainbowVisible}
-          fitText={refreshLayout}
+          fitText
         />
       )
   ) : null;
@@ -1520,12 +1458,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // text), so the invisible copy goes — never two copies of its words.
   const realBarShown = rainbowInSlot || (!!rainbowEndCard && bonusRainbowCorrect !== null);
   const rainbowSlot = lockedFullResult && !state.gotRainbow ? null : (
-    // board-bars: the same size container and one-tile-row height rule as
-    // the solved bars below, so the slot, the instruction's space and the
-    // Rainbow bar are exactly as tall as an ordinary category bar; the gap
-    // under it is the board's own tile gap.
+    // board-bars: the same size container, one-tile-row height rule and gap
+    // as the solved bars below (square tiles on a Mini, the wide board's
+    // gaps where it has them), so the slot, the instruction's space and the
+    // Rainbow bar are exactly as tall as an ordinary category bar on every
+    // board; the gap under it is the board's own tile gap.
     <div
-      className="board-bars board-bars-wide grid mb-1.5 md:mb-3 [&>*]:[grid-area:1/1]"
+      className={`board-bars grid [&>*]:[grid-area:1/1] ${
+        isMiniBoard ? "board-bars-square mb-2" : `mb-1.5 ${useWideBoard ? "board-bars-wide md:mb-3" : ""}`
+      }`}
       style={{ "--board-cols": format.columns } as import("react").CSSProperties}
       data-testid="rainbow-slot"
     >
@@ -1545,13 +1486,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           />
         </div>
       )}
-      {/* One line at every width: the size follows the viewport (the board
-          is the viewport minus its gutters below md), so the full sentence
-          always fits without wrapping or scrolling. */}
+      {/* One line at every width: the size follows the board's own width
+          (cqw of this slot), so the full sentence fits on a Full board, a
+          narrow phone and the capped Mini board alike, without wrapping or
+          scrolling. */}
       <p
         aria-hidden={slotTaken || undefined}
         className={`self-center text-center font-sans font-bold text-foreground whitespace-nowrap leading-tight
-          text-[clamp(12px,4.15vw,30px)] md:text-[28px] transition-opacity duration-300 ${slotTaken ? "opacity-0" : ""}`}
+          text-[clamp(12px,4.75cqw,28px)] transition-opacity duration-300 ${slotTaken ? "opacity-0" : ""}`}
       >
         Select {SELECTION_COUNT_WORD[format.answersPerCategory] ?? format.answersPerCategory} words that share a connection.
       </p>
@@ -1567,18 +1509,79 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           background={rainbowCardBg}
           textShadow={rainbowCardTextShadow}
           curtain={rainbowVisible}
-          fitText={refreshLayout}
+          fitText
         />
       ) : rainbowEndCard}
     </div>
   );
 
-  // Color Palette Mode buttons. Classic layout: directly under the
-  // instruction and ABOVE the solved bars, so solving a category never moves
-  // it. Refreshed layout: below the Shuffle/Deselect/Submit row instead, so
+  // ── Notifications: one reserved strip at the top of the game ──
+  // "Rainbow Spotted!", "One away…" (or its Rainbow variant) and "Already
+  // guessed!" show one at a time in a fixed-height strip above the
+  // instruction, so showing or hiding one never moves anything and never
+  // covers the header, instruction or board. The newest kind of event wins:
+  // Already guessed (2s), then One away, then Rainbow Spotted (3s). Timing is
+  // useGame's, unchanged.
+  //
+  // One away belongs to the guess that produced it: it shows only while
+  // every word of that submitted guess is still selected, so deselecting any
+  // of them (one tile, or Deselect All) hides it in that same render, before
+  // useGame's own selection effect clears the flag for good. Only a new
+  // submitted One Away result can set it again.
+  const lastGuess = useMemo(() => {
+    for (let i = state.guessHistory.length - 1; i >= 0; i--) {
+      if (!state.guessHistory[i].isHintMarker) return state.guessHistory[i];
+    }
+    return undefined;
+  }, [state.guessHistory]);
+  const oneAwayGuessStillSelected =
+    !!lastGuess && lastGuess.words.every((w) => state.selectedWords.includes(w));
+  const oneAwayKind = almostRainbow ? "almost" : oneAway ? "plain" : null;
+  const showOneAway = oneAwayKind !== null && oneAwayGuessStillSelected;
+  const dismissOneAway = () => {
+    setAlmostRainbow(false);
+    setOneAway(false);
+  };
+  const notificationPill = "inline-flex max-w-full items-center gap-2 whitespace-nowrap rounded-full text-sm shadow-md animate-fade-up";
+  const notificationStrip = (
+    <div role="status" aria-live="polite" className="h-9 mb-1 flex items-center justify-center" data-testid="notification-strip">
+      {alreadyGuessed ? (
+        <div className={`${notificationPill} bg-foreground text-background px-5 py-1.5 font-semibold`}>
+          {alreadyGuessed === "oneaway" ? "Already guessed — and one away!" : "Already guessed!"}
+        </div>
+      ) : showOneAway ? (
+        <div className={`${notificationPill} bg-foreground text-background pl-5 pr-2 py-1.5 font-semibold`}>
+          {oneAwayKind === "almost" ? theme.almostMessage : "One away…"}
+          <button
+            onClick={dismissOneAway}
+            className="w-6 h-6 rounded-full bg-background/20 hover:bg-background/30 flex items-center justify-center transition-colors active:scale-95"
+            aria-label="Dismiss"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : showRainbowPopup ? (
+        // Animated (or static, per the Rainbow Animation setting) rainbow
+        // fill for the default theme; a themed bonus's gradient is a fixed
+        // image either way. Static uses dark ink text on its softer gradient.
+        <div
+          className={`${notificationPill} px-5 py-1.5 font-bold ${
+            theme.isDefault
+              ? showRainbow ? "rainbow-tile text-white" : "rainbow-tile-static text-[#292825]"
+              : "text-white"
+          }`}
+          style={!theme.isDefault ? { background: theme.gradient, textShadow: theme.textShadow } : undefined}
+        >
+          {theme.spottedMessage}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  // Color Palette Mode buttons, below the Shuffle/Deselect/Submit row, so
   // neither turning the setting on nor switching modes can move the grid.
   const paletteRow = colorPaletteMode && remainingWords.length > 0 ? (
-      <div className={`flex items-center justify-center gap-2 ${refreshLayout ? "mt-4" : "mb-3"}`}>
+      <div className="flex items-center justify-center gap-2 mt-4">
         <button
           onClick={() => setPaletteMode("select")}
           className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
@@ -1627,6 +1630,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       ) : (
     <div className={`w-full mx-auto animate-fade-up ${useWideBoard ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
+      {notificationStrip}
       {/* Puzzle-mode badge on its own right-aligned row (opt-in via
           showModeBadge — see its prop doc), then the centered instruction
           directly beneath — stacked (not sharing one row) so both read
@@ -1637,60 +1641,32 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           <PuzzleModeBadge isRainbow={!!rainbowHerring} groupCount={format.categoryCount} />
         </div>
       )}
-      {refreshLayout ? rainbowSlot : (
-        <p className="text-center font-sans text-[clamp(13px,4.2vw,16px)] font-bold tracking-wide text-foreground mb-2">
-          Select {SELECTION_COUNT_WORD[format.answersPerCategory] ?? format.answersPerCategory} words that share a connection!
-        </p>
-      )}
-
-      {!refreshLayout && paletteRow}
-
-      {/* Compact board wrapper — Mini only (see isMiniBoard above). Caps the
-          solved bars, Rainbow reveal bar and tile grid together at ~330px so
-          they all share one width and stop growing past it, while every
-          other element on the page (instruction, controls, mistakes/timer
-          row) is unaffected because it lives outside this div. */}
+      {/* The board area: the instruction/Rainbow slot, the solved bars and the
+          tile grid. On a Mini it is capped at ~330px so all three share one
+          width and stop growing past it; the controls below keep the page
+          width. */}
       <div className={isMiniBoard ? "w-full max-w-[330px] mx-auto" : undefined}>
-      {/* Solved groups — rainbow is interleaved at the position it was actually
-          found (boardSlots), not always pinned to the top */}
+      {rainbowSlot}
       {/* The solved bars. Spaced exactly like the tile grid (same gaps), and
           each bar is one tile row tall (.board-bars / .solved-bar in
           index.css), so a row becoming a bar leaves the board below where
-          it was. pt-2 keeps the unsolved board exactly where it always sat,
-          and is where the first bar lands — right on top of the first row.
-          relative: the bar of a category mid-solve-animation is positioned
-          against this list. z-[1]: one layer below the tile grid (z-[2]), so
-          animated tiles draw in front of solved bars. */}
+          it was. relative: the bar of a category mid-solve-animation is
+          positioned against this list. z-[1]: one layer below the tile grid
+          (z-[2]), so animated tiles draw in front of solved bars. */}
       <div
-        ref={barsListRef}
-        className={`board-bars relative z-[1] ${refreshLayout ? "" : "pt-2"} ${
+        data-testid="solved-bars"
+        className={`board-bars relative z-[1] ${
           isMiniBoard
             ? `board-bars-square space-y-2 ${barsInFlow ? "mb-2" : ""}`
             : `space-y-1.5 ${barsInFlow ? "mb-1.5" : ""} ${useWideBoard ? `board-bars-wide md:space-y-3 ${barsInFlow ? "md:mb-3" : ""}` : ""}`
         }`}
         style={{ "--board-cols": format.columns } as import("react").CSSProperties}
       >
-        {boardSlots.map((slot) =>
-          slot.kind === "rainbow" ? (
-            <RainbowRevealBar
-              key="rainbow-reveal"
-              categoryName={puzzle.rainbowCategoryName}
-              categoryEmoji={puzzle.rainbowCategoryEmoji}
-              categoryEmojiHintOnly={puzzle.rainbowCategoryEmojiHintOnly}
-              theme={theme}
-              words={rainbowHerring!}
-              alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
-              textClass={rainbowCardTextClass}
-              background={rainbowCardBg}
-              textShadow={rainbowCardTextShadow}
-              curtain={rainbowVisible}
-              fitText={refreshLayout}
-            />
-          ) : (
+        {boardSlots.map((slot) => (
             <SolvedGroup
               key={slot.groupIdx}
               group={puzzle.groups[slot.groupIdx]}
-              fitText={refreshLayout}
+              fitText
               alphabetizeCompleted={puzzle.alphabetizeCompleted ?? true}
               // animate-group-appear is only for bars that DIDN'T go through the
               // solve animation (reduced-motion path, loss cascade). Animated
@@ -1704,11 +1680,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                   : undefined
               }
             />
-          )
-        )}
-
-        {/* The post-game Rainbow prompt/reveal (see rainbowEndCard). */}
-        {!refreshLayout && rainbowEndCard}
+        ))}
       </div>
 
       {/* Word grid. Stays mounted (empty) through the settle beat of the
@@ -1777,7 +1749,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 colorPaletteMode={colorPaletteMode}
                 isPaintMode={colorPaletteMode && paletteMode !== "select"}
                 squareTiles={isMiniBoard}
-                splitLongWords={refreshLayout}
+                splitLongWords
                 data-word={word}
               />
             );
@@ -1785,67 +1757,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           </div>
         </div>
       )}
+
       </div>
-
-
-      {/* Rainbow Spotted popup — animated (or static, per the Rainbow
-          Animation setting) rainbow-tile for the default theme; themed
-          gradients are already static images and always show regardless
-          of that setting, same as the actual game tiles. Static uses dark
-          ink text (better contrast on that softer gradient); animated and
-          themed keep the original white text. */}
-      {showRainbowPopup && (
-        <div className="flex justify-center mt-3 animate-fade-up">
-          <div
-            className={`${
-              theme.isDefault
-                ? showRainbow ? "rainbow-tile text-white" : "rainbow-tile-static text-[#292825]"
-                : "text-white"
-            } px-6 py-2.5 rounded-full text-sm font-bold shadow-lg`}
-            style={!theme.isDefault ? { background: theme.gradient, textShadow: theme.textShadow } : undefined}
-          >
-            {theme.spottedMessage}
-          </div>
-        </div>
-      )}
-
-      {/* Almost 🌈 takes priority over One Away */}
-      {almostRainbow ? (
-        <div className="flex justify-center mt-3 animate-fade-up">
-          <div className="bg-foreground text-background pl-5 pr-3 py-2 rounded-full text-sm font-semibold shadow-md flex items-center gap-2">
-            {theme.almostMessage}
-            <button
-              onClick={() => setAlmostRainbow(false)}
-              className="w-5 h-5 rounded-full bg-background/20 hover:bg-background/30 flex items-center justify-center transition-colors active:scale-95"
-              aria-label="Dismiss"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      ) : oneAway ? (
-        <div className="flex justify-center mt-3 animate-fade-up">
-          <div className="bg-foreground text-background pl-5 pr-3 py-2 rounded-full text-sm font-semibold shadow-md flex items-center gap-2">
-            One away…
-            <button
-              onClick={() => setOneAway(false)}
-              className="w-5 h-5 rounded-full bg-background/20 hover:bg-background/30 flex items-center justify-center transition-colors active:scale-95"
-              aria-label="Dismiss"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Already Guessed popup */}
-      {alreadyGuessed && (
-        <div className="flex justify-center mt-3 animate-fade-up">
-          <div className="bg-foreground text-background px-5 py-2 rounded-full text-sm font-semibold shadow-md">
-            {alreadyGuessed === "oneaway" ? "Already guessed — and one away!" : "Already guessed!"}
-          </div>
-        </div>
-      )}
 
       {/* Mistakes dots — hidden when viewing an already-completed puzzle.
           The running solve time is never shown during active play (on any
@@ -1857,8 +1770,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           regardless of whether this live span ever rendered). With no
           second item in this row, the pill is simply centered. */}
       {!wasAlreadyComplete.current && (
-        <div className={`${refreshLayout ? "mt-3 md:mt-4" : "mt-4"} w-full flex items-center justify-center`}>
-          <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} plain={refreshLayout} />
+        <div className={`mt-3 md:mt-4 w-full flex items-center justify-center`}>
+          <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} plain />
         </div>
       )}
 
@@ -1916,7 +1829,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
               Submit
             </button>
           </div>
-          {refreshLayout && paletteRow}
+          {paletteRow}
           {(colorCodeTiles || colorPaletteMode) && hasAnyColor && (
             // Same w-full md:w-[80%] mx-auto grid-cols-3 gap-2 math as the
             // Shuffle/Deselect All/Submit row above, with the button in the
@@ -2048,32 +1961,20 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
       {/* Guess History */}
       {settings?.guessHistory && incorrectGuesses.length > 0 && (
-        // Refreshed layout: a narrower card than the board (as in the
-        // mock-ups), its title left-aligned with the guess count.
-        <div className={refreshLayout
-          ? "mt-5 mx-auto w-[86%] sm:w-[72%] max-w-[600px] rounded-xl bg-card border border-border overflow-hidden"
-          : "mt-3 rounded-2xl bg-card border border-border overflow-hidden"}>
+        // A narrower card than the board, its title left-aligned with the
+        // guess count.
+        <div className="mt-5 mx-auto w-[86%] sm:w-[72%] max-w-[600px] rounded-xl bg-card border border-border overflow-hidden">
           <button
             onClick={() => setHistoryExpanded((v) => !v)}
             aria-expanded={historyExpanded}
-            className={`relative w-full px-4 py-3 hover:bg-secondary/40 transition-colors ${refreshLayout ? "text-left" : "text-center"}`}
+            className="relative w-full px-4 py-3 hover:bg-secondary/40 transition-colors text-left"
           >
-            {/* Centered relative to the full card width — the chevron below
-                is positioned absolutely so it doesn't shift this group off
-                center. */}
-            {refreshLayout ? (
-              <span className="flex items-center gap-2.5 pr-6">
-                <History className="w-5 h-5 text-foreground shrink-0" />
-                <span className="text-sm md:text-base font-semibold text-foreground">
-                  Guess History ({incorrectGuesses.length})
-                </span>
+            <span className="flex items-center gap-2.5 pr-6">
+              <History className="w-5 h-5 text-foreground shrink-0" />
+              <span className="text-sm md:text-base font-semibold text-foreground">
+                Guess History ({incorrectGuesses.length})
               </span>
-            ) : (
-            <span className="flex items-center justify-center gap-2">
-              <History className="w-4 h-4 text-muted-foreground shrink-0" />
-              <span className="text-sm font-bold text-foreground">Guess History</span>
             </span>
-            )}
             <ChevronDown
               className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
                 historyExpanded ? "rotate-180" : ""
@@ -2081,7 +1982,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             />
           </button>
           {historyExpanded && (
-            <div className={refreshLayout ? "mx-4 pt-2 pb-3 border-t border-border divide-y divide-border" : "px-4 pb-3 divide-y divide-border"}>
+            <div className="mx-4 pt-2 pb-3 border-t border-border divide-y divide-border">
               {incorrectGuesses.map((g, i) => {
                 const sorted = [...g.words].sort((a, b) => a.localeCompare(b));
                 // Reuse the guess's own stored feedback (set at guess-time in
@@ -2101,20 +2002,16 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                         selection rows — cell width never varies with word
                         length, and grid rows keep every cell the same
                         height even when one wraps to two lines. */}
-                    {/* Refreshed layout: two by two on phones, one row from
-                        sm up (the board's four columns). */}
+                    {/* A Full guess is two by two on phones and one row from
+                        sm up; a Mini guess (three words) is always one row. */}
                     <div
-                      className={refreshLayout ? "grid gap-1.5 grid-cols-2 sm:[grid-template-columns:var(--history-cols)]" : "grid gap-1"}
-                      style={refreshLayout
-                        ? ({ "--history-cols": `repeat(${format.answersPerCategory}, minmax(0, 1fr))` } as import("react").CSSProperties)
-                        : { gridTemplateColumns: `repeat(${format.answersPerCategory}, minmax(0, 1fr))` }}
+                      className={`grid gap-1.5 ${format.answersPerCategory === 4 ? "grid-cols-2 sm:[grid-template-columns:var(--history-cols)]" : "[grid-template-columns:var(--history-cols)]"}`}
+                      style={{ "--history-cols": `repeat(${format.answersPerCategory}, minmax(0, 1fr))` } as import("react").CSSProperties}
                     >
                       {sorted.map((w, j) => (
                         <span
                           key={`${w}-${j}`}
-                          className={refreshLayout
-                            ? "flex items-center justify-center min-w-0 bg-secondary text-foreground rounded-lg px-1 py-1.5 text-xs md:text-sm font-medium text-center leading-tight"
-                            : "flex items-center justify-center min-w-0 bg-secondary text-foreground rounded-md px-0.5 py-1.5 text-[11px] sm:text-xs md:text-sm font-medium text-center leading-tight"}
+                          className="flex items-center justify-center min-w-0 bg-secondary text-foreground rounded-lg px-1 py-1.5 text-xs md:text-sm font-medium text-center leading-tight"
                         >
                           {isCustomEmoji(w) ? (
                             <img

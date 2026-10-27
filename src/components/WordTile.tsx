@@ -154,6 +154,31 @@ function measureTextWidth(text: string, button: CSSStyleDeclaration): number {
   return ctx.measureText(upper).width + letterSpacingPx * Math.max(countVisibleChars(upper) - 1, 0);
 }
 
+// Consonant clusters English words commonly start with — a split that leaves
+// one of these at the start of the second line reads naturally (SNOW-FLAKES,
+// GRAPE-FRUIT); one that leaves "NDB" or "HC" does not.
+const WORD_ONSETS = new Set([
+  "BL", "BR", "CH", "CL", "CR", "DR", "FL", "FR", "GL", "GR", "KN", "PH", "PL", "PR", "QU",
+  "SC", "SCH", "SCR", "SH", "SK", "SL", "SM", "SN", "SP", "SPL", "SPR", "ST", "STR", "SW",
+  "TH", "THR", "TR", "TW", "WH", "WR",
+]);
+const isVowel = (c: string) => /[AEIOUY]/i.test(c);
+
+/** Whether breaking before chars[i] looks like a syllable or compound boundary. */
+function isNaturalBreak(chars: string[], i: number): boolean {
+  // The second line starts with a consonant (cluster) followed by a vowel...
+  let j = i;
+  while (j < chars.length && !isVowel(chars[j])) j++;
+  if (j === i || j === chars.length) return false;
+  const onset = chars.slice(i, j).join("").toUpperCase();
+  if (onset.length > 1 && !WORD_ONSETS.has(onset)) return false;
+  // ...that the split does not tear out of a cluster the first line ends
+  // with (SNOWF-LAKES breaks "FL").
+  const last = chars[i - 1].toUpperCase();
+  if (!isVowel(last) && WORD_ONSETS.has(last + onset)) return false;
+  return true;
+}
+
 /**
  * For a single word that would otherwise shrink to a much smaller size than
  * its neighbours, or not fit at all (e.g. IDENTIFICATION on a phone): the
@@ -172,11 +197,17 @@ function computeSplitFit(
   const floor = MIN_TILE_FONT_PX / basePx;
   const oneLineScale = ((tileInnerWidthPx - 2 * TILE_PAD_X) * 0.92) / measureTextWidth(word, button);
   if (oneLineScale >= SPLIT_BELOW_SCALE) return undefined;
-  let best: { parts: [string, string]; width: number } | undefined;
+  let best: { parts: [string, string]; score: number; width: number } | undefined;
   for (let i = 3; i <= chars.length - 3; i++) {
     const parts: [string, string] = [chars.slice(0, i).join(""), chars.slice(i).join("")];
     const width = Math.max(measureTextWidth(parts[0] + "-", button), measureTextWidth(parts[1], button));
-    if (!best || width < best.width) best = { parts, width };
+    // A natural break (DIAMOND-BACK, SNOW-FLAKES) wins over a slightly more
+    // even one (DIAMO-NDBACK); an even split is the fallback.
+    // Between two consonants (the usual compound seam: DIAMOND-BACK) edges
+    // out an equally even vowel-consonant break (DIA-MONDBACK).
+    const seam = !isVowel(chars[i - 1]) && !isVowel(chars[i]) ? 0.97 : 1;
+    const score = width * seam * (isNaturalBreak(chars, i) ? 1 : 1.5);
+    if (!best || score < best.score) best = { parts, score, width };
   }
   if (!best) return undefined;
   const target = (tileInnerWidthPx - 2 * SPLIT_PAD_X) * 0.92;
@@ -611,7 +642,10 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
           focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
         style={{
           ...(emojiFontSize ? { fontSize: emojiFontSize } : {}),
-          ...(splitParts ? { paddingLeft: SPLIT_PAD_X, paddingRight: SPLIT_PAD_X } : {}),
+          // Two lines need the vertical room the single-line padding takes, or a
+          // split word in a thick-bordered (Rainbow, painted) tile on a narrow
+          // phone makes its row taller than a tile row.
+          ...(splitParts ? { paddingLeft: SPLIT_PAD_X, paddingRight: SPLIT_PAD_X, paddingTop: 4, paddingBottom: 4 } : {}),
           ...(themedRainbow ? { background: rainbowGradient, textShadow: rainbowTextShadow } : {}),
           // `scale` (not `transform`) so it composes with the tile's own
           // selection scale; the button's transition-all eases the lift in
@@ -730,12 +764,14 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
             }}
           >
             {splitParts ? (
+              // The only break opportunity is the <wbr>, and the whole word is
+              // too wide for one line at this size, so it wraps exactly there.
+              // The hyphen is drawn by CSS (.tile-split-head), so the tile's
+              // text is still the plain word for copying and screen readers.
               <>
-                <span aria-hidden="true">
-                  {splitParts[0]}-<br />
-                  {splitParts[1]}
-                </span>
-                <span className="sr-only">{word}</span>
+                <span className="tile-split-head">{splitParts[0]}</span>
+                <wbr />
+                {splitParts[1]}
               </>
             ) : (
               word

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useGamePageTheme } from "@/hooks/useGamePageTheme";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,6 +37,7 @@ interface ArchivePuzzlePageProps {
 }
 
 export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePageProps = {}) {
+  useGamePageTheme();
   const { puzzleId } = useParams<{ puzzleId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -179,6 +181,7 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
         user={user ?? null}
         onSignOut={() => signOutOfRainbow()}
         simplifiedIcons
+        showCreateLink={false}
         // Matches the board's own wideBoard width below (840px) instead of
         // the narrower 512px default — simplifiedIcons alone only controls
         // which icons show, not how wide the header is; wideHeader is the
@@ -325,6 +328,7 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
         onSettingsChange={handleSettingsChange}
         onOpenFeedback={() => setActiveModal("feedback")}
         showMenuLinks
+        showCreateLink
         onHowToPlayClick={() => setActiveModal("help")}
         user={user ?? null}
         onSignOut={() => signOutOfRainbow()}

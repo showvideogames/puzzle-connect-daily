@@ -48,17 +48,22 @@ export function useFitBarText<T extends HTMLElement>(enabled: boolean, contentKe
 
     fit();
     let lastWidth = el.offsetWidth;
-    const observer = new ResizeObserver(() => {
+    const onResize = () => {
       if (Math.abs(el.offsetWidth - lastWidth) < 0.5) return;
       lastWidth = el.offsetWidth;
       fit();
-    });
-    observer.observe(el);
+    };
+    // Same fallback as WordTile's fit: environments without ResizeObserver
+    // (older browsers, the jsdom test runner) re-fit on window resize instead.
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : null;
+    if (observer) observer.observe(el);
+    else window.addEventListener("resize", onResize);
     let alive = true;
     document.fonts?.ready.then(() => alive && fit());
     return () => {
       alive = false;
-      observer.disconnect();
+      observer?.disconnect();
+      window.removeEventListener("resize", onResize);
     };
   }, [enabled, contentKey]);
 

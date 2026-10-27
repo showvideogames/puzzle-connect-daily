@@ -50,7 +50,7 @@ test.describe("Public Mini — today's puzzle", () => {
   });
 
   test("groups are three answers, and say so @smoke", async ({ page }) => {
-    await expect(page.getByText("Select three words that share a connection!")).toBeVisible();
+    await expect(page.getByText("Select three words that share a connection.")).toBeVisible();
 
     const group = MINI_RAINBOW.groups[0];
     await solveCategory(page, group);
