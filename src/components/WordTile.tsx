@@ -403,11 +403,16 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         if (!cancelled) measure();
       });
     }
+    // fonts.ready can settle before the tile face has started loading (a cold
+    // first visit), leaving a long word measured against the fallback font and
+    // drawn too wide. Any font finishing later re-measures.
+    document.fonts?.addEventListener?.("loadingdone", measure);
 
     return () => {
       cancelled = true;
       resizeObserver?.disconnect();
       window.removeEventListener("resize", measure);
+      document.fonts?.removeEventListener?.("loadingdone", measure);
     };
   }, [word, isEmojiPuzzle, isImage, splitLongWords]);
 
@@ -755,6 +760,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
           // a fraction of the normal size every other tile uses.
           <span
             ref={textRef}
+            data-tile-text
             className="w-full"
             style={{
               wordBreak: "normal",
