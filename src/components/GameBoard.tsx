@@ -1515,13 +1515,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     </div>
   );
 
-  // ── Notifications: one reserved strip at the top of the game ──
+  // ── Notifications: a compact overlay in a safe gap on the board ──
   // "Rainbow Spotted!", "One away…" (or its Rainbow variant) and "Already
-  // guessed!" show one at a time in a fixed-height strip above the
-  // instruction, so showing or hiding one never moves anything and never
-  // covers the header, instruction or board. The newest kind of event wins:
-  // Already guessed (2s), then One away, then Rainbow Spotted (3s). Timing is
-  // useGame's, unchanged.
+  // guessed!" show one at a time, floating over the remaining unsolved board
+  // rather than taking space of their own, so showing or hiding one never
+  // moves anything. The newest kind of event wins: Already guessed (2s), then
+  // One away, then Rainbow Spotted (3s). Timing is useGame's, unchanged.
   //
   // One away belongs to the guess that produced it: it shows only while
   // every word of that submitted guess is still selected, so deselecting any
@@ -1537,35 +1536,129 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const oneAwayGuessStillSelected =
     !!lastGuess && lastGuess.words.every((w) => state.selectedWords.includes(w));
   const oneAwayKind = almostRainbow ? "almost" : oneAway ? "plain" : null;
-  const showOneAway = oneAwayKind !== null && oneAwayGuessStillSelected;
+  // Development only (stripped from production builds): ?__notification=oneaway
+  // or =spotted shows that notification on demand, so its placement can be
+  // checked in board states play cannot produce, such as one unsolved row.
+  const forcedNotification = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("__notification") : null;
+  const showOneAway = (oneAwayKind !== null && oneAwayGuessStillSelected) || forcedNotification === "oneaway";
+  const showSpotted = showRainbowPopup || forcedNotification === "spotted";
   const dismissOneAway = () => {
     setAlmostRainbow(false);
     setOneAway(false);
   };
-  const notificationPill = "inline-flex max-w-full items-center gap-2 whitespace-nowrap rounded-full text-sm shadow-md animate-fade-up";
-  const notificationStrip = (
-    <div role="status" aria-live="polite" className="h-9 mb-1 flex items-center justify-center" data-testid="notification-strip">
+  const notificationKind = alreadyGuessed
+    ? `already-${alreadyGuessed}`
+    : showOneAway ? `oneaway-${oneAwayKind}` : showSpotted ? "spotted" : null;
+
+  // Where the pill goes is measured, never a fixed percentage. Every piece of
+  // text it could cover — tile words (wrapped or split lines included), solved
+  // bars, the instruction/Rainbow slot, the mistakes line and the controls —
+  // is an obstacle within the pill's own width. The pill takes the free band
+  // between unsolved rows nearest the middle of the remaining board (it may
+  // sit over the blank edges of tiles); with no inner band tall enough, the
+  // nearest free band at the board's outer edge. Nothing is enlarged to make
+  // room for it.
+  const boardColumnRef = useRef<HTMLDivElement | null>(null);
+  const boardAreaRef = useRef<HTMLDivElement | null>(null);
+  const notificationRef = useRef<HTMLDivElement | null>(null);
+  const [notificationTop, setNotificationTop] = useState<number | null>(null);
+  const placeNotification = useCallback(() => {
+    const area = boardAreaRef.current;
+    const pill = notificationRef.current;
+    const column = boardColumnRef.current;
+    const grid = gridWrapperRef.current;
+    if (!area || !pill || !column || !grid) return;
+    const areaRect = area.getBoundingClientRect();
+    const { width: W, height: H } = pill.getBoundingClientRect();
+    const left = areaRect.left + (areaRect.width - W) / 2;
+    const right = left + W;
+    const tiles = Array.from(grid.querySelectorAll<HTMLElement>("[data-word] button"));
+    if (tiles.length === 0) return;
+    const tileRects = tiles.map((t) => t.getBoundingClientRect());
+    const gridTop = Math.min(...tileRects.map((r) => r.top));
+    const gridBottom = Math.max(...tileRects.map((r) => r.bottom));
+    const gridMid = (gridTop + gridBottom) / 2;
+    const visible = (el: Element) => {
+      const cs = getComputedStyle(el);
+      return cs.visibility !== "hidden" && cs.opacity !== "0" && !el.closest("[aria-hidden=true]");
+    };
+    const PAD = 3;
+    const obstacles = Array.from(
+      column.querySelectorAll<HTMLElement>(
+        "[data-tile-text], [data-word] button img, .solved-bar > *, [data-testid=rainbow-slot] p, [data-notification-obstacle]",
+      ),
+    )
+      .filter((el) => !pill.contains(el) && visible(el))
+      .map((el) => el.getBoundingClientRect())
+      .filter((r) => r.height > 0 && r.right > left && r.left < right)
+      .map((r) => [r.top - PAD, r.bottom + PAD] as [number, number])
+      .sort((a, b) => a[0] - b[0]);
+    // Free vertical bands across the remaining board and its outer edges.
+    const searchTop = gridTop - H * 2;
+    const searchBottom = gridBottom + H * 2;
+    const bands: [number, number][] = [];
+    let cursor = searchTop;
+    for (const [t, b] of obstacles) {
+      if (b <= cursor) continue;
+      if (t > cursor) bands.push([cursor, Math.min(t, searchBottom)]);
+      cursor = Math.max(cursor, b);
+      if (cursor >= searchBottom) break;
+    }
+    if (cursor < searchBottom) bands.push([cursor, searchBottom]);
+    const centre = ([t, b]: [number, number]) => (t + b) / 2;
+    const edgeDistance = (band: [number, number]) =>
+      Math.min(Math.abs(centre(band) - gridTop), Math.abs(centre(band) - gridBottom));
+    const fits = bands.filter(([t, b]) => b - t >= H);
+    const inner = fits.filter((band) => centre(band) > gridTop && centre(band) < gridBottom);
+    const pick = inner.length
+      ? inner.sort((a, b) => Math.abs(centre(a) - gridMid) - Math.abs(centre(b) - gridMid))[0]
+      : fits.sort((a, b) => edgeDistance(a) - edgeDistance(b))[0];
+    // Nowhere fits at all (not seen in practice): straddle the board's bottom edge.
+    const y = pick ? centre(pick) - H / 2 : gridBottom - H / 2;
+    setNotificationTop(Math.round(y - areaRect.top));
+  }, []);
+  useLayoutEffect(() => {
+    if (!notificationKind) {
+      setNotificationTop(null);
+      return;
+    }
+    placeNotification();
+    window.addEventListener("resize", placeNotification);
+    return () => window.removeEventListener("resize", placeNotification);
+  }, [notificationKind, remainingWords, state.solvedGroups.length, placeNotification]);
+
+  const notificationPill = "pointer-events-none inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-full text-sm leading-5 shadow-md";
+  const notificationOverlay = notificationKind ? (
+    <div
+      ref={notificationRef}
+      role="status"
+      aria-live="polite"
+      data-testid="notification-overlay"
+      className="pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 max-w-full"
+      style={{ top: notificationTop ?? 0, visibility: notificationTop === null ? "hidden" : "visible" }}
+    >
       {alreadyGuessed ? (
-        <div className={`${notificationPill} bg-foreground text-background px-5 py-1.5 font-semibold`}>
+        <div className={`${notificationPill} bg-foreground text-background px-4 py-1 font-semibold`}>
           {alreadyGuessed === "oneaway" ? "Already guessed — and one away!" : "Already guessed!"}
         </div>
       ) : showOneAway ? (
-        <div className={`${notificationPill} bg-foreground text-background pl-5 pr-2 py-1.5 font-semibold`}>
+        <div className={`${notificationPill} bg-foreground text-background pl-4 pr-1 py-1 font-semibold`}>
           {oneAwayKind === "almost" ? theme.almostMessage : "One away…"}
+          {/* The one part of the overlay that takes taps. */}
           <button
             onClick={dismissOneAway}
-            className="w-6 h-6 rounded-full bg-background/20 hover:bg-background/30 flex items-center justify-center transition-colors active:scale-95"
+            className="pointer-events-auto w-5 h-5 rounded-full bg-background/20 hover:bg-background/30 flex items-center justify-center transition-colors active:scale-95"
             aria-label="Dismiss"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-3 h-3" />
           </button>
         </div>
-      ) : showRainbowPopup ? (
+      ) : (
         // Animated (or static, per the Rainbow Animation setting) rainbow
         // fill for the default theme; a themed bonus's gradient is a fixed
         // image either way. Static uses dark ink text on its softer gradient.
         <div
-          className={`${notificationPill} px-5 py-1.5 font-bold ${
+          className={`${notificationPill} px-4 py-1 font-bold ${
             theme.isDefault
               ? showRainbow ? "rainbow-tile text-white" : "rainbow-tile-static text-[#292825]"
               : "text-white"
@@ -1574,9 +1667,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         >
           {theme.spottedMessage}
         </div>
-      ) : null}
+      )}
     </div>
-  );
+  ) : null;
 
   // Color Palette Mode buttons, below the Shuffle/Deselect/Submit row, so
   // neither turning the setting on nor switching modes can move the grid.
@@ -1629,8 +1722,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-    <div className={`w-full mx-auto animate-fade-up ${useWideBoard ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
-      {notificationStrip}
+    <div ref={boardColumnRef} className={`w-full mx-auto animate-fade-up ${useWideBoard ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2"}`}>
       {/* Puzzle-mode badge on its own right-aligned row (opt-in via
           showModeBadge — see its prop doc), then the centered instruction
           directly beneath — stacked (not sharing one row) so both read
@@ -1644,8 +1736,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* The board area: the instruction/Rainbow slot, the solved bars and the
           tile grid. On a Mini it is capped at ~330px so all three share one
           width and stop growing past it; the controls below keep the page
-          width. */}
-      <div className={isMiniBoard ? "w-full max-w-[330px] mx-auto" : undefined}>
+          width. relative: the notification overlay is placed against it. */}
+      <div ref={boardAreaRef} className={isMiniBoard ? "relative w-full max-w-[330px] mx-auto" : "relative"}>
       {rainbowSlot}
       {/* The solved bars. Spaced exactly like the tile grid (same gaps), and
           each bar is one tile row tall (.board-bars / .solved-bar in
@@ -1757,7 +1849,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           </div>
         </div>
       )}
-
+      {notificationOverlay}
       </div>
 
       {/* Mistakes dots — hidden when viewing an already-completed puzzle.
@@ -1770,7 +1862,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           regardless of whether this live span ever rendered). With no
           second item in this row, the pill is simply centered. */}
       {!wasAlreadyComplete.current && (
-        <div className={`mt-3 md:mt-4 w-full flex items-center justify-center`}>
+        <div data-notification-obstacle className={`mt-3 md:mt-4 w-full flex items-center justify-center`}>
           <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} plain />
         </div>
       )}
@@ -1781,7 +1873,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           fixed-width buttons floating narrower than the grid above them. */}
       {!state.isComplete && (
         <>
-          <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-3">
+          <div data-notification-obstacle className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-3">
             <button
               onClick={shuffle}
               disabled={isChecking || reveal !== null}
