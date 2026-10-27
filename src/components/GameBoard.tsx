@@ -1545,19 +1545,20 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const feedbackKind = alreadyGuessed ? `already-${alreadyGuessed}` : guessFeedback ?? (showRainbowPopup ? "spotted" : null);
 
   // One visual family: a white pill with a strong purple outline and bold
-  // purple lettering (the Submit button's purple). Its text is centred in the
-  // whole pill; a dismissible pill reserves the close button's width on BOTH
-  // sides so the label stays centred. Rainbow Spotted keeps its rainbow fill
-  // as the success message.
+  // purple lettering (the Submit button's purple). The pill is sized to its
+  // content: the label (with its 🌈, if any) and the close button sit together
+  // as one group, centred with equal padding on both sides. Rainbow Spotted
+  // keeps its rainbow fill as the success message.
   const pillBase = "relative inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full text-[15px] sm:text-base font-extrabold leading-none animate-fade-up motion-reduce:animate-none";
   const purplePill = `${pillBase} border-2 border-[hsl(var(--brand-purple-to))] bg-white text-[hsl(258_68%_48%)] shadow-[0_2px_8px_-3px_rgba(139,92,246,0.45)] dark:bg-card dark:text-[hsl(var(--brand-purple-from))]`;
   const feedbackPill = !feedbackKind ? null : guessFeedback && !alreadyGuessed ? (
-    <div className={`${purplePill} px-10`} data-testid="guess-feedback">
+    <div className={`${purplePill} gap-2 px-3`} data-testid="guess-feedback">
       {guessFeedback === "incorrect" ? "Incorrect" : guessFeedback === "almost" ? `One Away... ${theme.emoji}` : "One Away..."}
+      {/* 28px circle, with a 44px invisible tap area around it. */}
       <button
         onClick={dismissFeedback}
         aria-label="Dismiss"
-        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center
+        className="relative shrink-0 w-7 h-7 rounded-full flex items-center justify-center
           bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))] text-white
           before:absolute before:-inset-2 before:content-[''] active:scale-95 transition-transform
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -1566,7 +1567,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       </button>
     </div>
   ) : alreadyGuessed ? (
-    <div className={`${purplePill} px-4`} data-testid="guess-feedback">
+    <div className={`${purplePill} px-3.5`} data-testid="guess-feedback">
       {alreadyGuessed === "oneaway" ? "Already guessed — one away!" : "Already guessed!"}
     </div>
   ) : (
@@ -1574,7 +1575,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     // the default theme; a themed bonus's gradient is a fixed image either way.
     <div
       data-testid="guess-feedback"
-      className={`${pillBase} px-4 shadow-md ${
+      className={`${pillBase} px-3.5 shadow-md ${
         theme.isDefault
           ? showRainbow ? "rainbow-tile text-white" : "rainbow-tile-static text-[#292825]"
           : "text-white"
@@ -1817,15 +1818,14 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         // is the board's (Mini's capped board included).
         <div
           ref={feedbackRowRef}
-          role="status"
-          aria-live="polite"
           data-testid="feedback-row"
           className={`mt-3 md:mt-4 w-full h-11 mx-auto flex flex-nowrap items-center justify-center ${compactMistakes ? "gap-2" : "gap-3"} ${isMiniBoard ? "max-w-[330px]" : ""}`}
         >
           <div ref={mistakesRef} className="shrink-0">
             <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} plain compact={compactMistakes} dotsOnly={mistakesFit > 1} />
           </div>
-          {feedbackPill}
+          {/* The message's own live region (the mistakes count has its own). */}
+          <div role="status" aria-live="polite" className="contents">{feedbackPill}</div>
         </div>
       )}
 
