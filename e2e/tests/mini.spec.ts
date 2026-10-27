@@ -20,6 +20,7 @@ import {
   submitButton,
   tile,
   tiles,
+  viewResultsButton,
 } from "../support/game.ts";
 import {
   FIXTURE_ARCHIVE_DATE,
@@ -87,10 +88,11 @@ test.describe("Public Mini — today's puzzle", () => {
     const frozen = await timer.innerText();
 
     // Frozen means frozen: it still reads the same after the page has been
-    // sitting there, and after a reload.
+    // sitting there, and after a reload (in the results, reopened).
     await expect(submitButton(page)).toHaveCount(0);
     await page.reload();
-    await expect(page.getByText(/^⏳/)).toHaveText(frozen, { timeout: 20_000 });
+    await viewResultsButton(page).click({ timeout: 20_000 });
+    await expect(page.getByText(/^⏳/)).toHaveText(frozen);
   });
 
   test("sharing a Mini result says Mini, three squares wide, with the time", async ({ page }) => {

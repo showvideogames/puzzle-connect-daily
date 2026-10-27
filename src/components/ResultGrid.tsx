@@ -82,6 +82,7 @@ export function ResultGrid({ rows }: ResultGridProps) {
               <div
                 key={i}
                 className={`${CELL_SIZE} rounded-[4px] border-2`}
+                data-cell={kind}
                 style={{
                   borderColor: INK,
                   ...(kind === "rainbow"

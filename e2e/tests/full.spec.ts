@@ -6,9 +6,11 @@
 import { expect, gotoApp, test } from "../support/fixtures.ts";
 import {
   boardColumnCount,
+  closeResults,
   discoverRainbow,
   expectNoHorizontalOverflow,
   mistakesRemaining,
+  resultsDialog,
   shareButton,
   solveAllCategories,
   solveCategory,
@@ -16,6 +18,7 @@ import {
   submitButton,
   tile,
   tiles,
+  viewResultsButton,
 } from "../support/game.ts";
 import { FIXTURE_ARCHIVE_DATE, FULL_CLASSIC, FULL_RAINBOW, MINI_RAINBOW } from "../fixtures/catalog.ts";
 
@@ -94,17 +97,23 @@ test.describe("Public Full — today's puzzle", () => {
       await discoverRainbow(page, FULL_RAINBOW.rainbowHerring!);
       await solveAllCategories(page, FULL_RAINBOW);
 
-      // Results.
+      // Results: the popup opens by itself once the board settles.
       await expect(shareButton(page)).toBeVisible({ timeout: 20_000 });
-      await expect(page.getByRole("button", { name: /Global Stats/ })).toBeVisible();
       // Full deliberately never shows a solve time (PuzzleFormat.showsTimer).
       await expect(page.getByText(/^⏳/)).toHaveCount(0);
+      await closeResults(page);
+      await expect(page.getByRole("button", { name: /Global Stats/ })).toBeVisible();
       // Play controls are gone: a finished board cannot be guessed at again.
       await expect(submitButton(page)).toHaveCount(0);
 
-      // Frozen: a reload restores the completed board, not a fresh one.
+      // Frozen: a reload restores the completed board, not a fresh one, and
+      // its results are one click away rather than popping up again.
       await page.reload();
-      await expect(shareButton(page)).toBeVisible({ timeout: 20_000 });
+      await expect(viewResultsButton(page)).toBeVisible({ timeout: 20_000 });
+      await expect(resultsDialog(page)).toHaveCount(0);
+      await viewResultsButton(page).click();
+      await expect(shareButton(page)).toBeVisible();
+      await closeResults(page);
       await expect(submitButton(page)).toHaveCount(0);
       for (const group of FULL_RAINBOW.groups) {
         await expect(solvedBar(page, group.category)).toBeVisible();

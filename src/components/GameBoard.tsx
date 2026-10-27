@@ -12,17 +12,18 @@ import { SpotTheRainbowModal } from "./SpotTheRainbowModal";
 import { SillySaturdayModal } from "./SillySaturdayModal";
 import { PuzzleRating } from "./PuzzleRating";
 import { LuckyBot } from "./LuckyBot";
-import { ResultGrid, ResultCellKind, ResultRow } from "./ResultGrid";
+import { ResultCellKind, ResultRow } from "./ResultGrid";
+import { ResultsDialog } from "./ResultsDialog";
+import { SpotRainbowPrompt } from "./SpotRainbowPrompt";
 import { PuzzleModeBadge } from "./PuzzleModeBadge";
-import { X, Share2, Check, TrendingUp, Eraser, Flame, MousePointer2, History, ChevronDown, RotateCcw } from "lucide-react";
+import { X, TrendingUp, Eraser, MousePointer2, History, ChevronDown, RotateCcw } from "lucide-react";
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { flushSync } from "react-dom";
 import { useImagePreload } from "@/hooks/useImagePreload";
 import type { User } from "@supabase/supabase-js";
 import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
-import { supabase } from "@/integrations/supabase/client";
-import { fetchSavedPromptAnswer, getDeviceId, getDeviceToken, recordBonusRainbowAttempt } from "@/lib/gameStats";
+import { fetchSavedPromptAnswer, recordBonusRainbowAttempt } from "@/lib/gameStats";
 import {
   loadPromptAnswer,
   markPromptAnswerSaved,
@@ -164,41 +165,13 @@ function getResultSubtitle(isWon: boolean, mistakes: number): string {
   return "Almost had it. Come back tomorrow!";
 }
 
-function StreakCelebration({ streak }: { streak: number }) {
-  const [displayNum, setDisplayNum] = useState(Math.max(1, streak - 1));
-  const [phase, setPhase] = useState<"counting" | "big" | "done">("counting");
-
-  useEffect(() => {
-    if (displayNum < streak) {
-      const t = setTimeout(() => setDisplayNum(n => n + 1), 120);
-      return () => clearTimeout(t);
-    } else {
-      setPhase("big");
-      const t = setTimeout(() => setPhase("done"), 600);
-      return () => clearTimeout(t);
-    }
-  }, [displayNum, streak]);
-
-  return (
-    <div className="flex justify-center mt-4 animate-fade-up">
-      <div
-        className={`flex items-center gap-2 bg-card border border-border rounded-full px-5 py-2.5 shadow-lg
-          transition-all duration-300 ${phase === "big" ? "scale-125" : "scale-100"}`}
-      >
-        <Flame className="w-7 h-7 text-orange-500" />
-        <span
-          className="font-bold tabular-nums transition-all duration-150"
-          style={{ fontSize: phase === "big" ? "1.6rem" : "1.3rem" }}
-        >
-          {displayNum}
-        </span>
-        <span className="text-sm font-semibold text-muted-foreground">
-          day streak!
-        </span>
-      </div>
-    </div>
-  );
-}
+// A lost game's last category bar plays its 0.3s entrance (group-appear)
+// before the board counts as settled; a little longer so it has fully landed.
+const LOSS_SETTLE_MS = 350;
+// The emptied Rainbow/instruction space folds away over this long once the
+// game ends without the Rainbow found (index.css .rainbow-slot-fold); the
+// results popup opens after it, so the board has stopped moving first.
+const SLOT_FOLD_MS = 320;
 
 type PaletteMode = "select" | CategoryColor | "eraser";
 
@@ -334,6 +307,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     handleDrop,
     alreadyGuessed,
     isOfficialAttemptRef,
+    officialAttempt,
     lockedByOfficialResult,
     sessionIdRef,
     activeSecondsRef,
@@ -893,8 +867,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
 
   // If this GameBoard instance is reused for a different puzzle (e.g. archive
   // browsing without a remount), drop any in-flight reveal rather than risk
-  // it referencing stale words/groups from the previous puzzle.
+  // it referencing stale words/groups from the previous puzzle. Not on the
+  // first mount: there is nothing to drop, and un-revealing a restored
+  // finished game for a moment would briefly unfold its board.
+  const resetPuzzleIdRef = useRef(puzzle.id);
   useEffect(() => {
+    if (resetPuzzleIdRef.current === puzzle.id) return;
+    resetPuzzleIdRef.current = puzzle.id;
     clearRevealTimers();
     clearVictoryTimers();
     setReveal(null);
@@ -962,47 +941,31 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const [bonusRainbowWords, setBonusRainbowWords] = useState<string[]>([]);
   const [hintVisible, setHintVisible] = useState(true);
 
-  const [streakBefore, setStreakBefore] = useState<number | null>(null);
-  const [showStreak, setShowStreak] = useState(false);
   const prevIsComplete = useRef(false);
   const prevGotRainbow = useRef(state.gotRainbow);
 
-  useEffect(() => {
-    // Beta mode never calls record_streak (see useGame's commitOfficialResult),
-    // so a beta win can never actually be "day N" of the real streak — showing
-    // this banner here would read the player's genuine current_streak and
-    // display it as if THIS win had just extended it, directly contradicting
-    // the "won't affect your official stats or streak" banner on the page.
-    if (isArchive || betaMode || customMode) return;
-    const fetchStreakBefore = async () => {
-      try {
-        // user_streaks is RPC-only now; the function resolves account vs
-        // proven-device ownership server-side.
-        // Scoped to THIS format: the celebration says "day N streak" about
-        // the game that was just won, so a Mini win must never display the
-        // player's Full streak (or extend the wrong one in the copy).
-        const { data } = await supabase.rpc("get_own_streak", {
-          _device_id: getDeviceId(),
-          _device_token: getDeviceToken(),
-          _format: format.statsNamespace,
-        });
-        const row = Array.isArray(data) ? data[0] : data;
-        if (row?.current_streak != null) setStreakBefore(row.current_streak);
-      } catch {}
-    };
-    void fetchStreakBefore();
-  }, [isArchive, betaMode, customMode, format.statsNamespace]);
-
-  // Streak celebration is part of the victory moment, so it waits for the same
-  // reveal gate. Gating on `lastRevealedGroup !== null` keeps it to LIVE wins:
-  // a solve happened this session. A restored/hydrated completed game never set
-  // lastRevealedGroup, so it won't re-show the streak — and this stays correct
-  // even if the completed state hydrates asynchronously.
-  useEffect(() => {
-    if (victoryRevealReady && state.isWon && lastRevealedGroup !== null && !isArchive && !betaMode && !customMode) {
-      setShowStreak(true);
-    }
-  }, [victoryRevealReady, state.isWon, lastRevealedGroup, isArchive, betaMode, customMode]);
+  // ── The results popup and the flame streak pill ──
+  // The game ended in THIS visit: a solve or the loss cascade revealed a bar
+  // here. A game restored already finished never sets lastRevealedGroup, so
+  // it never opens the popup by itself or replays the streak. A board locked
+  // by an official result this browser has no copy of has no results to show.
+  const finishedThisVisit = state.isComplete && lastRevealedGroup !== null && !lockedByOfficialResult;
+  // The flame pill belongs to the Daily streak. Archive never updates it, and
+  // Beta and custom play never touch official stats at all, so none of them
+  // shows it — reading the player's real streak there would present it as
+  // something this game changed.
+  const isDailyStreakGame = !isArchive && !betaMode && !customMode;
+  // A streak day newly earned: this visit's win, saved as THE official result
+  // (the server's answer, so a replay never qualifies), on a Daily. Only then
+  // does the flame count up — once; reopening shows it still.
+  const streakNewlyEarned = finishedThisVisit && state.isWon && isDailyStreakGame && officialAttempt === true;
+  const streakAnimatedRef = useRef(false);
+  const handleStreakAnimated = useCallback(() => {
+    streakAnimatedRef.current = true;
+  }, []);
+  const [resultsOpen, setResultsOpen] = useState(false);
+  const resultsAutoOpenedRef = useRef(false);
+  const viewResultsRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (state.isComplete && !prevIsComplete.current) {
@@ -1376,12 +1339,58 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     }
   }, [colorPaletteMode, paletteMode, toggleWord, setTileColor, tileColors]);
 
-  const streakToShow = streakBefore != null ? streakBefore + 1 : 1;
+  // A lost game has settled once the loss cascade has put every remaining
+  // category on the board and the last bar has landed. A game restored
+  // already lost starts settled.
+  const lossBoardEmpty = state.isComplete && !state.isWon && remainingWords.length === 0 && reveal === null;
+  const [lossSettled, setLossSettled] = useState(lossBoardEmpty);
+  useEffect(() => {
+    if (!lossBoardEmpty) {
+      setLossSettled(false);
+      return;
+    }
+    const t = setTimeout(() => setLossSettled(true), prefersReducedMotion() ? 0 : LOSS_SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [lossBoardEmpty]);
 
-  // Gate for the end-of-game results/share section. A WON game waits for the
-  // victory reveal (final arrival pop finished); a LOST game shows immediately
-  // as before, since it has no victory animation to wait on.
-  const showEndState = state.isComplete && (!state.isWon || victoryRevealReady);
+  // Gate for everything that belongs to the finished board: the results
+  // popup, View Results and the post-game Rainbow. A WON game waits for the
+  // victory reveal (final arrival pop finished), a LOST one for its loss
+  // cascade, so nothing moves the board while it is still animating. A board
+  // locked by an official result has nothing to wait for.
+  const showEndState =
+    state.isComplete && (lockedByOfficialResult || (state.isWon ? victoryRevealReady : lossSettled));
+
+  // Whether the Rainbow was found DURING the main game (it keeps its place
+  // at the top) rather than afterwards, through Spot the Rainbow (it goes
+  // below the categories). A find during play is always followed by the
+  // guess that ended the game; a post-game find is the last thing recorded.
+  const rainbowFoundInPlay = useMemo(() => {
+    if (!state.gotRainbow) return false;
+    if (!state.isComplete) return true;
+    const at = state.guessHistory.findIndex((a) => a.isRainbow);
+    // No record of when (an old save): keep it where it always was.
+    if (at === -1) return true;
+    return state.guessHistory.slice(at + 1).some((a) => !a.isHintMarker && !a.isRainbow);
+  }, [state.gotRainbow, state.isComplete, state.guessHistory]);
+
+  // Once a game has ended without the Rainbow found, the space reserved for
+  // it at the top (and the instruction it held) folds away and the solved
+  // categories move up into it. Waits for showEndState, so the final solve
+  // or loss cascade has finished first.
+  const slotFolded = showEndState && !rainbowFoundInPlay;
+  // Once folded, the slot leaves the page altogether (after its glide, or
+  // straight away for a finished game opened later), so nothing hidden in it
+  // lingers.
+  const [slotGone, setSlotGone] = useState(slotFolded);
+  useEffect(() => {
+    if (!slotFolded) {
+      setSlotGone(false);
+      return;
+    }
+    const t = setTimeout(() => setSlotGone(true), prefersReducedMotion() ? 0 : SLOT_FOLD_MS);
+    return () => clearTimeout(t);
+  }, [slotFolded]);
 
   // Whether the solved-bar list has anything in the page flow — a bar still
   // merging floats over its tile row and takes no space yet. Only then does
@@ -1401,29 +1410,54 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   const rainbowCardTextShadow = rainbowCardStatic ? undefined : theme.textShadow;
 
   // After the game, when the Rainbow wasn't found during play: the "spot
-  // the Rainbow" prompt, then (once answered) the revealed Rainbow. Not on a
+  // the Rainbow" prompt, then (once answered) the revealed Rainbow — or the
+  // Rainbow found through it. It sits BELOW the solved categories, never in
+  // the top slot (which has folded away by then, see slotFolded). Not on a
   // board locked by a result this browser holds no copy of
   // (lockedByOfficialResult): the prompt would score a Rainbow onto an empty
-  // local game whose outcome is unknown here. Classic layout: the last item
-  // in the solved-bar list. Refreshed layout: the reserved Rainbow slot.
-  const rainbowEndCard = showEndState && !lockedFullResult && !state.gotRainbow && rainbowHerring ? (
-      bonusRainbowCorrect === null ? (
-        // Hidden for the moment it takes to confirm with the server that
-        // a reopened game has not already used its prompt.
-        promptCheckPending ? null : (
-        <button
-          onClick={() => {
-            if (!promptAnsweredRef.current) setShowSpotModal(true);
-          }}
-          className={`w-full rounded-lg h-full py-1 px-4 text-center text-white
-            hover:opacity-90 transition-opacity active:scale-[0.99]
-            animate-rainbow-breathe animate-rainbow-shimmer`}
-          style={{ background: theme.gradient, textShadow: theme.textShadow }}
-        >
-          <div className="solved-bar-title font-tile font-bold text-[16px] md:text-[19px] leading-tight uppercase tracking-wide">{theme.spotPrompt}</div>
-          <div className="solved-bar-answers text-[13px] md:text-[15px] font-[575] leading-tight mt-0.5">Find one word from each group</div>
-        </button>
-        )
+  // local game whose outcome is unknown here.
+  const lateRainbowShown = showEndState && !lockedFullResult && !rainbowFoundInPlay && !!rainbowHerring;
+  // The invitation is still on offer: nothing answered yet, and not hidden
+  // for the moment it takes to confirm with the server that a reopened game
+  // has not already used its prompt.
+  const spotPromptAvailable =
+    lateRainbowShown && !state.gotRainbow && bonusRainbowCorrect === null && !promptCheckPending;
+  const openSpotTheRainbow = useCallback(() => {
+    if (!promptAnsweredRef.current) setShowSpotModal(true);
+  }, []);
+  // From the results popup: close it, then open the real challenge — one
+  // dialog at a time, so the popup has handed focus back before the
+  // challenge takes it.
+  const handleSpotFromResults = useCallback(() => {
+    setResultsOpen(false);
+    requestAnimationFrame(() => openSpotTheRainbow());
+  }, [openSpotTheRainbow]);
+
+  // Opens the results by itself once, when the game ends in front of the
+  // player: after the final solve or loss cascade has settled and the
+  // emptied Rainbow space has folded away. Never for a game reopened
+  // already finished — View Results is there for that.
+  useEffect(() => {
+    if (!finishedThisVisit || !showEndState || resultsAutoOpenedRef.current) return;
+    const t = setTimeout(
+      () => {
+        resultsAutoOpenedRef.current = true;
+        setResultsOpen(true);
+      },
+      // A win first lets its confetti burst over the finished board for a
+      // moment; a loss waits only for the emptied space to fold.
+      prefersReducedMotion() ? 150 : state.isWon ? 1000 : slotFolded ? SLOT_FOLD_MS + 250 : 450,
+    );
+    return () => clearTimeout(t);
+    // slotFolded is settled by the time showEndState is: read once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finishedThisVisit, showEndState]);
+
+  const rainbowEndCard = lateRainbowShown && rainbowHerring ? (
+      !state.gotRainbow && bonusRainbowCorrect === null ? (
+        spotPromptAvailable ? (
+          <SpotRainbowPrompt theme={theme} onClick={openSpotTheRainbow} className="solved-bar solved-bar-rainbow" />
+        ) : null
       ) : (
         <RainbowRevealBar
           categoryName={puzzle.rainbowCategoryName}
@@ -1441,24 +1475,30 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       )
   ) : null;
 
-  // ── Refreshed layout: one shared space for the instruction and the Rainbow ──
-  // Before the Rainbow is found the space shows the instruction; the found
-  // Rainbow bar (or, after the game, the "spot the Rainbow" prompt and its
-  // reveal) then takes that same space instead of adding a row, so the board
-  // below never moves. The space is sized by an invisible copy of THIS
-  // puzzle's own Rainbow bar — its real name and all of its answers — stacked
-  // in the same grid cell, so it is always exactly tall enough.
-  const rainbowInSlot = !!rainbowHerring && state.gotRainbow;
-  const slotTaken = rainbowInSlot || !!rainbowEndCard || state.isComplete;
+  // ── One shared space for the instruction and the Rainbow ──
+  // Before the Rainbow is found the space shows the instruction; a Rainbow
+  // found during play then takes that same space instead of adding a row, so
+  // the board below never moves. The space is sized by an invisible copy of
+  // THIS puzzle's own Rainbow bar — its real name and all of its answers —
+  // stacked in the same grid cell, so it is always exactly tall enough. A
+  // game that ends without the Rainbow found folds the space away
+  // (slotFolded); anything Rainbow after that goes below the categories.
+  const rainbowInSlot = !!rainbowHerring && rainbowFoundInPlay;
+  const slotTaken = rainbowInSlot || state.isComplete;
   // Once the real bar is showing it sizes the slot itself (same box, same
   // text), so the invisible copy goes — never two copies of its words.
-  const realBarShown = rainbowInSlot || (!!rainbowEndCard && bonusRainbowCorrect !== null);
-  const rainbowSlot = lockedFullResult && !state.gotRainbow ? null : (
+  const realBarShown = rainbowInSlot;
+  const rainbowSlot = (lockedFullResult && !state.gotRainbow) || slotGone ? null : (
     // board-bars: the same size container, one-tile-row height rule and gap
     // as the solved bars below (square tiles on a Mini, the wide board's
     // gaps where it has them), so the slot, the instruction's space and the
     // Rainbow bar are exactly as tall as an ordinary category bar on every
     // board; the gap under it is the board's own tile gap.
+    // rainbow-slot-fold (index.css) folds it to nothing once slotFolded —
+    // gliding when the game ends in front of the player, already folded
+    // when a finished game is reopened. Its margin folds with it.
+    <div className={`rainbow-slot-fold ${slotFolded ? "is-folded" : ""}`} aria-hidden={slotFolded || undefined}>
+    <div className="min-h-0 overflow-hidden">
     <div
       className={`board-bars grid [&>*]:[grid-area:1/1] ${
         isMiniBoard ? "board-bars-square mb-2" : `mb-1.5 ${useWideBoard ? "board-bars-wide md:mb-3" : ""}`
@@ -1507,9 +1547,23 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           curtain={rainbowVisible}
           fitText
         />
-      ) : rainbowEndCard}
+      ) : null}
+    </div>
+    </div>
     </div>
   );
+
+  // The post-game Rainbow's own row, below the solved categories: the same
+  // size container and 80%-height Rainbow bar as the top slot.
+  const lateRainbowRow = rainbowEndCard ? (
+    <div
+      className={`board-bars ${isMiniBoard ? "board-bars-square" : useWideBoard ? "board-bars-wide" : ""}`}
+      style={{ "--board-cols": format.columns } as import("react").CSSProperties}
+      data-testid="late-rainbow"
+    >
+      {rainbowEndCard}
+    </div>
+  ) : null;
 
   // ── Guess feedback, in its own row directly below the board ──
   // After a wrong guess exactly one message shows, read from that guess's own
@@ -1718,6 +1772,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
             />
         ))}
       </div>
+      {lateRainbowRow}
 
       {/* Word grid. Stays mounted (empty) through the settle beat of the
           final solve, so its height can glide to zero like any other settle. */}
@@ -1912,6 +1967,66 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </>
       )}
 
+      {/* The finished board's own actions, where the play controls were. */}
+      {showEndState && (
+        <div className="mt-3 sm:mt-4 flex flex-col items-center gap-3 text-center animate-fade-up motion-reduce:animate-none">
+          {/* A board locked by an official result this browser has no copy
+              of is finished, but its outcome is unknown here — isWon is only
+              its default false. Say it is done without calling it a loss,
+              and offer no results it doesn't have. */}
+          {lockedByOfficialResult ? (
+            <p className="text-sm text-muted-foreground" data-testid="already-finished">
+              You've already finished this puzzle. Come back tomorrow!
+            </p>
+          ) : (
+            <>
+              <button
+                ref={viewResultsRef}
+                type="button"
+                onClick={() => setResultsOpen(true)}
+                className={`w-full md:w-[80%] max-w-[420px] ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-base font-bold text-white transition-all
+                  bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
+                  shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]
+                  hover:-translate-y-px active:scale-95
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                  focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
+              >
+                View Results
+              </button>
+              {state.guessHistory.length > 0 && (!betaMode || (customMode && onReplay)) && (
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  {/* Global Stats reads real official completions for this
+                      puzzle id — meaningless (and potentially confusing) for
+                      a puzzle that structurally can never have any while
+                      it's in Beta. Custom puzzles get their OWN lightweight
+                      stats button/modal instead — see CustomStatsModal. */}
+                  {!betaMode && (
+                    <button
+                      type="button"
+                      onClick={() => setShowGlobalStats(true)}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border text-sm font-semibold
+                        hover:bg-secondary transition-all duration-150 active:scale-95 shadow-md"
+                    >
+                      <TrendingUp className="w-4 h-4" /> {customMode ? "Results" : "Global Stats"}
+                    </button>
+                  )}
+                  {customMode && onReplay && (
+                    <button
+                      type="button"
+                      onClick={onReplay}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border text-sm font-semibold
+                        hover:bg-secondary transition-all duration-150 active:scale-95 shadow-md"
+                    >
+                      <RotateCcw className="w-4 h-4" /> Replay
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {/* Hint pill */}
       {fullHintVisible && (
         <div className="mt-4 flex justify-center">
@@ -2088,91 +2203,13 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         </div>
       )}
 
-      {/* Streak celebration */}
-      {showStreak && <StreakCelebration streak={streakToShow} />}
-
-      {/* End state — hide headline/subtitle when viewing already-completed puzzle */}
-      {showEndState && (
-        <div className="text-center mt-6 animate-fade-up">
-          {/* A board locked by an official result this browser has no copy
-              of is finished, but its outcome is unknown here — isWon is only
-              its default false. Say it is done without calling it a loss. */}
-          {lockedFullResult ? (
-            <p className="text-sm text-muted-foreground" data-testid="already-finished">
-              You've already finished this puzzle. Come back tomorrow!
-            </p>
-          ) : !wasAlreadyComplete.current && (
-            <>
-              <p className="text-lg font-bold">
-                {getResultHeadline(state.isWon, state.mistakes)}
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                {getResultSubtitle(state.isWon, state.mistakes)}
-              </p>
-            </>
-          )}
-
-          {/* The frozen solve time. Shown on a timed format for any finished
-              run — including one being revisited later, where the headline
-              above is suppressed — because "how long did that take me?" is
-              exactly what someone reopening a finished Mini wants to see.
-              Zero seconds is not rendered: a restored legacy run that never
-              recorded a time should say nothing rather than claim "0s". */}
-          {format.showsTimer && activeSeconds > 0 && (
-            <p className="text-sm font-semibold tabular-nums mt-2">
-              ⏳ {formatActiveTime(activeSeconds)}
-            </p>
-          )}
-
-          {state.guessHistory.length > 0 && (
-            <div className="mt-4 space-y-3">
-              {/* Custom brand-color visual grid — decorative only. The
-                  copied Share Score text below is built from
-                  generateShareLines()/generateShareText() exactly as
-                  before and is unaffected by this. */}
-              <ResultGrid rows={resultRows} />
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <button
-                  onClick={handleShare}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold
-                    hover:opacity-90 transition-all duration-150 active:scale-95 shadow-md"
-                >
-                  {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                  {copied ? "Copied!" : "Share Score"}
-                </button>
-                {/* Global Stats reads real official completions for this
-                    puzzle id — meaningless (and potentially confusing) for a
-                    puzzle that structurally can never have any while it's in
-                    Beta. Custom puzzles get their OWN lightweight stats
-                    button/modal instead of losing this row entirely — see
-                    CustomStatsModal below. */}
-                {!betaMode && (
-                  <button
-                    onClick={() => setShowGlobalStats(true)}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border text-sm font-semibold
-                      hover:bg-secondary transition-all duration-150 active:scale-95 shadow-md"
-                  >
-                    <TrendingUp className="w-4 h-4" /> {customMode ? "Results" : "Global Stats"}
-                  </button>
-                )}
-                {customMode && onReplay && (
-                  <button
-                    onClick={onReplay}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border text-sm font-semibold
-                      hover:bg-secondary transition-all duration-150 active:scale-95 shadow-md"
-                  >
-                    <RotateCcw className="w-4 h-4" /> Replay
-                  </button>
-                )}
-              </div>
-              {/* Lucky Bot: the player's skill score and how it compares
-                  with everyone else who finished this puzzle. Official daily
-                  puzzles only, for the same reason as Global Stats above —
-                  a beta or custom puzzle has no official sessions to compare
-                  against. */}
-              {!betaMode && !customMode && !lockedFullResult && <LuckyBot puzzle={puzzle} state={state} rainbowPromptResult={bonusRainbowCorrect} />}
-            </div>
-          )}
+      {/* Lucky Bot: the player's skill score and how it compares with
+          everyone else who finished this puzzle. Official puzzles only, for
+          the same reason as Global Stats — a beta or custom puzzle has no
+          official sessions to compare against. */}
+      {showEndState && !lockedByOfficialResult && state.guessHistory.length > 0 && !betaMode && !customMode && (
+        <div className="mt-6 animate-fade-up motion-reduce:animate-none">
+          <LuckyBot puzzle={puzzle} state={state} rainbowPromptResult={bonusRainbowCorrect} />
         </div>
       )}
 
@@ -2196,6 +2233,34 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           onClose={() => setShowGlobalStats(false)}
           userMistakes={state.mistakes}
           isComplete={state.isComplete}
+        />
+      )}
+
+      {!lockedByOfficialResult && (
+        <ResultsDialog
+          open={resultsOpen && showEndState}
+          onOpenChange={setResultsOpen}
+          headline={getResultHeadline(state.isWon, state.mistakes)}
+          subtitle={getResultSubtitle(state.isWon, state.mistakes)}
+          // The frozen solve time, on a timed format. Zero seconds is not
+          // shown: a restored legacy run that never recorded a time says
+          // nothing rather than claim "0s".
+          timeLabel={format.showsTimer && activeSeconds > 0 ? formatActiveTime(activeSeconds) : null}
+          resultRows={resultRows}
+          onShare={handleShare}
+          copied={copied}
+          // Personal stats only where play counts toward them.
+          statsFormat={betaMode || customMode ? null : format}
+          statsPending={finishedThisVisit && officialAttempt === null}
+          // The flame celebrates a win, as it always has. (The server starts
+          // a brand-new player's streak at 1 even on a lost first game;
+          // the stats row still says so, but a loss is never celebrated.)
+          showStreak={isDailyStreakGame && state.isWon}
+          animateStreak={streakNewlyEarned && !streakAnimatedRef.current}
+          onStreakAnimated={handleStreakAnimated}
+          spotTheme={spotPromptAvailable ? theme : null}
+          onSpotRainbow={handleSpotFromResults}
+          returnFocusRef={viewResultsRef}
         />
       )}
 
