@@ -510,6 +510,9 @@ describe("the board for a finished game this browser has no copy of", () => {
     const dialog = screen.getByTestId("results-dialog");
     expect(within(dialog).getByRole("button", { name: /Share Score/ })).toBeTruthy();
     expect(within(dialog).queryByTestId("results-summary")).toBeNull();
+    // The one-word message for a win with one mistake, and nothing under it.
+    expect(within(dialog).getByRole("heading").textContent).toBe("Excellent!");
+    expect(dialog.textContent).not.toMatch(/Come back tomorrow|Well done/);
     expect(localStorage.getItem(progressKey(storageId))).toBeNull();
     expect(db.rpcLog).not.toContain("finalize_game_session");
   });
@@ -523,6 +526,7 @@ describe("the board for a finished game this browser has no copy of", () => {
     await click(screen.getByRole("button", { name: "View Results" }));
     await settle();
     const dialog = screen.getByTestId("results-dialog");
+    expect(within(dialog).getByRole("heading").textContent).toBe("Perfect!");
     const summary = within(dialog).getByTestId("results-summary");
     expect(summary.textContent).toContain("Rainbow not found · No hints used");
     expect(summary.textContent).toContain("Detailed results aren't available for this game.");

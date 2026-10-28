@@ -324,9 +324,9 @@ describe("the final solve", () => {
     expect(viewResults()).toBeTruthy();
     expect(gridWords(container)).toEqual([]);
     // The results popup follows once the board has stopped moving.
-    expect(screen.queryByText(/perfect game/i)).toBeNull();
+    expect(screen.queryByText(/^Perfect!$/)).toBeNull();
     await advance(1000);
-    expect(screen.getByText(/perfect game/i)).toBeTruthy();
+    expect(screen.getByText(/^Perfect!$/)).toBeTruthy();
   });
 });
 

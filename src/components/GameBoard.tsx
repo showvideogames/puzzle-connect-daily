@@ -149,23 +149,14 @@ async function deliverPromptAnswer(storageId: string, save: PromptAnswerSave) {
   if (result !== "failed") markPromptAnswerSaved(storageId);
 }
 
+// The results popup's one-word message: won or lost, and how many mistakes.
+// Same on every format and mode. Docs: docs/RESULTS-COPY.md.
 function getResultHeadline(isWon: boolean, mistakes: number): string {
-  if (isWon && mistakes === 0) return "Perfect game! 🎯";
-  if (isWon && mistakes === 1) return "Amazing! 🎉";
-  if (isWon && mistakes === 2) return "Great job! 👏";
-  if (isWon && mistakes === 3) return "Clutch!!! 🙌";
-  return "Valiant effort 💪";
-}
-
-// Same typography/spacing/separator treatment as SolvedGroup's answer line
-// — the completed Rainbow category should read as the same component
-// family as the four main categories, differing only in background.
-function getResultSubtitle(isWon: boolean, mistakes: number): string {
-  if (isWon && mistakes === 0) return "No mistakes — impressive. Come back tomorrow!";
-  if (isWon && mistakes === 1) return "Well done. Come back tomorrow!";
-  if (isWon && mistakes === 2) return "Easy does it. Come back tomorrow!";
-  if (isWon && mistakes === 3) return "Way to dig deep and not give up. Come back tomorrow!";
-  return "Almost had it. Come back tomorrow!";
+  if (isWon && mistakes === 0) return "Perfect!";
+  if (isWon && mistakes === 1) return "Excellent!";
+  if (isWon && mistakes === 2) return "Nice!";
+  if (isWon && mistakes === 3) return "Clutch!";
+  return "Onward!";
 }
 
 // A lost game's last category bar plays its 0.3s entrance (group-appear)
@@ -2266,7 +2257,6 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
           open={resultsOpen && showEndState}
           onOpenChange={setResultsOpen}
           headline={getResultHeadline(state.isWon, state.mistakes)}
-          subtitle={getResultSubtitle(state.isWon, state.mistakes)}
           // The frozen solve time, on a timed format. Zero seconds is not
           // shown: a restored legacy run that never recorded a time says
           // nothing rather than claim "0s".

@@ -98,6 +98,7 @@ test.describe("A finished game on another device", () => {
     const dialog = page.getByTestId("results-dialog");
     await expect(dialog.getByRole("button", { name: /Share Score/ })).toBeVisible();
     await expect(dialog.getByTestId("results-summary")).toHaveCount(0);
+    await expect(dialog.getByRole("heading", { name: "Perfect!", exact: true })).toBeVisible();
 
     // Still exactly the one official game, unchanged, and nothing written here.
     const after = await admin.from("game_sessions").select("status, is_official").eq("user_id", player.id);
