@@ -2,6 +2,10 @@
 
 TODO: Document your project here
 
+## Game copy
+
+`docs/RESULTS-COPY.md` lists every end-of-game message, button and rule (results popup, Share text, Rainbow placement, streak flame), taken from the code, with source references.
+
 ## Accounts and the database
 
 Rainbow's only sign-in is the shared account service (WorkOS AuthKit), reached
