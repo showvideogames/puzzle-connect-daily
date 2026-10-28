@@ -63,8 +63,9 @@ export default function HowToPlay() {
         <section className="space-y-2">
           <h2 className="text-base font-semibold">Archive &amp; Streaks</h2>
           <p>
-            A new puzzle drops every day. Your streak grows for every day you play. Browse and
-            replay past puzzles in the archive, available to subscribers.
+            A new puzzle drops every day. Win on consecutive days to build your streak. A loss or
+            a missed day breaks it. Browse and replay past puzzles in the archive, available to
+            subscribers.
           </p>
         </section>
 
