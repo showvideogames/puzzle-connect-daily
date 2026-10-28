@@ -218,7 +218,7 @@ describe("three categories solved is never a loss", () => {
     // exist to make a fourth mistake with.
     const onBoard = [...container.querySelectorAll("[data-word]")].map((el) => el.getAttribute("data-word")).sort();
     expect(onBoard).toEqual(R);
-    expect(screen.queryByText(/Valiant effort/)).toBeNull();
+    expect(screen.queryByText(/Onward!/)).toBeNull();
     expect(finalizeCalls()).toHaveLength(0);
     expect(sessions()[0].status).toBe("in_progress");
 
@@ -276,8 +276,8 @@ describe("three categories solved is never a loss", () => {
     expect(screen.getByTestId("already-finished").textContent).toBe(
       "You've already finished this puzzle. Come back tomorrow!"
     );
-    expect(screen.queryByText(/Valiant effort/)).toBeNull();
-    expect(screen.queryByText(/Almost had it/)).toBeNull();
+    expect(screen.queryByText(/Onward!/)).toBeNull();
+    expect(screen.queryByText(/^(Perfect|Excellent|Nice|Clutch)!$/)).toBeNull();
     expect(screen.queryByText("Find one word from each group")).toBeNull();
     expect(screen.queryByTestId("lucky-bot-card")).toBeNull();
   });

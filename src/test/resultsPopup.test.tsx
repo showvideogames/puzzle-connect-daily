@@ -185,8 +185,9 @@ describe("Daily win", () => {
     await win(first.container);
 
     const d = await popup();
-    expect(within(d).getByRole("heading").textContent).toBe("Perfect game! 🎯");
-    expect(within(d).getByText("No mistakes — impressive. Come back tomorrow!")).toBeTruthy();
+    expect(within(d).getByRole("heading").textContent).toBe("Perfect!");
+    // One word, no supporting sentence.
+    expect(d.textContent).not.toMatch(/Come back tomorrow/);
     // Stats, read after the completion was saved, so they include it.
     await waitFor(() => expect(statValue(d, "Played")).toBe("1"));
     expect(statValue(d, "Played")).toBe("1");
@@ -203,7 +204,7 @@ describe("Daily win", () => {
     // Close, then reopen from View Results: same results, flame shown still.
     await closePopup();
     let again = await viewResults();
-    expect(within(again).getByRole("heading").textContent).toBe("Perfect game! 🎯");
+    expect(within(again).getByRole("heading").textContent).toBe("Perfect!");
     expect((await within(again).findByTestId("streak-flame")).dataset.earned).toBe("false");
     await closePopup();
     again = await viewResults();
@@ -220,7 +221,7 @@ describe("Daily win", () => {
     expect(popupOrNull()).toBeNull();
     expect(screen.queryByRole("button", { name: "Submit" })).toBeNull();
     again = await viewResults();
-    expect(within(again).getByRole("heading").textContent).toBe("Perfect game! 🎯");
+    expect(within(again).getByRole("heading").textContent).toBe("Perfect!");
     const flameAfter = await within(again).findByTestId("streak-flame");
     expect(flameAfter.dataset.earned).toBe("false");
     expect(flameAfter.textContent).toContain("1 day streak");
@@ -272,10 +273,32 @@ describe("Daily win", () => {
     // View Results now carries the Rainbow row; the outcome and streak don't change.
     const after = await viewResults();
     expect(rainbowSquares(after)).toBe(4);
-    expect(within(after).getByRole("heading").textContent).toBe("Perfect game! 🎯");
+    expect(within(after).getByRole("heading").textContent).toBe("Perfect!");
     expect(within(after).queryByText(PROMPT)).toBeNull();
     expect(finalizes()).toBe(1);
     expect(streakRows()[0].current_streak).toBe(1);
+  }, 30_000);
+});
+
+describe("the result word follows the mistake count", () => {
+  // Wrong guesses that are never one away and never the Rainbow.
+  const misses = [
+    ["y2", "g2", "b2", "r2"],
+    ["y3", "g3", "b3", "r3"],
+    ["y4", "g4", "b4", "r4"],
+  ];
+  it.each([
+    [1, "Excellent!"],
+    [2, "Nice!"],
+    [3, "Clutch!"],
+  ])("a win with %i mistake(s) says %s, and nothing else", async (mistakes, word) => {
+    const view = renderBoard();
+    await settle();
+    for (const set of misses.slice(0, mistakes)) await guess(view.container, set);
+    await win(view.container);
+    const d = await popup();
+    expect(within(d).getByRole("heading").textContent).toBe(word);
+    expect(d.textContent).not.toMatch(/Come back tomorrow/);
   }, 30_000);
 });
 
@@ -287,7 +310,7 @@ describe("Daily loss", () => {
     // Not while the remaining categories are still being revealed.
     expect(popupOrNull()).toBeNull();
     const d = await popup(12_000);
-    expect(within(d).getByRole("heading").textContent).toBe("Valiant effort 💪");
+    expect(within(d).getByRole("heading").textContent).toBe("Onward!");
     // A loss is never celebrated with the flame.
     await waitFor(() => expect(statValue(d, "Played")).toBe("1"));
     expect(statValue(d, "Win %")).toBe("0");
@@ -304,7 +327,7 @@ describe("Daily loss", () => {
 
     expect(within(screen.getByTestId("late-rainbow")).getByText("Hidden Link")).toBeTruthy();
     const after = await viewResults();
-    expect(within(after).getByRole("heading").textContent).toBe("Valiant effort 💪");
+    expect(within(after).getByRole("heading").textContent).toBe("Onward!");
     expect(rainbowSquares(after)).toBe(4);
     expect(loadProgress(FULL.id)?.isWon).toBe(false);
     expect(finalizes()).toBe(1);

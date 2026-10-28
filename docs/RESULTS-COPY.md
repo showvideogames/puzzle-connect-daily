@@ -2,9 +2,9 @@
 
 What a player sees when a Rainbow Categories game ends: every message, button and rule, taken from the code as it runs today. **This describes; it doesn't change anything.** Use it to plan new wording, then change the code separately.
 
-- **Code version described:** `main` at `2a8e47a` — the results popup release (PR #91), live on rainbowcategories.com since 2026-10-27.
+- **Code version described:** branch `copy/simplify-results-messages` — the results popup released in PR #91 (live since 2026-10-27), with the simplified one-word result messages. **Until that branch is released, the live site still shows the older messages** (see [What changed](#what-changed-in-the-result-message)).
 - **One pending change** is called out where it matters: the streak fix in **PR #90**, which isn't merged or applied yet.
-- **Source references** look like `GameBoard.tsx:149`. Line numbers are for that commit; they drift as the code changes, so search for the quoted text if a number no longer matches. Paths are under `src/` unless shown otherwise.
+- **Source references** look like `GameBoard.tsx:151`. Line numbers are for that commit; they drift as the code changes, so search for the quoted text if a number no longer matches. Paths are under `src/` unless shown otherwise.
 - **Words used here:**
   - *Full* = the 4×4 game; *Mini* = the 3×3 game.
   - *Daily* = today's puzzle at `/` (Full) or `/mini` (Mini).
@@ -15,36 +15,48 @@ What a player sees when a Rainbow Categories game ends: every message, button an
 
 ---
 
-## 1. The result message (headline + supporting text)
+## 1. The result message
 
-Chosen by **two things only: won or lost, and how many mistakes**. It ignores the Rainbow, hints, time, mode and format. Source: `components/GameBoard.tsx:149` (headline) and `GameBoard.tsx:160` (supporting text).
+One word, with no emoji and no sentence under it. Chosen by **two things only: won or lost, and how many mistakes**. It ignores the Rainbow, hints, time, mode and format. Source: `components/GameBoard.tsx:151`.
 
-| Outcome | Headline | Supporting text |
-| --- | --- | --- |
-| Win, 0 mistakes | `Perfect game! 🎯` | `No mistakes — impressive. Come back tomorrow!` |
-| Win, 1 mistake | `Amazing! 🎉` | `Well done. Come back tomorrow!` |
-| Win, 2 mistakes | `Great job! 👏` | `Easy does it. Come back tomorrow!` |
-| Win, 3 mistakes | `Clutch!!! 🙌` | `Way to dig deep and not give up. Come back tomorrow!` |
-| Loss (4 mistakes) | `Valiant effort 💪` | `Almost had it. Come back tomorrow!` |
+| Outcome | Message |
+| --- | --- |
+| Win, 0 mistakes | `Perfect!` |
+| Win, 1 mistake | `Excellent!` |
+| Win, 2 mistakes | `Nice!` |
+| Win, 3 mistakes | `Clutch!` |
+| Loss (4 mistakes) | `Onward!` |
 
 **What "mistakes" means.** A wrong guess of the four (Full) or three (Mini) answers. Guessing the Rainbow is never a mistake. Both Full and Mini allow 4 mistakes, and the 4th ends the game as a loss.
 
 **Rainbow found or not — same message.** Examples:
-- Win with 1 mistake, Rainbow found during play → `Amazing! 🎉`
-- Win with 1 mistake, Rainbow never found → `Amazing! 🎉`
-- Loss, then the Rainbow found afterwards with Spot the Rainbow → still `Valiant effort 💪`. A find after the game never turns a loss into a win.
+- Win with 1 mistake, Rainbow found during play → `Excellent!`
+- Win with 1 mistake, Rainbow never found → `Excellent!`
+- Loss, then the Rainbow found afterwards with Spot the Rainbow → still `Onward!`. A find after the game never turns a loss into a win.
 
-**Same in every mode.** Daily, Mini, Archive, Beta and custom all use these exact words, including "Come back tomorrow!".
+**Same in every mode.** Daily, Mini, Archive, Beta and custom all use these exact words.
+
+### What changed in the result message
+
+The conditions are the same as before. Only the words changed, and the sentence under the message is gone.
+
+| Outcome | Before | Now |
+| --- | --- | --- |
+| Win, 0 mistakes | `Perfect game! 🎯` + `No mistakes — impressive. Come back tomorrow!` | `Perfect!` |
+| Win, 1 mistake | `Amazing! 🎉` + `Well done. Come back tomorrow!` | `Excellent!` |
+| Win, 2 mistakes | `Great job! 👏` + `Easy does it. Come back tomorrow!` | `Nice!` |
+| Win, 3 mistakes | `Clutch!!! 🙌` + `Way to dig deep and not give up. Come back tomorrow!` | `Clutch!` |
+| Loss | `Valiant effort 💪` + `Almost had it. Come back tomorrow!` | `Onward!` |
 
 ---
 
 ## 2. The results popup
 
-Source: `components/ResultsDialog.tsx`, wired up in `GameBoard.tsx:2240`.
+Source: `components/ResultsDialog.tsx`, wired up in `GameBoard.tsx:2231`.
 
 ### When it opens
 
-It opens **by itself, once**, only when the game ends **while the player is on the page**, and only after the board has stopped moving (`GameBoard.tsx:1440`):
+It opens **by itself, once**, only when the game ends **while the player is on the page**, and only after the board has stopped moving (`GameBoard.tsx:1431`):
 
 - **Win:** after the last category's bar has landed and the confetti has started, then about **1 second** later.
 - **Loss:**
@@ -63,8 +75,7 @@ It **does not** open by itself when:
 | --- | --- | --- |
 | Close button (✕) | screen-reader label `Close results` | top right; stays visible while the inside scrolls |
 | Share squares | — | One row per guess, in order: yellow/green/blue/red squares by category; a rainbow row when the Rainbow was found; a lightbulb or flashlight picture where a hint was used. Same history as the Share text. (`ResultGrid.tsx`) |
-| Headline | from [section 1](#1-the-result-message-headline--supporting-text) | also the popup's title for screen readers |
-| Supporting text | from [section 1](#1-the-result-message-headline--supporting-text) | |
+| Result message | one word from [section 1](#1-the-result-message) | also the popup's title for screen readers; nothing appears under it |
 | Solve time | `⏳ 7s` or `⏳ 1m 05s` | **Mini only** (Full never shows a time); hidden if no time was recorded |
 | Stats row | `Played`, `Win %`, `Max Streak` | **Daily and Archive only.** Shows `–` while loading. Same numbers as My Stats (`lib/gameStats.ts`, `winRateOf`). Full and Mini each have their own numbers. |
 | Flame streak pill | `🔥 5 day streak!` | **Daily wins only** — see [section 5](#5-the-streak-flame) |
@@ -88,7 +99,7 @@ The 🔥 in the pill is a drawn icon, not an emoji character.
 
 ## 3. Share text
 
-Built from the same guess history as the squares (`GameBoard.tsx:1214`, `lib/shareText.ts`). **Share Score copies the text**, except on custom puzzles where the device has a share sheet, which opens the share sheet instead.
+Built from the same guess history as the squares (`GameBoard.tsx:1205`, `lib/shareText.ts`). **Share Score copies the text**, except on custom puzzles where the device has a share sheet, which opens the share sheet instead.
 
 | Mode | Example |
 | --- | --- |
@@ -113,7 +124,7 @@ Built from the same guess history as the squares (`GameBoard.tsx:1214`, `lib/sha
 
 ## 4. Where the Rainbow appears on the board
 
-Source: `GameBoard.tsx:1368` (found during play?), `1381` (top space folds), `1419` (late Rainbow).
+Source: `GameBoard.tsx:1359` (found during play?), `1372` (top space folds), `1410` (late Rainbow).
 
 | What happened | Where it shows | Text on the bar |
 | --- | --- | --- |
@@ -161,7 +172,7 @@ A puzzle can use a holiday theme (`lib/themes.ts`); today there's one, `july4`.
 
 ## 5. The streak flame
 
-Source: `components/StreakCelebration.tsx`. The rules are at `GameBoard.tsx:952` (did the game end on this visit), `GameBoard.tsx:957` (Daily only), `GameBoard.tsx:961` (newly earned) and `GameBoard.tsx:2258` (wins only).
+Source: `components/StreakCelebration.tsx`. The rules are at `GameBoard.tsx:943` (did the game end on this visit), `GameBoard.tsx:948` (Daily only), `GameBoard.tsx:952` (newly earned) and `GameBoard.tsx:2248` (wins only).
 
 ### When the flame appears (in the popup only)
 
@@ -228,7 +239,7 @@ The server applies that rule correctly to every game except a player's **very fi
 
 ## 7. Below the finished board
 
-Shown once the board has settled (`GameBoard.tsx:1972`):
+Shown once the board has settled (`GameBoard.tsx:1963`):
 
 - **`View Results`** — always, except on a locked board.
 - **`Global Stats`** — Daily and Archive. Opens "Today's Puzzle Stats".
@@ -241,12 +252,12 @@ Shown once the board has settled (`GameBoard.tsx:1972`):
 
 ## 8. Notes: duplicates, unreachable copy, confusing conditions
 
-These are observations only. Nothing here has been changed.
+These are observations only. Apart from the result messages (above), nothing here has been changed.
 
-1. **"Come back tomorrow!" everywhere.** It ends all five supporting texts and the locked-board message, including on Archive, Beta and custom puzzles, which don't change tomorrow.
-2. **The loss text doesn't depend on progress.** `Almost had it.` shows whether the player solved three categories or none.
-3. **The message ignores the Rainbow and hints.** Finding the Rainbow, during or after the game, never changes the headline. After the game it only adds the rainbow row.
-4. **Unreachable fallback.** The last line of the headline/text choice would give a *win* with 4+ mistakes `Valiant effort 💪`. That can't happen, because the 4th mistake ends the game as a loss. It's harmless.
+1. **"Come back tomorrow!" now appears in one place only:** the locked-board message `You've already finished this puzzle. Come back tomorrow!`. That one also shows on locked Archive puzzles, which don't change tomorrow.
+2. **The loss word doesn't depend on progress.** `Onward!` shows whether the player solved three categories or none.
+3. **The message ignores the Rainbow and hints.** Finding the Rainbow, during or after the game, never changes the message. After the game it only adds the rainbow row.
+4. **Unreachable fallback.** The last line of the message choice would give a *win* with 4+ mistakes `Onward!`. That can't happen, because the 4th mistake ends the game as a loss. It's harmless.
 5. **Unused theme copy.** `lib/themes.ts` defines `Almost 🌈` (`almostMessage`) and `Rainbow 🌈` (`defaultCategoryName`). Neither is shown anywhere; the near miss actually shows `One Away... 🌈`.
 6. **Two buttons with similar names on custom puzzles.** `View Results` sits next to `Results`, and they do different things.
 7. **The streak is named four ways:**

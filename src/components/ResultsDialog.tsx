@@ -12,9 +12,8 @@ import type { ResolvedTheme } from "@/lib/themes";
 interface ResultsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** The board's own result message and summary (getResultHeadline/Subtitle). */
+  /** The board's own one-word result message (getResultHeadline). */
   headline: string;
-  subtitle: string;
   /** A timed format's frozen solve time, already formatted; null to omit. */
   timeLabel: string | null;
   /** The real share squares, from the same guess history the Share text uses. */
@@ -64,7 +63,6 @@ export function ResultsDialog({
   open,
   onOpenChange,
   headline,
-  subtitle,
   timeLabel,
   resultRows,
   onShare,
@@ -127,6 +125,8 @@ export function ResultsDialog({
         >
           <DialogPrimitive.Content
             data-testid="results-dialog"
+            // Titled by the result word only; there is no description line.
+            aria-describedby={undefined}
             onOpenAutoFocus={(e) => {
               e.preventDefault();
               shareRef.current?.focus();
@@ -157,9 +157,6 @@ export function ResultsDialog({
               <DialogPrimitive.Title asChild>
                 <h2 className="mt-4 text-2xl sm:text-[1.75rem] font-extrabold tracking-tight leading-tight">{headline}</h2>
               </DialogPrimitive.Title>
-              <DialogPrimitive.Description asChild>
-                <p className="mt-1 text-sm sm:text-base text-muted-foreground">{subtitle}</p>
-              </DialogPrimitive.Description>
               {timeLabel && (
                 <p className="text-sm font-semibold tabular-nums mt-2">⏳ {timeLabel}</p>
               )}
