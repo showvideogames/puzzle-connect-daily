@@ -518,6 +518,29 @@ export async function finalizeGameSession(
 }
 
 /**
+ * Win % as the player sees it: whole percent of completed official games
+ * won, 0 before the first one. Shared by My Stats and the results popup so
+ * the two can never show different numbers.
+ */
+export function winRateOf(stats: Pick<GameStats, "gamesPlayed" | "gamesWon">): number {
+  return stats.gamesPlayed > 0 ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100) : 0;
+}
+
+/**
+ * The current streak as the player sees it: 0 if the player hasn't played
+ * today or yesterday — the streak has lapsed, but the stored value is left
+ * alone so it can be inspected. Shared by My Stats and the results popup.
+ */
+export function displayStreakOf(stats: Pick<GameStats, "currentStreak" | "lastPlayedDate">): number {
+  if (!stats.lastPlayedDate) return 0;
+  const today = new Date().toLocaleDateString("en-CA");
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toLocaleDateString("en-CA");
+  return stats.lastPlayedDate === today || stats.lastPlayedDate === yesterdayStr ? stats.currentStreak : 0;
+}
+
+/**
  * A player's personal statistics FOR ONE FORMAT.
  *
  * Full and Mini are sibling games with sibling records: playing one must never

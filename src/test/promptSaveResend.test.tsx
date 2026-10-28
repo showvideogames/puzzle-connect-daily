@@ -105,8 +105,10 @@ async function winOnTheBoard(container: HTMLElement) {
   await settle(300);
 }
 
+/** From the results popup, which hands over to the real challenge. */
 async function submitPrompt(words: string[]) {
-  await click(screen.getByText(PROMPT));
+  await click(within(screen.getByTestId("results-dialog")).getByText(PROMPT));
+  await settle();
   const dialog = screen.getByRole("dialog");
   for (const w of words) await click(within(dialog).getByRole("button", { name: w }));
   await click(within(dialog).getByRole("button", { name: "Submit" }));

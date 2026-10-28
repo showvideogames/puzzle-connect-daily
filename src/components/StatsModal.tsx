@@ -1,6 +1,6 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
-import { loadStatsFromSupabase } from "@/lib/gameStats";
+import { displayStreakOf, loadStatsFromSupabase, winRateOf } from "@/lib/gameStats";
 import { GameStats } from "@/lib/types";
 import { X, Puzzle, Trophy, Flame, Crown, Star, LightbulbOff, BarChart3, ListOrdered } from "lucide-react";
 import { RainbowIcon } from "./RainbowIcon";
@@ -35,22 +35,9 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
     return () => { cancelled = true; };
   }, [open, format]);
 
-  const winRate = stats && stats.gamesPlayed > 0
-    ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100)
-    : 0;
-
-  // Show 0 if the player hasn't played today or yesterday — streak has lapsed
-  // but we intentionally leave the DB value alone so it can be inspected.
-  const displayStreak = (() => {
-    if (!stats?.lastPlayedDate) return 0;
-    const today = new Date().toLocaleDateString("en-CA");
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toLocaleDateString("en-CA");
-    return (stats.lastPlayedDate === today || stats.lastPlayedDate === yesterdayStr)
-      ? stats.currentStreak
-      : 0;
-  })();
+  const winRate = stats ? winRateOf(stats) : 0;
+  // 0 once the streak has lapsed (see displayStreakOf).
+  const displayStreak = stats ? displayStreakOf(stats) : 0;
 
   const topStats = stats
     ? [

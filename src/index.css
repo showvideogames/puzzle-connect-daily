@@ -459,10 +459,30 @@ html.layout-refresh .solved-bar {
 /* The Rainbow's bar (and the instruction space reserved for it) is 80% of an
    ordinary category bar's height: its vertical padding is trimmed first, and
    useFitBarText shrinks a long name or answer line only if it still doesn't
-   fit. It sits in its own slot above the board, never in the solved-bar list,
-   so the solve animation's one-tile-row rule for ordinary bars is unchanged. */
+   fit. A Rainbow found during play sits in its own slot above the board; one
+   found or revealed after the game sits in its own row below the categories.
+   Either way it is never in the solved-bar list, so the solve animation's
+   one-tile-row rule for ordinary bars is unchanged. */
 .board-bars .solved-bar.solved-bar-rainbow {
   min-height: calc(var(--solved-row-h) * 0.8);
+}
+
+/* The Rainbow/instruction slot folds to nothing once a game ends without the
+   Rainbow found during play (GameBoard's slotFolded), so the solved
+   categories move up into its space. A grid row going 1fr → 0fr glides the
+   height with nothing measured; a finished game opened later renders folded
+   from the start, so nothing moves. Timing matches SLOT_FOLD_MS. */
+.rainbow-slot-fold {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 320ms cubic-bezier(0.4, 0, 0.2, 1), opacity 200ms ease;
+}
+.rainbow-slot-fold.is-folded {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rainbow-slot-fold { transition: none; }
 }
 html.layout-refresh .solved-bar.solved-bar-rainbow {
   padding-top: 3px;

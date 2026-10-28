@@ -120,9 +120,15 @@ async function winOnTheBoard(container: HTMLElement, puzzle: Puzzle) {
   await settle(300);
 }
 
-/** Opens the prompt, picks the words and presses Submit. */
+/**
+ * Opens the prompt the way a player arriving at the end does — from the
+ * results popup, which closes and hands over to the real challenge — then
+ * picks the words and presses Submit.
+ */
 async function submitPrompt(words: string[]) {
-  await click(screen.getByText(PROMPT));
+  await click(within(screen.getByTestId("results-dialog")).getByText(PROMPT));
+  await settle();
+  expect(screen.queryByTestId("results-dialog")).toBeNull();
   const dialog = screen.getByRole("dialog");
   for (const w of words) await click(within(dialog).getByRole("button", { name: w }));
   await click(within(dialog).getByRole("button", { name: "Submit" }));
@@ -217,9 +223,9 @@ describe("Full: one post-game Rainbow answer per game", () => {
     await winOnTheBoard(view.container, FULL);
 
     await submitPrompt(["y2", "g2", "b2", "r2"]);
-    // The prompt button is still on screen for a moment; pressing it now
-    // must not open a second prompt.
-    const button = screen.getByText(PROMPT);
+    // The board's prompt button is still on screen for a moment; pressing
+    // it now must not open a second prompt.
+    const button = within(screen.getByTestId("late-rainbow")).getByText(PROMPT);
     await click(button);
     expect(screen.queryByRole("dialog")).toBeNull();
     await settle(700);

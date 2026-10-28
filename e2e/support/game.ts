@@ -180,7 +180,26 @@ export async function solveAllCategories(page: Page, fixture: OfficialPuzzleFixt
   }
 }
 
-/** The end-of-game results block: headline, share row and stats controls. */
+/**
+ * The end-of-game results popup. It opens by itself when a game ends in
+ * front of the player; afterwards (and after a reload) "View Results" below
+ * the finished board reopens it.
+ */
+export function resultsDialog(page: Page): Locator {
+  return page.getByTestId("results-dialog");
+}
+
+export function viewResultsButton(page: Page): Locator {
+  return page.getByRole("button", { name: "View Results" });
+}
+
+/** Closes the results popup, back to the finished board. */
+export async function closeResults(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Close results" }).click();
+  await expect(resultsDialog(page)).toHaveCount(0);
+}
+
+/** The results popup's Share button. */
 export function shareButton(page: Page): Locator {
   return page.getByRole("button", { name: /Share Score|Copied!/ });
 }

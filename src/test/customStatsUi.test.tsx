@@ -77,6 +77,13 @@ async function settle() {
   });
 }
 
+/** Waits for the end-of-game results popup and closes it, back to the board. */
+async function closeResults() {
+  const close = await screen.findByRole("button", { name: "Close results" }, { timeout: 10_000 });
+  await act(async () => { fireEvent.click(close); });
+  await settle();
+}
+
 async function mintIdentity() {
   const { data } = await db.rpc("create_device_identity");
   const id = (Array.isArray(data) ? data[0] : data) as { device_id: string; device_token: string };
@@ -167,6 +174,7 @@ describe("stats are reachable before, during and after play", () => {
   it("after completion the Results and Replay buttons appear, and Results shows the full summary", async () => {
     await renderPage();
     await playGroups(GROUPS);
+    await closeResults();
     const results = await screen.findByRole("button", { name: /^results$/i });
     expect(screen.getByRole("button", { name: /^replay$/i })).toBeTruthy();
     // No "Play Another": there is no discovery destination to send players to yet.
@@ -195,6 +203,7 @@ describe("Replay", () => {
   it("resets local progress, keeps the puzzle, and a completed replay counts as another play", async () => {
     const { shareId } = await renderPage();
     await playGroups(GROUPS);
+    await closeResults();
     const firstRun = loadProgress(`custom:${shareId}`)!;
     expect(firstRun.isComplete).toBe(true);
     const writesAfterFirst = db.writeLog.length;
@@ -214,14 +223,17 @@ describe("Replay", () => {
 
     // Lose the replay: another completed play, with its own outcome.
     await loseByGuessing();
+    // The results popup opens once the loss cascade has settled, with the
+    // replay's own share grid.
+    const popup = await screen.findByTestId("results-dialog", {}, { timeout: 10_000 });
+    expect(popup.textContent).toContain("Share Score");
+    await closeResults();
     await screen.findByRole("button", { name: /^results$/i });
     const st = db.tables.custom_puzzle_stats[0];
     expect(st.wins).toBe(1);
     expect(st.losses).toBe(1);
     // The replay is a NEW run.
     expect(loadProgress(`custom:${shareId}`)!.runId).not.toBe(firstRun.runId);
-    // ...and it can produce its own share grid.
-    expect(document.body.textContent).toContain("Share Score");
 
     // Refreshing the completed replay does not record it again.
     const writes = db.writeLog.length;
@@ -229,11 +241,12 @@ describe("Replay", () => {
     await settle();
     expect(db.writeLog.length).toBe(writes);
     expect(st.wins + st.losses).toBe(2);
-  });
+  }, 30_000);
 
   it("starting a replay and abandoning it counts nothing", async () => {
     const { shareId } = await renderPage();
     await playGroups(GROUPS);
+    await closeResults();
     fireEvent.click(await screen.findByRole("button", { name: /^replay$/i }));
     await settle();
     await playGroups([GROUPS[0]]);

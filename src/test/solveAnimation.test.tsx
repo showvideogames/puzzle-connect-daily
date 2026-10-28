@@ -309,19 +309,24 @@ describe("the final solve", () => {
     }
     const last = miniPuzzle.groups[2];
     await submit(container, last.words);
+    const viewResults = () => screen.queryByRole("button", { name: "View Results" });
     await advance(CHECKING_MS);
-    expect(screen.queryByText(/perfect game/i)).toBeNull();
+    expect(viewResults()).toBeNull();
     // The last row is the whole board, so there is nothing to gather: the bar
     // merges and pops straight away — and the celebration waits for it.
     await advance(10);
     expect(bar(last.category).className).toContain("animate-solved-arrival");
-    expect(screen.queryByText(/perfect game/i)).toBeNull();
+    expect(viewResults()).toBeNull();
     await advance(SOLVE_POP_MS);
     // The celebration is un-gated on a zero-delay timer from that last beat
     // (fake timers run a zero delay set inside a tick one millisecond later).
     await advance(10);
-    expect(screen.getByText(/perfect game/i)).toBeTruthy();
+    expect(viewResults()).toBeTruthy();
     expect(gridWords(container)).toEqual([]);
+    // The results popup follows once the board has stopped moving.
+    expect(screen.queryByText(/perfect game/i)).toBeNull();
+    await advance(1000);
+    expect(screen.getByText(/perfect game/i)).toBeTruthy();
   });
 });
 

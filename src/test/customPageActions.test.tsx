@@ -76,6 +76,13 @@ async function settle() {
   });
 }
 
+/** Waits for the end-of-game results popup and closes it, back to the board. */
+async function closeResults() {
+  const close = await screen.findByRole("button", { name: "Close results" }, { timeout: 10_000 });
+  await act(async () => { fireEvent.click(close); });
+  await settle();
+}
+
 async function mintIdentity() {
   const { data } = await db.rpc("create_device_identity");
   const id = (Array.isArray(data) ? data[0] : data) as { device_id: string; device_token: string };
@@ -162,6 +169,7 @@ describe("personal stats vs puzzle stats", () => {
   it("post-game Results opens the same Puzzle stats modal, and Puzzle Stats stays on the page", async () => {
     await renderPage();
     await playGroups(GROUPS);
+    await closeResults();
     expect(screen.getByRole("button", { name: "Puzzle Stats" })).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /^results$/i }));
     expect(await screen.findByRole("dialog", { name: "Puzzle stats" })).toBeTruthy();
@@ -204,6 +212,7 @@ describe("bottom CTA", () => {
   it("the CTA sits below Results and Replay after completion", async () => {
     await renderPage();
     await playGroups(GROUPS);
+    await closeResults();
     const replay = await screen.findByRole("button", { name: /^replay$/i });
     const cta = screen.getByTestId("custom-cta");
     expect(replay.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

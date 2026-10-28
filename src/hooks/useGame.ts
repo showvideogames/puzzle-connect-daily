@@ -751,6 +751,7 @@ export function useGame(
   // Stats by is_official anyway. This guard is kept so the protection does
   // not depend on any one of those three mechanisms holding alone.
   const isOfficialAttemptRef = useRef<boolean | null>(null);
+  const [officialAttempt, setOfficialAttempt] = useState<boolean | null>(null);
 
   // Finalizes this completed playthrough.
   //
@@ -798,6 +799,7 @@ export function useGame(
       // writes are skipped outright regardless (see GameBoard's betaMode
       // guard on canPersist).
       isOfficialAttemptRef.current = false;
+      setOfficialAttempt(false);
       return;
     }
 
@@ -819,6 +821,7 @@ export function useGame(
       // Rainbow persistence is already skipped via its own !!sessionId
       // check regardless of this flag.
       isOfficialAttemptRef.current = false;
+      setOfficialAttempt(false);
       return;
     }
 
@@ -839,6 +842,7 @@ export function useGame(
       skipStreak: isArchive,
     });
     isOfficialAttemptRef.current = isOfficial;
+    setOfficialAttempt(isOfficial);
   }, [isArchive, sessionIdRef, entryContext, puzzle.versionId, puzzle.id, mode]);
 
   const setTileColor = useCallback((word: string, color: string | null) => {
@@ -1420,6 +1424,14 @@ export function useGame(
     handleTouchDragEnd,
     alreadyGuessed,
     isOfficialAttemptRef,
+    /**
+     * isOfficialAttemptRef as render state: null until a completion in THIS
+     * mount has been saved (or refused), then whether it became the official
+     * result. A game restored already finished never sets it. The results
+     * popup waits on it before reading stats, and only a live, official,
+     * Daily win counts as a newly earned streak day.
+     */
+    officialAttempt,
     /**
      * True when the board is locked because this identity already has an
      * official result for the puzzle that this browser holds no copy of.
