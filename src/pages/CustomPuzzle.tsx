@@ -26,6 +26,7 @@ import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
 import { clearProgress } from "@/lib/gameProgress";
 import { formatOf, progressStorageId } from "@/lib/puzzleFormat";
+import { useProgressOwner } from "@/lib/progressOwner";
 import type { User } from "@supabase/supabase-js";
 
 type ModalName = "help" | "settings" | "feedback" | "stats" | null;
@@ -40,6 +41,8 @@ type ModalName = "help" | "settings" | "feedback" | "stats" | null;
 export default function CustomPuzzle() {
   useGamePageTheme();
   const { shareId, shortCode } = useParams<{ shareId?: string; shortCode?: string }>();
+  // Whose browser progress this page reads (lib/progressOwner.ts).
+  const owner = useProgressOwner();
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [loaded, setLoaded] = useState<CustomPlayablePuzzle | null>(null);
@@ -115,7 +118,7 @@ export default function CustomPuzzle() {
     if (!puzzle) return;
     // The same namespaced key useGame writes under — identical to the old
     // literal `custom:<shareId>` for a Full puzzle, and correct for a Mini.
-    clearProgress(progressStorageId(puzzle.id, formatOf(puzzle), "custom"));
+    clearProgress(progressStorageId(puzzle.id, formatOf(puzzle), "custom", owner));
     setSmallHintUsed(false);
     setFullHintUsed(false);
     setHintsViewOnly(false);
@@ -123,7 +126,7 @@ export default function CustomPuzzle() {
     setStatsOpen(false);
     setRunKey((k) => k + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [puzzle]);
+  }, [puzzle, owner]);
 
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">

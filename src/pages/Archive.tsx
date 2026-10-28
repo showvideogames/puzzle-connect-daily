@@ -17,6 +17,7 @@ import {
 } from "@/components/archive/ArchiveCalendar";
 import { monthParam } from "@/lib/archiveMonth";
 import { FULL_FORMAT, progressStorageId } from "@/lib/puzzleFormat";
+import { useProgressOwner } from "@/lib/progressOwner";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { playGiftOpenSound } from "@/lib/sounds";
 import { getDeviceId, getDeviceToken } from "@/lib/gameStats";
@@ -349,6 +350,8 @@ function CollectionRow<T>({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Archive() {
+  // Whose browser progress this page reads (lib/progressOwner.ts).
+  const owner = useProgressOwner();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
@@ -562,10 +565,8 @@ export default function Archive() {
     if (!isPast) return "none";
     const session = sessionsByPuzzleId.get(puzzle.id);
     if (session) return session.won ? (session.foundRainbow ? "won-rainbow" : "won") : "failed";
-    // The format-namespaced progress key. For Full this IS the bare puzzle
-    // id (see progressStorageId), so nothing about existing behaviour
-    // changes — it is written this way so the rule is stated once.
-    if (hasMeaningfulProgress(progressStorageId(puzzle.id, FULL_FORMAT))) return "in-progress";
+    // The format-namespaced progress key, under this player's own saves.
+    if (hasMeaningfulProgress(progressStorageId(puzzle.id, FULL_FORMAT, "official", owner))) return "in-progress";
     return "unplayed";
   }
 

@@ -8,6 +8,7 @@ import {
   resetDeviceIdentity,
 } from "@/lib/gameStats";
 import { ensureAccount } from "@/lib/platformSignIn";
+import { copyGuestProgressToAccount, sameOwner, type ProgressOwner } from "@/lib/progressOwner";
 
 /**
  * The one-time "Bring your progress with you?" decision, driven entirely by
@@ -73,13 +74,46 @@ interface ResolveRow {
   longest_streak: number | null;
 }
 
+/** The first Supabase auth error means "nobody is signed in", not a failure. */
+function isNoSession(error: unknown): boolean {
+  return (error as { name?: string } | null)?.name === "AuthSessionMissingError";
+}
+
 export function useAccountOnboarding() {
   const [state, setState] = useState<OnboardingPhase>({ phase: "checking" });
+  /**
+   * Whose browser progress the app shows (see lib/progressOwner.ts). Set
+   * together with every resolved phase, and cleared the moment a different
+   * player signs in or out, so one player's boards are never on screen for
+   * the next.
+   */
+  const [owner, setOwner] = useState<ProgressOwner | null>(null);
+  const ownerRef = useRef<ProgressOwner | null>(null);
   const running = useRef(false);
+  // A check asked for while another is running. The running one's answer may
+  // describe a player who has since signed in or out, so it is thrown away
+  // and the check runs again.
+  const rerun = useRef(false);
 
-  const check = useCallback(async () => {
-    if (running.current) return;
-    running.current = true;
+  const resolve = useCallback(async (): Promise<{ state: OnboardingPhase; owner: ProgressOwner }> => {
+    // Who is playing, as far as this browser knows. A guest is this
+    // browser's device identity ("unknown" only for a browser that cannot
+    // store one, where no progress can be saved anyway).
+    const guestOwner = (): ProgressOwner => ({ kind: "guest", deviceId: getDeviceId() });
+    const accountOwner = (userId: string): ProgressOwner => ({ kind: "account", userId });
+    // Whoever holds the stored session, without asking the server. Used when
+    // the server cannot be asked: the player is still who they were, and
+    // must keep seeing their own boards rather than a guest's.
+    const storedSessionOwner = async (): Promise<ProgressOwner> => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const id = data.session?.user?.id;
+        return id ? accountOwner(id) : guestOwner();
+      } catch {
+        return guestOwner();
+      }
+    };
+
     try {
       // Every client needs an identity, signed in or not, so this doubles as
       // the probe for whether secure recording is available at all.
@@ -101,18 +135,21 @@ export function useAccountOnboarding() {
       }
 
       if (!identity) {
-        setState({ phase: "saving_unavailable" });
-        return;
+        return { state: { phase: "saving_unavailable" }, owner: await storedSessionOwner() };
       }
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (!user) {
+        // A stored session the server could not be asked about (offline,
+        // for one) is still that player, not a guest.
+        if (userError && !isNoSession(userError)) {
+          return { state: { phase: "saving_unavailable" }, owner: await storedSessionOwner() };
+        }
         // An anonymous player with a credential already in hand still needs
         // to know whether the server is actually reachable — otherwise the
         // first thing they'd learn is a finished game that never saved.
         const { error: probeError } = await supabase.rpc("ping");
-        setState({ phase: probeError ? "saving_unavailable" : "ready" });
-        return;
+        return { state: { phase: probeError ? "saving_unavailable" : "ready" }, owner: guestOwner() };
       }
 
       // A session exists. Is it a Rainbow account? (In a shared Supabase
@@ -122,9 +159,11 @@ export function useAccountOnboarding() {
       // as a guest.
       const account = await ensureAccount();
       if (!account.ok || !account.account) {
-        setState({ phase: account.reason === "not_platform_linked" ? "ready" : "saving_unavailable" });
-        return;
+        return account.reason === "not_platform_linked"
+          ? { state: { phase: "ready" }, owner: guestOwner() }
+          : { state: { phase: "saving_unavailable" }, owner: accountOwner(user.id) };
       }
+      const owner = accountOwner(user.id);
       // The email shown in the import prompt is the account's CURRENT one,
       // from the server. Never user.email: GoTrue does not refresh it after
       // a change at the shared provider.
@@ -139,59 +178,102 @@ export function useAccountOnboarding() {
         // Same reasoning: we cannot tell whether this device owes a decision,
         // so we must not start account-owned gameplay — but the puzzle is
         // still perfectly playable, so let them play unsaved.
-        setState({ phase: "saving_unavailable" });
-        return;
+        return { state: { phase: "saving_unavailable" }, owner };
       }
 
       const row = (Array.isArray(data) ? data[0] : data) as ResolveRow | null;
       switch (row?.outcome) {
         case "import_available":
-          setState({
-            phase: "decision",
-            gamesPlayed: row.games_played ?? 0,
-            currentStreak: row.current_streak ?? 0,
-            longestStreak: row.longest_streak ?? 0,
-            email: accountEmail,
-            degraded: false,
-          });
-          return;
+          return {
+            state: {
+              phase: "decision",
+              gamesPlayed: row.games_played ?? 0,
+              currentStreak: row.current_streak ?? 0,
+              longestStreak: row.longest_streak ?? 0,
+              email: accountEmail,
+              degraded: false,
+            },
+            owner,
+          };
         case "credential_invalid":
           // Fails closed server-side: nothing was consumed. Offer the explicit
           // choice rather than silently resolving it away.
-          setState({
-            phase: "decision",
-            gamesPlayed: 0,
-            currentStreak: 0,
-            longestStreak: 0,
-            email: accountEmail,
-            degraded: true,
-          });
-          return;
+          return {
+            state: {
+              phase: "decision",
+              gamesPlayed: 0,
+              currentStreak: 0,
+              longestStreak: 0,
+              email: accountEmail,
+              degraded: true,
+            },
+            owner,
+          };
         case "already_decided":
         case "no_guest_history":
         case "unauthenticated":
-          setState({ phase: "ready" });
-          return;
+          return { state: { phase: "ready" }, owner };
         default:
-          setState({ phase: "saving_unavailable" });
-          return;
+          return { state: { phase: "saving_unavailable" }, owner };
       }
     } catch {
-      setState({ phase: "saving_unavailable" });
+      return { state: { phase: "saving_unavailable" }, owner: await storedSessionOwner() };
+    }
+  }, []);
+
+  const apply = useCallback((next: { state: OnboardingPhase; owner: ProgressOwner }) => {
+    // The same player keeps the same object: this check re-runs on every
+    // focus and reconnect, and pages that depend on the player must not
+    // reload for an answer that changed nothing.
+    const owner = sameOwner(ownerRef.current, next.owner) ? ownerRef.current! : next.owner;
+    ownerRef.current = owner;
+    setOwner(owner);
+    setState(next.state);
+  }, []);
+
+  const check = useCallback(async () => {
+    if (running.current) {
+      rerun.current = true;
+      return;
+    }
+    running.current = true;
+    try {
+      do {
+        rerun.current = false;
+        const next = await resolve();
+        // Asked again while this ran (a sign-in or sign-out, most often):
+        // this answer may describe the previous player, so it is dropped.
+        if (rerun.current) continue;
+        apply(next);
+      } while (rerun.current);
     } finally {
       running.current = false;
     }
-  }, []);
+  }, [resolve, apply]);
 
   useEffect(() => {
     void check();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // The stored session this page loaded with — exactly what the check
+      // above is already reading. Asking again would only repeat it.
+      if (event === "INITIAL_SESSION") return;
       if (event === "SIGNED_OUT") {
         // A later logout starts a genuinely separate guest identity, so the
         // account holder's browser does not keep playing as the identity
         // their account already absorbed.
         resetDeviceIdentity();
+      }
+      // A different player now: take the previous one's boards off screen
+      // straight away, before the check below has asked the server anything.
+      // A token refresh for the same player changes nothing here.
+      const current = ownerRef.current;
+      const nextUserId = event === "SIGNED_OUT" ? null : session?.user?.id ?? null;
+      const currentUserId = current?.kind === "account" ? current.userId : null;
+      if (current && (event === "SIGNED_OUT" || nextUserId !== currentUserId)) {
+        ownerRef.current = null;
+        setOwner(null);
+        setState({ phase: "checking" });
       }
       void check();
     });
@@ -224,8 +306,9 @@ export function useAccountOnboarding() {
   }, []);
 
   const addMyProgress = useCallback(async () => {
+    const guestDeviceId = getDeviceId();
     const { data, error } = await supabase.rpc("import_guest_history", {
-      _device_id: getDeviceId(),
+      _device_id: guestDeviceId,
       _device_token: getDeviceToken(),
     });
     const row = (Array.isArray(data) ? data[0] : data) as { outcome?: string } | null;
@@ -234,6 +317,13 @@ export function useAccountOnboarding() {
       // opportunity. Re-checking shows the choice again.
       await check();
       return;
+    }
+    // The player said yes and the server moved their games: their boards in
+    // this browser come with them. Only on "imported" — "already_decided"
+    // says nothing about which way an earlier decision went.
+    const current = ownerRef.current;
+    if (row.outcome === "imported" && current?.kind === "account") {
+      copyGuestProgressToAccount(guestDeviceId, current.userId);
     }
     await rotateAfterDecision();
     setState({ phase: "ready" });
@@ -253,5 +343,5 @@ export function useAccountOnboarding() {
     setState({ phase: "ready" });
   }, [check, rotateAfterDecision]);
 
-  return { state, recheck: check, addMyProgress, startFresh };
+  return { state, owner, recheck: check, addMyProgress, startFresh };
 }

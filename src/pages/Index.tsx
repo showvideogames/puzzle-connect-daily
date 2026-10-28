@@ -21,6 +21,7 @@ import { getTodaysPuzzle } from "@/lib/puzzles";
 import { resolvePlayablePuzzle } from "@/lib/puzzleVersion";
 import { Puzzle } from "@/lib/types";
 import { FULL_FORMAT, progressStorageId, rainbowHerringFor, type PuzzleFormat } from "@/lib/puzzleFormat";
+import { useProgressOwner } from "@/lib/progressOwner";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,6 +44,8 @@ interface IndexProps {
 }
 
 export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
+  // Whose browser progress this page reads (lib/progressOwner.ts).
+  const owner = useProgressOwner();
   const [activeModal, setActiveModal] = useState<ModalName>(null);
   const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,9 +98,9 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
     // The FORMAT-NAMESPACED progress key, not the bare puzzle id: today's
     // Full game and today's Mini game are separate boards a player may have
     // in progress at the same time.
-    if (hasInProgressGame(progressStorageId(puzzle.id, format))) return false;
+    if (hasInProgressGame(progressStorageId(puzzle.id, format, "official", owner))) return false;
     return true;
-  }, [puzzle, error, loading, format, landingKey]);
+  }, [puzzle, error, loading, format, landingKey, owner]);
 
   const showLanding = isLandingEligible && !landingDismissed;
 
@@ -187,7 +190,7 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
         // this returns exactly what was loaded. See lib/puzzleVersion.ts.
         // The progress key is format-namespaced for the same reason the
         // landing check above is.
-        setPuzzle(p ? resolvePlayablePuzzle(p, progressStorageId(p.id, format)) : null);
+        setPuzzle(p ? resolvePlayablePuzzle(p, progressStorageId(p.id, format, "official", owner)) : null);
         setLoading(false);
       })
       .catch(() => {
@@ -197,7 +200,7 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
       });
 
     return () => clearTimeout(timeout);
-  }, [format]);
+  }, [format, owner]);
 
   useEffect(() => loadPuzzle(), [loadPuzzle]);
 

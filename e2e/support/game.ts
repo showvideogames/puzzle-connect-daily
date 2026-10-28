@@ -241,10 +241,24 @@ export async function expectNoHorizontalOverflow(page: Page): Promise<void> {
 // Signing in lives in support/auth.ts: there is no login form to drive any
 // more, a test hands the app a real session from the local GoTrue instead.
 
-/** The localStorage progress blob for one attempt, or null. */
+/**
+ * The localStorage progress blob for one attempt, or null.
+ *
+ * Read under the CURRENT player's own key, exactly as the app does (see
+ * src/lib/progressOwner.ts): `acct:<user id>/` when signed in, otherwise
+ * `guest:<device id>/`. Repeated here rather than imported, for the same
+ * reason as AUTH_STORAGE_KEY in support/auth.ts.
+ */
 export async function readProgress(page: Page, storageId: string): Promise<Record<string, unknown> | null> {
   return page.evaluate((key) => {
-    const raw = window.localStorage.getItem(`connections-progress-${key}`);
+    let scope = `guest:${window.localStorage.getItem("rc-device-id") ?? "unknown"}/`;
+    try {
+      const session = JSON.parse(window.localStorage.getItem("rc-auth") ?? "null") as { user?: { id?: string } } | null;
+      if (session?.user?.id) scope = `acct:${session.user.id}/`;
+    } catch {
+      // no stored session: a guest
+    }
+    const raw = window.localStorage.getItem(`connections-progress-${scope}${key}`);
     return raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
   }, storageId);
 }

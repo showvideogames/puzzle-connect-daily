@@ -25,6 +25,7 @@ import confetti from "canvas-confetti";
 import { playRainbowSound } from "@/lib/sounds";
 import { fetchSavedPromptAnswer, recordBonusRainbowAttempt } from "@/lib/gameStats";
 import {
+  loadProgress,
   loadPromptAnswer,
   markPromptAnswerSaved,
   savePromptAnswer,
@@ -38,7 +39,9 @@ import { loadPlayedDifficulties } from "@/lib/puzzleVersion";
 import { buildCustomShareText, buildOfficialShareText } from "@/lib/shareText";
 import { customPuzzlePath } from "@/lib/customPuzzles";
 import { resolveCategoryVisual, splitCategoryVisual } from "@/lib/categoryVisual";
-import { rainbowHerringFor, type CategoryColor } from "@/lib/puzzleFormat";
+import { formatOf, progressStorageId, rainbowHerringFor, type CategoryColor } from "@/lib/puzzleFormat";
+import { lookupFinishedGame, type RestoredGame } from "@/lib/finishedGame";
+import { ownerKey, useProgressOwner, type ProgressOwner } from "@/lib/progressOwner";
 import { categorySwatches } from "@/lib/categoryPalette";
 import { formatActiveTime } from "@/lib/activeTimer";
 import {
@@ -242,7 +245,10 @@ interface GameBoardProps {
   onReplay?: () => void;
 }
 
-export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", wideBoard = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, onHintsViewOnlyChange, showModeBadge = true, entryContext = "daily_home", betaMode = false, customMode = false, statsOpen: statsOpenProp, onStatsOpenChange, onReplay }: GameBoardProps) {
+function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, isArchive = false, variant = "default", wideBoard = false, smallHintUsed = false, fullHintUsed = false, onHintClick, onComplete, onHintsViewOnlyChange, showModeBadge = true, entryContext = "daily_home", betaMode = false, customMode = false, statsOpen: statsOpenProp, onStatsOpenChange, onReplay, owner, restored }: GameBoardProps & {
+  owner: ProgressOwner | null;
+  restored: RestoredGame | null;
+}) {
   const isDailyHomepage = variant === "dailyHomepage";
   // Drives the board's own desktop width/tile-gap classes below — true for
   // the daily homepage itself, or any other context that explicitly opted
@@ -308,7 +314,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     alreadyGuessed,
     isOfficialAttemptRef,
     officialAttempt,
-    lockedByOfficialResult,
     sessionIdRef,
     activeSecondsRef,
     activeSeconds,
@@ -323,6 +328,8 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     // The timer starts when the board is genuinely on screen, not while the
     // preload spinner is up — a slow image load is not solving time.
     boardReady: imagesReady,
+    owner,
+    restored,
   });
 
   // ── One post-game Rainbow answer per Full game ──
@@ -334,9 +341,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // 20260928000000), so a stale page cannot add one. Mini keeps its own,
   // original prompt behaviour for now.
   const oneAnswerPrompt = format.id === "full";
-  // The locked "already finished" board (see lockedByOfficialResult) is the
-  // regular game's; a Mini keeps its live behaviour for now.
-  const lockedFullResult = lockedByOfficialResult && oneAnswerPrompt;
   const promptAnsweredRef = useRef(false);
   // A wrong answer restored from storage shows its Rainbow straight away,
   // without replaying the reveal animation it already had.
@@ -349,8 +353,27 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     if (promptRestoredForRef.current === storageId) return;
     promptRestoredForRef.current = storageId;
     promptAnsweredRef.current = false;
-    if (!oneAnswerPrompt) return;
+    // A game restored from the server: its own record says whether the
+    // post-game question was answered (a right answer is already on the
+    // board as a found Rainbow). Answered wrong shows the revealed Rainbow,
+    // exactly as reopening it on the device it was answered on does.
+    const restoredAnsweredWrong = !!restored && restored.bonusRainbowAttempted && !state.gotRainbow;
+    if (!oneAnswerPrompt) {
+      if (restoredAnsweredWrong && bonusRainbowCorrect === null) {
+        restoredWrongAnswerRef.current = true;
+        setBonusRainbowCorrect(false);
+      }
+      return;
+    }
     const answer = loadPromptAnswer(storageId);
+    if (!answer && restored) {
+      if (restored.bonusRainbowAttempted) promptAnsweredRef.current = true;
+      if (restoredAnsweredWrong) {
+        restoredWrongAnswerRef.current = true;
+        setBonusRainbowCorrect(false);
+      }
+      return;
+    }
     if (!answer) {
       // A game finished before this visit, with no answer remembered here,
       // may have been answered by an older version of the app, which kept no
@@ -385,7 +408,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       restoredWrongAnswerRef.current = true;
       setBonusRainbowCorrect(false);
     }
-  }, [storageId, oneAnswerPrompt, state.isComplete, state.gotRainbow, rainbowHerring, markRainbowFound, bonusRainbowCorrect, betaMode, customMode, puzzle.id]);
+  }, [storageId, oneAnswerPrompt, state.isComplete, state.gotRainbow, rainbowHerring, markRainbowFound, bonusRainbowCorrect, betaMode, customMode, puzzle.id, restored]);
 
   // An answer whose save never got through on an earlier visit (the page
   // closed during the reveal or while the request was in flight) is sent
@@ -947,9 +970,9 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // ── The results popup and the flame streak pill ──
   // The game ended in THIS visit: a solve or the loss cascade revealed a bar
   // here. A game restored already finished never sets lastRevealedGroup, so
-  // it never opens the popup by itself or replays the streak. A board locked
-  // by an official result this browser has no copy of has no results to show.
-  const finishedThisVisit = state.isComplete && lastRevealedGroup !== null && !lockedByOfficialResult;
+  // it never opens the popup by itself or replays the streak — nor does a
+  // game read back from the server.
+  const finishedThisVisit = state.isComplete && lastRevealedGroup !== null && !restored;
   // The flame pill belongs to the Daily streak. Archive never updates it, and
   // Beta and custom play never touch official stats at all, so none of them
   // shows it — reading the player's real streak there would present it as
@@ -964,6 +987,15 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     streakAnimatedRef.current = true;
   }, []);
   const [resultsOpen, setResultsOpen] = useState(false);
+  // A finished game read back from the server with its outcome only (see
+  // lib/finishedGame.ts): what the record says, and nothing more.
+  const restoredSummary = restored?.detail === "summary";
+  const restoredFacts = restoredSummary
+    ? [
+        rainbowHerring ? (state.gotRainbow ? "Rainbow found" : "Rainbow not found") : null,
+        restored.hintsUsed ? "Hints used" : "No hints used",
+      ].filter((f): f is string => f !== null)
+    : [];
   const resultsAutoOpenedRef = useRef(false);
   const viewResultsRef = useRef<HTMLButtonElement>(null);
 
@@ -1356,10 +1388,10 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // Gate for everything that belongs to the finished board: the results
   // popup, View Results and the post-game Rainbow. A WON game waits for the
   // victory reveal (final arrival pop finished), a LOST one for its loss
-  // cascade, so nothing moves the board while it is still animating. A board
-  // locked by an official result has nothing to wait for.
+  // cascade, so nothing moves the board while it is still animating. A game
+  // read back from the server has nothing to wait for.
   const showEndState =
-    state.isComplete && (lockedByOfficialResult || (state.isWon ? victoryRevealReady : lossSettled));
+    state.isComplete && (!!restored || (state.isWon ? victoryRevealReady : lossSettled));
 
   // Whether the Rainbow was found DURING the main game (it keeps its place
   // at the top) rather than afterwards, through Spot the Rainbow (it goes
@@ -1369,10 +1401,12 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
     if (!state.gotRainbow) return false;
     if (!state.isComplete) return true;
     const at = state.guessHistory.findIndex((a) => a.isRainbow);
-    // No record of when (an old save): keep it where it always was.
-    if (at === -1) return true;
+    // No record of when (an old save, or a game restored with its outcome
+    // only): keep it where it always was, unless the record says it was
+    // found after the game.
+    if (at === -1) return restored?.rainbowSource !== "post_game";
     return state.guessHistory.slice(at + 1).some((a) => !a.isHintMarker && !a.isRainbow);
-  }, [state.gotRainbow, state.isComplete, state.guessHistory]);
+  }, [state.gotRainbow, state.isComplete, state.guessHistory, restored]);
 
   // Once a game has ended without the Rainbow found, the space reserved for
   // it at the top (and the instruction it held) folds away and the solved
@@ -1412,16 +1446,18 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // After the game, when the Rainbow wasn't found during play: the "spot
   // the Rainbow" prompt, then (once answered) the revealed Rainbow — or the
   // Rainbow found through it. It sits BELOW the solved categories, never in
-  // the top slot (which has folded away by then, see slotFolded). Not on a
-  // board locked by a result this browser holds no copy of
-  // (lockedByOfficialResult): the prompt would score a Rainbow onto an empty
-  // local game whose outcome is unknown here.
-  const lateRainbowShown = showEndState && !lockedFullResult && !rainbowFoundInPlay && !!rainbowHerring;
+  // the top slot (which has folded away by then, see slotFolded).
+  const lateRainbowShown = showEndState && !rainbowFoundInPlay && !!rainbowHerring;
+  // A game read back from the server keeps an unanswered question, so
+  // changing device never takes it away — but only when the answer can be
+  // saved to that same game (a guest cannot read its id), and never a
+  // second time: one already given, right or wrong, is final.
+  const restoredPromptOpen = !restored || (!!restored.sessionId && !restored.bonusRainbowAttempted);
   // The invitation is still on offer: nothing answered yet, and not hidden
   // for the moment it takes to confirm with the server that a reopened game
   // has not already used its prompt.
   const spotPromptAvailable =
-    lateRainbowShown && !state.gotRainbow && bonusRainbowCorrect === null && !promptCheckPending;
+    lateRainbowShown && !state.gotRainbow && bonusRainbowCorrect === null && !promptCheckPending && restoredPromptOpen;
   const openSpotTheRainbow = useCallback(() => {
     if (!promptAnsweredRef.current) setShowSpotModal(true);
   }, []);
@@ -1488,7 +1524,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
   // Once the real bar is showing it sizes the slot itself (same box, same
   // text), so the invisible copy goes — never two copies of its words.
   const realBarShown = rainbowInSlot;
-  const rainbowSlot = (lockedFullResult && !state.gotRainbow) || slotGone ? null : (
+  const rainbowSlot = slotGone ? null : (
     // board-bars: the same size container, one-tile-row height rule and gap
     // as the solved bars below (square tiles on a Mini, the wide board's
     // gaps where it has them), so the slot, the instruction's space and the
@@ -1970,15 +2006,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* The finished board's own actions, where the play controls were. */}
       {showEndState && (
         <div className="mt-3 sm:mt-4 flex flex-col items-center gap-3 text-center animate-fade-up motion-reduce:animate-none">
-          {/* A board locked by an official result this browser has no copy
-              of is finished, but its outcome is unknown here — isWon is only
-              its default false. Say it is done without calling it a loss,
-              and offer no results it doesn't have. */}
-          {lockedByOfficialResult ? (
-            <p className="text-sm text-muted-foreground" data-testid="already-finished">
-              You've already finished this puzzle. Come back tomorrow!
-            </p>
-          ) : (
             <>
               <button
                 ref={viewResultsRef}
@@ -2023,7 +2050,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
                 </div>
               )}
             </>
-          )}
         </div>
       )}
 
@@ -2207,7 +2233,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           everyone else who finished this puzzle. Official puzzles only, for
           the same reason as Global Stats — a beta or custom puzzle has no
           official sessions to compare against. */}
-      {showEndState && !lockedByOfficialResult && state.guessHistory.length > 0 && !betaMode && !customMode && (
+      {showEndState && restored?.detail !== "summary" && state.guessHistory.length > 0 && !betaMode && !customMode && (
         <div className="mt-6 animate-fade-up motion-reduce:animate-none">
           <LuckyBot puzzle={puzzle} state={state} rainbowPromptResult={bonusRainbowCorrect} />
         </div>
@@ -2236,8 +2262,7 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
         />
       )}
 
-      {!lockedByOfficialResult && (
-        <ResultsDialog
+      <ResultsDialog
           open={resultsOpen && showEndState}
           onOpenChange={setResultsOpen}
           headline={getResultHeadline(state.isWon, state.mistakes)}
@@ -2246,8 +2271,11 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           // shown: a restored legacy run that never recorded a time says
           // nothing rather than claim "0s".
           timeLabel={format.showsTimer && activeSeconds > 0 ? formatActiveTime(activeSeconds) : null}
-          resultRows={resultRows}
-          onShare={handleShare}
+          // A game restored with its outcome only has no rows to show and
+          // nothing honest to share; it lists what its record does say.
+          resultRows={restoredSummary ? [] : resultRows}
+          onShare={restoredSummary ? null : handleShare}
+          summary={restoredSummary ? { facts: restoredFacts, note: "Detailed results aren't available for this game." } : null}
           copied={copied}
           // Personal stats only where play counts toward them.
           statsFormat={betaMode || customMode ? null : format}
@@ -2262,7 +2290,6 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
           onSpotRainbow={handleSpotFromResults}
           returnFocusRef={viewResultsRef}
         />
-      )}
 
       {rainbowHerring && (
         <SpotTheRainbowModal
@@ -2278,5 +2305,121 @@ export function GameBoard({ puzzle, settings, user = null, clearColorsTrigger = 
       {/* Silly Saturday modal — rendered outside the preload gate so it appears immediately */}
       <SillySaturdayModal isEmojiPuzzle={!!puzzle.isEmojiPuzzle} puzzleId={puzzle.id} />
     </>
+  );
+}
+
+/**
+ * Whether this browser's board can be shown straight away, or the server
+ * must first be asked about a finished game this browser has no copy of.
+ */
+type FinishedGameCheck =
+  | { status: "checking" }
+  | { status: "failed" }
+  | { status: "ready"; restored: RestoredGame | null };
+
+/** How long to wait for that answer before offering Retry. */
+const FINISHED_GAME_CHECK_TIMEOUT_MS = 10_000;
+
+/**
+ * The game board, for whoever is playing (see lib/progressOwner.ts).
+ *
+ * When this browser has the player's own progress for the puzzle — a game
+ * underway or finished here — the board opens from it at once, as it always
+ * has. When it has none, the board waits while the server is asked whether
+ * this player already finished the puzzle elsewhere (another device, or
+ * before this browser was cleared):
+ *
+ *   checking  a plain loading state — never a playable board that might
+ *             turn out to be already finished
+ *   found     the finished game, read back from the server (lib/finishedGame.ts)
+ *   none      a fresh board
+ *   failed    "couldn't load your result" with Retry. There is deliberately
+ *             no way past it: "we don't know" is not "you haven't played",
+ *             and a fresh board here could not count anyway.
+ *
+ * Every answer is tied to the player and puzzle it was asked about; one that
+ * arrives after either has changed, or after Retry, is ignored.
+ *
+ * Beta and custom puzzles never have an official result, so they open at once.
+ */
+export function GameBoard(props: GameBoardProps) {
+  const { puzzle, betaMode = false, customMode = false, variant = "default", wideBoard = false } = props;
+  const owner = useProgressOwner();
+  const mode = customMode ? "custom" : betaMode ? "beta" : "official";
+  const storageId = progressStorageId(puzzle.id, formatOf(puzzle), mode, owner);
+  const checkKey = `${ownerKey(owner)}|${storageId}`;
+
+  // Decided once per player and puzzle: a game the player starts on this
+  // board then saves progress, which must not send it back to "checking".
+  // Without a known player (a board rendered outside the app's
+  // OnboardingGate, as unit tests do) there is no one to ask about.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const needsCheck = useMemo(() => mode === "official" && owner !== null && loadProgress(storageId) === null, [checkKey, mode]);
+
+  const [attempt, setAttempt] = useState(0);
+  const [answer, setAnswer] = useState<{ forKey: string; check: FinishedGameCheck } | null>(null);
+
+  useEffect(() => {
+    if (!needsCheck || !owner) return;
+    let current = true;
+    const settle = (check: FinishedGameCheck) => {
+      if (!current) return;
+      current = false;
+      clearTimeout(timer);
+      setAnswer({ forKey: checkKey, check });
+    };
+    const timer = setTimeout(() => settle({ status: "failed" }), FINISHED_GAME_CHECK_TIMEOUT_MS);
+    lookupFinishedGame(puzzle, owner).then(
+      (found) => settle({ status: "ready", restored: found.status === "found" ? found.game : null }),
+      (err) => {
+        console.error("Could not check for a finished game:", err);
+        settle({ status: "failed" });
+      }
+    );
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+    // checkKey stands for the player and puzzle; attempt is Retry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsCheck, checkKey, attempt]);
+
+  const check: FinishedGameCheck = !needsCheck
+    ? { status: "ready", restored: null }
+    : answer && answer.forKey === checkKey
+      ? answer.check
+      : { status: "checking" };
+
+  if (check.status === "ready") {
+    return <GameBoardView key={checkKey} {...props} owner={owner} restored={check.restored} />;
+  }
+
+  const width = variant === "dailyHomepage" || wideBoard ? "max-w-[840px] px-3 md:px-0" : "max-w-lg px-2";
+  return (
+    <div className={`w-full mx-auto flex flex-col items-center justify-center py-20 text-center ${width}`}>
+      {check.status === "checking" ? (
+        <div role="status" data-testid="finished-check-loading">
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+          <span className="sr-only">Loading</span>
+        </div>
+      ) : (
+        <div data-testid="finished-check-failed">
+          <p className="text-base font-medium">We couldn't load your result for this puzzle.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Check your connection and try again.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setAnswer(null);
+              setAttempt((n) => n + 1);
+            }}
+            className="mt-4 px-5 py-2.5 rounded-full text-sm font-semibold transition-opacity hover:opacity-90 active:scale-95
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            style={{ background: "hsl(var(--foreground))", color: "hsl(var(--background))" }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

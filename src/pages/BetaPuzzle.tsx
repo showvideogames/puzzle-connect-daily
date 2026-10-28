@@ -17,6 +17,7 @@ import { getBetaPuzzleById } from "@/lib/puzzles";
 import { resolvePlayablePuzzle } from "@/lib/puzzleVersion";
 import { loadProgress, clearProgress } from "@/lib/gameProgress";
 import { formatOf, progressStorageId } from "@/lib/puzzleFormat";
+import { useProgressOwner, type ProgressOwner } from "@/lib/progressOwner";
 import { resetBetaPlaytest } from "@/lib/betaPlaytest";
 import { Puzzle } from "@/lib/types";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
@@ -29,13 +30,15 @@ type ModalName = "help" | "settings" | "feedback" | "betaFeedback" | null;
 // The beta progress key for a puzzle, namespaced by its own format so a
 // Mini beta can never share a blob with a Full one. Identical to the old
 // literal `beta:<id>` for a Full puzzle — see progressStorageId.
-function betaStorageKey(puzzle: Pick<Puzzle, "id" | "format">) {
-  return progressStorageId(puzzle.id, formatOf(puzzle), "beta");
+function betaStorageKey(puzzle: Pick<Puzzle, "id" | "format">, owner: ProgressOwner | null) {
+  return progressStorageId(puzzle.id, formatOf(puzzle), "beta", owner);
 }
 
 export default function BetaPuzzle() {
   useGamePageTheme();
   const { puzzleId } = useParams<{ puzzleId: string }>();
+  // Whose browser progress this page reads (lib/progressOwner.ts).
+  const owner = useProgressOwner();
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
@@ -77,7 +80,7 @@ export default function BetaPuzzle() {
         // Same version-pin resolution the Daily/Archive pages use, but keyed
         // to the beta-only progress namespace so this never reads (or
         // collides with) the puzzle's official progress blob.
-        setPuzzle(resolvePlayablePuzzle(p, betaStorageKey(p)));
+        setPuzzle(resolvePlayablePuzzle(p, betaStorageKey(p, owner)));
         setLoading(false);
         trackEvent("beta_puzzle_opened", { puzzle_id: p.id });
       })
@@ -87,7 +90,7 @@ export default function BetaPuzzle() {
         setLoading(false);
       });
     return () => clearTimeout(timeout);
-  }, [puzzleId]);
+  }, [puzzleId, owner]);
 
   const handleSettingsChange = (s: GameSettings) => {
     setSettings(s);
@@ -104,7 +107,7 @@ export default function BetaPuzzle() {
       return;
     }
     await resetBetaPlaytest(puzzle.id);
-    clearProgress(betaStorageKey(puzzle));
+    clearProgress(betaStorageKey(puzzle, owner));
     trackEvent("beta_puzzle_reset", { puzzle_id: puzzle.id });
     // Simplest correct way to give every piece of GameBoard/useGame state a
     // genuinely fresh start (selections, shuffled board, tile colors, guess
@@ -112,9 +115,9 @@ export default function BetaPuzzle() {
     // then re-fetches the CURRENT version, exactly matching "reload the
     // newest current version as a completely fresh playtest."
     window.location.reload();
-  }, [puzzle]);
+  }, [puzzle, owner]);
 
-  const currentPlaytestId = puzzle ? loadProgress(betaStorageKey(puzzle))?.gameSessionId ?? null : null;
+  const currentPlaytestId = puzzle ? loadProgress(betaStorageKey(puzzle, owner))?.gameSessionId ?? null : null;
 
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
