@@ -932,6 +932,52 @@ const CHECKS: Check[] = [
       expect(games.rows[0].n === 0, "the new account inherited history it must not have");
     },
   },
+  {
+    // The streak counts consecutive days WON, per format (migration 0003):
+    // a first win starts it at 1, a first loss at 0, and a loss followed by a
+    // win the next day is a 1-day streak, never 2. Checked on the real
+    // record_streak, for Full and Mini, current and max.
+    name: "streaks count consecutive days won, from the first game, in Full and Mini",
+    async run(db) {
+      const newDevice = async () =>
+        (await db.query<{ device_id: string }>("select device_id from public.create_device_identity()")).rows[0].device_id;
+      const play = (device: string, won: boolean, day: string, format: string) =>
+        db.query("select public.record_streak(null, $1, $2, $3, $4)", [device, won, day, format]);
+      const streak = async (device: string, format: string) => {
+        const r = await db.query<{ current_streak: number; longest_streak: number }>(
+          "select current_streak, longest_streak from public.user_streaks where device_id = $1 and user_id is null and format = $2",
+          [device, format]
+        );
+        expect(r.rows.length === 1, `expected one ${format} streak row for the device, found ${r.rows.length}`);
+        return `${r.rows[0].current_streak}/${r.rows[0].longest_streak}`;
+      };
+
+      for (const format of ["full", "mini"]) {
+        const winner = await newDevice();
+        await play(winner, true, "2026-07-01", format);
+        expect((await streak(winner, format)) === "1/1", `${format}: a first-game win should be streak 1, max 1 (got ${await streak(winner, format)})`);
+
+        const loser = await newDevice();
+        await play(loser, false, "2026-07-01", format);
+        expect((await streak(loser, format)) === "0/0", `${format}: a first-game loss should be streak 0, max 0 (got ${await streak(loser, format)})`);
+
+        const comeback = await newDevice();
+        await play(comeback, false, "2026-07-01", format);
+        await play(comeback, true, "2026-07-02", format);
+        expect((await streak(comeback, format)) === "1/1", `${format}: a loss then a win the next day should be streak 1, max 1 (got ${await streak(comeback, format)})`);
+        // ...and it keeps counting from there.
+        await play(comeback, true, "2026-07-03", format);
+        expect((await streak(comeback, format)) === "2/2", `${format}: a second consecutive win should be streak 2, max 2 (got ${await streak(comeback, format)})`);
+      }
+
+      // One device, both formats on the same day: each keeps its own streak.
+      const both = await newDevice();
+      await play(both, false, "2026-07-01", "full");
+      await play(both, true, "2026-07-01", "mini");
+      expect((await streak(both, "full")) === "0/0", "a Full first-game loss was changed by a Mini win");
+      expect((await streak(both, "mini")) === "1/1", "a Mini first-game win was changed by a Full loss");
+    },
+  },
 ];
 
 async function main(): Promise<number> {

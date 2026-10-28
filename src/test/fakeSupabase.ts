@@ -2074,13 +2074,14 @@ export class FakeSupabase {
 
     if (!row) {
       if (userId == null && (!deviceId || deviceId === "unknown")) return;
+      // First game in this format (migration 0003): only a win starts a streak.
       rows.push({
         id: this._newId(),
         user_id: userId,
         device_id: deviceId,
         format,
-        current_streak: 1,
-        longest_streak: 1,
+        current_streak: won ? 1 : 0,
+        longest_streak: won ? 1 : 0,
         last_played_date: today,
         updated_at: new Date().toISOString(),
       });
