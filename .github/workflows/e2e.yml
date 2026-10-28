@@ -97,7 +97,10 @@ jobs:
 
   browser:
     name: Browser suite (local Supabase)
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04 on 2026-10-28, which this
+    # Playwright version cannot install Chromium on ("Playwright does not
+    # support chromium on ubuntu26.04-x64"). Unpin once Playwright supports it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: schema
     steps:
