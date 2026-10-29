@@ -98,33 +98,34 @@ html {
   }
 
   .dark {
-    --background: 220 15% 10%;
-    --foreground: 40 15% 90%;
+    --background: 0 0% 9%;
+    /* Primary whites are neutral; muted/disabled tokens stay subdued. */
+    --foreground: 0 0% 100%;
 
-    --card: 220 15% 13%;
-    --card-foreground: 40 15% 90%;
+    --card: 0 0% 12%;
+    --card-foreground: var(--foreground);
 
-    --popover: 220 15% 13%;
-    --popover-foreground: 40 15% 90%;
+    --popover: 0 0% 12%;
+    --popover-foreground: var(--foreground);
 
-    --primary: 40 15% 90%;
-    --primary-foreground: 220 15% 10%;
+    --primary: var(--foreground);
+    --primary-foreground: 0 0% 9%;
 
-    --secondary: 220 12% 18%;
-    --secondary-foreground: 40 15% 90%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: var(--foreground);
 
-    --muted: 220 10% 20%;
-    --muted-foreground: 40 5% 55%;
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 65%;
 
-    --accent: 220 12% 18%;
-    --accent-foreground: 40 15% 90%;
+    --accent: 0 0% 18%;
+    --accent-foreground: var(--foreground);
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 10% 22%;
-    --input: 220 10% 22%;
-    --ring: 40 15% 90%;
+    --border: 0 0% 27%;
+    --input: 0 0% 27%;
+    --ring: var(--foreground);
 
     /* Solved category colors (--group-1..4 and their -fg text pair) are
        DELIBERATELY not redeclared here — dark mode used to have its own
@@ -137,20 +138,21 @@ html {
        behind while the background reverts to the light value would make
        the solved-category text illegible. */
 
-    --tile: 220 12% 18%;
-    --tile-selected: 40 15% 85%;
-    --tile-selected-fg: 220 15% 10%;
+    --tile: 0 0% 16%;
+    --tile-selected: 0 0% 30%;
+    --tile-selected-fg: var(--foreground);
 
-    /* Same fixed brand purple as light mode — not theme-adaptive. */
+    /* The flat Submit keeps the brand hue; a slightly deeper fill gives
+       its white normal-size label at least 4.5:1 contrast. */
+    --submit-flat: 258 82% 62%;
+
+    /* Preserve the shared brand gradient tokens for other uses. */
     --brand-purple-from: 255 92% 76%;
     --brand-purple-to: 258 90% 66%;
 
-    /* Redesign tokens: dark mode must render exactly as it did before this
-       redesign, so these are NOT a new dark palette — each one aliases an
-       existing, already-correct dark token as a defensive fallback. The
-       handful of components whose old dark look needs more precision than a
-       generic alias (mistake dots, Shuffle/Clear, Submit) get explicit
-       `dark:`-prefixed overrides at the component level instead. */
+    /* Semantic aliases keep primary whites in sync while preserving dark
+       surfaces and the separate muted/disabled palette. Component-level
+       dark overrides still handle mistake dots, Shuffle/Clear and Submit. */
     --ink: var(--foreground);
     --slate: var(--muted-foreground);
     --pebble: var(--muted-foreground);
@@ -164,13 +166,13 @@ html {
     --disabled-bg: var(--muted);
     --disabled-fg: var(--muted-foreground);
 
-    --sidebar-background: 220 15% 10%;
-    --sidebar-foreground: 40 15% 90%;
-    --sidebar-primary: 40 15% 90%;
-    --sidebar-primary-foreground: 220 15% 10%;
-    --sidebar-accent: 220 12% 18%;
-    --sidebar-accent-foreground: 40 15% 90%;
-    --sidebar-border: 220 10% 22%;
+    --sidebar-background: var(--background);
+    --sidebar-foreground: var(--foreground);
+    --sidebar-primary: var(--foreground);
+    --sidebar-primary-foreground: var(--background);
+    --sidebar-accent: var(--secondary);
+    --sidebar-accent-foreground: var(--foreground);
+    --sidebar-border: var(--border);
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
@@ -241,15 +243,41 @@ html {
   html.layout-refresh:not(.dark) .cloud-tile {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 3px 8px rgba(0, 0, 0, 0.06);
   }
-  .dark .cloud-tile {
-    background: linear-gradient(145deg, #2c2933, #232029);
-    border: 1px solid rgba(255,255,255,0.07);
-    color: #e6e7fb;
-    box-shadow: 0 10px 24px rgba(0,0,0,0.42), 0 3px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+  /* Flat dark tiles: no bevel, gradient or drop shadow. Keyboard focus
+     retains its crisp offset ring, separate from the selection border. */
+  .dark button.tile-base {
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000);
   }
-  .dark .cloud-tile:active {
-    transform: translateY(1px) scale(0.99);
-    box-shadow: 0 5px 12px rgba(0,0,0,0.4), inset 0 2px 5px rgba(0,0,0,0.35);
+  .dark .cloud-tile {
+    background: hsl(var(--tile));
+    color: hsl(var(--foreground));
+  }
+  .dark .tile-neutral {
+    border: 2px solid hsl(var(--tile-border));
+  }
+  .dark .tile-neutral[aria-pressed="true"],
+  .dark .tile-neutral.animate-tile-matched {
+    background: hsl(var(--tile-selected));
+    border-color: hsl(var(--foreground));
+    color: hsl(var(--tile-selected-fg));
+  }
+  /* A dark separator keeps the white selection edge distinct even on the
+     light category paint. Both lines stay inside the existing border box. */
+  .dark .tile-painted[aria-pressed="true"] {
+    border-color: hsl(var(--background));
+    outline: 2px solid hsl(var(--foreground));
+    outline-offset: -2px;
+  }
+  .dark button.game-secondary {
+    background: transparent;
+    border-color: hsl(0 0% 44%);
+  }
+  .dark button.game-secondary:hover:not(:disabled) {
+    background: hsl(var(--muted));
+  }
+  .dark .game-submit {
+    background: hsl(var(--submit-flat));
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000);
   }
 
   /* Background of a tile the player has hand-painted a category color onto

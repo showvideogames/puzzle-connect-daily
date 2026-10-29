@@ -1649,7 +1649,7 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
   // as one group, centred with equal padding on both sides. Rainbow Spotted
   // keeps its rainbow fill as the success message.
   const pillBase = "relative inline-flex h-9 sm:h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full text-[15px] sm:text-base font-extrabold leading-none animate-fade-up motion-reduce:animate-none";
-  const purplePill = `${pillBase} border-2 border-[hsl(var(--brand-purple-to))] bg-white text-[hsl(258_68%_48%)] shadow-[0_2px_8px_-3px_rgba(139,92,246,0.45)] dark:bg-card dark:text-[hsl(var(--brand-purple-from))]`;
+  const purplePill = `${pillBase} border-2 border-[hsl(var(--brand-purple-to))] bg-white text-[hsl(258_68%_48%)] shadow-[0_2px_8px_-3px_rgba(139,92,246,0.45)] dark:shadow-none dark:bg-card dark:text-[hsl(var(--brand-purple-from))]`;
   const feedbackAnnouncement = !feedbackKind
     ? ""
     : alreadyGuessed
@@ -1666,7 +1666,7 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
         onClick={dismissFeedback}
         aria-label="Dismiss"
         className="relative shrink-0 w-7 h-7 rounded-full flex items-center justify-center
-          bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))] text-white
+          game-submit bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))] text-white
           before:absolute before:-inset-2 before:content-[''] active:scale-95 transition-transform
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
@@ -1915,7 +1915,7 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
             <button
               onClick={shuffle}
               disabled={isChecking || reveal !== null}
-              className={`w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold transition-colors
+              className={`game-secondary w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold transition-colors
                 bg-action-secondary-bg text-action-secondary-fg border border-transparent
                 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
                 dark:bg-secondary dark:text-foreground dark:border-border
@@ -1929,7 +1929,7 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
             <button
               onClick={handleDeselectAll}
               disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
-              className={`w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold transition-colors
+              className={`game-secondary w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold transition-colors
                 border border-transparent
                 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
                 dark:bg-secondary dark:text-foreground dark:border-border
@@ -1947,7 +1947,7 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
             <button
               onClick={handleSubmit}
               disabled={state.selectedWords.length !== format.answersPerCategory || isChecking || reveal !== null}
-              className={`w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold text-white transition-all
+              className={`game-submit w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold text-white transition-all
                 bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
                 shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]
                 hover:-translate-y-px active:scale-95
@@ -1970,7 +1970,7 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
               <div aria-hidden="true" />
               <button
                 onClick={clearAllColors}
-                className="w-full h-12 rounded-full text-sm md:text-base font-bold transition-colors
+                className="game-secondary w-full h-12 rounded-full text-sm md:text-base font-bold transition-colors
                   bg-action-secondary-bg text-action-secondary-fg border border-transparent
                   dark:bg-transparent dark:border-border
                   dark:hover:bg-muted active:scale-95 dark:disabled:opacity-40
