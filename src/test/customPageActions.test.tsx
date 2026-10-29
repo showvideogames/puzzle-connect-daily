@@ -101,8 +101,8 @@ beforeEach(async () => {
   window.scrollTo = () => {};
 });
 
-async function renderPage() {
-  const { shareId } = await createCustomPuzzle(INPUT);
+async function renderPage(input = INPUT) {
+  const { shareId } = await createCustomPuzzle(input);
   const view = render(
     <HelmetProvider>
       <MemoryRouter initialEntries={[`/custom/${shareId}`]}>
@@ -113,7 +113,7 @@ async function renderPage() {
       </MemoryRouter>
     </HelmetProvider>
   );
-  await screen.findByText("Select four words that share a connection.");
+  await screen.findByText(`Select ${input.content.format === "mini" ? "three" : "four"} words that share a connection.`);
   return { shareId, view };
 }
 
@@ -226,4 +226,16 @@ describe("bottom CTA", () => {
     expect(parseSupportUrl("not a url")).toBeNull();
     expect(parseSupportUrl("https://ko-fi.com/x")).toBe("https://ko-fi.com/x");
   });
+});
+
+
+it.each(["mini", "full"] as const)("custom %s help uses the loaded puzzle format", async (format) => {
+  const size = format === "mini" ? 3 : 4;
+  const groups = INPUT.content.groups.slice(0, size).map(group => ({ ...group, words: group.words.slice(0, size) }));
+  await renderPage({ ...INPUT, content: { ...INPUT.content, format, groups, wordOrder: groups.flatMap(group => group.words) } });
+  fireEvent.click(await screen.findByRole("button", { name: /Settings/ }));
+  fireEvent.click(screen.getByRole("button", { name: /How to Play/i }));
+  fireEvent.click(screen.getByRole("button", { name: "How to Play" }));
+  const count = format === "mini" ? "three" : "four";
+  expect(screen.getByText(new RegExp(`Find ${count} groups of ${count} words`))).toBeInTheDocument();
 });

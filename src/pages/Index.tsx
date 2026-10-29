@@ -356,7 +356,7 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
       )}
 
       <StatsModal open={activeModal === "stats"} onClose={closeModal} format={format} />
-      <TutorialModal
+      <TutorialModal format={format}
         open={activeModal === "help"}
         onClose={handleTutorialClose}
       />

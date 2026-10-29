@@ -13,6 +13,7 @@
  *   /__fixtures/mini             a Classic Mini 3×3 board
  *   /__fixtures/mini?rainbow=1   a Rainbow Mini — one answer per category
  *   /__fixtures/mini?format=full the same fixture as a Full 4×4, for comparison
+ *   /__fixtures/mini?help=1      isolated format-aware tutorial (no game board)
  *   /__fixtures/mini?long=1      the longest answers the tiles must survive
  *   /__fixtures/mini?emoji=1     every category carries a Category Emoji
  *   /__fixtures/mini?hintonly=1  the same, but the last category's visual is
@@ -26,6 +27,7 @@
  * solved-answers row has to hold three long words on a 320px screen, and
  * ?rainbow=1&hintonly=1 shows Hint Only on both kinds of solved bar at once.
  */
+import { TutorialModal } from "@/components/TutorialModal";
 import { useSearchParams } from "react-router-dom";
 import { GameBoard } from "@/components/GameBoard";
 import { GameHeader } from "@/components/GameHeader";
@@ -119,6 +121,10 @@ export default function MiniFixtures() {
   const hint = params.get("hint") === "1";
   const puzzle = fixturePuzzle(formatId, long, rainbow, emoji, hintOnly);
   const format = getFormat(formatId);
+
+  if (params.get("help") === "1") {
+    return <TutorialModal open onClose={() => {}} format={format} />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
