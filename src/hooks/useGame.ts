@@ -112,6 +112,14 @@ export function useGame(
     restored?: RestoredGame | null;
   } = {}
 ) {
+  // Reveals belong to this mounted board; their durable outcome is saved
+  // immediately, independently of the animation finishing.
+  const lossRevealTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => {
+    lossRevealTimers.current.forEach(clearTimeout);
+    lossRevealTimers.current = [];
+  }, []);
+
   /**
    * This board's shape — grid size, category count, answers per category,
    * colour order, mistake allowance and whether a Rainbow can exist at all.
@@ -655,6 +663,15 @@ export function useGame(
     if (state.solvedGroups.length > 0 || state.mistakes > 0 || state.guessHistory.length > 0) {
       saveProgress(storageId, {
         solvedGroups: state.solvedGroups,
+        // The reveal is presentation only. A refresh mid-animation must
+        // already have the full finished board, with no timer writing later.
+        ...(state.isComplete && !state.isWon ? {
+          finalSolvedGroups: [...state.solvedGroups, ...puzzle.groups
+            .map((g, i) => ({ idx: i, diff: g.difficulty }))
+            .sort((a, b) => a.diff - b.diff)
+            .map((g) => g.idx)
+            .filter((i) => !state.solvedGroups.includes(i))],
+        } : {}),
         mistakes: state.mistakes,
         guessHistory: state.guessHistory,
         gotRainbow: state.gotRainbow,
@@ -1299,36 +1316,13 @@ export function useGame(
             .map((item) => item.idx);
 
           const unsolvedIndices = sortedIndices.filter((idx) => !state.solvedGroups.includes(idx));
-          const finalSolvedGroups = [...state.solvedGroups, ...unsolvedIndices];
-
           unsolvedIndices.forEach((groupIdx, i) => {
-            setTimeout(() => {
+            lossRevealTimers.current.push(setTimeout(() => {
               const solvedWords = puzzle.groups[groupIdx].words;
               setLastRevealedGroup(groupIdx);
               setShuffledWords((prev) => prev.filter((w) => !solvedWords.includes(w)));
               setState((s) => ({ ...s, solvedGroups: [...s.solvedGroups, groupIdx] }));
-
-              if (i === unsolvedIndices.length - 1) {
-                saveProgress(storageId, {
-                  solvedGroups: finalSolvedGroups,
-                  finalSolvedGroups,
-                  mistakes: newMistakes,
-                  guessHistory: fullGuessHistory,
-                  gotRainbow: state.gotRainbow,
-                  rainbowSolveIndex: state.rainbowSolveIndex,
-                  shuffledWords: [],
-                  rainbowWords,
-                  isComplete: true,
-                  isWon: false,
-                  tileColors,
-                  smallHintUsed: effectiveSmallHintUsed,
-                  fullHintUsed: effectiveFullHintUsed,
-                  activeTimeSeconds: activeSecondsRef.current,
-        gameSessionId: sessionIdRef.current,
-        puzzleSnapshot,
-                });
-              }
-            }, 800 + i * 1500);
+            }, 800 + i * 1500));
           });
         }
       }

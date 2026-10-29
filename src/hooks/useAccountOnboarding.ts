@@ -90,12 +90,15 @@ export function useAccountOnboarding() {
   const [owner, setOwner] = useState<ProgressOwner | null>(null);
   const ownerRef = useRef<ProgressOwner | null>(null);
   const running = useRef(false);
+  const identityEpoch = useRef(0);
+  const decisionInFlight = useRef(false);
   // A check asked for while another is running. The running one's answer may
   // describe a player who has since signed in or out, so it is thrown away
   // and the check runs again.
   const rerun = useRef(false);
 
   const resolve = useCallback(async (): Promise<{ state: OnboardingPhase; owner: ProgressOwner }> => {
+    const epoch = identityEpoch.current;
     // Who is playing, as far as this browser knows. A guest is this
     // browser's device identity ("unknown" only for a browser that cannot
     // store one, where no progress can be saved anyway).
@@ -209,7 +212,20 @@ export function useAccountOnboarding() {
             },
             owner,
           };
-        case "already_decided":
+        case "already_decided": {
+          // A decision can retire the device before its response arrives,
+          // including after the player has switched accounts. Readiness
+          // requires a usable credential, not just a resolved decision.
+          const replacement = await createDeviceIdentity(() =>
+            identityEpoch.current === epoch
+            && getDeviceId() === identity.deviceId
+            && getDeviceToken() === identity.deviceToken
+          );
+          return {
+            state: { phase: replacement ? "ready" : "saving_unavailable" },
+            owner,
+          };
+        }
         case "no_guest_history":
         case "unauthenticated":
           return { state: { phase: "ready" }, owner };
@@ -270,6 +286,9 @@ export function useAccountOnboarding() {
       const current = ownerRef.current;
       const nextUserId = event === "SIGNED_OUT" ? null : session?.user?.id ?? null;
       const currentUserId = current?.kind === "account" ? current.userId : null;
+      if (event === "SIGNED_OUT" || nextUserId !== currentUserId) {
+        identityEpoch.current++;
+      }
       if (current && (event === "SIGNED_OUT" || nextUserId !== currentUserId)) {
         ownerRef.current = null;
         setOwner(null);
@@ -285,63 +304,58 @@ export function useAccountOnboarding() {
     window.addEventListener("online", recheck);
 
     return () => {
+      identityEpoch.current++;
       subscription.unsubscribe();
       window.removeEventListener("focus", recheck);
       window.removeEventListener("online", recheck);
     };
   }, [check]);
 
-  /**
-   * After either decision the source device is retired server-side, so this
-   * browser must mint a fresh one before it writes any more gameplay —
-   * otherwise every subsequent write would fail its device check.
-   */
-  const rotateAfterDecision = useCallback(async () => {
-    try {
-      await createDeviceIdentity();
-    } catch {
-      // A failed mint leaves the player effectively storage-blocked, which
-      // the rest of the app already tolerates.
-    }
-  }, []);
-
-  const addMyProgress = useCallback(async () => {
+  // A decision belongs to the account and guest device that were visible
+  // when it was made. Auth can change while either RPC is in flight.
+  const decide = useCallback(async (importProgress: boolean) => {
+    const account = ownerRef.current;
+    if (state.phase !== "decision" || account?.kind !== "account" || decisionInFlight.current) return;
+    const epoch = identityEpoch.current;
     const guestDeviceId = getDeviceId();
-    const { data, error } = await supabase.rpc("import_guest_history", {
-      _device_id: guestDeviceId,
-      _device_token: getDeviceToken(),
-    });
-    const row = (Array.isArray(data) ? data[0] : data) as { outcome?: string } | null;
-    if (error || !row || (row.outcome !== "imported" && row.outcome !== "already_decided")) {
-      // Left undecided on purpose: a failed import must not consume the
-      // opportunity. Re-checking shows the choice again.
-      await check();
-      return;
+    const guestDeviceToken = getDeviceToken();
+    const stillCurrent = () => identityEpoch.current === epoch
+      && sameOwner(ownerRef.current, account)
+      && getDeviceId() === guestDeviceId
+      && getDeviceToken() === guestDeviceToken;
+    decisionInFlight.current = true;
+    try {
+      const { data, error } = await supabase.rpc(
+        importProgress ? "import_guest_history" : "decline_guest_history",
+        { _device_id: guestDeviceId, _device_token: guestDeviceToken }
+      );
+      if (!stillCurrent()) return;
+      const row = (Array.isArray(data) ? data[0] : data) as { outcome?: string } | null;
+      const success = importProgress ? "imported" : "started_fresh";
+      if (error || !row || (row.outcome !== success && row.outcome !== "already_decided")) {
+        await check();
+        return;
+      }
+      // "already_decided" does not say which decision won, so never copy it.
+      if (importProgress && row.outcome === "imported") {
+        copyGuestProgressToAccount(guestDeviceId, account.userId);
+      }
+      // Do not let an old identity mint overwrite the next player's device.
+      await createDeviceIdentity(stillCurrent);
+      if (identityEpoch.current === epoch && sameOwner(ownerRef.current, account)) {
+        await check();
+      }
+    } catch {
+      // Transport failures leave the choice recoverable, including rejected
+      // promises rather than just Supabase's usual error return value.
+      if (identityEpoch.current === epoch && sameOwner(ownerRef.current, account)) await check();
+    } finally {
+      decisionInFlight.current = false;
     }
-    // The player said yes and the server moved their games: their boards in
-    // this browser come with them. Only on "imported" — "already_decided"
-    // says nothing about which way an earlier decision went.
-    const current = ownerRef.current;
-    if (row.outcome === "imported" && current?.kind === "account") {
-      copyGuestProgressToAccount(guestDeviceId, current.userId);
-    }
-    await rotateAfterDecision();
-    setState({ phase: "ready" });
-  }, [check, rotateAfterDecision]);
+  }, [check, state.phase]);
 
-  const startFresh = useCallback(async () => {
-    const { data, error } = await supabase.rpc("decline_guest_history", {
-      _device_id: getDeviceId(),
-      _device_token: getDeviceToken(),
-    });
-    const row = (Array.isArray(data) ? data[0] : data) as { outcome?: string } | null;
-    if (error || !row || (row.outcome !== "started_fresh" && row.outcome !== "already_decided")) {
-      await check();
-      return;
-    }
-    await rotateAfterDecision();
-    setState({ phase: "ready" });
-  }, [check, rotateAfterDecision]);
+  const addMyProgress = useCallback(() => decide(true), [decide]);
+  const startFresh = useCallback(() => decide(false), [decide]);
 
   return { state, owner, recheck: check, addMyProgress, startFresh };
 }

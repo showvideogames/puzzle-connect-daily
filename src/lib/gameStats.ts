@@ -82,14 +82,17 @@ export function getDeviceIdentity(): DeviceIdentity | null {
  * Used on sign-out (so post-logout play is a genuinely separate guest, not a
  * continuation of the account holder's browser) and to replace a pre-cutover
  * id that has no token and can never be verified again.
+ * shouldStore lets a caller discard a response after its player changed.
  */
-export async function createDeviceIdentity(): Promise<DeviceIdentity | null> {
+export async function createDeviceIdentity(
+  shouldStore: () => boolean = () => true
+): Promise<DeviceIdentity | null> {
   const { data, error } = await supabase.rpc("create_device_identity");
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   const deviceId = (row as { device_id?: string } | null)?.device_id;
   const deviceToken = (row as { device_token?: string } | null)?.device_token;
-  if (!deviceId || !deviceToken) return null;
+  if (!deviceId || !deviceToken || !shouldStore()) return null;
   try {
     localStorage.setItem(DEVICE_ID_KEY, deviceId);
     localStorage.setItem(DEVICE_TOKEN_KEY, deviceToken);
