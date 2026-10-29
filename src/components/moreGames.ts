@@ -2,38 +2,38 @@
 export const moreGames = [
   {
     "title": "CrossPuns",
-    "description": "A crossword with a twist",
+    "description": "Clever crosswords that’ll have you laughing out loud.",
     "href": "https://crosspuns.com/",
     "icon": "crosspuns"
   },
   {
     "title": "Cluevoyance",
-    "description": "Follow the clues",
+    "description": "A word association game best played with friends.",
     "href": "https://cluevoyance.com/",
     "icon": "cluevoyance"
   },
   {
     "title": "Hamburgle",
-    "description": "The buns are given. Find the filling.",
+    "description": "A bite-sized, Wordle-style game.",
     "href": "https://hamburgle.com/",
     "icon": "hamburgle"
   },
   {
     "title": "Yodel",
-    "description": "Another daily challenge",
+    "description": "A Family Feud-style daily climb.",
     "href": "https://yodel.gg/",
     "icon": "yodel"
   },
   {
     "title": "Price Is What?!",
-    "description": "Put your price sense to the test",
+    "description": "Guess yesterday’s prices in today’s dollars.",
     "href": "https://priceiswhat.com/",
     "icon": "price-is-what"
   },
   {
     "title": "What The Fudge Trivia",
-    "description": "A little trivia. A little surprise.",
-    "href": "https://wtf-trivia.vercel.app/",
+    "description": "A simple, hilarious quiz that’ll have you saying WTF?!",
+    "href": "https://whatthefudge.gg",
     "icon": "what-the-fudge"
   }
 ] as const;
