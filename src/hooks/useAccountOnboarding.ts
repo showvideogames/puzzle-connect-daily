@@ -98,6 +98,7 @@ export function useAccountOnboarding() {
   const rerun = useRef(false);
 
   const resolve = useCallback(async (): Promise<{ state: OnboardingPhase; owner: ProgressOwner }> => {
+    const epoch = identityEpoch.current;
     // Who is playing, as far as this browser knows. A guest is this
     // browser's device identity ("unknown" only for a browser that cannot
     // store one, where no progress can be saved anyway).
@@ -211,7 +212,20 @@ export function useAccountOnboarding() {
             },
             owner,
           };
-        case "already_decided":
+        case "already_decided": {
+          // A decision can retire the device before its response arrives,
+          // including after the player has switched accounts. Readiness
+          // requires a usable credential, not just a resolved decision.
+          const replacement = await createDeviceIdentity(() =>
+            identityEpoch.current === epoch
+            && getDeviceId() === identity.deviceId
+            && getDeviceToken() === identity.deviceToken
+          );
+          return {
+            state: { phase: replacement ? "ready" : "saving_unavailable" },
+            owner,
+          };
+        }
         case "no_guest_history":
         case "unauthenticated":
           return { state: { phase: "ready" }, owner };

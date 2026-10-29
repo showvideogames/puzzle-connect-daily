@@ -832,6 +832,10 @@ describe("pending guest decisions stay with the player who made them", () => {
     expect(localStorage.getItem(progressKey(storageId))).toBe(guestSave);
     expect(getDeviceId()).toBe(deviceBefore);
     expect(hook.result.current.owner).toEqual(BOB);
+    await playOnAnotherDevice(BOB, [Y]);
+    const bobsSessions = sessions().filter((session) => session.user_id === "user-bob");
+    expect(bobsSessions).toHaveLength(1);
+    expect(db.tables.guess_events.some((guess) => guess.game_session_id === bobsSessions[0].id)).toBe(true);
   });
 
   it.each(["addMyProgress", "startFresh"] as const)("a late %s does not resolve the next player's pending check", async (decision) => {
@@ -959,4 +963,33 @@ describe("guest decision recovery", () => {
     expect(getDeviceId()).toBe(deviceBefore);
     expect(hook.result.current.owner).toEqual({ kind: "guest", deviceId: deviceBefore });
   });
+});
+
+
+it("a retired credential stays saving-unavailable until a replacement can be minted", async () => {
+  await playOnAnotherDevice(guestOwner(), [Y]);
+  const retiredDevice = getDeviceId();
+  db.signIn("user-alice");
+  await db.rpc("import_guest_history", {
+    _device_id: retiredDevice,
+    _device_token: localStorage.getItem("rc-device-token"),
+  });
+  db.signIn("user-bob");
+  const rpc = db.rpc.bind(db);
+  const spy = vi.spyOn(db, "rpc").mockImplementation(async (name, args) => {
+    if (name === "create_device_identity") throw new Error("offline");
+    return rpc(name, args);
+  });
+  const hook = renderHook(() => useAccountOnboarding());
+  await settle();
+  expect(hook.result.current.owner).toEqual(BOB);
+  expect(hook.result.current.state.phase).toBe("saving_unavailable");
+  expect(getDeviceId()).toBe(retiredDevice);
+  spy.mockRestore();
+  await act(async () => hook.result.current.recheck());
+  expect(hook.result.current.state.phase).toBe("ready");
+  expect(getDeviceId()).not.toBe(retiredDevice);
+  expect(progressKeys().some((key) => key.includes("acct:user-bob/"))).toBe(false);
+  await playOnAnotherDevice(BOB, [Y]);
+  expect(sessions().filter((session) => session.user_id === "user-bob")).toHaveLength(1);
 });
