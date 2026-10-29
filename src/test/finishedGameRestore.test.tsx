@@ -236,6 +236,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   auth.gate = null;
 });
 
@@ -796,5 +797,166 @@ describe("the player the app shows progress for", () => {
     await settle();
 
     expect(progressKeys().some((k) => k.includes("acct:user-alice/"))).toBe(false);
+  });
+});
+
+
+describe("pending guest decisions stay with the player who made them", () => {
+  it("a late import never copies Alice's guest boards into Bob's account", async () => {
+    const { storageId } = await playOnAnotherDevice(guestOwner(), [Y]);
+    const guestSave = localStorage.getItem(progressKey(storageId));
+    db.signIn("user-alice");
+    const hook = renderHook(() => useAccountOnboarding());
+    await settle();
+    expect(hook.result.current.state.phase).toBe("decision");
+
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const rpc = db.rpc.bind(db);
+    vi.spyOn(db, "rpc").mockImplementation(async (name, args) => {
+      const answer = await rpc(name, args);
+      if (name === "import_guest_history") await gate;
+      return answer;
+    });
+    let pending!: Promise<void>;
+    act(() => { pending = hook.result.current.addMyProgress(); });
+    await settle();
+    db.signIn("user-bob");
+    act(() => auth.listener?.("SIGNED_IN", { user: { id: "user-bob" } }));
+    await settle();
+    expect(hook.result.current.owner).toEqual(BOB);
+    const deviceBefore = getDeviceId();
+    await act(async () => { release(); await pending; });
+
+    expect(localStorage.getItem(progressKey(progressStorageId(FULL.id, FULL_FORMAT, "official", BOB)))).toBeNull();
+    expect(localStorage.getItem(progressKey(storageId))).toBe(guestSave);
+    expect(getDeviceId()).toBe(deviceBefore);
+    expect(hook.result.current.owner).toEqual(BOB);
+  });
+
+  it.each(["addMyProgress", "startFresh"] as const)("a late %s does not resolve the next player's pending check", async (decision) => {
+    await playOnAnotherDevice(guestOwner(), [Y]);
+    db.signIn("user-alice");
+    const hook = renderHook(() => useAccountOnboarding());
+    await settle();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const rpc = db.rpc.bind(db);
+    vi.spyOn(db, "rpc").mockImplementation(async (name, args) => {
+      const answer = await rpc(name, args);
+      if (name === "import_guest_history" || name === "decline_guest_history") await gate;
+      return answer;
+    });
+    let pending!: Promise<void>;
+    act(() => { pending = hook.result.current[decision](); });
+    await settle();
+    let releaseAuth!: () => void;
+    auth.gate = new Promise<void>((r) => (releaseAuth = r));
+    db.signIn(null);
+    act(() => auth.listener?.("SIGNED_OUT", null));
+    await settle();
+    const deviceBefore = getDeviceId();
+    await act(async () => { release(); await pending; });
+    expect(hook.result.current.state.phase).toBe("checking");
+    expect(hook.result.current.owner).toBeNull();
+    expect(getDeviceId()).toBe(deviceBefore);
+    auth.gate = null;
+    await act(async () => releaseAuth());
+    await settle();
+  });
+});
+
+
+it("a loss saves its final board before revealing it and never rewrites storage after unmount", async () => {
+  db.signIn("user-alice");
+  const { storageId } = await playOnAnotherDevice(ALICE, [
+    Y, ["g1", "g2", "b1", "b2"], ["g1", "g3", "b1", "b3"],
+    ["g2", "g4", "r1", "r2"], ["b4", "g4", "r3", "r4"],
+  ]);
+  expect(loadProgress(storageId)?.finalSolvedGroups).toEqual([0, 1, 2, 3]);
+  const reopened = renderHook(() => useGame(FULL, { owner: ALICE }));
+  expect(reopened.result.current.state.isComplete).toBe(true);
+  expect(reopened.result.current.remainingWords).toEqual([]);
+  reopened.unmount();
+  forgetThisBrowser(storageId);
+  const finalizeCount = db.rpcLog.filter((n) => n === "finalize_game_session").length;
+  await settle(4000);
+  expect(localStorage.getItem(progressKey(storageId))).toBeNull();
+  expect(db.rpcLog.filter((n) => n === "finalize_game_session")).toHaveLength(finalizeCount);
+});
+
+
+describe("guest decision recovery", () => {
+  it("serializes competing clicks so only the first decision is sent", async () => {
+    await playOnAnotherDevice(guestOwner(), [Y]);
+    db.signIn("user-alice");
+    const hook = renderHook(() => useAccountOnboarding());
+    await settle();
+    const rpc = db.rpc.bind(db);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    vi.spyOn(db, "rpc").mockImplementation(async (name, args) => {
+      if (name === "import_guest_history") await gate;
+      return rpc(name, args);
+    });
+    let pending!: Promise<void>;
+    act(() => { pending = hook.result.current.addMyProgress(); });
+    await act(async () => {
+      await hook.result.current.addMyProgress();
+      await hook.result.current.startFresh();
+    });
+    await act(async () => { release(); await pending; });
+    expect(db.rpcLog.filter((n) => n === "import_guest_history")).toHaveLength(1);
+    expect(db.rpcLog).not.toContain("decline_guest_history");
+    expect(hook.result.current.state.phase).toBe("ready");
+  });
+
+  it("a failed request keeps the decision recoverable", async () => {
+    await playOnAnotherDevice(guestOwner(), [Y]);
+    db.signIn("user-alice");
+    const hook = renderHook(() => useAccountOnboarding());
+    await settle();
+    const rpc = db.rpc.bind(db);
+    const spy = vi.spyOn(db, "rpc").mockImplementation(async (name, args) => {
+      if (name === "import_guest_history") throw new Error("offline");
+      return rpc(name, args);
+    });
+    await act(async () => hook.result.current.addMyProgress());
+    expect(hook.result.current.state.phase).toBe("decision");
+    expect(progressKeys().some((k) => k.includes("acct:user-alice/"))).toBe(false);
+    spy.mockRestore();
+    await act(async () => hook.result.current.addMyProgress());
+    expect(hook.result.current.state.phase).toBe("ready");
+  });
+
+  it("an identity mint finishing after sign-out cannot replace the new guest's identity", async () => {
+    await playOnAnotherDevice(guestOwner(), [Y]);
+    db.signIn("user-alice");
+    const hook = renderHook(() => useAccountOnboarding());
+    await settle();
+    const rpc = db.rpc.bind(db);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let held = false;
+    vi.spyOn(db, "rpc").mockImplementation(async (name, args) => {
+      const answer = await rpc(name, args);
+      if (name === "create_device_identity" && !held) {
+        held = true;
+        await gate;
+      }
+      return answer;
+    });
+    let pending!: Promise<void>;
+    act(() => { pending = hook.result.current.startFresh(); });
+    await settle();
+    expect(held).toBe(true);
+    db.signIn(null);
+    act(() => auth.listener?.("SIGNED_OUT", null));
+    await settle();
+    const deviceBefore = getDeviceId();
+    expect(hook.result.current.owner).toEqual({ kind: "guest", deviceId: deviceBefore });
+    await act(async () => { release(); await pending; });
+    expect(getDeviceId()).toBe(deviceBefore);
+    expect(hook.result.current.owner).toEqual({ kind: "guest", deviceId: deviceBefore });
   });
 });
