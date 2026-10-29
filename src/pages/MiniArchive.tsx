@@ -313,7 +313,7 @@ export default function MiniArchive() {
       </div>
 
       <StatsModal open={activeModal === "stats"} onClose={() => setActiveModal(null)} format={format} />
-      <TutorialModal open={activeModal === "help"} onClose={() => setActiveModal(null)} />
+      <TutorialModal format={format} open={activeModal === "help"} onClose={() => setActiveModal(null)} />
       <SettingsModal
         format={format}
         open={activeModal === "settings"}

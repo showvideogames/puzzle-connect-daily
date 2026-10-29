@@ -208,7 +208,7 @@ export default function CustomPuzzle() {
       {puzzle && !error && !loading && <CustomPuzzleCta supportUrl={getSupportUrl()} />}
 
       <StatsModal open={activeModal === "stats"} onClose={() => setActiveModal(null)} />
-      <TutorialModal open={activeModal === "help"} onClose={() => setActiveModal(null)} />
+      <TutorialModal format={formatOf(puzzle)} open={activeModal === "help"} onClose={() => setActiveModal(null)} />
       <SettingsModal
         open={activeModal === "settings"}
         onClose={() => setActiveModal(null)}

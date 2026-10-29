@@ -9,7 +9,7 @@
  * right puzzle.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { FakeSupabase } from "./fakeSupabase";
@@ -206,4 +206,24 @@ describe("20. existing Full routes still load", () => {
     expect(MINI_FORMAT.archivePath).toBe("/mini/archive");
     expect(MINI_FORMAT.archivePuzzlePath("abc")).toBe("/mini/archive/abc");
   });
+});
+
+
+describe("format-aware help entrypoints", () => {
+  for (const [path, element, routePath, count] of [
+    ["/mini", <MiniDaily />, "/mini", "three"],
+    [`/mini/archive/${MINI_OLD_ID}`, <MiniArchivePuzzle />, "/mini/archive/:puzzleId", "three"],
+    ["/mini/archive", <MiniArchive />, "/mini/archive", "three"],
+    ["/", <Index />, "/", "four"],
+    [`/archive/${FULL_OLD_ID}`, <ArchivePuzzlePage />, "/archive/:puzzleId", "four"],
+  ] as const) {
+    it(`opens the correct guide from ${path}`, async () => {
+      renderAt(path, element, routePath);
+      const settings = await screen.findByRole("button", { name: /Settings/ });
+      fireEvent.click(settings);
+      fireEvent.click(screen.getByRole("button", { name: /How to Play/i }));
+      fireEvent.click(screen.getByRole("button", { name: "How to Play" }));
+      expect(screen.getByText(new RegExp(`Find ${count} groups of ${count} words`))).toBeInTheDocument();
+    });
+  }
 });
