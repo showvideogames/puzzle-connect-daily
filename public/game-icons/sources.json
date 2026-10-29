@@ -1,0 +1,44 @@
+[
+  {
+    "title": "CrossPuns",
+    "subtitle": "A crossword with a twist",
+    "url": "https://crosspuns.com/",
+    "asset": "/game-icons/crosspuns.png",
+    "sourceAsset": "https://crosspuns.com/apple-touch-icon.png"
+  },
+  {
+    "title": "Cluevoyance",
+    "subtitle": "Follow the clues",
+    "url": "https://cluevoyance.com/",
+    "asset": "/game-icons/cluevoyance.png",
+    "sourceAsset": "https://cluevoyance.com/apple-touch-icon.png"
+  },
+  {
+    "title": "Yodel",
+    "subtitle": "Another daily challenge",
+    "url": "https://yodel.gg/",
+    "asset": "/game-icons/yodel.png",
+    "sourceAsset": "https://yodel.gg/apple-touch-icon.png"
+  },
+  {
+    "title": "Price Is What?!",
+    "subtitle": "Put your price sense to the test",
+    "url": "https://priceiswhat.com/",
+    "asset": "/game-icons/price-is-what.png",
+    "sourceAsset": "https://priceiswhat.com/brand/apple-touch-icon-20261027b.png"
+  },
+  {
+    "title": "What The Fudge Trivia",
+    "subtitle": "A little trivia. A little surprise.",
+    "url": "https://wtf-trivia.vercel.app/",
+    "asset": "/game-icons/what-the-fudge.png",
+    "sourceAsset": "https://wtf-trivia.vercel.app/apple-touch-icon.png"
+  },
+  {
+    "title": "Hamburgle",
+    "subtitle": "The buns are given. Find the filling.",
+    "url": "https://hamburgle.com/",
+    "asset": "/game-icons/hamburgle.png",
+    "sourceAsset": "https://hamburgle.com/icon-192.png"
+  }
+]
