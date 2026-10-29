@@ -561,19 +561,11 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   //   only ever changing its color removes that outside-the-box halo
   //   entirely — the border paints inside the box, so it can never overlap
   //   a neighbour regardless of gap size.
-  // - Normal tiles: inverted charcoal/plum + white when selected, with a
-  //   border that matches the selected background exactly — border-tile-
-  //   selected resolves against the same --tile-selected variable as the
-  //   fill in both themes, so it's always seamless/invisible without a
-  //   dark:-specific override. This used to be dark:border-0 in dark mode
-  //   (a real 0px border), while the unselected .cloud-tile class carries
-  //   its own 1px border in both themes — so selecting a tile switched its
-  //   border-box from 1px to 0px, visibly shifting it out of alignment with
-  //   its grid neighbours for the duration of the transition. Keeping
-  //   border-width constant at 1px in every state and only ever changing
-  //   color removes that geometry change entirely.
+  // - Neutral tiles: light mode keeps the inverted fill. Dark mode uses
+  //   a lighter charcoal fill and a white border (tile-neutral in CSS).
+  //   Border width stays fixed in each theme, so selection cannot reflow.
   const stateClasses = isMatched
-    ? "bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
+    ? "tile-neutral bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
       ? themedRainbow
         ? `text-white shadow-md border-[3px] md:border-[4px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
@@ -599,10 +591,10 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         // the neutral-tile comment above, just a wider box on desktop. 3px
         // on mobile is unchanged from before; 4px only kicks in at the
         // existing md: breakpoint, where the tile itself is already bigger.
-        ? `${colorStyle.bg} ${colorStyle.text} hover:shadow-sm active:scale-95 border-[3px] md:border-[4px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
+        ? `tile-painted ${colorStyle.bg} ${colorStyle.text} hover:shadow-sm active:scale-95 border-[3px] md:border-[4px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
         : isSelected
-          ? "bg-tile-selected text-tile-selected-fg border border-tile-selected active:scale-95"
-          : "cloud-tile active:scale-95";
+          ? "tile-neutral bg-tile-selected text-tile-selected-fg border border-tile-selected active:scale-95"
+          : "tile-neutral cloud-tile active:scale-95";
 
   return (
     <div
