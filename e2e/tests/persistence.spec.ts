@@ -51,8 +51,8 @@ test.describe("Refresh restores an unfinished game", () => {
     await expect(tiles(page)).toHaveCount(12);
 
     // The progress blob is keyed by the puzzle's own id for a Full official
-    // game — unprefixed, which is the compatibility contract in
-    // progressStorageId().
+    // game, under this player's own prefix (readProgress reads it the way
+    // the app does — see progressStorageId()).
     const progress = await readProgress(page, seed.official.fullRainbow.id);
     expect(progress).not.toBeNull();
     expect(progress!.mistakes).toBe(1);
@@ -201,8 +201,9 @@ test.describe("Guest identity", () => {
 
     // Declining must leave the anonymous rows exactly as they were. This is
     // the assertion that would catch an account quietly adopting history it
-    // was never given.
-    await expect(tiles(page)).toHaveCount(12, { timeout: 20_000 });
+    // was never given — and the guest's half-played board in this browser
+    // stays the guest's too: the account gets a fresh one.
+    await expect(tiles(page)).toHaveCount(16, { timeout: 20_000 });
     const after = await admin
       .from("game_sessions")
       .select("user_id")

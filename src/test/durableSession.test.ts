@@ -42,6 +42,7 @@ vi.mock("@/lib/analytics", () => ({ trackEvent: () => {} }));
 import { useGame } from "@/hooks/useGame";
 import { loadStatsFromSupabase, getDeviceId } from "@/lib/gameStats";
 import { progressKey } from "@/lib/gameProgress";
+import { lookupFinishedGame } from "@/lib/finishedGame";
 
 const PUZZLE_ID = "puzzle-1";
 
@@ -533,7 +534,7 @@ describe("K. daily replay", () => {
     await guess(view, ["y1", "y2", "g2", "r1"]);
   }
 
-  it("locks the board on return, so a replay cannot even begin", async () => {
+  it("opens the finished game on return, so a replay cannot even begin", async () => {
     const first = mount();
     await playToLoss(first);
     const officialId = sessions()[0].id;
@@ -542,13 +543,20 @@ describe("K. daily replay", () => {
 
     // The player clears local progress but keeps their identity.
     localStorage.removeItem(progressKey(PUZZLE_ID));
-    const second = mount();
+
+    // What the board does when this browser has no copy: ask the server,
+    // and open the game it finds — the first and strongest layer of replay
+    // protection.
+    const found = await lookupFinishedGame(puzzle, { kind: "guest", deviceId: getDeviceId() });
+    expect(found.status).toBe("found");
+    const second = mount(puzzle, { restored: found.status === "found" ? found.game : null });
     await settle();
 
-    // hasOfficialResult() finds the completed official result and locks the
-    // board — the first and strongest layer of replay protection.
     expect(second.result.current.state.isComplete).toBe(true);
+    expect(second.result.current.state.isWon).toBe(false);
     await guess(second, ["y1", "y2", "y3", "y4"]);
+    // Reopening wrote nothing to this browser either.
+    expect(localStorage.getItem(progressKey(PUZZLE_ID))).toBeNull();
 
     expect(sessions()).toHaveLength(1);
     expect(sessions()[0].id).toBe(officialId);
@@ -567,6 +575,7 @@ describe("K. daily replay", () => {
     first.unmount();
 
     localStorage.removeItem(progressKey(PUZZLE_ID));
+    expect(await lookupFinishedGame(puzzle, { kind: "guest", deviceId: getDeviceId() })).toEqual({ status: "none" });
     const second = mount();
     await settle();
     expect(second.result.current.state.isComplete).toBe(false);
@@ -1456,9 +1465,10 @@ describe("access control", () => {
     await guess(view, ["b1", "b2", "b3", "b4"]);
     await guess(view, ["r1", "r2", "r3", "r4"]);
     await loadStatsFromSupabase();
+    // A guest's "have I already finished this?" check (see GameBoard).
+    await lookupFinishedGame(puzzle, { kind: "guest", deviceId: getDeviceId() });
 
     // Every own-data read went through a function.
-    expect(db.rpcLog).toContain("has_official_result");
     expect(db.rpcLog).toContain("get_own_completed_sessions");
     expect(db.rpcLog).toContain("create_game_session");
   });

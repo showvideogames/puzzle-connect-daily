@@ -14,6 +14,7 @@ import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { getDeviceId, getDeviceToken } from "@/lib/gameStats";
 import { hasMeaningfulProgress } from "@/lib/gameProgress";
 import { MINI_FORMAT, progressStorageId } from "@/lib/puzzleFormat";
+import { useProgressOwner } from "@/lib/progressOwner";
 import { monthParam, resolveViewedMonth } from "@/lib/archiveMonth";
 import {
   ArchiveCalendar,
@@ -79,6 +80,8 @@ type ModalName = "stats" | "help" | "settings" | "feedback" | null;
 const format = MINI_FORMAT;
 
 export default function MiniArchive() {
+  // Whose browser progress this page reads (lib/progressOwner.ts).
+  const owner = useProgressOwner();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
@@ -214,7 +217,7 @@ export default function MiniArchive() {
     }
     // The FORMAT-NAMESPACED progress key — a Full game in progress on the
     // same date must never light up a Mini cell.
-    if (hasMeaningfulProgress(progressStorageId(puzzle.id, format))) return "in-progress";
+    if (hasMeaningfulProgress(progressStorageId(puzzle.id, format, "official", owner))) return "in-progress";
     return "unplayed";
   }
 

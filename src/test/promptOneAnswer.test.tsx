@@ -117,7 +117,7 @@ async function winOnTheBoard(container: HTMLElement, puzzle: Puzzle) {
     await click(screen.getByRole("button", { name: "Submit" }));
     await settle();
   }
-  await settle(300);
+  await screen.findByTestId("results-dialog");
 }
 
 /**

@@ -49,6 +49,8 @@ import { useGame } from "@/hooks/useGame";
 import { loadStatsFromSupabase } from "@/lib/gameStats";
 import { loadProgress, progressKey } from "@/lib/gameProgress";
 import { resolvePlayablePuzzle, loadPlayedDifficulties } from "@/lib/puzzleVersion";
+import { lookupFinishedGame } from "@/lib/finishedGame";
+import { getDeviceId } from "@/lib/gameStats";
 import { resolveDesignerName } from "@/lib/puzzles";
 
 const ADMIN_ID = "admin-user";
@@ -747,14 +749,17 @@ describe("J+K+L. versioning changes no counting semantics", () => {
     await adminSave(puzzleId, V2_CONTENT);
 
     // The same player comes back to the SAME puzzle on the new version, with
-    // their local progress gone. The board locks, exactly as it would have
-    // without an edit: has_official_result asks about the puzzle IDENTITY,
-    // and a new version is not a new puzzle to replay.
+    // their local progress gone. Their finished game is found, exactly as it
+    // would have been without an edit: the lookup asks about the puzzle
+    // IDENTITY, and a new version is not a new puzzle to replay.
     localStorage.removeItem(progressKey(puzzleId));
     const v2 = playablePuzzle(puzzleId);
-    const again = mount(v2);
+    const found = await lookupFinishedGame(v2, { kind: "guest", deviceId: getDeviceId() });
+    expect(found.status).toBe("found");
+    const again = mount(v2, { restored: found.status === "found" ? found.game : null });
     await settle();
     expect(again.result.current.state.isComplete).toBe(true);
+    expect(again.result.current.state.isWon).toBe(true);
 
     const official = sessions().filter((s) => s.is_official === true);
     expect(official).toHaveLength(1);

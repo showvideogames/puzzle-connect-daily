@@ -4,7 +4,10 @@ import { dedupeHintMarkers } from "@/lib/hints";
 import { vibrateSuccess, vibrateError, vibrateCelebration } from "@/lib/haptics";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
-import { finalizeGameSession, hasOfficialResult } from "@/lib/gameStats";
+import { finalizeGameSession } from "@/lib/gameStats";
+import { buildShareGrid } from "@/lib/shareGrid";
+import type { RestoredGame } from "@/lib/finishedGame";
+import type { ProgressOwner } from "@/lib/progressOwner";
 import { finalizeBetaPlaytest } from "@/lib/betaPlaytest";
 import { submitCustomPuzzleResult } from "@/lib/customPuzzles";
 import { playRainbowSound } from "@/lib/sounds";
@@ -41,43 +44,6 @@ function shuffleArray<T>(arr: T[]): T[] {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
-}
-
-const DIFFICULTY_SQUARE: Record<number, string> = {
-  1: "🟨",
-  2: "🟩",
-  3: "🟦",
-  4: "🟥",
-};
-
-function buildShareGrid(guessHistory: GuessAttempt[], puzzle: Puzzle): string {
-  // One square per answer in a guess, so a Mini row is 3 wide and a Full row
-  // is 4 — the Rainbow row included, which is as wide as the board it was
-  // found on rather than a fixed four emoji.
-  const rainbowRow = "🌈".repeat(formatOf(puzzle).categoryCount);
-  const lines: string[] = [];
-  for (const attempt of dedupeHintMarkers(guessHistory)) {
-    if (attempt.isHintMarker) {
-      const emoji = attempt.hintType === "small" ? "💡" : "🔦";
-      const last = lines[lines.length - 1];
-      if (last === "💡" || last === "🔦" || last === "💡🔦" || last === "🔦💡") {
-        lines[lines.length - 1] = last + emoji;
-      } else {
-        lines.push(emoji);
-      }
-    } else if (attempt.isRainbow) {
-      lines.push(rainbowRow);
-    } else {
-      const row = attempt.groupIndices
-        .map((gi) => {
-          const diff = puzzle.groups[gi]?.difficulty;
-          return DIFFICULTY_SQUARE[diff] || "⬜";
-        })
-        .join("");
-      lines.push(row);
-    }
-  }
-  return lines.join("\n");
 }
 
 // Legacy-progress fallback: does the restored guessHistory already contain a
@@ -126,6 +92,14 @@ export function useGame(
     // not solving time. Defaults to true so every caller that doesn't
     // distinguish the two behaves exactly as before.
     boardReady = true,
+    // The player whose browser progress this game reads and writes (see
+    // lib/progressOwner.ts). null only outside the app's OnboardingGate.
+    owner = null,
+    // A finished game read back from the server because this browser holds
+    // no copy of it (see lib/finishedGame.ts). The board opens already
+    // finished, and nothing about it is written to this browser: it can
+    // only ever be what the server says.
+    restored = null,
   }: {
     isArchive?: boolean;
     smallHintUsed?: boolean;
@@ -134,8 +108,18 @@ export function useGame(
     entryContext?: EntryContext;
     mode?: "official" | "beta" | "custom";
     boardReady?: boolean;
+    owner?: ProgressOwner | null;
+    restored?: RestoredGame | null;
   } = {}
 ) {
+  // Reveals belong to this mounted board; their durable outcome is saved
+  // immediately, independently of the animation finishing.
+  const lossRevealTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => {
+    lossRevealTimers.current.forEach(clearTimeout);
+    lossRevealTimers.current = [];
+  }, []);
+
   /**
    * This board's shape — grid size, category count, answers per category,
    * colour order, mistake allowance and whether a Rainbow can exist at all.
@@ -175,7 +159,11 @@ export function useGame(
    * inside the blob (puzzleSnapshot.versionId) does the per-version resume
    * work unchanged in every case; only the storage KEY differs.
    */
-  const storageId = progressStorageId(puzzle.id, format, mode);
+  const storageId = progressStorageId(puzzle.id, format, mode, owner);
+
+  // A game restored from the server is never written to this browser: every
+  // progress write below checks this first. See lib/finishedGame.ts.
+  const keepsLocalProgress = !restored;
 
   const MAX_MISTAKES = format.maxMistakes;
   // Shared "checking guess" suspense: every submitted guess (correct OR
@@ -197,8 +185,8 @@ export function useGame(
   );
 
   const saved = useMemo(() => {
-    return loadProgress(storageId);
-  }, [storageId]);
+    return restored ? null : loadProgress(storageId);
+  }, [storageId, restored]);
 
   // Authoritative "was a hint ever revealed this session" state. The
   // smallHintUsed/fullHintUsed PROPS above are owned by the page (Index.tsx/
@@ -217,10 +205,10 @@ export function useGame(
   // tick. Reopening, remounting, repeated clicks or a restored blob can
   // therefore never record (or add a share marker for) the same hint twice.
   const smallHintRevealedRef = useRef(
-    !!saved?.smallHintUsed || hintUsedInHistory(saved?.guessHistory, "small")
+    !!saved?.smallHintUsed || hintUsedInHistory(saved?.guessHistory, "small") || !!restored?.smallHintUsed
   );
   const fullHintRevealedRef = useRef(
-    !!saved?.fullHintUsed || hintUsedInHistory(saved?.guessHistory, "full")
+    !!saved?.fullHintUsed || hintUsedInHistory(saved?.guessHistory, "full") || !!restored?.fullHintUsed
   );
   // This playthrough's identity (see SavedProgress.runId).
   const runIdRef = useRef<string>(saved?.runId ?? crypto.randomUUID());
@@ -230,6 +218,8 @@ export function useGame(
 
   const [shuffledWords, setShuffledWords] = useState(() => {
     if (saved) return saved.shuffledWords;
+    // A finished board has no tiles left.
+    if (restored) return [];
     if (puzzle.wordOrder && puzzle.wordOrder.length > 0) {
       const wordSet = new Set(allWords);
       const isValid = puzzle.wordOrder.every(w => wordSet.has(w));
@@ -243,6 +233,20 @@ export function useGame(
   });
 
   const [state, setState] = useState<GameState>(() => {
+    if (restored) {
+      return {
+        puzzleId: puzzle.id,
+        solvedGroups: restored.solvedGroups,
+        mistakes: restored.mistakes,
+        maxMistakes: MAX_MISTAKES,
+        selectedWords: [],
+        isComplete: true,
+        isWon: restored.isWon,
+        guessHistory: restored.guessHistory,
+        gotRainbow: restored.gotRainbow,
+        rainbowSolveIndex: restored.rainbowSolveIndex,
+      };
+    }
     if (saved) {
       const solvedGroups = saved.finalSolvedGroups ?? saved.solvedGroups;
       return {
@@ -273,37 +277,6 @@ export function useGame(
     };
   });
 
-  // Lock the board when this puzzle has already been OFFICIALLY COMPLETED by
-  // this identity — most often a player who cleared localStorage but is still
-  // signed in.
-  //
-  // hasOfficialResult(), not the old hasExistingSession(): now that a session
-  // row is created on the first meaningful action, "a session exists" and
-  // "this puzzle has been finished" are different facts. Checking mere
-  // existence here would lock a player out of the game they are in the middle
-  // of playing the moment they refreshed.
-  //
-  // A locked board is complete but its OUTCOME is not known here: this
-  // browser has no copy of the game, so isWon stays at its default false
-  // without meaning "lost". lockedByOfficialResult says so, and the board
-  // uses it to show neither loss wording nor anything scored from the empty
-  // local state (the post-game Rainbow prompt, Lucky Bot).
-  const [lockedByOfficialResult, setLockedByOfficialResult] = useState(false);
-  useEffect(() => {
-    // A Beta or custom puzzle structurally can never have an official result
-    // (neither ever writes game_sessions) — nothing to check, and no lock to
-    // apply.
-    if (mode === "beta" || mode === "custom") return;
-    if (saved) return;
-    let cancelled = false;
-    hasOfficialResult(puzzle.id).then((played) => {
-      if (!cancelled && played) {
-        setLockedByOfficialResult(true);
-        setState((s) => ({ ...s, isComplete: true }));
-      }
-    });
-    return () => { cancelled = true; };
-  }, [puzzle.id, saved, mode]);
 
   const [shaking, setShaking] = useState(false);
   const [lastRevealedGroup, setLastRevealedGroup] = useState<number | null>(null);
@@ -340,7 +313,9 @@ export function useGame(
   const [oneAway, setOneAway] = useState(false);
   const [almostRainbow, setAlmostRainbow] = useState(false);
   const [alreadyGuessed, setAlreadyGuessed] = useState<"plain" | "oneaway" | null>(null);
-  const [rainbowWords, setRainbowWords] = useState<string[]>(saved?.rainbowWords ?? []);
+  const [rainbowWords, setRainbowWords] = useState<string[]>(
+    saved?.rainbowWords ?? (restored?.gotRainbow ? (rainbowHerringFor(puzzle) ?? []) : [])
+  );
   const [showRainbowPopup, setShowRainbowPopup] = useState(false);
   const [matchedWords, setMatchedWords] = useState<string[]>([]);
   const [draggedWord, setDraggedWord] = useState<string | null>(null);
@@ -365,7 +340,7 @@ export function useGame(
    */
   const timerRef = useRef<ActiveTimer | null>(null);
   if (timerRef.current === null) {
-    timerRef.current = createActiveTimer(saved?.activeTimeSeconds ?? 0);
+    timerRef.current = createActiveTimer(saved?.activeTimeSeconds ?? restored?.activeTimeSeconds ?? 0);
   }
   const timer = timerRef.current;
 
@@ -417,7 +392,7 @@ export function useGame(
     if (state.isComplete) {
       timer.freeze();
       setActiveSeconds(timer.seconds());
-      checkpointActiveTime(storageId, timer.seconds());
+      if (keepsLocalProgress) checkpointActiveTime(storageId, timer.seconds());
       return;
     }
     if (!boardReady) return;
@@ -498,6 +473,15 @@ export function useGame(
     puzzle.versionId ?? null,
     { mode, storageKey: storageId }
   );
+  // A restored game belongs to the official session it was read from, so the
+  // one thing still open on it — an unused post-game Rainbow answer — is
+  // saved against that session, never a new one. Seeded once, on the first
+  // render, before anything could read it.
+  const restoredSessionSeededRef = useRef(false);
+  if (!restoredSessionSeededRef.current) {
+    restoredSessionSeededRef.current = true;
+    if (restored?.sessionId && !sessionIdRef.current) sessionIdRef.current = restored.sessionId;
+  }
 
   /**
    * The content of the board being played, frozen for the progress blob.
@@ -612,8 +596,11 @@ export function useGame(
   // Once the whole puzzle is resolved (board complete AND the Rainbow result
   // known) the result is final: hints become view-only. A view-only reveal
   // shows the hint but writes no event, marker, flag or progress.
+  //
+  // A game restored from the server is view-only from the start: reading a
+  // hint there records nothing, so reopening a result can never add to it.
   const hintsViewOnly =
-    state.isComplete && (!rainbowHerring || state.gotRainbow || rainbowResolved);
+    !!restored || (state.isComplete && (!rainbowHerring || state.gotRainbow || rainbowResolved));
 
   const addHintMarker = useCallback((type: "small" | "full") => {
     setState((s) => ({
@@ -672,9 +659,19 @@ export function useGame(
   }, [state.selectedWords]);
 
   useEffect(() => {
+    if (!keepsLocalProgress) return;
     if (state.solvedGroups.length > 0 || state.mistakes > 0 || state.guessHistory.length > 0) {
       saveProgress(storageId, {
         solvedGroups: state.solvedGroups,
+        // The reveal is presentation only. A refresh mid-animation must
+        // already have the full finished board, with no timer writing later.
+        ...(state.isComplete && !state.isWon ? {
+          finalSolvedGroups: [...state.solvedGroups, ...puzzle.groups
+            .map((g, i) => ({ idx: i, diff: g.difficulty }))
+            .sort((a, b) => a.diff - b.diff)
+            .map((g) => g.idx)
+            .filter((i) => !state.solvedGroups.includes(i))],
+        } : {}),
         mistakes: state.mistakes,
         guessHistory: state.guessHistory,
         gotRainbow: state.gotRainbow,
@@ -707,6 +704,7 @@ export function useGame(
       tileColorsMountedRef.current = true;
       return;
     }
+    if (!keepsLocalProgress) return;
     const existing = loadProgress(storageId);
     saveProgress(storageId, {
       solvedGroups: state.solvedGroups,
@@ -1318,36 +1316,13 @@ export function useGame(
             .map((item) => item.idx);
 
           const unsolvedIndices = sortedIndices.filter((idx) => !state.solvedGroups.includes(idx));
-          const finalSolvedGroups = [...state.solvedGroups, ...unsolvedIndices];
-
           unsolvedIndices.forEach((groupIdx, i) => {
-            setTimeout(() => {
+            lossRevealTimers.current.push(setTimeout(() => {
               const solvedWords = puzzle.groups[groupIdx].words;
               setLastRevealedGroup(groupIdx);
               setShuffledWords((prev) => prev.filter((w) => !solvedWords.includes(w)));
               setState((s) => ({ ...s, solvedGroups: [...s.solvedGroups, groupIdx] }));
-
-              if (i === unsolvedIndices.length - 1) {
-                saveProgress(storageId, {
-                  solvedGroups: finalSolvedGroups,
-                  finalSolvedGroups,
-                  mistakes: newMistakes,
-                  guessHistory: fullGuessHistory,
-                  gotRainbow: state.gotRainbow,
-                  rainbowSolveIndex: state.rainbowSolveIndex,
-                  shuffledWords: [],
-                  rainbowWords,
-                  isComplete: true,
-                  isWon: false,
-                  tileColors,
-                  smallHintUsed: effectiveSmallHintUsed,
-                  fullHintUsed: effectiveFullHintUsed,
-                  activeTimeSeconds: activeSecondsRef.current,
-        gameSessionId: sessionIdRef.current,
-        puzzleSnapshot,
-                });
-              }
-            }, 800 + i * 1500);
+            }, 800 + i * 1500));
           });
         }
       }
@@ -1433,12 +1408,11 @@ export function useGame(
      */
     officialAttempt,
     /**
-     * True when the board is locked because this identity already has an
-     * official result for the puzzle that this browser holds no copy of.
-     * The game is over, but whether it was won is unknown here — never read
-     * the default isWon=false as a loss when this is set.
+     * The finished game read back from the server, when this board is one
+     * (see lib/finishedGame.ts), else null. Its `detail` says whether the
+     * guess-by-guess history is known or only the outcome.
      */
-    lockedByOfficialResult,
+    restored,
     /**
      * The durable session this attempt belongs to. Exposed so GameBoard's
      * post-completion "Spot the Rainbow" bonus can attach its own writes to
@@ -1480,6 +1454,8 @@ export function useGame(
      * attempt silently discarded as a duplicate.
      */
     nextGuessNumber: (failedBonusAttempts = 0) =>
-      submittedGuessCount(state.guessHistory) + failedBonusAttempts + 1,
+      // Never below a guess the server already holds for a restored game,
+      // whose history here may be only the outcome.
+      Math.max(submittedGuessCount(state.guessHistory), restored?.lastGuessNumber ?? 0) + failedBonusAttempts + 1,
   };
 }

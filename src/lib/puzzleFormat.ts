@@ -46,6 +46,7 @@
  * categories — so every "how many Rainbow answers" question reads
  * `categoryCount` and neither size is special-cased.
  */
+import { ownerScope, type ProgressOwner } from "./progressOwner";
 
 /** The difficulty/colour slot a category occupies. Shared by both formats. */
 export type Difficulty = 1 | 2 | 3 | 4;
@@ -329,12 +330,20 @@ export function rainbowHerringFor(
  *   Full   official  <id>            Mini   official  mini:<id>
  *   Full   beta      beta:<id>       Mini   beta      mini:beta:<id>
  *   Full   custom    custom:<id>     Mini   custom    mini:custom:<id>
+ *
+ * Every one of those is then prefixed with its owner — `acct:<user id>/` or
+ * `guest:<device id>/` — so each player's saves are their own. See
+ * lib/progressOwner.ts.
  */
 export function progressStorageId(
   puzzleId: string,
   format: PuzzleFormat,
-  mode: "official" | "beta" | "custom" = "official"
+  mode: "official" | "beta" | "custom" = "official",
+  // Whose save this is. Every page inside the app passes the player from
+  // useProgressOwner(); null (the unscoped key) is only reached by a board
+  // rendered outside OnboardingGate, as unit tests do.
+  owner: ProgressOwner | null = null
 ): string {
   const modePrefix = mode === "official" ? "" : mode;
-  return [format.progressNamespace, modePrefix, puzzleId].filter(Boolean).join(":");
+  return ownerScope(owner) + [format.progressNamespace, modePrefix, puzzleId].filter(Boolean).join(":");
 }

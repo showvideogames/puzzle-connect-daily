@@ -21,6 +21,7 @@ import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
 import { resolveArchiveEntryContext } from "@/lib/entryContext";
 import { FULL_FORMAT, progressStorageId, rainbowHerringFor, type PuzzleFormat } from "@/lib/puzzleFormat";
+import { useProgressOwner } from "@/lib/progressOwner";
 import type { User } from "@supabase/supabase-js";
 
 type ModalName = "stats" | "help" | "settings" | "feedback" | null;
@@ -39,6 +40,8 @@ interface ArchivePuzzlePageProps {
 export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePageProps = {}) {
   useGamePageTheme();
   const { puzzleId } = useParams<{ puzzleId: string }>();
+  // Whose browser progress this page reads (lib/progressOwner.ts).
+  const owner = useProgressOwner();
   const navigate = useNavigate();
   const location = useLocation();
   // How the player reached this puzzle. /archive/:id and the legacy
@@ -96,7 +99,7 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
         // mid-game edit can never leave this board with answers it is unable
         // to submit. A completed or never-started puzzle resolves to the
         // current version. See lib/puzzleVersion.ts.
-        setPuzzle(resolvePlayablePuzzle(p, progressStorageId(p.id, format)));
+        setPuzzle(resolvePlayablePuzzle(p, progressStorageId(p.id, format, "official", owner)));
         setLoading(false);
       })
       .catch(() => {
@@ -105,7 +108,7 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
         setLoading(false);
       });
     return () => clearTimeout(timeout);
-  }, [puzzleId, format]);
+  }, [puzzleId, format, owner]);
 
   const handleSmallHint = useCallback(() => {
     trackEvent("hint_small_used");

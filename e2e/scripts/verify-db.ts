@@ -932,6 +932,71 @@ const CHECKS: Check[] = [
       expect(games.rows[0].n === 0, "the new account inherited history it must not have");
     },
   },
+  {
+    name: "an account switch after import needs a fresh credential to save the next game",
+    async run(db) {
+      const users = await db.query<{ id: string; email: string }>(
+        "select id, email from auth.users where email = any($1::text[])",
+        [[ACCOUNTS.player.email, ACCOUNTS.admin.email]]
+      );
+      const alice = users.rows.find((user) => user.email === ACCOUNTS.player.email)!.id;
+      const bob = users.rows.find((user) => user.email === ACCOUNTS.admin.email)!.id;
+      const puzzle = await db.query<{ id: string }>(
+        "select id from public.puzzles where date = $1 and format = 'full'", [FULL_RAINBOW.date]
+      );
+      const puzzleId = puzzle.rows[0].id;
+      await actAs(db, null);
+      const guest = (await db.query<{ device_id: string; device_token: string }>(
+        "select * from public.create_device_identity()"
+      )).rows[0];
+      const guestSession = (await db.query<{ id: string }>(
+        "select public.create_game_session($1, $2, $3, 'daily_home') as id",
+        [puzzleId, guest.device_id, guest.device_token]
+      )).rows[0].id;
+      expect(!!guestSession, "guest session should exist before import");
+      await actAs(db, alice);
+      const imported = await db.query<{ outcome: string }>(
+        "select * from public.import_guest_history($1, $2)", [guest.device_id, guest.device_token]
+      );
+      expect(imported.rows[0].outcome === "imported", "Alice must import and retire the device");
+
+      // Bob's resolver observes the committed import while Alice's browser
+      // request can still be waiting for its response.
+      await actAs(db, bob);
+      const resolved = await db.query<{ outcome: string }>(
+        "select * from public.resolve_device_import($1, $2)", [guest.device_id, guest.device_token]
+      );
+      expect(resolved.rows[0].outcome === "already_decided", "Bob must see the retired decision");
+      const rejected = await db.query<{ id: string | null }>(
+        "select public.create_game_session($1, $2, $3, 'daily_home') as id",
+        [puzzleId, guest.device_id, guest.device_token]
+      );
+      expect(rejected.rows[0].id === null, "a retired credential must not save Bob's game");
+      const fresh = (await db.query<{ device_id: string; device_token: string }>(
+        "select * from public.create_device_identity()"
+      )).rows[0];
+      const session = (await db.query<{ id: string }>(
+        "select public.create_game_session($1, $2, $3, 'daily_home') as id",
+        [puzzleId, fresh.device_id, fresh.device_token]
+      )).rows[0].id;
+      expect(!!session, "Bob must be able to save with the replacement credential");
+      const recorded = await db.query<{ n: number }>(
+        "select public.record_guess_events($1, $2, $3, $4::jsonb) as n",
+        [session, fresh.device_id, fresh.device_token, JSON.stringify([{
+          guess_number: 1, words: FULL_RAINBOW.groups[0].words, correct: true,
+          group_name: FULL_RAINBOW.groups[0].category, guessed_at: new Date().toISOString(),
+          active_time_seconds: 1, groups_solved: 0,
+        }])]
+      );
+      expect(recorded.rows[0].n === 1, "Bob's first guess must be durable");
+      const owners = await db.query<{ id: string; user_id: string }>(
+        "select id, user_id from public.game_sessions where id = any($1::uuid[])", [[guestSession, session]]
+      );
+      expect(owners.rows.find((row) => row.id === guestSession)?.user_id === alice, "Alice must retain her imported session");
+      expect(owners.rows.find((row) => row.id === session)?.user_id === bob, "Bob must own only his new session");
+      await actAs(db, null);
+    },
+  },
 ];
 
 async function main(): Promise<number> {

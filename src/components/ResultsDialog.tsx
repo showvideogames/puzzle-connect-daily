@@ -12,14 +12,20 @@ import type { ResolvedTheme } from "@/lib/themes";
 interface ResultsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** The board's own result message and summary (getResultHeadline/Subtitle). */
+  /** The board's own one-word result message (getResultHeadline). */
   headline: string;
-  subtitle: string;
   /** A timed format's frozen solve time, already formatted; null to omit. */
   timeLabel: string | null;
   /** The real share squares, from the same guess history the Share text uses. */
   resultRows: ResultRow[];
-  onShare: () => void;
+  /** null when there is nothing honest to share (see `summary`). */
+  onShare: (() => void) | null;
+  /**
+   * A finished game whose details were not saved, restored from its outcome
+   * only (lib/finishedGame.ts): the facts its record does hold, and a line
+   * saying the rest is not available. null for every other game.
+   */
+  summary?: { facts: string[]; note: string } | null;
   copied: boolean;
   /**
    * Whose personal stats to show (Played / Win % / Max Streak), read the
@@ -64,10 +70,10 @@ export function ResultsDialog({
   open,
   onOpenChange,
   headline,
-  subtitle,
   timeLabel,
   resultRows,
   onShare,
+  summary = null,
   copied,
   statsFormat,
   statsPending,
@@ -127,9 +133,13 @@ export function ResultsDialog({
         >
           <DialogPrimitive.Content
             data-testid="results-dialog"
+            // Titled by the result word only; there is no description line.
+            aria-describedby={undefined}
             onOpenAutoFocus={(e) => {
+              // Share first, as before; without one, the dialog's own default.
+              if (!shareRef.current) return;
               e.preventDefault();
-              shareRef.current?.focus();
+              shareRef.current.focus();
             }}
             onCloseAutoFocus={(e) => {
               const target = returnFocusRef?.current;
@@ -157,11 +167,17 @@ export function ResultsDialog({
               <DialogPrimitive.Title asChild>
                 <h2 className="mt-4 text-2xl sm:text-[1.75rem] font-extrabold tracking-tight leading-tight">{headline}</h2>
               </DialogPrimitive.Title>
-              <DialogPrimitive.Description asChild>
-                <p className="mt-1 text-sm sm:text-base text-muted-foreground">{subtitle}</p>
-              </DialogPrimitive.Description>
               {timeLabel && (
                 <p className="text-sm font-semibold tabular-nums mt-2">⏳ {timeLabel}</p>
+              )}
+
+              {summary && (
+                <div className="mt-3" data-testid="results-summary">
+                  {summary.facts.length > 0 && (
+                    <p className="text-sm font-semibold">{summary.facts.join(" · ")}</p>
+                  )}
+                  <p className="mt-1 text-sm text-muted-foreground">{summary.note}</p>
+                </div>
               )}
 
               {statItems.length > 0 && (
@@ -179,6 +195,7 @@ export function ResultsDialog({
                 <StreakCelebration streak={streak} animate={streakMoves} className="mt-4" />
               )}
 
+              {onShare && (
               <button
                 ref={shareRef}
                 type="button"
@@ -191,6 +208,7 @@ export function ResultsDialog({
                 {copied ? <Check className="w-5 h-5" /> : <Share2 className="w-5 h-5" />}
                 {copied ? "Copied!" : "Share Score"}
               </button>
+              )}
 
               {spotTheme && (
                 <>

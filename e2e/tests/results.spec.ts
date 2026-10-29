@@ -83,7 +83,7 @@ test.describe("Results popup", () => {
     await solveAllCategories(page, FULL_RAINBOW);
 
     await expect(resultsDialog(page)).toBeVisible({ timeout: 20_000 });
-    await expect(resultsDialog(page).getByRole("heading")).toHaveText("Perfect game! 🎯");
+    await expect(resultsDialog(page).getByRole("heading")).toHaveText("Perfect!");
     await expect(flame(page)).toHaveAttribute("data-earned", "true");
     await expect(flame(page)).toContainText("1 day streak");
 
@@ -104,7 +104,7 @@ test.describe("Results popup", () => {
 
     // Reopen: the same results, the flame shown still.
     await viewResultsButton(page).click();
-    await expect(resultsDialog(page).getByRole("heading")).toHaveText("Perfect game! 🎯");
+    await expect(resultsDialog(page).getByRole("heading")).toHaveText("Perfect!");
     await expect(flame(page)).toHaveAttribute("data-earned", "false");
     await closeResults(page);
 
@@ -150,7 +150,7 @@ test.describe("Results popup", () => {
 
     // View Results carries the Rainbow now; the outcome and streak don't change.
     await viewResultsButton(page).click();
-    await expect(resultsDialog(page).getByRole("heading")).toHaveText("Perfect game! 🎯");
+    await expect(resultsDialog(page).getByRole("heading")).toHaveText("Perfect!");
     await expect(spotPrompt(page)).toHaveCount(0);
     expect(await copiedShareText(page)).toContain("🌈");
     const device = await deviceId(page);
@@ -171,7 +171,7 @@ test.describe("Results popup", () => {
   }) => {
     await loseTheGame(page);
     await expect(resultsDialog(page)).toBeVisible({ timeout: 20_000 });
-    await expect(resultsDialog(page).getByRole("heading")).toHaveText("Valiant effort 💪");
+    await expect(resultsDialog(page).getByRole("heading")).toHaveText("Onward!");
     await expect(resultsDialog(page).getByTestId("results-stats")).toContainText("Played");
     await expect(flame(page)).toHaveCount(0);
     await expect(resultsDialog(page).getByTestId("spot-rainbow-prompt")).toBeVisible();

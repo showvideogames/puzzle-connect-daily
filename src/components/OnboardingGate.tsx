@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useAccountOnboarding } from "@/hooks/useAccountOnboarding";
+import { ProgressOwnerContext, ownerKey } from "@/lib/progressOwner";
 import { OnboardingModal } from "./OnboardingModal";
 import { SavingUnavailableNotice } from "./SavingUnavailableNotice";
 
@@ -25,9 +26,11 @@ import { SavingUnavailableNotice } from "./SavingUnavailableNotice";
  * this design avoids everywhere else.
  */
 export function OnboardingGate({ children }: { children: ReactNode }) {
-  const { state, recheck, addMyProgress, startFresh } = useAccountOnboarding();
+  const { state, owner, recheck, addMyProgress, startFresh } = useAccountOnboarding();
 
-  if (state.phase === "checking") {
+  // No player known yet — or a different one signing in or out. Nothing from
+  // the previous player stays on screen while the server is asked.
+  if (state.phase === "checking" || !owner) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background" data-testid="onboarding-checking">
         <div className="h-8 w-8 rounded-full border-2 border-muted-foreground/30 border-t-foreground animate-spin" />
@@ -49,12 +52,15 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
     );
   }
 
+  // Every page reads and writes the browser progress of this player only
+  // (lib/progressOwner.ts). Keyed by the player too, so a change of player
+  // rebuilds every page from scratch rather than carrying any state across.
   return (
-    <>
-      {children}
+    <ProgressOwnerContext.Provider value={owner}>
+      <Fragment key={ownerKey(owner)}>{children}</Fragment>
       {state.phase === "saving_unavailable" && (
         <SavingUnavailableNotice onRetry={recheck} />
       )}
-    </>
+    </ProgressOwnerContext.Provider>
   );
 }

@@ -41,6 +41,7 @@ import { useGame } from "@/hooks/useGame";
 import { GameBoard } from "@/components/GameBoard";
 import { loadProgress, clearProgress } from "@/lib/gameProgress";
 import { skillScoreForGame } from "@/lib/skillScore";
+import { ProgressOwnerContext } from "@/lib/progressOwner";
 
 const PUZZLE_ID = "puzzle-1";
 const puzzle: Puzzle = {
@@ -218,7 +219,7 @@ describe("three categories solved is never a loss", () => {
     // exist to make a fourth mistake with.
     const onBoard = [...container.querySelectorAll("[data-word]")].map((el) => el.getAttribute("data-word")).sort();
     expect(onBoard).toEqual(R);
-    expect(screen.queryByText(/Valiant effort/)).toBeNull();
+    expect(screen.queryByText(/Onward!/)).toBeNull();
     expect(finalizeCalls()).toHaveLength(0);
     expect(sessions()[0].status).toBe("in_progress");
 
@@ -254,7 +255,7 @@ describe("three categories solved is never a loss", () => {
     expect(skill.lines.map((l) => l.label)).toEqual(["Didn't finish the board", "Solved Yellow", "Solved Green"]);
   }, 10000);
 
-  it("a board locked by a result this browser has no copy of is not shown as a loss", async () => {
+  it("a finished game this browser has no copy of opens as its real result, not a loss", async () => {
     // Win the puzzle officially, then lose the local copy (a cleared
     // browser that still holds the same identity).
     const played = mount();
@@ -268,16 +269,20 @@ describe("three categories solved is never a loss", () => {
 
     render(
       <MemoryRouter>
-        <GameBoard puzzle={puzzle} settings={{} as never} showModeBadge={false} />
+        <ProgressOwnerContext.Provider value={{ kind: "guest", deviceId: localStorage.getItem("rc-device-id")! }}>
+          <GameBoard puzzle={puzzle} settings={{} as never} showModeBadge={false} />
+        </ProgressOwnerContext.Provider>
       </MemoryRouter>
     );
     await settle();
 
-    expect(screen.getByTestId("already-finished").textContent).toBe(
-      "You've already finished this puzzle. Come back tomorrow!"
-    );
-    expect(screen.queryByText(/Valiant effort/)).toBeNull();
-    expect(screen.queryByText(/Almost had it/)).toBeNull();
+    // The server's record of the win, finished — never an empty locked board,
+    // never a loss, and the results popup does not open by itself.
+    expect(screen.queryByTestId("already-finished")).toBeNull();
+    expect(screen.getByRole("button", { name: "View Results" })).toBeTruthy();
+    expect(finalizeCalls()).toHaveLength(1);
+    expect(screen.queryByText(/Onward!/)).toBeNull();
+    expect(screen.queryByText(/^(Perfect|Excellent|Nice|Clutch)!$/)).toBeNull();
     expect(screen.queryByText("Find one word from each group")).toBeNull();
     expect(screen.queryByTestId("lucky-bot-card")).toBeNull();
   });
