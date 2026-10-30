@@ -18,17 +18,17 @@ function select(word: string) {
 }
 for (const { format, count, rainbow, groups } of examples) {
   describe(`${format.name} guide`, () => {
-    it("explains its group size, difficulty ladder, optional Rainbow and four mistakes", () => {
+    it("explains its group size, difficulty ladder, optional Rainbow and its mistake budget", () => {
       const { container } = render(<TutorialModal open onClose={() => {}} format={format} />);
       fireEvent.click(screen.getByRole("button", { name: "How to Play" }));
       expect(container).toHaveTextContent(`Find ${count} groups of ${count} words`);
       expect(container).toHaveTextContent(`There are ${count} difficulty levels`);
       expect(container).toHaveTextContent(`all ${count} Rainbow words`);
       expect(container).toHaveTextContent("Classic puzzles have no Rainbow");
-      expect(container).toHaveTextContent("4 mistakes");
+      expect(container).toHaveTextContent(`${format.maxMistakes} mistakes`);
       expect(container).toHaveTextContent(`${format.answersPerCategory}-word guess contains ${format.answersPerCategory - 1} words`);
       expect(screen.getByText("Easiest").parentElement?.parentElement?.children).toHaveLength(format.categoryCount);
-      if (format.id === "mini") expect(container.textContent).not.toMatch(/four|5 categories|4 groups|4 words/i);
+      if (format.id === "mini") expect(container.textContent).not.toMatch(/5 categories|4 groups|4 words/i);
     });
     it("illustrates and completes exactly the right number of groups and Rainbow selections", () => {
       vi.useFakeTimers();
@@ -48,7 +48,7 @@ for (const { format, count, rainbow, groups } of examples) {
       select(groups[1][1]); // selection cap must ignore an extra tile
       expect(container.querySelectorAll('[aria-pressed="true"]')).toHaveLength(format.answersPerCategory);
       fireEvent.click(screen.getByRole("button", { name: "Submit" }));
-      expect(screen.getByText("One away…")).toBeInTheDocument();
+      expect(screen.getByText(format.id === "mini" ? "One Away... 🟩" : "One away…")).toBeInTheDocument();
       expect(screen.getByText("Mistakes: 1")).toBeInTheDocument();
       groups.forEach((group, index) => {
         group.forEach(select);

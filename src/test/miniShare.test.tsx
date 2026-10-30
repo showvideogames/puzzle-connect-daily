@@ -223,7 +223,7 @@ describe("the Mini share grid", () => {
     expect(view.result.current.state.mistakes).toBe(2);
   });
 
-  it("a LOST Mini shares the four real mistakes", async () => {
+  it("a LOST Mini shares the three real mistakes", async () => {
     const view = mount(classicMini);
     await guess(view, ["g1", "b1", "r1"]);
     await guess(view, ["g1", "b1", "r2"]);
@@ -233,7 +233,7 @@ describe("the Mini share grid", () => {
     expect(view.result.current.state.isWon).toBe(false);
 
     const lines = shareLines(view.result.current.state.guessHistory, classicMini, MINI_FORMAT);
-    expect(lines).toHaveLength(4);
+    expect(lines).toHaveLength(3);
     for (const line of lines) expect([...line]).toHaveLength(3);
     // No row claims a solved category.
     expect(lines).not.toContain("🟩🟩🟩");

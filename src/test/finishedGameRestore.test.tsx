@@ -187,7 +187,7 @@ function renderBoard(owner: ProgressOwner | null, puzzle: Puzzle = FULL) {
   const tree = (o: ProgressOwner | null) => (
     <MemoryRouter>
       <ProgressOwnerContext.Provider value={o}>
-        <GameBoard puzzle={puzzle} settings={{} as never} showModeBadge={false} />
+        <GameBoard puzzle={puzzle} settings={{ guessHistory: true } as never} showModeBadge={false} />
       </ProgressOwnerContext.Provider>
     </MemoryRouter>
   );
@@ -992,4 +992,47 @@ it("a retired credential stays saving-unavailable until a replacement can be min
   expect(progressKeys().some((key) => key.includes("acct:user-bob/"))).toBe(false);
   await playOnAnotherDevice(BOB, [Y]);
   expect(sessions().filter((session) => session.user_id === "user-bob")).toHaveLength(1);
+});
+
+
+describe("Mini colored Guess History", () => {
+  it("persists the submitted color on reopen and on a completed cross-device review", async () => {
+    db.signIn("user-alice");
+    const classic = { ...MINI, rainbowHerring: null };
+    const first = renderBoard(ALICE, classic);
+    await settle();
+    for (const word of ["r1", "r2", "g1"]) await click(tile(word)!.querySelector("button")!);
+    await click(screen.getByRole("button", { name: /^submit$/i }));
+    await settle();
+    expect(screen.getByTestId("history-feedback")).toHaveTextContent("One Away 🟥");
+    expect(screen.getByTestId("history-feedback")).toHaveTextContent("Red category");
+    first.unmount();
+    const reopened = renderBoard(ALICE, classic);
+    await settle();
+    expect(screen.getByTestId("history-feedback")).toHaveTextContent("One Away 🟥");
+    reopened.unmount();
+    const { storageId } = await playOnAnotherDevice(ALICE, classic.groups.map(g => g.words), classic);
+    forgetThisBrowser(storageId);
+    const restored = await lookupFinishedGame(classic, ALICE);
+    expect(restored.status).toBe("found");
+    expect((restored as { game: RestoredGame }).game.detail).toBe("full");
+    renderBoard(ALICE, classic);
+    await settle();
+    expect(screen.getByTestId("history-feedback")).toHaveTextContent("One Away 🟥");
+    expect(screen.getByTestId("history-feedback")).toHaveTextContent("Red category");
+  });
+  it("keeps Almost Rainbow precedence in Mini history and Full history unchanged", async () => {
+    db.signIn("user-alice");
+    const { storageId } = await playOnAnotherDevice(ALICE, [["g1", "g2", "b1"]], MINI);
+    const miniView = renderBoard(ALICE, MINI);
+    await settle();
+    expect(screen.getByTestId("history-feedback")).toHaveTextContent("One Away 🌈");
+    expect(screen.getByTestId("history-feedback")).not.toHaveTextContent("🟩");
+    miniView.unmount();
+    forgetThisBrowser(storageId);
+    await playOnAnotherDevice(ALICE, [["y1", "y2", "y3", "g2"]]);
+    renderBoard(ALICE);
+    await settle();
+    expect(screen.getByTestId("history-feedback")).toHaveTextContent(/^One Away$/);
+  });
 });

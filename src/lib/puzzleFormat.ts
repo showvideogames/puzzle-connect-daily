@@ -190,9 +190,8 @@ export const MINI_FORMAT: PuzzleFormat = {
   // Green, Blue, Red — see the module comment on why these are 2, 3, 4.
   difficultyOrder: [2, 3, 4],
   colorOrder: ["green", "blue", "red"],
-  // Four, same as Full. This is a product decision, not an inherited default:
-  // it is stated here so changing it is a one-line change in one place.
-  maxMistakes: 4,
+  // Mini offers a category-color near-miss hint and three mistakes.
+  maxMistakes: 3,
   // A Mini CAN carry a Rainbow. Whether a given Mini does is decided by its
   // own content — see rainbowHerringFor. A Mini Rainbow is three answers,
   // one per category, because categoryCount is 3.

@@ -16,6 +16,8 @@ import { GuessAttempt } from "./types";
 import type { PinnedPuzzleContent } from "./puzzleVersion";
 
 export interface SavedProgress {
+  // 1 (or absent): original four-mistake Mini; 2: three-mistake Mini.
+  rulesVersion?: 1 | 2;
   solvedGroups: number[];
   mistakes: number;
   guessHistory: GuessAttempt[];

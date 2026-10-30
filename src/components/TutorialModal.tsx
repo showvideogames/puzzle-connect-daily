@@ -178,6 +178,7 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
   // Tracks words to hide after each group is solved (including that group's rainbow word)
   const [solvedGroupWords, setSolvedGroupWords] = useState<string[]>([]);
   const [oneAway, setOneAway] = useState(false);
+  const [oneAwayDifficulty, setOneAwayDifficulty] = useState<number | null>(null);
   const [mistakes, setMistakes] = useState(0);
   const [shakingBoard, setShakingBoard] = useState(false);
 
@@ -256,7 +257,7 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
         setTimeout(() => setPhase("complete"), 600);
       }
     } else {
-      const isOneAway = groups.some(
+      const nearGroup = groups.find(
         (g) =>
           !solvedGroups.includes(g) &&
           g.words.filter((w) => selected.includes(w)).length === oneAwayThreshold(format)
@@ -267,7 +268,8 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
       setMistakes((m) => m + 1);
       setSelected([]);
 
-      if (isOneAway) {
+      if (nearGroup) {
+        setOneAwayDifficulty(nearGroup.difficulty);
         setOneAway(true);
         setTimeout(() => setOneAway(false), 2500);
       }
@@ -381,7 +383,7 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
               <section>
                 <SectionLabel>Mistakes</SectionLabel>
                 <p className="text-sm leading-relaxed">
-                  You have <strong>{format.maxMistakes} mistakes</strong> before the puzzle ends. If your {format.answersPerCategory}-word guess contains {oneAwayThreshold(format)} words from the same group, you'll get a <strong>"One Away"</strong> hint.
+                  You have <strong>{format.maxMistakes} mistakes</strong> before the puzzle ends. If your {format.answersPerCategory}-word guess contains {oneAwayThreshold(format)} words from the same group, you'll get a <strong>"One Away"</strong> hint.{format.id === "mini" && <> The hint also shows the category color, for example <strong>One Away... 🟥</strong>. Previously started games keep their original four mistakes.</>}
                 </p>
               </section>
 
@@ -475,7 +477,7 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
                 <p className="text-sm font-semibold">You spotted the Rainbow!</p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                   Now solve the remaining {format.categoryCount} groups. If your {format.answersPerCategory}-word guess contains {oneAwayThreshold(format)} from one of the main groups,
-                  the game will give you a <strong>"One Away"</strong> hint.
+                  the game will give you a <strong>"One Away"</strong> hint{format.id === "mini" ? " with the category color" : ""}.
                 </p>
               </div>
               <button
@@ -499,7 +501,7 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
               {oneAway && (
                 <div className="flex justify-center animate-fade-up">
                   <div className="bg-foreground text-background px-5 py-2 rounded-full text-sm font-semibold shadow-md">
-                    One away…
+                    {format.id === "mini" ? `One Away... ${{2: "🟩", 3: "🟦", 4: "🟥"}[oneAwayDifficulty!] ?? ""}` : "One away…"}
                   </div>
                 </div>
               )}
