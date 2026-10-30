@@ -1,3 +1,4 @@
+import { mistakeBudget } from "@/lib/miniRules";
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Puzzle, GameState, GuessAttempt } from "@/lib/types";
 import { dedupeHintMarkers } from "@/lib/hints";
@@ -165,7 +166,6 @@ export function useGame(
   // progress write below checks this first. See lib/finishedGame.ts.
   const keepsLocalProgress = !restored;
 
-  const MAX_MISTAKES = format.maxMistakes;
   // Shared "checking guess" suspense: every submitted guess (correct OR
   // incorrect) first plays a staggered per-tile bounce, then holds a beat,
   // before the outcome is revealed — matching NYT Connections.
@@ -187,6 +187,13 @@ export function useGame(
   const saved = useMemo(() => {
     return restored ? null : loadProgress(storageId);
   }, [storageId, restored]);
+
+  // Hosted completed records have no rule version. Preserve their historical
+  // presentation; loss counts identify the budget, wins retain the old budget.
+  const MAX_MISTAKES = restored
+    ? (restored.isWon ? 4 : Math.max(format.maxMistakes, restored.mistakes))
+    : mistakeBudget(puzzle, saved);
+  const rulesVersion: 1 | 2 = MAX_MISTAKES === 3 ? 2 : 1;
 
   // Authoritative "was a hint ever revealed this session" state. The
   // smallHintUsed/fullHintUsed PROPS above are owned by the page (Index.tsx/
@@ -662,6 +669,7 @@ export function useGame(
     if (!keepsLocalProgress) return;
     if (state.solvedGroups.length > 0 || state.mistakes > 0 || state.guessHistory.length > 0) {
       saveProgress(storageId, {
+        rulesVersion,
         solvedGroups: state.solvedGroups,
         // The reveal is presentation only. A refresh mid-animation must
         // already have the full finished board, with no timer writing later.
@@ -707,6 +715,7 @@ export function useGame(
     if (!keepsLocalProgress) return;
     const existing = loadProgress(storageId);
     saveProgress(storageId, {
+      rulesVersion,
       solvedGroups: state.solvedGroups,
       mistakes: state.mistakes,
       guessHistory: state.guessHistory,
@@ -1237,6 +1246,7 @@ export function useGame(
 
           const allGroupIndices = puzzle.groups.map((_, i) => i);
           saveProgress(storageId, {
+            rulesVersion,
             solvedGroups: newSolved,
             finalSolvedGroups: allGroupIndices,
             mistakes: state.mistakes,

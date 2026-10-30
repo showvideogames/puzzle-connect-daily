@@ -38,6 +38,11 @@ export default function HowToPlay() {
         </section>
 
         <section className="space-y-2">
+          <h2 className="text-base font-semibold">Mini</h2>
+          <p>Mini has three groups of three words: Green, Blue and Red. You have 3 mistakes. When two selected words belong to one category, the ordinary near-miss hint shows its color: <strong>One Away... 🟥</strong>. Previously started games keep their original four mistakes.</p>
+        </section>
+
+        <section className="space-y-2">
           <h2 className="text-base font-semibold">Categories</h2>
           <p>Each puzzle has four colored categories, ordered by difficulty:</p>
           <ul className="space-y-1">

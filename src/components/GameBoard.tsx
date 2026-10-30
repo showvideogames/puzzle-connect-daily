@@ -1,3 +1,4 @@
+import { miniOneAwayColor } from "@/lib/miniRules";
 import { Puzzle } from "@/lib/types";
 import { GameSettings } from "@/lib/settings";
 import { useGame } from "@/hooks/useGame";
@@ -1650,17 +1651,20 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
   // keeps its rainbow fill as the success message.
   const pillBase = "relative inline-flex h-9 sm:h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full text-[15px] sm:text-base font-extrabold leading-none animate-fade-up motion-reduce:animate-none";
   const purplePill = `${pillBase} border-2 border-[hsl(var(--brand-purple-to))] bg-white text-[hsl(258_68%_48%)] shadow-[0_2px_8px_-3px_rgba(139,92,246,0.45)] dark:shadow-none dark:bg-card dark:text-[hsl(var(--brand-purple-from))]`;
+  const oneAwayColor = guessFeedback === "oneaway" && lastGuess
+    ? miniOneAwayColor(puzzle, lastGuess.words, state.solvedGroups) : null;
+  const oneAwayCopy = `One Away...${oneAwayColor ? ` ${oneAwayColor.square}` : ""}`;
   const feedbackAnnouncement = !feedbackKind
     ? ""
     : alreadyGuessed
       ? (alreadyGuessed === "oneaway" ? "Already guessed — one away!" : "Already guessed!")
       : guessFeedback === "incorrect" ? "Incorrect"
       : guessFeedback === "almost" ? `One Away... ${theme.emoji}`
-      : guessFeedback === "oneaway" ? "One Away..."
+      : guessFeedback === "oneaway" ? (oneAwayColor ? `One Away... ${oneAwayColor.name} category` : oneAwayCopy)
       : theme.spottedMessage;
   const feedbackPill = !feedbackKind ? null : guessFeedback && !alreadyGuessed ? (
     <div className={`${purplePill} gap-2 px-3`} data-testid="guess-feedback">
-      {guessFeedback === "incorrect" ? "Incorrect" : guessFeedback === "almost" ? `One Away... ${theme.emoji}` : "One Away..."}
+      {guessFeedback === "incorrect" ? "Incorrect" : guessFeedback === "almost" ? `One Away... ${theme.emoji}` : oneAwayCopy}
       {/* 28px circle, with a 44px invisible tap area around it. */}
       <button
         onClick={dismissFeedback}
@@ -2168,15 +2172,22 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
                 // Reuse the guess's own stored feedback (set at guess-time in
                 // useGame.ts) rather than re-deriving one-away/rainbow status
                 // from the final solved categories.
+                // Historical guesses precede today's solved state. Derive only
+                // the color from their own tiles, never reclassify the outcome.
+                const historyColor = g.isOneAway && !g.isAlmostRainbow
+                  ? miniOneAwayColor(puzzle, g.words, []) : null;
                 const label = g.isAlmostRainbow
                   ? "One Away 🌈"
                   : g.isOneAway
-                    ? "One Away"
+                    ? (format.id === "mini" ? `One Away${historyColor ? ` ${historyColor.square}` : ""}` : "One Away")
                     : "Incorrect";
 
                 return (
                   <div key={i} className="py-2 text-center first:pt-0 last:pb-0">
-                    <p className="text-xs font-semibold text-muted-foreground mb-1">{label}</p>
+                    <p className="text-xs font-semibold text-muted-foreground mb-1" data-testid="history-feedback">
+                      <span aria-hidden={historyColor ? true : undefined}>{label}</span>
+                      {historyColor && <span className="sr-only">One Away {historyColor.name} category</span>}
+                    </p>
                     {/* Equal-width grid, one column per answer in a guess (4 on
                         Full, 3 on Mini), matching the Spot the Rainbow
                         selection rows — cell width never varies with word

@@ -39,10 +39,11 @@ vi.mock("@/lib/haptics", () => ({
 }));
 vi.mock("@/lib/analytics", () => ({ trackEvent: () => {} }));
 
+import { miniOneAwayColor } from "@/lib/miniRules";
 import { useGame } from "@/hooks/useGame";
 import { useBuilderForm } from "@/hooks/useBuilderForm";
 import { loadStatsFromSupabase } from "@/lib/gameStats";
-import { loadProgress, progressKey } from "@/lib/gameProgress";
+import { loadProgress, progressKey, saveProgress, clearProgress } from "@/lib/gameProgress";
 import {
   FULL_FORMAT,
   MINI_FORMAT,
@@ -191,7 +192,7 @@ describe("the format definition", () => {
     expect(MINI_FORMAT.categoryCount).toBe(3);
     expect(MINI_FORMAT.answersPerCategory).toBe(3);
     expect(MINI_FORMAT.tileCount).toBe(9);
-    expect(MINI_FORMAT.maxMistakes).toBe(4);
+    expect(MINI_FORMAT.maxMistakes).toBe(3);
     expect(MINI_FORMAT.colorOrder).toEqual(["green", "blue", "red"]);
     expect(MINI_FORMAT.difficultyOrder).toEqual([2, 3, 4]);
     // A Mini CAN carry a Rainbow. Whether a given Mini does is a property of
@@ -331,19 +332,17 @@ describe("Mini guess resolution", () => {
     expect(view.result.current.state.mistakes).toBe(1);
   });
 
-  it("7. four Mini mistakes end the game as a loss", async () => {
+  it("7. three Mini mistakes end the game as a loss", async () => {
     const view = mount(miniPuzzle);
     await guess(view, ["g1", "b1", "r1"]);
     await guess(view, ["g1", "b1", "r2"]);
-    await guess(view, ["g1", "b1", "r3"]);
     expect(view.result.current.state.isComplete).toBe(false);
+    expect(view.result.current.state.mistakes).toBe(2);
+    await guess(view, ["g1", "b1", "r3"]);
     expect(view.result.current.state.mistakes).toBe(3);
-
-    await guess(view, ["g1", "b2", "r1"]);
-    expect(view.result.current.state.mistakes).toBe(4);
     expect(view.result.current.state.isComplete).toBe(true);
     expect(view.result.current.state.isWon).toBe(false);
-    expect(view.result.current.state.maxMistakes).toBe(4);
+    expect(view.result.current.state.maxMistakes).toBe(3);
 
     // A loss reveals the unsolved categories one at a time, easiest first,
     // on a real multi-second cascade (800ms + 1500ms each in useGame). This
@@ -1160,5 +1159,69 @@ describe("18. custom-puzzle validation is format-aware", () => {
     const row = fetched.data as { content: Record<string, unknown> };
     // No format key is stored, and it reads back as Full.
     expect("format" in row.content).toBe(false);
+  });
+});
+
+
+describe("Mini rule revision", () => {
+  it.each([["g1", "g2", "r1", "🟩", "Green"], ["b1", "b2", "r1", "🟦", "Blue"], ["r1", "r2", "g1", "🟥", "Red"]])("maps the pair %s/%s to its category", (a, b, c, square, name) => {
+    expect(miniOneAwayColor(miniPuzzle, [a, b, c], [])).toEqual({ square, name });
+    expect(miniOneAwayColor(miniPuzzle, [c, b, a], [])).toEqual({ square, name });
+  });
+  it("does not color Full, mixed trios, or solved categories", () => {
+    expect(miniOneAwayColor(fullPuzzle, ["y1", "y2", "y3", "gg1"], [])).toBeNull();
+    expect(miniOneAwayColor(miniPuzzle, ["g1", "b1", "r1"], [])).toBeNull();
+    expect(miniOneAwayColor(miniPuzzle, ["g1", "g2", "r1"], [0])).toBeNull();
+    expect(miniOneAwayColor(miniPuzzle, ["g1", "g2", "missing"], [])).toBeNull();
+    expect(miniOneAwayColor(miniPuzzle, ["g1", "g1", "r1"], [])).toBeNull();
+    expect(miniOneAwayColor(miniPuzzle, [" G1 ", "G2", "R1"], [])).toEqual({ square: "🟩", name: "Green" });
+  });
+  it("keeps Almost Rainbow precedence when a trio is also ordinary one-away", async () => {
+    const view = mount({ ...miniPuzzle, rainbowHerring: ["g1", "b1", "r1"] });
+    await guess(view, ["g1", "g2", "b1"]);
+    expect(view.result.current.state.guessHistory[0]).toMatchObject({ isAlmostRainbow: true, isOneAway: false });
+    view.unmount();
+  });
+  it("retains four lives for legacy saves through refresh, and resets to three", async () => {
+    const id = progressStorageId(MINI_ID, MINI_FORMAT, "official");
+    saveProgress(id, { solvedGroups: [], mistakes: 2, guessHistory: [], gotRainbow: false, shuffledWords: miniPuzzle.groups.flatMap(g => g.words), rainbowWords: [] });
+    let view = mount(miniPuzzle);
+    expect(view.result.current.state.maxMistakes).toBe(4);
+    await guess(view, ["g1", "b1", "r1"]);
+    expect(view.result.current.state.isComplete).toBe(false);
+    expect(loadProgress(id)?.rulesVersion).toBe(1);
+    view.unmount();
+    view = mount(miniPuzzle);
+    expect(view.result.current.state.maxMistakes).toBe(4);
+    expect(view.result.current.state.mistakes).toBe(3);
+    await guess(view, ["g1", "b1", "r2"]);
+    expect(view.result.current.state.isComplete).toBe(true);
+    expect(view.result.current.state.mistakes).toBe(4);
+    await settle();
+    const stats = await loadStatsFromSupabase(MINI_FORMAT);
+    expect(stats.guessDistribution[4]).toBe(1);
+    expect(stats.averageMistakes).toBe(4);
+    view.unmount();
+    view = mount(miniPuzzle);
+    expect(view.result.current.state).toMatchObject({ isComplete: true, mistakes: 4, maxMistakes: 4 });
+    view.unmount();
+    clearProgress(id);
+    view = mount(miniPuzzle);
+    expect(view.result.current.state.maxMistakes).toBe(3);
+    await guess(view, ["g1", "b1", "r1"]);
+    expect(loadProgress(id)?.rulesVersion).toBe(2);
+    view.unmount();
+    view = mount(miniPuzzle);
+    expect(view.result.current.state.maxMistakes).toBe(3);
+    expect(view.result.current.state.mistakes).toBe(1);
+    view.unmount();
+  });
+  it("keeps Full playable after three mistakes", async () => {
+    const view = mount(fullPuzzle);
+    for (const w of ["y1", "y2", "y3"]) await guess(view, [w, "gg2", "bb2", "rr2"]);
+    expect(view.result.current.state.mistakes).toBe(3);
+    expect(view.result.current.state.isComplete).toBe(false);
+    expect(view.result.current.state.maxMistakes).toBe(4);
+    view.unmount();
   });
 });

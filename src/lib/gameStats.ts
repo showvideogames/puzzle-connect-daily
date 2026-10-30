@@ -557,8 +557,9 @@ export function displayStreakOf(stats: Pick<GameStats, "currentStreak" | "lastPl
  * formatRpcArgs: `_format` is only added for a non-Full format).
  */
 export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT): Promise<GameStats> {
-  // One bucket per possible mistake count, 0..maxMistakes inclusive.
-  const emptyDistribution = () => Array<number>(format.maxMistakes + 1).fill(0);
+  // Retain the historical four-mistake bucket, including legacy Mini losses.
+  const historicalMaxMistakes = Math.max(4, format.maxMistakes);
+  const emptyDistribution = () => Array<number>(historicalMaxMistakes + 1).fill(0);
 
   const empty: GameStats = {
     gamesPlayed: 0,
@@ -678,21 +679,14 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
     // counts every row in `rows` regardless of its mistakes value.
     let mistakesKnownCount = 0;
     for (const r of rows) {
-      if (Number.isInteger(r.mistakes) && (r.mistakes as number) >= 0 && (r.mistakes as number) <= format.maxMistakes) {
+      if (Number.isInteger(r.mistakes) && (r.mistakes as number) >= 0 && (r.mistakes as number) <= historicalMaxMistakes) {
         totalMistakes += r.mistakes as number;
         mistakesKnownCount++;
       }
       const isRainbowEligible = !!r.puzzle_id && rainbowPuzzleIds.has(r.puzzle_id);
 
-      // Mistake Distribution: every completed official session (win OR
-      // formal loss), bucketed by its own mistake count. A formal loss
-      // always has mistakes === 4 (the game ends the instant the 4th
-      // mistake is made — see MAX_MISTAKES in useGame.ts), so this is what
-      // actually lets bucket 4 populate. Previously this increment lived
-      // inside the `if (r.won)` block below, which made bucket 4
-      // structurally impossible: a win can never reach 4 mistakes (that's a
-      // loss), so every loss — the only rows that ever have mistakes === 4
-      // — was silently excluded from the distribution entirely.
+      // Bucket each completed result by its recorded count, including old
+      // four-mistake Mini losses. Never reinterpret history under new rules.
       //
       // Unfinished sessions cannot reach here at all: the query above
       // filters them out, so an abandoned game with 2 mistakes so far never
@@ -705,7 +699,7 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
       // row is still counted everywhere else (Played, totalMistakes for
       // Average Mistakes, etc. below) exactly as before; only this one
       // bucketing decision excludes it.
-      if (Number.isInteger(r.mistakes) && (r.mistakes as number) >= 0 && (r.mistakes as number) <= format.maxMistakes) {
+      if (Number.isInteger(r.mistakes) && (r.mistakes as number) >= 0 && (r.mistakes as number) <= historicalMaxMistakes) {
         guessDistribution[r.mistakes as number]++;
       }
 
