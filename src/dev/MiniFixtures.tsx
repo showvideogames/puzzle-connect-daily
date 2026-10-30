@@ -15,6 +15,7 @@
  *   /__fixtures/mini?format=full the same fixture as a Full 4×4, for comparison
  *   /__fixtures/mini?help=1      isolated format-aware tutorial (no game board)
  *   /__fixtures/mini?long=1      the longest answers the tiles must survive
+ *   /__fixtures/mini?zoom=2      CSS enlargement check (not browser zoom)
  *   /__fixtures/mini?emoji=1     every category carries a Category Emoji
  *   /__fixtures/mini?hintonly=1  the same, but the last category's visual is
  *                                Hint Only: shown in the Full Hint, withheld
@@ -27,6 +28,7 @@
  * solved-answers row has to hold three long words on a 320px screen, and
  * ?rainbow=1&hintonly=1 shows Hint Only on both kinds of solved bar at once.
  */
+import { useGamePageTheme } from "@/hooks/useGamePageTheme";
 import { TutorialModal } from "@/components/TutorialModal";
 import { useSearchParams } from "react-router-dom";
 import { GameBoard } from "@/components/GameBoard";
@@ -111,6 +113,7 @@ function fixturePuzzle(
 }
 
 export default function MiniFixtures() {
+  useGamePageTheme();
   const [params] = useSearchParams();
   const formatId = params.get("format") === "full" ? "full" : "mini";
   const long = params.get("long") === "1";
@@ -127,7 +130,7 @@ export default function MiniFixtures() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
+    <div style={{ zoom: Math.min(3, Math.max(1, Number(params.get("zoom")) || 1)) }} className="min-h-screen flex flex-col items-center pt-2 pb-12">
       <GameHeader showHint user={null} onSignOut={() => {}} variant="minimal" format={format} />
       <div className="w-full max-w-[840px] border-b border-divider mb-2" />
       <p className="text-xs text-muted-foreground mb-2">

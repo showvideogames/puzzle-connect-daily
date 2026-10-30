@@ -30,8 +30,14 @@ export function useFitBarText<T extends HTMLElement>(enabled: boolean, contentKe
       const minHeight = parseFloat(style.minHeight) || 0;
       const children = Array.from(el.children) as HTMLElement[];
       if (minHeight > 0 && children.length > 0) {
-        const top = children[0].getBoundingClientRect().top;
-        const bottom = children[children.length - 1].getBoundingClientRect().bottom;
+        // Mini can be enlarged or measured during its arrival animation.
+        // Compare layout pixels with CSS min-height, not transformed pixels,
+        // which would falsely shrink otherwise fitting text.
+        const mini = !!el.closest(".board-bars-square");
+        const first = children[0];
+        const last = children[children.length - 1];
+        const top = mini ? first.offsetTop : first.getBoundingClientRect().top;
+        const bottom = mini ? last.offsetTop + last.offsetHeight : last.getBoundingClientRect().bottom;
         const needed = bottom - top + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
         if (needed > minHeight + 0.5) return true;
       }

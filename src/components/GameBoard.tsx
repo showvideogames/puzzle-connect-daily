@@ -1528,7 +1528,7 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
     <div className={`rainbow-slot-fold ${slotFolded ? "is-folded" : ""}`} aria-hidden={slotFolded || undefined}>
     <div className="min-h-0 overflow-hidden">
     <div
-      className={`board-bars grid [&>*]:[grid-area:1/1] ${
+      className={`board-bars rainbow-slot-grid grid [&>*]:[grid-area:1/1] ${
         isMiniBoard ? "board-bars-square mb-2" : `mb-1.5 ${useWideBoard ? "board-bars-wide md:mb-3" : ""}`
       }`}
       style={{ "--board-cols": format.columns } as import("react").CSSProperties}
