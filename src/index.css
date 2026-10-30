@@ -526,6 +526,27 @@ html.layout-refresh .solved-bar-answers {
   margin-top: 0.3em;
 }
 
+/* Mini's Rainbow grid must share the ordinary bars' width, even when
+   enlarged text would otherwise size its implicit column by min-content. */
+.board-bars.board-bars-square.rainbow-slot-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.board-bars.board-bars-square.rainbow-slot-grid > * {
+  min-width: 0;
+}
+
+/* A modest Mini-only increase: at 330px, titles 18.5 → 20.5px and
+   answers 13.9 → 15.8px. The existing fit hook protects long content. */
+html.layout-refresh .board-bars-square .solved-bar-title {
+  font-size: calc(clamp(16px, 6.2cqw, 22px) * var(--bar-fit, 1));
+}
+html.layout-refresh .board-bars-square .solved-bar-answers {
+  font-size: calc(clamp(13px, 4.8cqw, 17px) * var(--bar-fit, 1));
+}
+html.layout-refresh .board-bars-square .solved-bar:not(.solved-bar-rainbow) .solved-bar-answers {
+  font-size: calc(clamp(16px, 5.6cqw, 20px) * var(--bar-fit, 1));
+}
+
 /* ── Solved category bar "arrival" pop — production's animation, slowed ──
    Production's keyframe shape and easing (main 7317a57: 0.95 → 1.08 → 1,
    480ms, ease-in-out), in Sam's experiment: a bigger peak (1.12) and half
