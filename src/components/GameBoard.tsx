@@ -1821,7 +1821,7 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
               only emits the classes it can see in the source and a computed
               class name would be purged from the production build. */}
           <div
-            className={`grid ${isMiniBoard ? "gap-2" : `gap-1.5 ${useWideBoard ? "md:gap-3" : ""}`} ${shaking || spotShaking ? "animate-shake" : ""}`}
+            className={`grid tile-mark-grid ${shaking || spotShaking ? "animate-shake" : ""}`}
             style={{ gridTemplateColumns: `repeat(${format.columns}, minmax(0, 1fr))` }}
           >
           {remainingWords.map((word, index) => {
