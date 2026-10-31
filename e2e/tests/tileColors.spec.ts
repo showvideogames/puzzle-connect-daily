@@ -50,7 +50,10 @@ test.describe("Color Palette Mode offers one colour per category", () => {
     const target = tile(page, fullWord);
     await target.click();
     await expect(target).toHaveAttribute("aria-pressed", "true");
-    const size = () => target.evaluate((el) => ({ width: el.offsetWidth, height: el.offsetHeight }));
+    const size = () => target.evaluate((el) => {
+      if (!(el instanceof HTMLElement)) throw new Error("Expected an HTML tile button");
+      return { width: el.offsetWidth, height: el.offsetHeight };
+    });
     const before = await size();
     await page.getByRole("button", { name: "Blue paint", exact: true }).click();
     await target.click();
