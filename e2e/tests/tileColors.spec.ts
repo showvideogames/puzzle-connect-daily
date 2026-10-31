@@ -44,6 +44,25 @@ test.describe("Color Palette Mode offers one colour per category", () => {
     await expectNoHorizontalOverflow(page);
   });
 
+  test("painting and erasing a selected tile keeps its size at 320px", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await gotoApp(page, "/");
+    const target = tile(page, fullWord);
+    await target.click();
+    await expect(target).toHaveAttribute("aria-pressed", "true");
+    const size = () => target.evaluate((el) => ({ width: el.offsetWidth, height: el.offsetHeight }));
+    const before = await size();
+    await page.getByRole("button", { name: "Blue paint", exact: true }).click();
+    await target.click();
+    await expect(target).toHaveAttribute("data-tile-color", "blue");
+    await expect.poll(size).toEqual(before);
+    await page.getByRole("button", { name: "Eraser", exact: true }).click();
+    await target.click();
+    await expect(target).not.toHaveAttribute("data-tile-color", "blue");
+    await expect(target).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(size).toEqual(before);
+  });
+
   test("the regular game's swatch row is Yellow, Green, Blue, Red", async ({ page }) => {
     await gotoApp(page, "/");
     await expect(tiles(page)).toHaveCount(16);

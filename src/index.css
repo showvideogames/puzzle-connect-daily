@@ -279,10 +279,9 @@ html {
     background: color-mix(in srgb, hsl(var(--mark-color)) var(--tile-paint-mix), white);
     color: hsl(var(--ink));
     border-color: transparent;
-    border-width: 3px;
-  }
-  @media (min-width: 768px) {
-    .tile-neutral[data-tile-color] { border-width: 4px; }
+    /* Match the unmarked light tile so painting/erasing cannot change its
+       intrinsic height on narrow screens. Outlines live outside this box. */
+    border-width: 1px;
   }
   .dark .tile-neutral[data-tile-color] {
     background: var(--mark-tint);
