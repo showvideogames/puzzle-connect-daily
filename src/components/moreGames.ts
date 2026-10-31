@@ -14,7 +14,7 @@ export const moreGames = [
   },
   {
     "title": "Hamburgle",
-    "description": "Bite-sized Wordle-inspired game.",
+    "description": "Bite-sized Wordle inspired game.",
     "href": "https://hamburgle.com/",
     "icon": "hamburgle"
   },
