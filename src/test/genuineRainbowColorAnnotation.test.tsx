@@ -1,14 +1,4 @@
-/**
- * The category-color ring on a GENUINELY found Rainbow answer, end to end —
- * corrects an earlier, wrong version of this feature.
- *
- * That earlier version let a player paint "Rainbow" onto any arbitrary tile
- * through a new palette swatch (a fake per-word `tileRainbowMarks` flag,
- * fully decoupled from real gameplay). This suite proves that's gone, and
- * that the real replacement only ever activates on words the player has
- * actually solved as the puzzle's Rainbow answer — driven through the REAL
- * useGame/GameBoard guess flow, not a shortcut.
- */
+// Genuine Rainbow discovery, category annotations, and erasing through real gameplay.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -112,7 +102,7 @@ function renderBoard(puzzle: Puzzle) {
 const tileButton = (container: HTMLElement, word: string) =>
   container.querySelector(`[data-word="${word}"] button`) as HTMLButtonElement;
 const ring = (container: HTMLElement, word: string) =>
-  container.querySelector(`[data-word="${word}"] button > span[aria-hidden="true"]`);
+  container.querySelector(`[data-word="${word}"] > [data-tile-mark]`);
 
 /** Selects and submits exactly the puzzle's real Rainbow words — the one and
  *  only way `isRainbow` ever becomes true for those tiles. */
@@ -260,22 +250,22 @@ describe("genuine Rainbow discovery + category color (Mini)", () => {
   });
 });
 
-describe("existing non-Rainbow palette behavior is unchanged", () => {
-  it("a plain colored tile (never a genuine Rainbow word) still renders the pastel category wash, no ring", () => {
+describe("ordinary annotations preserve palette and erase behavior", () => {
+  it("a plain colored tile (never a genuine Rainbow word) keeps its neutral fill with an outside mark", () => {
     const { container } = renderBoard(fullPuzzle);
     paint(container, "Green paint", "b2");
     const btn = tileButton(container, "b2");
-    expect(btn.className).toContain("tile-paint-2");
+    expect(btn.parentElement!.querySelector("[data-tile-mark=\"green\"]")).not.toBeNull();
     expect(btn.className).not.toContain("rainbow-tile");
-    expect(ring(container, "b2")).toBeNull();
+    expect(ring(container, "b2")).not.toBeNull();
   });
 
   it("Clear Colors still clears an ordinary painted tile", () => {
     const { container } = renderBoard(fullPuzzle);
     paint(container, "Yellow paint", "b2");
-    expect(tileButton(container, "b2").className).toContain("tile-paint-1");
+    expect(tileButton(container, "b2").parentElement!.querySelector("[data-tile-mark=\"yellow\"]")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /clear colors/i }));
-    expect(tileButton(container, "b2").className).not.toContain("tile-paint-1");
+    expect(tileButton(container, "b2").parentElement!.querySelector("[data-tile-mark=\"yellow\"]")).toBeNull();
   });
 });
 

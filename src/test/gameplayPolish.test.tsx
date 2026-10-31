@@ -349,7 +349,7 @@ describe("text on coloured backgrounds is solid Ink", () => {
     }
   });
 
-  it("a hand-painted tile uses the pastel group wash and Ink, with no opacity class", () => {
+  it("a hand-painted tile keeps its neutral fill and ink, with no opacity class", () => {
     const { container } = render(
       <MemoryRouter>
         <GameBoard puzzle={puzzle} settings={{ colorPaletteMode: true } as never} customMode showModeBadge={false} />
@@ -358,8 +358,8 @@ describe("text on coloured backgrounds is solid Ink", () => {
     fireEvent.click(screen.getByLabelText("Yellow paint"));
     const btn = container.querySelector('[data-word="y1"] button') as HTMLButtonElement;
     fireEvent.click(btn);
-    expect(btn.className).toContain("tile-paint-1");
-    expect(btn.className).toContain("text-group-1-fg");
+    expect(btn.parentElement!.querySelector("[data-tile-mark=\"yellow\"]")).not.toBeNull();
+    expect(btn.className).toContain("cloud-tile");
     expect(btn.className).not.toMatch(/(^|\s)opacity-/);
     // The softness is a lighter colour, not a translucent or opacity class.
     expect(btn.className).not.toMatch(/bg-group-1/);

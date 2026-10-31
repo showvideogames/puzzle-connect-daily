@@ -23,48 +23,11 @@ const IGNORE_CLICKS_AFTER_DRAG_MS = 600;
 
 const LIFT_SHADOW ="0 14px 28px -8px rgb(0 0 0 / 0.30), 0 6px 12px -4px rgb(0 0 0 / 0.18)";
 
-// bg: a soft pastel wash of the category's color (index.css's .tile-paint-N,
-// which mixes the same --group-N variable the SOLVED category bars use with
-// white) — a hand-painted tile is recognisably that category's color, but
-// lighter and "shaded in" rather than the bar's solid fill, so a
-// note-to-self color doesn't read as an already-solved group.
-//
-// text: the same guaranteed-readable dark ink SolvedGroup.tsx pairs with
-// that color (text-group-N-fg). Fully opaque — the softness lives entirely
-// in the background color, never in an opacity on the tile or its text.
-//
-// History: this was first a fixed hex at 35% alpha (bg-[#F6DA6A]/35, etc),
-// which let the tile's own background bleed through and so looked pale in
-// light mode and muddy in dark mode; then the solid bg-group-N fill, which
-// was theme-consistent but no longer soft. Mixing toward white keeps the
-// theme-consistency (no dark: variant needed — --group-1..4 and
-// --tile-paint-mix deliberately have no .dark override) and the softness.
-const COLOR_STYLES: Record<string, { bg: string; text: string }> = {
-  yellow: { bg: "tile-paint-1", text: "text-group-1-fg" },
-  green:  { bg: "tile-paint-2", text: "text-group-2-fg" },
-  blue:   { bg: "tile-paint-3", text: "text-group-3-fg" },
-  red:    { bg: "tile-paint-4", text: "text-group-4-fg" },
-};
-
-// The category-color inset ring shown on a genuine Rainbow tile (isRainbow)
-// that the player has ALSO painted a regular color onto — same
-// border-group-N variable as COLOR_STYLES.bg above, just as a border-color
-// instead of a fill, since the ring itself is drawn by a bordered overlay,
-// not a background.
+// Rainbow annotations stay outside the gradient; ordinary tiles use a themed tint.
 const COLOR_RING_BORDER_CLASS: Record<string, string> = {
-  yellow: "border-group-1",
-  green: "border-group-2",
-  blue: "border-group-3",
-  red: "border-group-4",
+  yellow: "border-group-1", green: "border-group-2",
+  blue: "border-group-3", red: "border-group-4",
 };
-
-// The white gap that separates that ring from the rainbow gradient on BOTH
-// sides, so the category color never sits directly against a hue the
-// animation is also cycling through. See the long note at the ring's JSX for
-// the geometry and for why this is a literal white in both themes rather
-// than a theme token.
-const RAINBOW_RING_GAP_PX = 2;
-const RAINBOW_RING_GAP_COLOR = "#ffffff";
 
 // Count visible characters/emojis using Intl.Segmenter
 // Handles multi-codepoint emojis correctly (e.g. 👨‍👩‍👧‍👦 = 1)
@@ -524,7 +487,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
     setShowColorPicker(false);
   }, [word, tileColor, onColorChange]);
 
-  const colorStyle = tileColor ? COLOR_STYLES[tileColor] : null;
+  const colorRing = tileColor ? COLOR_RING_BORDER_CLASS[tileColor] : null;
 
   // A themed bonus (e.g. flag) swaps the animated rainbow tile for a static gradient.
   const themedRainbow = !!isRainbow && !!rainbowGradient;
@@ -543,34 +506,21 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
   // desktop (md:768px+) keep the previously-approved flat 110px height,
   // unchanged from before this pass (md:aspect-auto hands sizing back to
   // that explicit height there).
-  const baseClasses = `tile-base font-tile ${squareTiles ? "aspect-[5/4] md:aspect-square" : "aspect-[5/4] md:aspect-auto md:h-[110px]"} font-[700] transition-all duration-150 ease-out relative
+  const baseClasses = `tile-base font-tile ${squareTiles ? "aspect-[5/4] md:aspect-square" : "aspect-[5/4] md:aspect-auto md:h-[110px]"} font-[700] transition-[background-color,border-color,box-shadow,transform,scale,opacity] duration-150 ease-out relative
     ${disabled ? (tileColor || isRainbow || !dimWhenDisabled ? "cursor-default" : "opacity-50 cursor-default") : ""}
   `;
 
-  // Selection styling:
-  // - Rainbow/colored tiles: solid foreground-color border when selected,
-  //   keep their own background/gradient. This used to be a ring-[3px]
-  //   ring-offset-2 (a box-shadow "halo" painted ~5px *outside* the tile's
-  //   own box) with no equivalent reserved on the unselected tile — visually
-  //   harmless to this element's own layout box, but the halo sits well
-  //   outside the tile's border-box, inside the grid's own 6px gap, and can
-  //   visually bleed onto/over a neighbouring tile (most often the one
-  //   above) the moment it appears. Reserving the same border-[3px] on the
-  //   unselected tile (transparent, so the paint color still shows straight
-  //   through to the edge under border-box's default background-clip) and
-  //   only ever changing its color removes that outside-the-box halo
-  //   entirely — the border paints inside the box, so it can never overlap
-  //   a neighbour regardless of gap size.
-  // - Neutral tiles: light mode keeps the inverted fill. Dark mode uses
-  //   a lighter charcoal fill and a white border (tile-neutral in CSS).
-  //   Border width stays fixed in each theme, so selection cannot reflow.
+  // Submission selection is independent of annotations: CSS combines the
+  // ordinary tint with selection; Rainbow gradients remain untouched.
+  // Border widths stay fixed, so toggling either state cannot reflow a tile.
+  // Selection uses separate edge styling, never a scale or a fill overlay.
   const stateClasses = isMatched
     ? "tile-neutral bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
       ? themedRainbow
-        ? `text-white shadow-md border-[3px] md:border-[4px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
+        ? `text-white shadow-md border-[3px] md:border-[4px] ${isSelected ? "border-foreground" : "border-transparent"}`
         : rainbowAnimated
-          ? `rainbow-tile text-white shadow-md border-[3px] md:border-[4px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
+          ? `rainbow-tile text-white shadow-md border-[3px] md:border-[4px] ${isSelected ? "border-foreground" : "border-transparent"}`
           // Static rainbow: the smooth blended gradient reads better with
           // dark ink text than white (much stronger contrast across its
           // lighter bands), and with the tile's normal hairline border
@@ -578,23 +528,9 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
           // that border read as its own thin multicolor edge against this
           // softer gradient, which this design intentionally avoids.
           : `rainbow-tile-static text-[#292825] shadow-md border ${isSelected ? "border-foreground" : "border-tile-border"}`
-      : colorStyle
-        // text-group-N-fg: the original 35%-opacity fill left this unset,
-        // relying on whatever ambient text color happened to inherit —
-        // harmless for emoji tiles (an <img>, not text) but not a real
-        // word/letters, which need the same guaranteed-readable dark ink
-        // SolvedGroup.tsx uses; it reads just as well on the pastel.
-        //
-        // border-[3px] md:border-[4px]: width applies to BOTH the selected
-        // and unselected states (only border-color differs below) so it
-        // stays constant across the selection toggle — same reasoning as
-        // the neutral-tile comment above, just a wider box on desktop. 3px
-        // on mobile is unchanged from before; 4px only kicks in at the
-        // existing md: breakpoint, where the tile itself is already bigger.
-        ? `tile-painted ${colorStyle.bg} ${colorStyle.text} hover:shadow-sm active:scale-95 border-[3px] md:border-[4px] ${isSelected ? "border-foreground scale-[0.97]" : "border-transparent"}`
-        : isSelected
-          ? "tile-neutral bg-tile-selected text-tile-selected-fg border border-tile-selected active:scale-95"
-          : "tile-neutral cloud-tile active:scale-95";
+      : isSelected
+        ? "tile-neutral bg-tile-selected text-tile-selected-fg border border-tile-selected"
+        : "tile-neutral cloud-tile";
 
   return (
     <div
@@ -606,7 +542,9 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       // width available to the button's cqw-based font-size below, so text
       // scales directly off the tile's actual size (mobile through
       // desktop) rather than the viewport.
-      className={`relative [container-type:inline-size] ${isChecking ? "animate-tile-checking" : ""}`}
+      data-tile-kind={isRainbow ? "rainbow" : "ordinary"}
+      data-tile-selected={isSelected ? "true" : "false"}
+      className={`tile-shell relative [container-type:inline-size] ${isChecking ? "animate-tile-checking" : ""}`}
       style={{
         touchAction: arrangeTiles ? "none" : "manipulation",
         // The board positions a lifted tile with an inline transform on
@@ -617,6 +555,12 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         ...(isChecking ? { animationDelay: `${checkingIndex * 0.07}s` } : {}),
       }}
     >
+      {colorRing && (
+        <span aria-hidden="true" data-tile-mark={tileColor}
+          className={`tile-color-outline pointer-events-none absolute ${colorRing}`} />
+      )}
+      {(colorRing || isRainbow) && isSelected && <span aria-hidden="true" data-tile-selection
+        className="tile-selection-outline pointer-events-none absolute" />}
       <button
         ref={buttonRef}
         onClick={handleClick}
@@ -633,11 +577,9 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         onPointerDown={handlePointerDown}
         disabled={disabled}
         aria-pressed={isSelected}
-        // A lifted tile drops the press-down shrink (active:scale-95), which
-        // would otherwise hold for the whole drag and cancel out the lift.
-        className={`${baseClasses} ${isLifted ? stateClasses.replace("active:scale-95", "") : stateClasses} w-full ${isEmojiPuzzle ? "!p-2" : "text-[clamp(9px,15.5cqw,33px)]"}
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-          focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
+        data-tile-color={colorRing ? tileColor : undefined}
+        className={`${baseClasses} ${stateClasses} w-full ${isEmojiPuzzle ? "!p-2" : "text-[clamp(9px,15.5cqw,33px)]"}
+          tile-keyboard-focus`}
         style={{
           ...(emojiFontSize ? { fontSize: emojiFontSize } : {}),
           // Two lines need the vertical room the single-line padding takes, or a
@@ -645,83 +587,10 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
           // phone makes its row taller than a tile row.
           ...(splitParts ? { paddingLeft: SPLIT_PAD_X, paddingRight: SPLIT_PAD_X, paddingTop: 4, paddingBottom: 4 } : {}),
           ...(themedRainbow ? { background: rainbowGradient, textShadow: rainbowTextShadow } : {}),
-          // `scale` (not `transform`) so it composes with the tile's own
-          // selection scale; the button's transition-all eases the lift in
-          // and back out on release.
+          // Deliberate drag lift only; selecting a tile never scales it.
           ...(isLifted ? { scale: String(LIFT_SCALE), boxShadow: LIFT_SHADOW } : {}),
         }}
       >
-        {/* Category-color inset ring — only on a GENUINE Rainbow tile
-            (isRainbow, the real gameplay find) that the player has ALSO
-            painted a regular color onto, recording which ordinary category
-            they think it belongs to. A separate absolutely-positioned
-            overlay (not a box-shadow/ring utility) on purpose: the
-            focus-visible ring below and this element's own selection border
-            both already use box-shadow/border on the BUTTON itself, and
-            layering a THIRD color onto either of those risks the exact
-            "double border" bug this file's mousedown fix exists to avoid.
-            This overlay draws inside the button's padding box (inset-0 on a
-            `relative` ancestor — tile-base already sets that), so it always
-            sits flush just inside the selection border, entirely independent
-            of it and of the focus ring. pointer-events-none so it never
-            intercepts clicks.
-
-            The animated rainbow gradient cycles through every hue, including
-            each category color itself — so on some frames a same-hue ring
-            (Yellow against the gradient's own yellow band, Green against its
-            green band, etc.) can get hard to place. A thin band of white on
-            BOTH sides of the ring fixes that: the ring never touches the
-            gradient, so the only thing bordering the category color is a
-            neutral the gradient never contains, and "is this tile marked
-            blue or green?" stops depending on which frame of the animation
-            you happen to be looking at.
-
-            This replaces an earlier 1px hsl(var(--ink)/0.4) separator on the
-            ring's INNER edge only. That one adapted to the theme (a dark
-            hairline in light mode, a light one in dark mode), which sounds
-            tidier but is the wrong tool here: it only ever separated the
-            ring from the gradient on one side, and in dark mode it was
-            itself pale. The gap is deliberately a LITERAL white in both
-            themes rather than a theme token — its job is to be a constant,
-            gradient-free reference the eye reads the category color against,
-            and a token that went near-black in dark mode would put the ring
-            straight back against a moving background.
-
-            Geometry, and why it is drawn this way: the span is inset BY the
-            gap rather than sitting at inset-0, and the outer gap is an
-            OUTSET box-shadow filling exactly that inset band. That keeps the
-            whole treatment inside the button's padding box, so it can never
-            paint over the button's own 3px/4px selection border — an outset
-            shadow from inset-0 would have covered 2 of those 3px on mobile,
-            the same "something else eats the selection border" problem that
-            moved selection off ring/ring-offset in the first place. The
-            inner gap is an INSET box-shadow. So neither gap changes the 4px
-            ring's own thickness or color, and the ring itself stays a plain
-            border-group-N class. The radius is the tile's own minus the
-            inset, so the outset shadow's outer edge lands back exactly on
-            the tile's curve. */}
-        {isRainbow && colorStyle && (
-          <span
-            aria-hidden="true"
-            className={`pointer-events-none absolute border-[4px] ${COLOR_RING_BORDER_CLASS[tileColor as string]}`}
-            style={{
-              // Inset/radius/gap live here rather than in arbitrary Tailwind
-              // classes on purpose: Tailwind only emits classes it can see
-              // literally in the source, so an interpolated inset-[${...}]
-              // would be purged from the production build (the same trap
-              // GameBoard's grid-template-columns note describes). Inline
-              // style has no such constraint, which also lets all three
-              // derive from the one RAINBOW_RING_GAP_PX above. Units are
-              // written out rather than left to React's numeric-value px
-              // defaulting, so the three uses read identically.
-              inset: `${RAINBOW_RING_GAP_PX}px`,
-              borderRadius: `calc(clamp(11px,1.2vw,14px) - ${RAINBOW_RING_GAP_PX}px)`,
-              boxShadow:
-                `0 0 0 ${RAINBOW_RING_GAP_PX}px ${RAINBOW_RING_GAP_COLOR}, ` +
-                `inset 0 0 0 ${RAINBOW_RING_GAP_PX}px ${RAINBOW_RING_GAP_COLOR}`,
-            }}
-          />
-        )}
         {isImage ? (
           <img
             src={customEmojiUrl(word)}
