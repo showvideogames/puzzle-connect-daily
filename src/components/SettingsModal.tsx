@@ -308,7 +308,7 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                       className="flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <img src={`/game-icons/${game.icon}.png`} alt="" width={40} height={40} className="w-10 h-10 shrink-0 rounded-lg object-contain" />
                       <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{game.title}</span><span className="block text-xs text-muted-foreground">{game.description}</span></span>
-                      <span aria-hidden="true">↗</span><span className="sr-only"> (opens in a new tab)</span>
+                      <span className="sr-only"> (opens in a new tab)</span>
                     </a>
                   ))}
                 </section>
