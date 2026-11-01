@@ -1,5 +1,5 @@
+import type { SocialApi } from "@/components/social/socialApi";
 import { ensureAccount, signOutOfRainbow } from "@/lib/platformSignIn";
-import type { SocialClient } from "@/social/client";
 import type { Outcome, SessionState } from "@/social/contract";
 import { createRainbowSocial, rainbowSession } from "@/social/rainbowAdapter";
 import { backend } from "./fakeBackend";
@@ -18,8 +18,8 @@ export type Who = PersonId | "guest";
 /** A link one person hands another. */
 export type PreviewLink = SeededLink;
 
-export interface Preview {
-  client: SocialClient;
+/** The screens run on the same small api as the app. The rest is for the bar. */
+export interface Preview extends SocialApi {
   choices: { id: PersonId; label: string }[];
   seededLinks: PreviewLink[];
   /** Whoever holds the stored session. */
@@ -31,7 +31,6 @@ export interface Preview {
   finishToday(): Promise<Outcome | null>;
   nextDay(): void;
   puzzleId(): string;
-  today(): Date;
 }
 
 async function change(who: Who): Promise<void> {
@@ -74,6 +73,9 @@ async function begin(): Promise<Preview> {
     nextDay: () => backend.nextDay(),
     puzzleId: () => backend.puzzleId(),
     today: () => backend.today(),
+    linkUrl: (code) => `${location.origin}/?invite=${encodeURIComponent(code)}`,
+    // The bar already holds every link, so there is nothing to hand over.
+    share: async () => "done",
   };
 }
 

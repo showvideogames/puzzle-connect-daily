@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { FriendsTab } from "@/components/account/FriendsHome";
+import type { MadeLink } from "@/components/social/socialApi";
+import { SocialScreens } from "@/components/social/SocialScreens";
 import { socialProblem } from "@/lib/socialView";
 import type { SessionState } from "@/social/contract";
-import { Waiting } from "./flowPanels";
+import { GuestPanel, Waiting } from "./flowPanels";
 import type { Preview, PreviewLink, Who } from "./preview";
-import { Session } from "./Session";
 
 /**
- * The page: the bar above the real screens. It knows who is signed in only from
- * the real session source. The links in the bar outlast a switch on purpose:
- * they are what one person hands another. Everything else goes.
+ * The page: the bar above the real screens, which the app runs too. It knows who
+ * is signed in only from the real session source. The links in the bar outlast a
+ * switch on purpose: they are what one person hands another. Everything else goes.
  */
 
 const RELOADED_NOTE = "A reload empties this preview, so a link from before it no longer works.";
+const SIGN_IN_NOTE = "This preview has no sign-in page. Choose a person in the bar. This invitation stays open.";
+const NAME_LATER_NOTE = "Friends and Groups wait for a Display Name. Your games don't need one.";
 
 type VisitState = "changing" | "checking" | "guest" | "signed-in";
 
@@ -93,7 +96,10 @@ export function FriendsFlow({ preview }: { preview: Preview }) {
     if (nextTab) setTab(nextTab);
   }, []);
 
-  const addLink = useCallback((link: PreviewLink) => setLinks((list) => [link, ...list]), []);
+  const addLink = useCallback(({ label, code, url }: MadeLink) => {
+    setLinks((list) => [{ label, code }, ...list]);
+    if (url) setNote(`Link ready: ${url}. Open it from the bar: a reload empties this preview.`);
+  }, []);
 
   const ready = visit.state === "guest" || visit.state === "signed-in";
 
@@ -131,9 +137,9 @@ export function FriendsFlow({ preview }: { preview: Preview }) {
       </header>
       <div className="preview-body">
         {ready ? (
-          <Session
+          <SocialScreens
             key={`${visit.id}:${day}:${invite ?? ""}`}
-            preview={preview}
+            api={preview}
             signedIn={visit.state === "signed-in"}
             code={invite}
             refresh={refresh}
@@ -142,6 +148,11 @@ export function FriendsFlow({ preview }: { preview: Preview }) {
             onNote={setNote}
             onLink={addLink}
             onLeaveLink={leaveLink}
+            onSignIn={() => setNote(SIGN_IN_NOTE)}
+            onNameLater={() => setNote(NAME_LATER_NOTE)}
+            guest={<GuestPanel />}
+            waiting={<Waiting label="Loading" />}
+            editorClassName="preview-editor"
           />
         ) : (
           <Waiting label="Checking who this is" />

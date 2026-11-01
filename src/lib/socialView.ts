@@ -1,5 +1,6 @@
-import type { FoundPerson } from "@/components/account/AddFriendScreen";
+import type { FoundPerson, SentRequest } from "@/components/account/AddFriendScreen";
 import type { GroupInvitePreview } from "@/components/account/GroupInviteCard";
+import type { GroupView } from "@/components/account/GroupPage";
 import type { GroupSummary } from "@/components/account/GroupsTab";
 import type {
   Face,
@@ -9,6 +10,7 @@ import type {
   GameSummaries,
   GroupInvitePreview as HubGroupPreview,
   GroupRow,
+  MemberRow,
   Operations,
   ResultRow,
 } from "@/social/contract";
@@ -100,10 +102,27 @@ export function friendResults({ me, friends, rows }: { me: Me; friends: readonly
   return [resultFor(you, rows.find((row) => row.isMe)), ...others];
 }
 
+/**
+ * The viewer, then every other member, joined the same way by memberRef. Everyone
+ * here is a member, so this is the group's list of people as well as its results.
+ */
+export function groupResults({ members, rows }: { members: readonly MemberRow[]; rows: readonly ResultRow[] }): FriendResult[] {
+  const shown = members.map((member) => {
+    const person: Person = { id: member.memberRef, name: shownName(member.name), isYou: member.isMe, ...faceOf(member) };
+    return resultFor(person, rows.find((row) => "memberRef" in row && row.memberRef === member.memberRef));
+  });
+  return [...shown.filter((result) => result.isYou), ...shown.filter((result) => !result.isYou)];
+}
+
 // ── Groups ──
 
-export function groupSummary({ name, emblemId, photo, accentColor, memberCount }: GroupRow): GroupSummary {
-  return { name, emblemId: emblemOf(emblemId), photo, accentColor: colorOf(accentColor), memberCount };
+export function groupSummary({ groupId, name, emblemId, photo, accentColor, memberCount }: GroupRow): GroupSummary {
+  return { groupId, name, emblemId: emblemOf(emblemId), photo, accentColor: colorOf(accentColor), memberCount };
+}
+
+/** The list row plus what its page needs. A code only ever reaches an owner's page, and it can still be null. */
+export function groupView(row: GroupRow): GroupView {
+  return { ...groupSummary(row), isOwner: row.isOwner, inviteCode: row.isOwner ? row.inviteCode : null };
 }
 
 /** Tells the two kinds of invitation apart, the way the contract says to. */
@@ -151,6 +170,11 @@ export function foundPerson(found: Found): FoundPerson {
   return { displayName: shownName(found.name), ...faceOf(found) };
 }
 
+/** A sent request's id is its requestRef, which is all Cancel needs. */
+export function sentRequest(row: FriendRequestRow): SentRequest {
+  return { id: row.requestRef, displayName: shownName(row.name), ...faceOf(row) };
+}
+
 // ── Wording ──
 //
 // Rainbow's words for the contract's outcomes, in the style of joinProblem in
@@ -184,6 +208,14 @@ function commonProblem(outcome: string): string | null {
 /** When nothing more specific fits, such as a list that wouldn't load. */
 export function socialProblem(outcome: string): string {
   return commonProblem(outcome) ?? "Something went wrong. Please try again.";
+}
+
+/**
+ * The account being re-checked, which Rainbow does on every focus and reconnect.
+ * A read refused for this says nothing about the player, so it asks again quietly.
+ */
+export function isBackgroundCheck(outcome: string): boolean {
+  return outcome === "still_checking" || outcome === "stale_session";
 }
 
 export function findProblem(outcome: string): string {
@@ -260,6 +292,29 @@ export function makeGroupProblem(outcome: string): string {
   }
 }
 
+/** Declining a request that was sent to you, or cancelling one you sent. */
+export function requestChangeProblem(outcome: string): string {
+  if (outcome === "not_found") return "That friend request is no longer waiting.";
+  return commonProblem(outcome) ?? "We couldn't change that request just now. Please try again.";
+}
+
+/** Removing or blocking a friend. */
+export function friendChangeProblem(outcome: string): string {
+  if (outcome === "not_found") return "That person isn't on your friends list any more.";
+  return commonProblem(outcome) ?? "We couldn't change that just now. Please try again.";
+}
+
+/** Reading a group's page. */
+export function groupProblem(outcome: string): string {
+  if (outcome === "not_a_member") return "You're not in this group any more.";
+  return commonProblem(outcome) ?? "We couldn't open this group just now. Please try again.";
+}
+
+export function leaveProblem(outcome: string): string {
+  if (outcome === "not_a_member") return "You're not in this group any more.";
+  return commonProblem(outcome) ?? "We couldn't leave the group just now. Please try again.";
+}
+
 /** The group already exists by this point, so this always says so. */
 export function groupPictureProblem(outcome: string): string {
   switch (outcome) {
@@ -273,3 +328,27 @@ export function groupPictureProblem(outcome: string): string {
       return "Your group was made, but its picture and color weren't saved.";
   }
 }
+
+export const copyProblem = (url: string): string => `We couldn't copy that. Here's your link: ${url}`;
+
+export const NO_RESULTS_NOTE = "We couldn't load today's results. Please try again later.";
+
+// ── Questions and notes ──
+
+export const memberWords = (count: number): string => `${count} ${count === 1 ? "member" : "members"}`;
+
+export const removeFriendQuestion = (name: string): string => `Remove ${name} from your friends? You'll stop sharing results.`;
+
+export const blockQuestion = (name: string): string => `Block ${name}? You'll stop being friends, and neither of you can add the other.`;
+
+export const leaveGroupQuestion = (name: string): string => `Leave ${name}? Your results will stop being shared with this group.`;
+
+export const leftGroupNote = (name: string, closed: boolean): string => (closed ? `You left ${name}, and that closed the group.` : `You left ${name}.`);
+
+export const CHECKING_NOTE = "Checking who this is";
+
+export const LOADING_NOTE = "Loading";
+
+export const GUEST_HEADING = "Sign in for Friends and Groups";
+
+export const GUEST_NOTE = "Your friends and groups need an account. Every game stays open without one.";

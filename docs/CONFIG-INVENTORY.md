@@ -19,6 +19,7 @@ Supabase address or another game's table prefix appears in `src/`,
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | its anon / publishable key | public by design |
 | `VITE_PLATFORM_DISCOVERY_URL` | the shared sign-in service's OpenID discovery document | empty = accounts OFF (guest-only build) |
 | `VITE_ACCOUNTS_ENABLED` | emergency switch; `"false"` hides every sign-in surface | anything else = on |
+| `VITE_SHARED_SOCIAL` | Friends and Groups. `beta` turns on the routes, menu row and live connection, and the gateway's allow-list still decides who gets in. `mock` is for local previews and refused in production builds | anything else = off |
 | `VITE_TURNSTILE_SITE_KEY` | Cloudflare Turnstile for the feedback form | public site key |
 | `VITE_MINI_SHARE_URL` | where Mini share text points | defaults to rainbowcategories.com/mini |
 | `VITE_SUPPORT_URL` | the "Keep the Puzzles Coming" link | empty hides the button |

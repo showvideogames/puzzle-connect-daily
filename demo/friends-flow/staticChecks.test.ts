@@ -14,14 +14,17 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const RAINBOW = path.resolve(HERE, "../..");
 
 const read = (name: string) => readFileSync(path.join(HERE, name), "utf8");
+const readShared = (name: string) => readFileSync(path.join(RAINBOW, "src", "components", "social", name), "utf8");
 
-const PAGE_FILES = ["AddFriendFlow.tsx", "FriendsFlow.tsx", "LinkCards.tsx", "MyGroups.tsx", "Session.tsx", "WaitingRequests.tsx", "flowData.ts", "flowPanels.tsx", "useLive.ts", "main.tsx"];
+const PAGE_FILES = ["FriendsFlow.tsx", "flowPanels.tsx", "main.tsx"];
+/** Moved into the app, which runs the same files. The rules for what a screen may do still hold for them. */
+const SHARED_FILES = ["AddFriendFlow.tsx", "GroupFlow.tsx", "LinkCards.tsx", "MyGroups.tsx", "SocialScreens.tsx", "WaitingRequests.tsx", "socialData.ts", "useLive.ts"];
 const FAKE_FILES = ["fakeBackend.ts", "fakeSupabase.ts", "fakeSupabaseJs.ts"];
 
 const page = read("index.html");
 const main = read("main.tsx");
 const glue = read("preview.ts");
-const pageTexts = PAGE_FILES.map(read);
+const pageTexts = [...PAGE_FILES.map(read), ...SHARED_FILES.map(readShared)];
 const fakeTexts = FAKE_FILES.map(read);
 
 /** The network and every storage but the one each file is allowed. */
@@ -83,9 +86,10 @@ describe("real code only", () => {
     expect(read("fakeBackend.ts")).toContain("hub.serverFor(GAME).recordCompletion");
   });
 
-  it("builds a link only from what createGroup or createFriendInvite answered", () => {
-    expect(read("MyGroups.tsx")).toContain("const { groupId, inviteCode } = made.data;");
-    // Read off a row it would be a code from a list, which the contract forbids.
+  it("builds a link only from what createGroup or createFriendInvite answered, or from an owner's own group", () => {
+    expect(readShared("MyGroups.tsx")).toContain("const { groupId, inviteCode } = made.data;");
+    expect(readShared("GroupFlow.tsx")).toContain("if (!inviteCode) return false;");
+    // The owner's page is the one place a row's code is read, and socialView only hands it to an owner.
     for (const text of pageTexts) expect(text).not.toMatch(/\.inviteCode\b/);
   });
 });

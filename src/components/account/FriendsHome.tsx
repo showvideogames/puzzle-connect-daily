@@ -1,10 +1,8 @@
-import { useId, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
-import { ChevronDown, ChevronUp } from "lucide-react";
-import { canOpenResult, resultSummary, type FriendResult } from "@/lib/friendResults";
+import type { FriendResult } from "@/lib/friendResults";
 import { accountPanel, outlineAction, primaryAction, quietText } from "./accountStyles";
-import { ProfileAvatar } from "./ProfileAvatar";
-import { ResultDetail } from "./ResultDetail";
+import { ResultRow, TodayHeading } from "./ResultRow";
 
 export type FriendsTab = "friends" | "groups";
 
@@ -20,6 +18,8 @@ interface FriendsHomeProps {
   groups: ReactNode;
   /** Used by tests. In the app this is simply today on this device. */
   today?: Date;
+  /** What an opened row offers. Null for a row with nothing to offer. */
+  rowActions?: (result: FriendResult) => ReactNode;
 }
 
 const tabButton =
@@ -27,58 +27,14 @@ const tabButton =
   "data-[state=active]:bg-[hsl(258_46%_52%)] data-[state=active]:text-white " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_46%_52%)] focus-visible:ring-offset-2 focus-visible:ring-offset-card";
 
-function ResultRow({ result, open, onToggle }: { result: FriendResult; open: boolean; onToggle: () => void }) {
-  const panel = useId();
-  const person = (
-    <>
-      <ProfileAvatar animalId={result.animalId} backgroundColor={result.backgroundColor} size={56} />
-      <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-lg font-bold leading-tight text-foreground">{result.isYou ? "You" : result.name}</span>
-        <span className={`block text-base leading-snug ${quietText}`}>{resultSummary(result)}</span>
-      </span>
-    </>
-  );
-  return (
-    <li className="border-t border-border first:border-t-0" data-testid="result-row" data-person={result.id}>
-      {canOpenResult(result) ? (
-        <>
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls={panel}
-            onClick={onToggle}
-            className="flex min-h-[4.5rem] w-full items-center gap-3 rounded-lg py-2 hover:bg-secondary/60
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_46%_52%)]"
-          >
-            {person}
-            <span className="flex shrink-0 items-center gap-0.5 text-base font-semibold text-[hsl(258_46%_42%)] dark:text-[hsl(258_80%_82%)]">
-              {open ? "Hide" : "Details"}
-              {open
-                ? <ChevronUp aria-hidden="true" className="h-5 w-5" />
-                : <ChevronDown aria-hidden="true" className="h-5 w-5" />}
-            </span>
-          </button>
-          {open && (
-            <div id={panel} className="px-1 pb-3 pt-1">
-              <ResultDetail result={result} />
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="flex min-h-[4.5rem] items-center gap-3 py-2">{person}</div>
-      )}
-    </li>
-  );
-}
-
 /**
- * Today's results first, with Friends and Groups side by side. Only people who
- * have played can be opened. A friend code is there to read out or copy.
+ * Today's results first, with Friends and Groups side by side. People who have
+ * played can be opened, and so can anyone with actions. A friend code is there
+ * to read out or copy.
  */
-export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, onAddFriend, groups, today = new Date() }: FriendsHomeProps) {
+export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, onAddFriend, groups, today = new Date(), rowActions }: FriendsHomeProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [copied, setCopied] = useState<"yes" | "no" | null>(null);
-  const date = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(today);
 
   const copyCode = async () => {
     try {
@@ -101,10 +57,7 @@ export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, o
         </Tabs.List>
 
         <Tabs.Content value="friends" className="focus-visible:outline-none">
-          <div className="mt-3 flex items-baseline justify-between gap-3">
-            <h2 className="font-tile text-xl font-bold text-foreground">Today</h2>
-            <p className={`text-base ${quietText}`}>{date}</p>
-          </div>
+          <TodayHeading today={today} />
           <ul className="mt-1">
             {results.map((result) => (
               <ResultRow
@@ -112,6 +65,7 @@ export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, o
                 result={result}
                 open={openId === result.id}
                 onToggle={() => setOpenId(openId === result.id ? null : result.id)}
+                actions={rowActions?.(result)}
               />
             ))}
           </ul>

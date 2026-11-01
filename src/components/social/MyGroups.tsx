@@ -2,21 +2,22 @@ import type { GroupAppearance } from "@/components/account/GroupAppearanceForm";
 import { GroupsTab, type GroupSummary } from "@/components/account/GroupsTab";
 import { SHARING_NOTICE_VERSION } from "@/lib/sharingNotice";
 import { groupPictureProblem, makeGroupProblem } from "@/lib/socialView";
-import type { Preview, PreviewLink } from "./preview";
+import type { MadeLink, SocialApi } from "./socialApi";
 import { useLive } from "./useLive";
 
 interface MyGroupsProps {
-  preview: Preview;
+  api: SocialApi;
   groups: readonly GroupSummary[];
   displayName: string | undefined;
   onNote: (note: string) => void;
-  onLink: (link: PreviewLink) => void;
+  onLink?: (link: MadeLink) => void;
   onReload: () => Promise<void>;
+  onOpen: (groupId: string) => void;
 }
 
-/** The real tab. A new group's link comes from createGroup, never from listMyGroups, as the contract asks. */
-export function MyGroups({ preview, groups, displayName, onNote, onLink, onReload }: MyGroupsProps) {
-  const { client } = preview;
+/** The tab. A new group's link comes from what createGroup answered. */
+export function MyGroups({ api, groups, displayName, onNote, onLink, onReload, onOpen }: MyGroupsProps) {
+  const { client } = api;
   const live = useLive();
 
   /** The form shows the notice above Save, so this is the one place its version is sent from. A throw keeps the form open with everything chosen. */
@@ -29,7 +30,7 @@ export function MyGroups({ preview, groups, displayName, onNote, onLink, onReloa
       throw new Error(made.outcome);
     }
     const { groupId, inviteCode } = made.data;
-    onLink({ label: `Group link: ${group.name}`, code: inviteCode });
+    onLink?.({ label: `Group link: ${group.name}`, code: inviteCode });
     const styled = await client.call("setGroupAppearance", { groupId, emblemId: group.emblemId, photo: group.photo, accentColor: group.accentColor });
     if (!live.current) return;
     // The group exists now, so saving again from the form would make a second one.
@@ -37,5 +38,5 @@ export function MyGroups({ preview, groups, displayName, onNote, onLink, onReloa
     await onReload();
   };
 
-  return <GroupsTab groups={groups} onCreate={makeGroup} />;
+  return <GroupsTab groups={groups} onCreate={makeGroup} onOpen={onOpen} />;
 }

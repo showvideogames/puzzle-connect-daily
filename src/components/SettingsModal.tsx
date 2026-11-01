@@ -3,9 +3,10 @@ import { useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Switch } from "@/components/ui/switch";
 import { GameSettings } from "@/lib/settings";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { BookOpen, Archive as ArchiveIcon, Gamepad2, Grid2x2, PlusCircle, Star, Users, X } from "lucide-react";
 import { PlayerAuth } from "./PlayerAuth";
+import { socialBetaOn } from "@/components/social/socialFlag";
 import { ACCOUNTS_ENABLED } from "@/lib/platformSignIn";
 import { FULL_FORMAT, MINI_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 import type { User as AuthUser } from "@supabase/supabase-js";
@@ -38,8 +39,27 @@ interface SettingsModalProps {
   onEditProfile?: () => void;
   /** Adds "All games" to the Menu section, for the game picker. */
   onOpenGames?: () => void;
-  /** Adds "Friends & Groups" to the Menu section. */
+  /** Adds "Friends & Groups" to the Menu section. In the beta it is there without this, and opens /friends. */
   onOpenSocial?: () => void;
+}
+
+function SocialRow({ onClose, onOpen }: { onClose: () => void; onOpen: () => void }) {
+  return (
+    <button
+      onClick={() => { onClose(); onOpen(); }}
+      className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
+        hover:bg-secondary transition-colors active:scale-95"
+    >
+      <Users className="w-4 h-4 text-slate" />
+      Friends &amp; Groups
+    </button>
+  );
+}
+
+/** Its own component so the router is only reached for inside the Menu section, where a router is already needed. */
+function BetaSocialRow({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate();
+  return <SocialRow onClose={onClose} onOpen={() => navigate("/friends")} />;
 }
 
 export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback, showMenuLinks = false, showCreateLink = false, onHowToPlayClick, user = null, onSignOut, format = FULL_FORMAT, onEditProfile, onOpenGames, onOpenSocial }: SettingsModalProps) {
@@ -206,15 +226,10 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                         All games
                       </button>
                     )}
-                    {onOpenSocial && (
-                      <button
-                        onClick={() => { onClose(); onOpenSocial(); }}
-                        className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
-                          hover:bg-secondary transition-colors active:scale-95"
-                      >
-                        <Users className="w-4 h-4 text-slate" />
-                        Friends &amp; Groups
-                      </button>
+                    {onOpenSocial ? (
+                      <SocialRow onClose={onClose} onOpen={onOpenSocial} />
+                    ) : socialBetaOn() && (
+                      <BetaSocialRow onClose={onClose} />
                     )}
                     {user && (
                       <Link

@@ -159,7 +159,7 @@ describe("a friend by code", () => {
     expect(rows().find((row) => row.includes("Jordan"))).toContain("Not played yet");
   });
 
-  it("finding a friend again says so in the bar, because the screen can only say nobody was found", async () => {
+  it("finding a friend again says so on the screen, in its own sentence", async () => {
     await preview.switchTo("jordan");
     const jordansCode = data(await preview.client.call("getMe", {})).friendCode;
     await preview.switchTo("guest");
@@ -167,8 +167,7 @@ describe("a friend by code", () => {
     await become("alex");
     click("Add a friend");
     findFriend(jordansCode);
-    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't find anyone with that code.");
-    expect(note()).toBe("You're already friends.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("You're already friends.");
   });
 });
 
@@ -195,7 +194,7 @@ describe("the person with no name", () => {
     click("Continue");
 
     expect(await screen.findByTestId("friend-invite")).toHaveTextContent("Alex wants to be friends");
-    expect(screen.queryByRole("button", { name: /decline/i })).toBeNull();
+    expect(screen.getByRole("button", { name: "Decline" })).toBeInTheDocument();
     click("Not now");
     expect(await screen.findByRole("heading", { name: "Sam wants to be friends" })).toBeInTheDocument();
     click("Accept");
@@ -207,7 +206,7 @@ describe("the person with no name", () => {
     expect(data(await preview.client.call("listFriends", {})).map((row) => row.name)).toEqual(["Sam"]);
   });
 
-  it("a refused send never says sent: the screen starts over and the bar says why", async () => {
+  it("a refused send never says sent: the screen goes back a step and says why", async () => {
     await preview.switchTo("newcomer");
     const rileysCode = data(await preview.client.call("getMe", {})).friendCode;
     await preview.switchTo("jordan");
@@ -226,7 +225,7 @@ describe("the person with no name", () => {
     click("Send request");
     await screen.findByLabelText("Enter a friend code");
     expect(screen.queryByTestId("request-sent")).toBeNull();
-    expect(note()).toBe("There's already a friend request between you.");
+    expect(screen.getByRole("alert")).toHaveTextContent("There's already a friend request between you.");
 
     const [sent] = data(await backend.hubCall("newcomer", "listFriendRequests", {})).outgoing.filter((row) => row.name === "Jordan");
     data(await backend.hubCall("newcomer", "cancelFriendRequest", { requestRef: sent.requestRef }));
@@ -279,7 +278,7 @@ describe("a friend link", () => {
 
     openLink("Friend link from Alex");
     fireEvent.click(await screen.findByRole("button", { name: "Add friend" }));
-    await waitFor(() => expect(note()).toBe("That's your own link. Send it to a friend."));
+    expect(await screen.findByRole("alert")).toHaveTextContent("That's your own link. Send it to a friend.");
     expect(screen.getByTestId("friend-invite")).toHaveTextContent("Alex wants to be friends");
   });
 });

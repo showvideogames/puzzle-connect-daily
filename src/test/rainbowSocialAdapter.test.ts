@@ -18,6 +18,8 @@
  * listeners are set up at load and account state lives in the module. Nothing
  * can leak from one test to the next.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SocialTransport } from "@/social/contract";
@@ -271,6 +273,122 @@ describe("socialMode", () => {
     const { socialMode } = await load();
     expect(socialMode()).toBe("off");
   });
+
+  it("is beta for the exact flag, in a production build too", async () => {
+    const { socialMode } = await load();
+    expect(socialMode({ VITE_SHARED_SOCIAL: "beta" })).toBe("beta");
+    expect(socialMode({ VITE_SHARED_SOCIAL: "beta", PROD: false })).toBe("beta");
+    expect(socialMode({ VITE_SHARED_SOCIAL: "beta", PROD: true })).toBe("beta");
+  });
+
+  it.each([true, false])("is off for anything nearly the beta flag, with production %j", async (production) => {
+    const { socialMode } = await load();
+    const nearly: unknown[] = ["BETA", "Beta", " beta", "beta ", "beta\n", "true", 1, true, {}, ["beta"]];
+    for (const flag of nearly) {
+      expect(socialMode({ VITE_SHARED_SOCIAL: flag, PROD: production })).toBe("off");
+    }
+  });
+
+  it("reads the beta flag from the build environment, in a production build", async () => {
+    vi.stubEnv("VITE_SHARED_SOCIAL", "beta");
+    vi.stubEnv("PROD", true);
+    const { socialMode } = await load();
+    expect(socialMode()).toBe("beta");
+  });
+});
+
+describe("in beta mode", () => {
+  const TRANSPORT_ANSWER = { ok: true, data: { displayName: "From the gateway" } };
+
+  beforeEach(() => {
+    vi.stubEnv("VITE_SHARED_SOCIAL", "beta");
+  });
+
+  function fakeTransport() {
+    const call = vi.fn(async () => TRANSPORT_ANSWER);
+    return { call, transport: { call } as unknown as SocialTransport };
+  }
+
+  it.each([false, true])("gives a confirmed account a session, with production %j", async (production) => {
+    vi.stubEnv("PROD", production);
+    expectSessionFor(await signedIn(), ALEX);
+  });
+
+  it("registers the storage listener, so a sign-out elsewhere ends the sign-in", async () => {
+    const rainbow = await signedIn();
+    expect(storageListeners()).toHaveLength(1);
+
+    localStorage.removeItem(AUTH_KEY);
+    storageEvent(AUTH_KEY, null);
+    storeSession(ALEX);
+
+    expect(rainbow.accountCheckState()).toBe("unsettled");
+    await expectRefused(rainbow, "checking");
+  });
+
+  it("gives a guest null and a check in flight checking, as mock does", async () => {
+    const rainbow = await load();
+    await expectRefused(rainbow, null);
+
+    storeSession(ALEX);
+    startCheck(rainbow);
+    await expectRefused(rainbow, "checking");
+  });
+
+  it("refuses an account's session when accounts are off", async () => {
+    vi.stubEnv("VITE_ACCOUNTS_ENABLED", "false");
+    await expectRefused(await signedIn(), null);
+  });
+
+  it.each([false, true])("builds a client that reaches the transport with the credential, with production %j", async (production) => {
+    vi.stubEnv("PROD", production);
+    const rainbow = await signedIn();
+    const { call, transport } = fakeTransport();
+
+    const answer = await rainbow.createRainbowSocial({ transport, credentialFor }).call("getMe", {});
+
+    expect(answer).toEqual(TRANSPORT_ANSWER);
+    expect(call).toHaveBeenCalledWith("getMe", {}, CREDENTIALS[ALEX.user_id]);
+  });
+
+  it("builds a client when beta is asked for by name", async () => {
+    const rainbow = await signedIn();
+    const { call, transport } = fakeTransport();
+
+    await rainbow.createRainbowSocial({ mode: "beta", transport, credentialFor }).call("getMe", {});
+
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets a guest preview with no credential, and nothing more", async () => {
+    const rainbow = await load();
+    const { call, transport } = fakeTransport();
+    const client = rainbow.createRainbowSocial({ transport, credentialFor });
+
+    await client.call("previewInvite", { code: "x" });
+    expect(call).toHaveBeenCalledWith("previewInvite", { code: "x" }, null);
+
+    expect(await client.call("getMe", {})).toEqual({ ok: false, outcome: "not_signed_in" });
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it("still refuses mock by name in a production build", async () => {
+    vi.stubEnv("PROD", true);
+    const rainbow = await signedIn();
+    const { call, transport } = fakeTransport();
+
+    const answer = await rainbow.createRainbowSocial({ mode: "mock", transport, credentialFor }).call("getMe", {});
+
+    expect(answer).toEqual({ ok: false, outcome: "unavailable" });
+    expect(call).not.toHaveBeenCalled();
+  });
+
+  it("keeps the adapter's source clear of the outside world", () => {
+    const source = readFileSync(path.join(__dirname, "..", "social", "rainbowAdapter.ts"), "utf8");
+    for (const name of ["fetch", "XMLHttpRequest", "WebSocket", "localStorage", "sessionStorage", "recordCompletion"]) {
+      expect(source).not.toMatch(new RegExp(`\\b${name}\\b`));
+    }
+  });
 });
 
 describe("when off", () => {
@@ -446,7 +564,7 @@ describe("the state table", () => {
       storeSession(BLAKE);
       return rainbow;
     }, "checking"],
-    ["5: an account back on screen after the newest check said not an account", async () => {
+    ["3: an older ok, after the newest check said not an account, brings nobody back", async () => {
       const rainbow = await load();
       storeSession(ALEX);
       const older = startCheck(rainbow);
@@ -455,9 +573,9 @@ describe("the state table", () => {
       await newest.finishWith(notLinked);
       await older.finishWith(accountOk(ALEX));
       expect(rainbow.accountCheckState()).toBe("not_an_account");
-      expect(rainbow.getCurrentAccount()).toEqual(ALEX);
+      expect(rainbow.getCurrentAccount()).toBeNull();
       return rainbow;
-    }, "checking"],
+    }, null],
   ];
 
   it.each(rows)("%s", async (_label, arrive, refusal) => {
@@ -712,20 +830,21 @@ describe("after a failed check", () => {
 });
 
 describe("overlapping account checks", () => {
-  it.each([
-    ["the older", 0, 1],
-    ["the newer", 1, 0],
-  ])("is unsettled when only %s has finished, and confirmed once both have", async (_label, firstDone, secondDone) => {
+  it.each<[string, number, number, Person | null]>([
+    ["the older", 0, 1, null],
+    ["the newer", 1, 0, ALEX],
+  ])("is unsettled when only %s has finished, and confirmed once both have", async (_label, firstDone, secondDone, shownSoFar) => {
     const rainbow = await load();
     storeSession(ALEX);
     const checks = [startCheck(rainbow), startCheck(rainbow)];
 
     await checks[firstDone].finishWith(accountOk(ALEX));
-    expect(rainbow.getCurrentAccount()).toEqual(ALEX);
+    expect(rainbow.getCurrentAccount()).toEqual(shownSoFar);
     expect(rainbow.accountCheckState()).toBe("unsettled");
     await expectRefused(rainbow, "checking");
 
     await checks[secondDone].finishWith(accountOk(ALEX));
+    expect(rainbow.getCurrentAccount()).toEqual(ALEX);
     expect(rainbow.accountCheckState()).toBe("confirmed");
     expectSessionFor(rainbow, ALEX);
   });
@@ -761,7 +880,7 @@ describe("overlapping account checks", () => {
 
     await newer.finishWith(rpcError);
     await older.finishWith(accountOk(ALEX));
-    expect(rainbow.getCurrentAccount()).toEqual(ALEX);
+    expect(rainbow.getCurrentAccount()).toBeNull();
     expect(rainbow.accountCheckState()).toBe("unsettled");
     await expectRefused(rainbow, "checking");
   });
@@ -810,20 +929,93 @@ describe("overlapping account checks", () => {
   });
 });
 
-describe("a late ok republishing Alex after Blake confirmed", () => {
-  async function alexRepublishedAfterBlake() {
+describe("a late ok for Alex after Blake confirmed", () => {
+  async function blakeConfirmedThenAlexAnswers() {
     const rainbow = await signedIn();
     const slowAlex = startCheck(rainbow);
     await rainbow.signOutOfRainbow();
     await signInAs(rainbow, BLAKE);
+    // Alex's check is still running, so nothing is settled yet, even for Blake.
+    await expectRefused(rainbow, "checking");
+    const generation = rainbow.accountSignInGeneration();
+    const heard = vi.fn();
+    const unsubscribe = rainbow.subscribeToCurrentAccount(heard);
     await slowAlex.finishWith(accountOk(ALEX));
-    expect(rainbow.getCurrentAccount()).toEqual(ALEX);
-    return rainbow;
+    unsubscribe();
+    return { rainbow, generation, heard };
   }
 
-  it("confirms nobody, so Blake's stored session is refused, and his next check gives him his session", async () => {
-    const rainbow = await alexRepublishedAfterBlake();
+  it("is dropped without touching any account state", async () => {
+    const { rainbow, generation, heard } = await blakeConfirmedThenAlexAnswers();
 
+    expect(heard).not.toHaveBeenCalled();
+    expect(rainbow.getCurrentAccount()).toEqual(BLAKE);
+    expect(rainbow.accountCheckState()).toBe("confirmed");
+    expect(rainbow.accountSignInGeneration()).toBe(generation);
+    expectSessionFor(rainbow, BLAKE);
+  });
+
+  it("tells its own caller the sign-in changed, with no account", async () => {
+    const rainbow = await signedIn();
+    const answer = deferred();
+    rpc.mockReturnValueOnce(answer.promise);
+    const slowAlex = rainbow.ensureAccount();
+    await rainbow.signOutOfRainbow();
+    await signInAs(rainbow, BLAKE);
+
+    answer.resolve(accountOk(ALEX));
+
+    expect(await slowAlex).toEqual({ ok: false, account: null, reason: "unavailable", message: rainbow.SIGN_IN_CHANGED });
+  });
+
+  it("gives Alex nothing when an Alex session is then written elsewhere, until a check of his own", async () => {
+    const { rainbow } = await blakeConfirmedThenAlexAnswers();
+
+    writeSessionElsewhere(ALEX);
+
+    expect(rainbow.accountCheckState()).toBe("unsettled");
+    await expectRefused(rainbow, "checking");
+
+    await recheck(rainbow, ALEX);
+    expectSessionFor(rainbow, ALEX);
+  });
+});
+
+describe("a late ok about the person signed in now", () => {
+  it("still tells its own caller ok, because the callback page and onboarding overlap, and publishes nothing", async () => {
+    const rainbow = await load();
+    storeSession(ALEX);
+    const answer = deferred();
+    rpc.mockReturnValueOnce(answer.promise);
+    const callbackPage = rainbow.ensureAccount();
+    const onboarding = startCheck(rainbow);
+    const heard = vi.fn();
+    const unsubscribe = rainbow.subscribeToCurrentAccount(heard);
+
+    answer.resolve(accountOk(ALEX));
+
+    expect(await callbackPage).toEqual({ ok: true, account: ALEX, reason: "ok", message: "" });
+    expect(heard).not.toHaveBeenCalled();
+    expect(rainbow.getCurrentAccount()).toBeNull();
+    expect(rainbow.accountCheckState()).toBe("unsettled");
+
+    await onboarding.finishWith(accountOk(ALEX));
+    unsubscribe();
+    expect(heard).toHaveBeenCalledTimes(1);
+    expect(rainbow.accountCheckState()).toBe("confirmed");
+  });
+});
+
+describe("a change of stored session during a single check", () => {
+  it("drops an ok for the person who has gone, with no newer check involved", async () => {
+    const rainbow = await load();
+    storeSession(ALEX);
+    const check = startCheck(rainbow);
+
+    storeSession(BLAKE);
+    await check.finishWith(accountOk(ALEX));
+
+    expect(rainbow.getCurrentAccount()).toBeNull();
     expect(rainbow.accountCheckState()).toBe("unsettled");
     await expectRefused(rainbow, "checking");
 
@@ -831,17 +1023,37 @@ describe("a late ok republishing Alex after Blake confirmed", () => {
     expectSessionFor(rainbow, BLAKE);
   });
 
-  it("still gives Alex nothing when a same-person Alex session is then written", async () => {
-    const rainbow = await alexRepublishedAfterBlake();
+  it("drops an ok when the session has gone altogether", async () => {
+    const rainbow = await load();
+    storeSession(ALEX);
+    const check = startCheck(rainbow);
 
-    writeSessionElsewhere(ALEX);
+    localStorage.removeItem(AUTH_KEY);
+    await check.finishWith(accountOk(ALEX));
 
-    // Account and store now agree, so only tying the confirmation to the person refuses.
+    expect(rainbow.getCurrentAccount()).toBeNull();
     expect(rainbow.accountCheckState()).toBe("unsettled");
-    await expectRefused(rainbow, "checking");
+  });
 
-    await recheck(rainbow, ALEX);
-    expectSessionFor(rainbow, ALEX);
+  it("keeps the ok through a token refresh, which changes no owner", async () => {
+    const rainbow = await load();
+    storeSession(ALEX);
+    const check = startCheck(rainbow);
+
+    storeSession(ALEX, "refreshed-credential");
+    await check.finishWith(accountOk(ALEX));
+
+    expect(rainbow.getCurrentAccount()).toEqual(ALEX);
+    expect(rainbow.accountCheckState()).toBe("confirmed");
+  });
+
+  it("keeps an ok with nothing stored from start to finish, as a check with no local session always has", async () => {
+    const rainbow = await load();
+    const check = startCheck(rainbow);
+
+    await check.finishWith(accountOk(ALEX));
+
+    expect(rainbow.getCurrentAccount()).toEqual(ALEX);
   });
 });
 
@@ -921,9 +1133,8 @@ describe("accountCheckState", () => {
     storeSession(ALEX);
     await stale.finishWith(accountOk(ALEX));
 
-    // The late answer still republishes the account, as it always has, and a
-    // session is stored again, so only the check state can refuse here.
-    expect(rainbow.getCurrentAccount()).toEqual(ALEX);
+    // The late answer brings nobody back, even with a session stored again.
+    expect(rainbow.getCurrentAccount()).toBeNull();
     expect(rainbow.accountCheckState()).toBe("unsettled");
     await expectRefused(rainbow, "checking");
 

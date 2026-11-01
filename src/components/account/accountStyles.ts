@@ -20,3 +20,12 @@ export const outlineAction =
 
 /** Secondary text that stays readable: the theme's muted gray is too light for body text on these screens. */
 export const quietText = "text-slate";
+
+/** The boxed section on Add a friend and the group page. */
+export const accountCard = "rounded-2xl border border-border bg-background/60 p-4";
+export const accountCardTitle = "font-tile text-xl font-bold text-foreground";
+
+/** A plain text button, for an action that should stay out of the way of the screen's main one. */
+export const quietAction =
+  "rounded-lg px-2 py-1 text-base font-semibold text-slate hover:underline " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";

@@ -1,9 +1,8 @@
 /**
  * The Rainbow binding for shared Friends / Groups: contract version 0, section
- * 9. Mock only and off by default: nothing in the app imports it, and there is
- * deliberately no live transport here. Whoever calls createRainbowSocial
- * supplies the transport, and only tests do. Not portable: this is the one file
- * in src/social that knows about Rainbow.
+ * 9. Off by default. The live transport is supplied by whoever calls
+ * createRainbowSocial, so this file reaches nothing itself. Not portable: this
+ * is the one file in src/social that knows about Rainbow.
  *
  * rainbowSession is synchronous because the portable client asks for the
  * session synchronously, before and after every call. It never touches the
@@ -31,15 +30,20 @@ import { createSocialClient, disabledSocialClient } from "./client";
 import type { SocialClient } from "./client";
 import type { SessionState, SocialTransport } from "./contract";
 
-export type SocialMode = "mock" | "off";
+export type SocialMode = "beta" | "mock" | "off";
 
 interface SocialEnv {
   VITE_SHARED_SOCIAL?: unknown;
   PROD?: unknown;
 }
 
-/** Mock needs the exact flag outside a production build. Everything else is off. */
+/**
+ * Beta needs the exact flag, and production builds may have it, because a
+ * Vercel preview is a production build. Mock needs the exact flag outside a
+ * production build. Everything else is off.
+ */
 export function socialMode(env: SocialEnv = import.meta.env): SocialMode {
+  if (env.VITE_SHARED_SOCIAL === "beta") return "beta";
   return env.VITE_SHARED_SOCIAL === "mock" && env.PROD !== true ? "mock" : "off";
 }
 
@@ -92,7 +96,7 @@ function endsSignIn(event: StorageEvent): boolean {
 
 // Registered at load, so a sign-out before the first rainbowSession() call
 // still counts. Off registers nothing.
-if (socialMode() === "mock" && typeof window !== "undefined") {
+if (socialMode() !== "off" && typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
     if (endsSignIn(event)) endSignIn();
   });
@@ -105,7 +109,7 @@ if (socialMode() === "mock" && typeof window !== "undefined") {
  */
 export function rainbowSession(credentialFor: () => string | null): SessionState {
   try {
-    if (socialMode() !== "mock" || !ACCOUNTS_ENABLED) return null;
+    if (socialMode() === "off" || !ACCOUNTS_ENABLED) return null;
 
     // Asked first, in every state: a same-tab sign-out that never reached
     // publishAccount() must also stop a check that is still running.
@@ -129,8 +133,7 @@ export function rainbowSession(credentialFor: () => string | null): SessionState
       return "checking";
     }
 
-    // An older check's late ok can republish an account after the newest check
-    // said not an account, so only "confirmed" goes on.
+    // Nothing but "confirmed" goes on, whatever else put this account here.
     if (checkState !== "confirmed") return "checking";
 
     const credential = credentialFor();
@@ -149,6 +152,7 @@ export function createRainbowSocial({ mode = socialMode(), transport, credential
   credentialFor: () => string | null;
 }): SocialClient {
   // A production build refuses mock even when a caller asks for it by name.
-  if (mode !== "mock" || import.meta.env.PROD === true) return disabledSocialClient("unavailable");
+  const refused = mode === "off" || (mode === "mock" && import.meta.env.PROD === true);
+  if (refused) return disabledSocialClient("unavailable");
   return createSocialClient({ getSession: () => rainbowSession(credentialFor), transport });
 }

@@ -334,6 +334,21 @@ describe("friend invitations", () => {
     expect(screen.getByRole("button", { name: "Choose a Display Name to add Jordan" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add friend" })).toBeNull();
   });
+
+  it("offers Decline beside Not now only when it is given one", () => {
+    const onDecline = vi.fn();
+    const { rerender } = render(<FriendInviteCard inviterName="Jordan" signedIn displayName="Alex" {...handlers()} />);
+    expect(screen.queryByRole("button", { name: "Decline" })).toBeNull();
+    rerender(<FriendInviteCard inviterName="Jordan" signedIn displayName="Alex" {...handlers()} onDecline={onDecline} />);
+    fireEvent.click(screen.getByRole("button", { name: "Decline" }));
+    expect(onDecline).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a refusal on the card, and offers the same choice again", () => {
+    render(<FriendInviteCard inviterName="Jordan" signedIn displayName="Alex" error="That friend request is no longer waiting." {...handlers()} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("That friend request is no longer waiting.");
+    expect(screen.getByRole("button", { name: "Add friend" })).toBeEnabled();
+  });
 });
 
 const friendResult = (changes: Partial<FriendResult>): FriendResult => ({
@@ -377,6 +392,23 @@ describe("FriendsHome", () => {
     render(home([friendResult({ id: "taylor", name: "Taylor", status: "not-played", mistakes: 0 })]));
     expect(screen.getByText("Not played yet")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Taylor/ })).toBeNull();
+  });
+
+  it("opens someone who has not played when there are actions, with no result panel to show", () => {
+    const rowActions = (result: FriendResult) => (result.isYou ? null : <button type="button">Do something</button>);
+    render(home([friendResult({ id: "you", isYou: true, name: "Alex", status: "not-played", mistakes: 0 }), friendResult({ id: "taylor", name: "Taylor", status: "not-played", mistakes: 0 })], { rowActions }));
+    expect(screen.queryByRole("button", { name: /You/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Taylor/ }));
+    expect(screen.getByRole("button", { name: "Do something" })).toBeInTheDocument();
+    expect(screen.queryByTestId("result-locked")).toBeNull();
+    expect(screen.queryByTestId("result-detail")).toBeNull();
+  });
+
+  it("keeps a locked row locked when there are actions", () => {
+    render(home([friendResult({ detail: null })], { rowActions: () => <button type="button">Do something</button> }));
+    fireEvent.click(screen.getByRole("button", { name: /Sam/ }));
+    expect(screen.getByTestId("result-locked")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Do something" })).toBeInTheDocument();
   });
 
   it("opens to a plain locked message when the details were not sent", () => {
@@ -528,9 +560,80 @@ describe("AddFriendScreen", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("doesn't look like a friend code");
     expect(handlers.onFind).not.toHaveBeenCalled();
   });
+
+  it("says what its handler says when a code can't be used", async () => {
+    const handlers = on();
+    handlers.onFind.mockResolvedValueOnce({ problem: "You're already friends." });
+    render(<AddFriendScreen pictureSrc="/picture.png" {...handlers} />);
+    enterCode("K7M-4PX");
+    expect(await screen.findByRole("alert")).toHaveTextContent("You're already friends.");
+    expect(screen.queryByText(/couldn't find anyone/)).toBeNull();
+  });
+
+  it("never says Request sent for a refused send: it goes back and says why", async () => {
+    const handlers = on();
+    handlers.onSendRequest.mockResolvedValueOnce("There's already a friend request between you.");
+    render(<AddFriendScreen pictureSrc="/picture.png" {...handlers} />);
+    enterCode("K7M-4PX");
+    fireEvent.click(await screen.findByRole("button", { name: "Send request" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("There's already a friend request between you.");
+    expect(screen.queryByTestId("request-sent")).toBeNull();
+    expect(screen.queryByText("Request sent")).toBeNull();
+  });
+
+  it("doesn't say Done for a link it couldn't make, or one the player cancelled", async () => {
+    const handlers = on();
+    handlers.onCopyLink.mockResolvedValueOnce("You've made a lot of friend links today. Please try again tomorrow.");
+    handlers.onShareLink.mockResolvedValueOnce(false);
+    render(<AddFriendScreen pictureSrc="/picture.png" {...handlers} />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("made a lot of friend links");
+    expect(screen.queryByText("Done.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Share invite link" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(screen.queryByText("Done.")).toBeNull();
+  });
+
+  describe("sent requests", () => {
+    const sent = [{ id: "r1", ...jordan }];
+
+    it("lists them on the first step only, and has no list without any", async () => {
+      const onCancelRequest = vi.fn();
+      const { rerender } = render(<AddFriendScreen pictureSrc="/picture.png" {...on()} sentRequests={[]} onCancelRequest={onCancelRequest} />);
+      expect(screen.queryByTestId("sent-requests")).toBeNull();
+      rerender(<AddFriendScreen pictureSrc="/picture.png" {...on()} sentRequests={sent} onCancelRequest={onCancelRequest} />);
+      expect(screen.getByTestId("sent-requests")).toHaveTextContent("Jordan");
+      enterCode("K7M-4PX");
+      await screen.findByTestId("found-person");
+      expect(screen.queryByTestId("sent-requests")).toBeNull();
+    });
+
+    it("cancels by id, and shows a refusal beside the row", async () => {
+      const onCancelRequest = vi.fn().mockResolvedValue("That friend request is no longer waiting.");
+      render(<AddFriendScreen pictureSrc="/picture.png" {...on()} sentRequests={sent} onCancelRequest={onCancelRequest} />);
+      fireEvent.click(screen.getByRole("button", { name: "Cancel request to Jordan" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("no longer waiting");
+      expect(onCancelRequest).toHaveBeenCalledWith("r1");
+    });
+  });
 });
 
 describe("GroupsTab", () => {
+  const coffee = { groupId: "g1", name: "Coffee Crew", emblemId: "coffee" as const, photo: null, accentColor: "#F8D0BD" as const, memberCount: 4 };
+
+  it("opens a group by its id when it can, and keeps two groups of one name apart", () => {
+    const onOpen = vi.fn();
+    render(<GroupsTab groups={[coffee, { ...coffee, groupId: "g2", memberCount: 1 }]} onCreate={vi.fn()} onOpen={onOpen} />);
+    expect(screen.getAllByTestId("group-row")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: /1 member/ }));
+    expect(onOpen).toHaveBeenCalledWith("g2");
+  });
+
+  it("has plain rows when nothing can open them", () => {
+    render(<GroupsTab groups={[coffee]} onCreate={vi.fn()} />);
+    expect(within(screen.getByTestId("group-row")).queryByRole("button")).toBeNull();
+  });
+
   it("lists groups, and reuses the group form to make one", async () => {
     const onCreate = vi.fn();
     render(<GroupsTab groups={[{ name: "Coffee Crew", emblemId: "coffee", photo: null, accentColor: "#F8D0BD", memberCount: 4 }]} onCreate={onCreate} />);

@@ -3,23 +3,32 @@ import {
   acceptProblem,
   findProblem,
   foundPerson,
+  friendChangeProblem,
   friendInvite,
   friendLinkProblem,
   friendRequest,
   friendResults,
   groupInvite,
   groupPictureProblem,
+  groupProblem,
+  groupResults,
   groupSummary,
+  groupView,
+  isBackgroundCheck,
   isGroupPreview,
+  leaveProblem,
+  leftGroupNote,
   makeGroupProblem,
   profileFromMe,
+  requestChangeProblem,
   sendProblem,
+  sentRequest,
   socialProblem,
 } from "@/lib/socialView";
 import { joinProblem } from "@/lib/accountFlow";
 import { SHARING_NOTICE_VERSION } from "@/lib/sharingNotice";
 import { CURRENT_NOTICE_VERSION, OUTCOMES } from "@/social/contract";
-import type { FriendInvitePreview, FriendRequestRow, FriendRow, GroupInvitePreview, GroupRow, Operations, ResultRow } from "@/social/contract";
+import type { FriendInvitePreview, FriendRequestRow, FriendRow, GroupInvitePreview, GroupRow, MemberRow, Operations, ResultRow } from "@/social/contract";
 
 const GRID = "🟨🟨🟨🟨\n🟩🟩🟩🟩";
 
@@ -134,6 +143,40 @@ describe("a locked result", () => {
   });
 });
 
+describe("groupResults", () => {
+  const member = (memberRef: string, name: string, isMe = false): MemberRow => ({
+    memberRef,
+    name,
+    animalId: "owl",
+    backgroundColor: "#F8D0BD",
+    isOwner: false,
+    isMe,
+    joinedAt: "2026-10-30T18:00:00.000Z",
+  });
+  const memberRow = (memberRef: string, changes: object = {}) => ({ ...row(null, { isMe: false }), friendRef: undefined, memberRef, ...changes }) as unknown as ResultRow;
+  const members = [member("m1", "Sam"), member("m2", "Alex", true), member("m3", "Jordan")];
+
+  it("puts the viewer first, joins by memberRef, and anyone with no result is not played", () => {
+    const shown = groupResults({ members, rows: [memberRow("m3")] });
+    expect(shown.map((result) => [result.id, result.isYou, result.status])).toEqual([
+      ["m2", true, "not-played"],
+      ["m1", false, "not-played"],
+      ["m3", false, "solved"],
+    ]);
+  });
+
+  it("shows a locked row's summary and no detail, and an unlocked row its detail", () => {
+    const { detail: _left, ...locked } = memberRow("m1", { detailLocked: true }) as ResultRow & { detail: string };
+    const shown = groupResults({ members, rows: [locked as ResultRow, memberRow("m3")] });
+    expect(shown.find((result) => result.id === "m1")).toMatchObject({ status: "solved", detail: null });
+    expect(shown.find((result) => result.id === "m3")).toMatchObject({ status: "solved", detail: GRID });
+  });
+
+  it("does not take a friend's row for a member's", () => {
+    expect(groupResults({ members, rows: [row("m1")] }).every((result) => result.status === "not-played")).toBe(true);
+  });
+});
+
 describe("profileFromMe", () => {
   it("keeps only what a profile holds", () => {
     expect(profileFromMe(me)).toEqual({ version: 1, displayName: "Alex", animalId: "fox", backgroundColor: "#DED1F2" });
@@ -159,8 +202,20 @@ describe("what a screen can be handed", () => {
     memberPreview: { faces: [{ animalId: "owl", backgroundColor: "#F8D0BD" }], leadName: "Jordan", memberCount: 2 },
   };
 
-  it("a group row keeps no id, no code and no name in the group", () => {
-    expect(groupSummary({ ...groupRow, ...HOSTILE })).toEqual({ name: "Book Nerds", emblemId: "book", photo: null, accentColor: "#CCE6CA", memberCount: 3 });
+  it("a group row keeps its id, and no code and no name in the group", () => {
+    expect(groupSummary({ ...groupRow, ...HOSTILE })).toEqual({ groupId: "g1", name: "Book Nerds", emblemId: "book", photo: null, accentColor: "#CCE6CA", memberCount: 3 });
+  });
+
+  it("a group's page gets a code only for its owner, and a null stays null", () => {
+    expect(groupView(groupRow)).toMatchObject({ isOwner: true, inviteCode: "abc123abc123" });
+    expect(groupView({ ...groupRow, inviteCode: null })).toMatchObject({ isOwner: true, inviteCode: null });
+    expect(groupView({ ...groupRow, isOwner: false })).toMatchObject({ isOwner: false, inviteCode: null });
+    expect(groupView({ ...groupRow, ...HOSTILE })).not.toHaveProperty("myName");
+  });
+
+  it("a sent request keeps a name, a face and its ref as its id", () => {
+    const request: FriendRequestRow = { animalId: "owl", backgroundColor: "#F8D0BD", requestRef: "r1", name: null, sentAt: "2026-10-30T18:00:00.000Z" };
+    expect(sentRequest({ ...request, ...{ email: HOSTILE.email } })).toEqual({ id: "r1", displayName: "A Rainbow player", animalId: "owl", backgroundColor: "#F8D0BD" });
   });
 
   it("a group preview maps only the fields the card takes, and each face only a face", () => {
@@ -203,7 +258,19 @@ describe("what a screen can be handed", () => {
 });
 
 describe("the wording", () => {
-  const wordings = { socialProblem, findProblem, sendProblem, acceptProblem, friendLinkProblem, makeGroupProblem, groupPictureProblem };
+  const wordings = {
+    socialProblem,
+    findProblem,
+    sendProblem,
+    acceptProblem,
+    friendLinkProblem,
+    makeGroupProblem,
+    groupPictureProblem,
+    requestChangeProblem,
+    friendChangeProblem,
+    groupProblem,
+    leaveProblem,
+  };
 
   it.each(Object.entries(wordings))("%s has a sentence for every outcome, and never shows the outcome itself", (_name, wording) => {
     for (const outcome of OUTCOMES) {
@@ -231,6 +298,15 @@ describe("the wording", () => {
 
   it("says a group exists whenever only its picture failed", () => {
     for (const outcome of OUTCOMES) expect(groupPictureProblem(outcome)).toContain("Your group was made");
+  });
+
+  it("says whether leaving closed the group", () => {
+    expect(leftGroupNote("Book Nerds", false)).toBe("You left Book Nerds.");
+    expect(leftGroupNote("Book Nerds", true)).toBe("You left Book Nerds, and that closed the group.");
+  });
+
+  it("counts only an account re-check as background, so a real refusal is still shown", () => {
+    expect(OUTCOMES.filter(isBackgroundCheck)).toEqual(["still_checking", "stale_session"]);
   });
 });
 

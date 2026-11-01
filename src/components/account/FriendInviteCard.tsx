@@ -16,10 +16,15 @@ interface FriendInviteCardProps {
   onChooseName: () => void;
   onAdd: () => void;
   onContinue: () => void;
+  /** Only a request can be declined. Left out, there is no Decline. */
+  onDecline?: () => void;
+  /** Why the last answer was refused. */
+  error?: string | null;
 }
 
 /** A friend invitation or request. Like a group, it says what is shared first and only a button accepts it. */
-export function FriendInviteCard({ inviterName, inviter, signedIn, displayName, added = false, acceptLabel = "Add friend", onSignIn, onChooseName, onAdd, onContinue }: FriendInviteCardProps) {
+export function FriendInviteCard({ inviterName, inviter, signedIn, displayName, added = false, acceptLabel = "Add friend", onSignIn, onChooseName, onAdd, onContinue, onDecline, error }: FriendInviteCardProps) {
+  const notNow = <button type="button" onClick={onContinue} className={`${outlineAction} mt-3 h-12 ${onDecline ? "flex-1" : "w-full"} text-base`}>Not now</button>;
   return (
     <main className={`${accountPanel} mx-auto w-full max-w-[32rem] px-5 py-6 text-center sm:px-10 sm:py-10`} data-testid="friend-invite">
       {inviter && <ProfileAvatar animalId={inviter.animalId} backgroundColor={inviter.backgroundColor} size={88} className="mb-3" />}
@@ -31,6 +36,7 @@ export function FriendInviteCard({ inviterName, inviter, signedIn, displayName, 
       ) : (
         <>
           <SharingNotice audience="friend" />
+          {error && <p role="alert" className="mt-3 text-base font-medium text-destructive">{error}</p>}
           {!signedIn ? (
             <button type="button" onClick={onSignIn} className={`${primaryAction} mt-5 h-14 w-full text-lg`}>Sign in to add {inviterName}</button>
           ) : !displayName ? (
@@ -38,7 +44,12 @@ export function FriendInviteCard({ inviterName, inviter, signedIn, displayName, 
           ) : (
             <button type="button" onClick={onAdd} className={`${primaryAction} mt-5 h-14 w-full text-lg`}>{acceptLabel}</button>
           )}
-          <button type="button" onClick={onContinue} className={`${outlineAction} mt-3 h-12 w-full text-base`}>Not now</button>
+          {onDecline ? (
+            <div className="flex gap-2.5">
+              {notNow}
+              <button type="button" onClick={onDecline} className={`${outlineAction} mt-3 h-12 flex-1 text-base`}>Decline</button>
+            </div>
+          ) : notNow}
         </>
       )}
     </main>
