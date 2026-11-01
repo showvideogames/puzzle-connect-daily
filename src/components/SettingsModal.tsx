@@ -4,7 +4,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Switch } from "@/components/ui/switch";
 import { GameSettings } from "@/lib/settings";
 import { Link } from "react-router-dom";
-import { BookOpen, Archive as ArchiveIcon, Grid2x2, PlusCircle, Star, X } from "lucide-react";
+import { BookOpen, Archive as ArchiveIcon, Gamepad2, Grid2x2, PlusCircle, Star, Users, X } from "lucide-react";
 import { PlayerAuth } from "./PlayerAuth";
 import { ACCOUNTS_ENABLED } from "@/lib/platformSignIn";
 import { FULL_FORMAT, MINI_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
@@ -34,9 +34,15 @@ interface SettingsModalProps {
    * Full, so every existing call site keeps its current behaviour.
    */
   format?: PuzzleFormat;
+  /** Passed to the account menu, which then offers "Edit profile". */
+  onEditProfile?: () => void;
+  /** Adds "All games" to the Menu section, for the game picker. */
+  onOpenGames?: () => void;
+  /** Adds "Friends & Groups" to the Menu section. */
+  onOpenSocial?: () => void;
 }
 
-export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback, showMenuLinks = false, showCreateLink = false, onHowToPlayClick, user = null, onSignOut, format = FULL_FORMAT }: SettingsModalProps) {
+export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback, showMenuLinks = false, showCreateLink = false, onHowToPlayClick, user = null, onSignOut, format = FULL_FORMAT, onEditProfile, onOpenGames, onOpenSocial }: SettingsModalProps) {
   const isMini = format.id === MINI_FORMAT.id;
   // Drives PlayerAuth's forceOpen below, so the "Sign In"/"Account" TEXT
   // (not just PlayerAuth's own icon button) opens the sign-in modal or
@@ -190,6 +196,26 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                         ? `Rainbow Categories ${FULL_FORMAT.sizeLabel}`
                         : `${MINI_FORMAT.name} Categories ${MINI_FORMAT.sizeLabel}`}
                     </Link>
+                    {onOpenGames && (
+                      <button
+                        onClick={() => { onClose(); onOpenGames(); }}
+                        className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
+                          hover:bg-secondary transition-colors active:scale-95"
+                      >
+                        <Gamepad2 className="w-4 h-4 text-slate" />
+                        All games
+                      </button>
+                    )}
+                    {onOpenSocial && (
+                      <button
+                        onClick={() => { onClose(); onOpenSocial(); }}
+                        className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
+                          hover:bg-secondary transition-colors active:scale-95"
+                      >
+                        <Users className="w-4 h-4 text-slate" />
+                        Friends &amp; Groups
+                      </button>
+                    )}
                     {user && (
                       <Link
                         to="/favorites"
@@ -219,6 +245,7 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                         forceOpen={authOpen}
                         onForceClose={() => setAuthOpen(false)}
                         dropdownAlign="left"
+                        onEditProfile={onEditProfile}
                       />
                       {/* A real, separate <button> — not text nested inside
                           PlayerAuth's own <button> above, which would be

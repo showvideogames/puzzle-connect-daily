@@ -1,0 +1,507 @@
+{
+  "note": "Display copies only. Originals were read, never changed.",
+  "originalBytes": 18877257,
+  "displayBytes": 749728,
+  "files": [
+    {
+      "display": "avatars/bear.webp",
+      "original": "/polished-social/assets/bear.png",
+      "originalSha256": "85aa4c046d4a6cae5eb718717c9fbf97e70a200ad4d66b6067b5d6479bde88d9",
+      "originalBytes": 1007397,
+      "originalSize": "1254x1254",
+      "displaySha256": "296ba4b26a457386d1564b1401ac4f81ca4b5f9a3661a5175bddff07aa0b36c9",
+      "displayBytes": 14120,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/owl.webp",
+      "original": "/polished-social/assets/owl.png",
+      "originalSha256": "de07e0b3ad88f55d71cc659de9df846d3e1f4c548a3caa73bcc54a85e57d3ef0",
+      "originalBytes": 914081,
+      "originalSize": "1254x1254",
+      "displaySha256": "c1888d0fa5009e389fa052e20f93b75940b309e741b0090a10ca7497fcc4ce81",
+      "displayBytes": 10074,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/fox.webp",
+      "original": "/polished-social/assets/fox.png",
+      "originalSha256": "07e9715705304b46633fa31679014f887db58c6515b966c59d1b5657c9a3da3f",
+      "originalBytes": 907519,
+      "originalSize": "1254x1254",
+      "displaySha256": "5f9462c2118c0b0cb29d4aa21c3ba05000381d814f50452a6f29da58a87a1567",
+      "displayBytes": 14976,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/frog.webp",
+      "original": "/polished-social/assets/frog.png",
+      "originalSha256": "b77644500a0db26b3c27a5ac433afa57108cdabb7f0447a6ea6abf1d24095cc1",
+      "originalBytes": 982580,
+      "originalSize": "1254x1254",
+      "displaySha256": "8b7f30dee99933e471a9c0e0ef137d2d3d64f260d3696b839c772897c4427da3",
+      "displayBytes": 13770,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/cat.webp",
+      "original": "/polished-social/assets/cat.png",
+      "originalSha256": "38aa891278b0f9f971814295526702da4453e2b2452000111b61e06fb2372c74",
+      "originalBytes": 966715,
+      "originalSize": "1254x1254",
+      "displaySha256": "e247c36e23472d71a34216cdca2c3d2d728bf475cef72da0b4482adcdeac3740",
+      "displayBytes": 14734,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/saint-bernard.webp",
+      "original": "/polished-social/assets/saint-bernard.png",
+      "originalSha256": "2778389d8cab3a81b29a614b1ce51dbb28216e777432c15c9c06bc330ce10263",
+      "originalBytes": 998531,
+      "originalSize": "1254x1254",
+      "displaySha256": "c71e156cc4f512a51096d87cc241253d45ea10476591342894aeb7962dfca8c8",
+      "displayBytes": 14152,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/rabbit.webp",
+      "original": "/polished-social/assets/rabbit.png",
+      "originalSha256": "1d7856ccf308ba66f1f5dfd8ad8aaa432d88a11da9d49618789051bdcd652d1a",
+      "originalBytes": 642434,
+      "originalSize": "1254x1254",
+      "displaySha256": "f3b557cd59a9db0a7f0d5ff04bba2267e647a43bf2e3819c05a5495cfecee54b",
+      "displayBytes": 10288,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/raccoon.webp",
+      "original": "/polished-social/assets/raccoon.png",
+      "originalSha256": "b74a31a54cf157330622377809235af2780b228d95d8c2d273e204a1567d7c37",
+      "originalBytes": 907817,
+      "originalSize": "1254x1254",
+      "displaySha256": "436ce4be64eab61e80f8cbd347bb3fc53668cce36fbe11d026ebf7ad09bdc0d6",
+      "displayBytes": 12272,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/penguin.webp",
+      "original": "/polished-social/assets/penguin.png",
+      "originalSha256": "8448e9d5334e0552f09ccae90abd96706dd9bc2c23dc6dde89481bd6dc5a670e",
+      "originalBytes": 937402,
+      "originalSize": "1254x1254",
+      "displaySha256": "c86095ca2f41aa8e5c0844371473540eba3b7b37d4756dac5568298196e1bb95",
+      "displayBytes": 11730,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/koala.webp",
+      "original": "/polished-social/assets/koala.png",
+      "originalSha256": "5519a954c00afea9d3512c2410796e36f085c06beed020674c8570696034cf2f",
+      "originalBytes": 150041,
+      "originalSize": "400x400",
+      "displaySha256": "814259c3db8aacec4fd692fe9d25bf0f82ca8e0974854bc24b9448c66ec467c2",
+      "displayBytes": 10970,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/red-panda.webp",
+      "original": "/polished-social/assets/red-panda.png",
+      "originalSha256": "af64b3510b69499134bbf6314323a93f784ea8c72ef22a3601a952aff9c9d0a5",
+      "originalBytes": 1104454,
+      "originalSize": "1254x1254",
+      "displaySha256": "fd068c0f32f9a705c7805ab56ba7f386ce359b4751cf44714bdd001a94be6fe8",
+      "displayBytes": 18016,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/otter.webp",
+      "original": "/polished-social/assets/otter.png",
+      "originalSha256": "6096427e58ee5e1128e44d1d28099e6039b45949aceb9d7a9e09dc02f828ecbb",
+      "originalBytes": 157975,
+      "originalSize": "400x400",
+      "displaySha256": "72fa4e9672017e6cb3659a4bd68858a77954434a08f75f49456276d898112ecf",
+      "displayBytes": 11634,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/hedgehog.webp",
+      "original": "/polished-social/assets/hedgehog.png",
+      "originalSha256": "e398856d3fa3d2eaf4fe124f5c30f906c6f8ece662f693a886c329b9dac9541e",
+      "originalBytes": 172852,
+      "originalSize": "400x400",
+      "displaySha256": "05cbcf7f708860ff43529e8b93643f02feff97fc2f0280a93f569e42a96cfd79",
+      "displayBytes": 13498,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/panda.webp",
+      "original": "/polished-social/assets/panda.png",
+      "originalSha256": "0f2460358c699c44fea7d119988659e57f2c0114165ea19c2680fa79989ff25c",
+      "originalBytes": 155711,
+      "originalSize": "400x400",
+      "displaySha256": "909b6bb8cac022de2825b1c206cb5d2cfa0fc3338f207c0ba93f4a6a204cbe8c",
+      "displayBytes": 10086,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/tiger.webp",
+      "original": "/polished-social/assets/tiger.png",
+      "originalSha256": "0aaabc3431c0a88137a8c51a9466712b5c6f515d7b0c9ea5562a4f48834a4a5b",
+      "originalBytes": 175568,
+      "originalSize": "400x400",
+      "displaySha256": "c02ac5febb79b04455188efa7b03608bb8d6cdf433c1d1146a13cd5b914bc338",
+      "displayBytes": 14096,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/lion.webp",
+      "original": "/polished-social/assets/lion.png",
+      "originalSha256": "e1e1c206328c227f0264f7a096865aeed00ed4474cfdaac63dcd88004af56a6b",
+      "originalBytes": 176692,
+      "originalSize": "400x400",
+      "displaySha256": "e5ad366cf871b989659ff00aa571f388175786f06cad17ba194103acd94936ab",
+      "displayBytes": 13380,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/elephant.webp",
+      "original": "/polished-social/assets/elephant.png",
+      "originalSha256": "bbfca77b02c99d412b3126686d32500a5326cdbe38e9e4b190dd2e4de1dc50cf",
+      "originalBytes": 155562,
+      "originalSize": "400x400",
+      "displaySha256": "4a25410709a530f9f78bc95704d5941b8de6bdbe4f59e793ff0537a8dc286010",
+      "displayBytes": 11064,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/giraffe.webp",
+      "original": "/polished-social/assets/giraffe.png",
+      "originalSha256": "3f02f00be9fb6af1fc973427cb68468d73801b1b1c1202efd77903b36bb22996",
+      "originalBytes": 165397,
+      "originalSize": "400x400",
+      "displaySha256": "8882319ed39fca9a3028c6855ba918ae92b18a844bb95f3951fc6a004a6754fc",
+      "displayBytes": 13944,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/mouse.webp",
+      "original": "/polished-social/assets/mouse.png",
+      "originalSha256": "23872d97356e9e8968265f8e716dd43ccb8c95b9b6ee2d3dfddf860e90bfd3c7",
+      "originalBytes": 160303,
+      "originalSize": "400x400",
+      "displaySha256": "ed9b0528b08e56211a615b707f3106719ca43e1f0333825a98502eeb1563e6db",
+      "displayBytes": 12590,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/squirrel.webp",
+      "original": "/polished-social/assets/squirrel.png",
+      "originalSha256": "17a190639a957f845e07c0420f893e5b2883aee4a17c0d3b5531e5d4717c8644",
+      "originalBytes": 165754,
+      "originalSize": "400x400",
+      "displaySha256": "f34b7df76203d9ef3de70fd72c13e44e0fc71c7209d90e4c1644d9db7efe839e",
+      "displayBytes": 13044,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/sloth.webp",
+      "original": "/polished-social/assets/sloth.png",
+      "originalSha256": "b94f024eae83704f9e706433d018a4d312edeaa7077fbfb834c7974d3c0c9c5e",
+      "originalBytes": 168127,
+      "originalSize": "400x400",
+      "displaySha256": "a77cb78248017c7f59006793188e03b64f6d1a43becb65bf4c9d901d16b5d74e",
+      "displayBytes": 12106,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/deer.webp",
+      "original": "/polished-social/assets/deer.png",
+      "originalSha256": "574eaffa77f5914fc4e8e82bdc9fecbe8812e89f71de578c25f41f9f8ec4b52b",
+      "originalBytes": 167559,
+      "originalSize": "400x400",
+      "displaySha256": "5f96432297ed1baff3a283bb18c31cc8fc53cad308dc0165fefcaabdd7f9ffb3",
+      "displayBytes": 15134,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/basketball.webp",
+      "original": "/polished-social/assets/basketball.png",
+      "originalSha256": "b45f5b62728e4c9bd76b767a65a5e176b19b3a317c8339bf266cbca5a8c1df0e",
+      "originalBytes": 207044,
+      "originalSize": "480x480",
+      "displaySha256": "6d66bae2e7462ed04bedc75f289440c3a9863bf4d48f3e0bda2a5e90a6be7a61",
+      "displayBytes": 9842,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/football.webp",
+      "original": "/polished-social/assets/football.png",
+      "originalSha256": "b594ced5d167f461d542735911d4b326636647fc931beed479c66d838edf9797",
+      "originalBytes": 196029,
+      "originalSize": "480x480",
+      "displaySha256": "4fc4f03ccc66b50352c61f5cdcb94735462233739b08619c7f7726106e1742d6",
+      "displayBytes": 7850,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/soccer.webp",
+      "original": "/polished-social/assets/soccer.png",
+      "originalSha256": "1f103a1e24ac865f170fdee8e0ff813afe3c7a2a9bc8797c49b1ffba378ba873",
+      "originalBytes": 199230,
+      "originalSize": "480x480",
+      "displaySha256": "7177e1bd825adf827dea37fefd740808fb81a12fa3f3a98fd7ee7a303b43b07c",
+      "displayBytes": 7502,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/baseball-bat.webp",
+      "original": "/polished-social/assets/baseball-bat.png",
+      "originalSha256": "45073bf7ddc0de3486a054f597c5b116269923f7909d72512b5bd41ccda6adb3",
+      "originalBytes": 195411,
+      "originalSize": "480x480",
+      "displaySha256": "46606077808bef8c77235423efcf50a1577d84755dd74cd5350c832f41dcb677",
+      "displayBytes": 8218,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/pizza.webp",
+      "original": "/polished-social/assets/pizza.png",
+      "originalSha256": "fd815467e8ed53d468ffb1d5373a380d61dabd7b542f94c31c2ce8f4e0019836",
+      "originalBytes": 102909,
+      "originalSize": "320x320",
+      "displaySha256": "6e63eabe0293a4cf157e717bf01bc05206e395303a2fe2ce96662d08f8d7b42c",
+      "displayBytes": 7050,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/hamburger.webp",
+      "original": "/polished-social/assets/hamburger.png",
+      "originalSha256": "4d33cfd11c818f360936d0b55048b607c4e2ed3eaefdea00ff729e1523cb6683",
+      "originalBytes": 104625,
+      "originalSize": "320x320",
+      "displaySha256": "160f4a69ee432d2b8f24f22bbe9332d990fd7eacb4648f85536fb77600d85644",
+      "displayBytes": 6852,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/ghost.webp",
+      "original": "/polished-social/assets/ghost.png",
+      "originalSha256": "5166536ee486b492082ec209e732b91f178c6ff8cf0bc06d9a9c985b5df57fde",
+      "originalBytes": 178947,
+      "originalSize": "480x480",
+      "displaySha256": "f3a9c97620d643826f53202a639819ed5ace5fb2d68ec745199cdbd761b3c3ce",
+      "displayBytes": 6654,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "avatars/frankenstein.webp",
+      "original": "/polished-social/assets/frankenstein.png",
+      "originalSha256": "c310906a3e87a871b5163a2f869007561f6c386a449fa835d12ca26aaf8b4077",
+      "originalBytes": 212856,
+      "originalSize": "480x480",
+      "displaySha256": "047c806f04964b45fa35294e59223828c5c373f7e1ad0f42ac22c34b2e27f841",
+      "displayBytes": 11246,
+      "displaySize": "320x320"
+    },
+    {
+      "display": "groups/campfire.webp",
+      "original": "/polished-social/assets/groups/campfire.png",
+      "originalSha256": "6154a8384b6dc8786ad708c42e54145dca4c5f30bb4d1652459ea48ca1ec38f8",
+      "originalBytes": 183037,
+      "originalSize": "410x395",
+      "displaySha256": "2bdef4594a1bdde2214593b16f3cc76f631c043372d9314444d6cd2ee7dad41b",
+      "displayBytes": 17880,
+      "displaySize": "340x328"
+    },
+    {
+      "display": "groups/cabin.webp",
+      "original": "/polished-social/assets/groups/cabin.png",
+      "originalSha256": "857073f7a456e1531ae4a996bed7471db870a2be80f8437f191276a4b1bad805",
+      "originalBytes": 178122,
+      "originalSize": "410x395",
+      "displaySha256": "5db912e4044676e9ed9286f55e528d6d35498253f149a87fd9d866e03cc7f7ee",
+      "displayBytes": 14172,
+      "displaySize": "340x328"
+    },
+    {
+      "display": "groups/mountains.webp",
+      "original": "/polished-social/assets/groups/mountains.png",
+      "originalSha256": "0967dd074c4f1d4c7515f12b9417597d96baedb5b3abcb976a985c45d79cbebc",
+      "originalBytes": 161986,
+      "originalSize": "410x395",
+      "displaySha256": "852fad70a5a09f6928903653a5caed68baca2fcb2e6a1a83d96ed7d4ad187714",
+      "displayBytes": 9036,
+      "displaySize": "340x328"
+    },
+    {
+      "display": "groups/cards-dice.webp",
+      "original": "/polished-social/assets/groups/cards-dice.png",
+      "originalSha256": "a0de4781957865b1412b792e3a225a1f6c6418ad7e40a25355faa63cb745d29a",
+      "originalBytes": 144729,
+      "originalSize": "410x340",
+      "displaySha256": "a284d44d386d1cf9fe6a2cec5e055f3fb1a4410dc1ed5d309ab1b6d4abec910c",
+      "displayBytes": 10016,
+      "displaySize": "340x282"
+    },
+    {
+      "display": "groups/coffee.webp",
+      "original": "/polished-social/assets/groups/coffee.png",
+      "originalSha256": "2089b782148622353516e43eeee86d741df8bf53d980a36744c8bfc662b3c166",
+      "originalBytes": 148352,
+      "originalSize": "410x340",
+      "displaySha256": "fff9d45ed16e55b57fa491cd0bfa1f5ac06bdb4634670f65bb2396c2cea004bb",
+      "displayBytes": 13084,
+      "displaySize": "340x282"
+    },
+    {
+      "display": "groups/book.webp",
+      "original": "/polished-social/assets/groups/book.png",
+      "originalSha256": "271f515389cf7d0da240fcaedb4000cca3c9906be113d06bc8854a431a4dd6c4",
+      "originalBytes": 141592,
+      "originalSize": "410x340",
+      "displaySha256": "ef3cb43c28a7800f8dcff763a9ab3c1ae95ee3a996966be8ba79ff2a7e4ada2e",
+      "displayBytes": 8720,
+      "displaySize": "340x282"
+    },
+    {
+      "display": "groups/picnic.webp",
+      "original": "/polished-social/assets/groups/picnic.png",
+      "originalSha256": "a044fafc7c56978a17728c0ed644e77ee03d16a170d3547b190dce2672ea74bd",
+      "originalBytes": 180919,
+      "originalSize": "410x370",
+      "displaySha256": "38ab76a6cb0af987fcd63752376b3c2eefe9242dfbd385a1c86bf37084992e78",
+      "displayBytes": 13694,
+      "displaySize": "340x307"
+    },
+    {
+      "display": "groups/flowers.webp",
+      "original": "/polished-social/assets/groups/flowers.png",
+      "originalSha256": "e816fac2b1e5f733d4b7d872e817ee5c1f5eacd5a24c46a9f43133eb4f60ce59",
+      "originalBytes": 158863,
+      "originalSize": "410x370",
+      "displaySha256": "885de7557d1671539193e1d1aa98ac8866c4eecde38c4d4dc85bb48f0f520f99",
+      "displayBytes": 11674,
+      "displaySize": "340x307"
+    },
+    {
+      "display": "groups/moon.webp",
+      "original": "/polished-social/assets/groups/moon.png",
+      "originalSha256": "1334c65818e609dd9519ebded9596620512114c7646954b077e1fe965740779a",
+      "originalBytes": 146307,
+      "originalSize": "410x370",
+      "displaySha256": "d7543c2455487614bf599b022165746309daeb214d1216c245da9a3ef818091a",
+      "displayBytes": 10984,
+      "displaySize": "340x307"
+    },
+    {
+      "display": "covers/rainbow-logo.webp",
+      "original": "/game-repositories/rainbow/.claude/worktrees/onboarding-game-picker-cbd7db/public/rainbow-categories-logo-stacked.webp",
+      "originalSha256": "f8937f3a0830d1b35686edb34df70e69b9f1d7f16bc3deae2c3b382a24003757",
+      "originalBytes": 221616,
+      "originalSize": "1623x650",
+      "displaySha256": "8ff4cb78f1ea85372f8f572db406feefc928bc3dcebf164992733eb9f4b29310",
+      "displayBytes": 43798,
+      "displaySize": "720x288"
+    },
+    {
+      "display": "covers/crosspuns-logo.webp",
+      "original": "/game-repositories/crosspuns/public/brand/crosspuns-logo.webp",
+      "originalSha256": "136cb4ccfa87a476f50092f5cfc2cc1e918a77a0d17966a55de61d793aecb176",
+      "originalBytes": 66252,
+      "originalSize": "1200x213",
+      "displaySha256": "369c4a405ef2459d3507e13a8c555e28f6bf17a5da120ca59605447cee9ad15a",
+      "displayBytes": 25100,
+      "displaySize": "760x135"
+    },
+    {
+      "display": "covers/cluevoyance-logo-dark.webp",
+      "original": "/game-repositories/cluevoyance/public/assets/cluevoyance-logo-dark.png",
+      "originalSha256": "b4040462e8617effc7fc5516efb497e2258f30c896dbac0b481cccdcb94ea021",
+      "originalBytes": 226762,
+      "originalSize": "1743x350",
+      "displaySha256": "d979c8bb7e6ce35be0e4a3c215e9c402d2cc2a9f02425fdc128b14ecadcd7128",
+      "displayBytes": 22614,
+      "displaySize": "760x153"
+    },
+    {
+      "display": "covers/cluevoyance-nebula.webp",
+      "original": "/game-repositories/cluevoyance/public/assets/Ethereal starry sky and nebula.png",
+      "originalSha256": "53707de186f147965940a2b7f3db1e4b7300c235398076f41f2f4e3f404a3790",
+      "originalBytes": 1577455,
+      "originalSize": "1024x1536",
+      "displaySha256": "287518a83d057e3ee923635b890d3eaedadbc7c9edac8ff09a8b8b67709b4be6",
+      "displayBytes": 20256,
+      "displaySize": "1000x1500"
+    },
+    {
+      "display": "covers/hamburgle-icon.webp",
+      "original": "/game-repositories/hamburgle/public/icon-512.png",
+      "originalSha256": "fe13c7c2b15747a112d0d8b09a1a71d1d5f001f79bc7f328f669faccce89e884",
+      "originalBytes": 190743,
+      "originalSize": "512x512",
+      "displaySha256": "56c2786950f740aca00a8b57f22835eab146dd9e7ada4b119d57cea474ed0ae2",
+      "displayBytes": 7128,
+      "displaySize": "340x340"
+    },
+    {
+      "display": "covers/yodel-hero.webp",
+      "original": "/game-repositories/yodel/public/art/hero.webp",
+      "originalSha256": "d42851db1454ce47f469a42bbd0daab2b08a4613296cb53a52b63667235fc23e",
+      "originalBytes": 158306,
+      "originalSize": "1400x788",
+      "displaySha256": "fc065a459b2e15a70ee3ec359bed36a71dd76efeba8fce511e82d2cc448bc72d",
+      "displayBytes": 51176,
+      "displaySize": "1000x563"
+    },
+    {
+      "display": "covers/price-logo.webp",
+      "original": "/game-repositories/price-is-what/public/brand/price-is-what-logo-20261027-960.webp",
+      "originalSha256": "cfaec8befdb1670a8c159d0b8d596b95fc12ec7060cb9fce3c577d739b1f79f6",
+      "originalBytes": 402982,
+      "originalSize": "960x461",
+      "displaySha256": "37d6bb5320b8846efffe7639c365ca3130ee8955d1468e398d8758ebed6dcf6f",
+      "displayBytes": 28912,
+      "displaySize": "620x298"
+    },
+    {
+      "display": "covers/wtf-wordmark.webp",
+      "original": "/game-repositories/wtf-shared-social/public/wtf-logo-wordmark.png",
+      "originalSha256": "a8009089f99dc8d934723a14d8125f4f5a7dc6973d9a428827f7a0e1fae31766",
+      "originalBytes": 215832,
+      "originalSize": "600x244",
+      "displaySha256": "0fd5561bd7d31210337ee7c130bf2cb8a8ba626bf246cf83e72ad6aa590350f2",
+      "displayBytes": 35910,
+      "displaySize": "600x244"
+    },
+    {
+      "display": "covers/candy-pink.webp",
+      "original": "/game-repositories/wtf-shared-social/public/candy-pink.png",
+      "originalSha256": "1c95dac5da4f2aa8600a4397a91e26a355a2b2bdcb11bb913066d3a7e8d93e73",
+      "originalBytes": 197567,
+      "originalSize": "640x393",
+      "displaySha256": "606c60bdb1b776ac52b873f967fb366111ab84e3949c86fcf3fe74309458c50f",
+      "displayBytes": 13034,
+      "displaySize": "340x209"
+    },
+    {
+      "display": "covers/candy-turquoise.webp",
+      "original": "/game-repositories/wtf-shared-social/public/candy-turquoise.png",
+      "originalSha256": "9f39f14cf230d2b313548b20905b16a0150c799c6d6c68259af24bbcbc35cbe0",
+      "originalBytes": 237318,
+      "originalSize": "640x414",
+      "displaySha256": "6a12ada48958a642ba7a69d0f6ea2220a5072ce9e691cbdca47b2ae2bb87157f",
+      "displayBytes": 15144,
+      "displaySize": "340x220"
+    },
+    {
+      "display": "friends/bear-frog-heart.webp",
+      "original": "/game-repositories/rainbow/.claude/onboarding-brief/friends-groups/bear-frog-heart-clean-edges_no_margin_no_margin.png",
+      "originalSha256": "b9743f501dd4474c647c4a4512beaacd6e42c0174778856b455d1094fcba2b35",
+      "originalBytes": 1200995,
+      "originalSize": "1353x947",
+      "displaySha256": "06169b69ff94b8a57985a87142fd189f28c6581c331fb8fb24c7743d747a71c7",
+      "displayBytes": 26504,
+      "displaySize": "480x336"
+    }
+  ]
+}

@@ -7,7 +7,7 @@ import {
   getDeviceToken,
   resetDeviceIdentity,
 } from "@/lib/gameStats";
-import { ensureAccount } from "@/lib/platformSignIn";
+import { ensureAccount, forgetAccountConfirmation } from "@/lib/platformSignIn";
 import { copyGuestProgressToAccount, sameOwner, type ProgressOwner } from "@/lib/progressOwner";
 
 /**
@@ -143,6 +143,7 @@ export function useAccountOnboarding() {
 
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (!user) {
+        forgetAccountConfirmation();
         // A stored session the server could not be asked about (offline,
         // for one) is still that player, not a guest.
         if (userError && !isNoSession(userError)) {
@@ -233,6 +234,7 @@ export function useAccountOnboarding() {
           return { state: { phase: "saving_unavailable" }, owner };
       }
     } catch {
+      forgetAccountConfirmation();
       return { state: { phase: "saving_unavailable" }, owner: await storedSessionOwner() };
     }
   }, []);
