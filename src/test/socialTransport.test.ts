@@ -46,7 +46,7 @@ describe("createGatewayTransport", () => {
     expect(answer).toEqual({ ok: true, data: { displayName: "Ada" } });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0];
-    expect(url).toBe(`${BASE_URL}/functions/v1/social-gateway`);
+    expect(url).toBe(`${BASE_URL}/functions/v1/social-gateway?forceFunctionRegion=us-east-1`);
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toEqual({ op: "setDisplayName", args: { name: "Ada" } });
   });
@@ -75,7 +75,7 @@ describe("createGatewayTransport", () => {
     answerWith({ ok: true, data: {} });
     await createGatewayTransport({ baseUrl: `${BASE_URL}/`, publishableKey: KEY }).call("getMe", {}, TOKEN);
 
-    expect(fetchSpy.mock.calls[0][0]).toBe(`${BASE_URL}/functions/v1/social-gateway`);
+    expect(fetchSpy.mock.calls[0][0]).toBe(`${BASE_URL}/functions/v1/social-gateway?forceFunctionRegion=us-east-1`);
   });
 
   it("passes on the gateway's outcomes and empty answers", async () => {

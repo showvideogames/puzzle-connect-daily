@@ -26,7 +26,9 @@ export function createGatewayTransport({ baseUrl, publishableKey }: {
   baseUrl: string;
   publishableKey: string;
 }): SocialTransport {
-  const url = `${baseUrl.replace(/\/+$/, "")}/functions/v1/social-gateway`;
+  // Run beside the database: one call is several round trips to it, and a
+  // function in a far region turns each page load into many seconds.
+  const url = `${baseUrl.replace(/\/+$/, "")}/functions/v1/social-gateway?forceFunctionRegion=us-east-1`;
   return {
     async call(op, args, credential) {
       try {
