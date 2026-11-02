@@ -59,7 +59,45 @@ export interface GatewayDeps {
    * refusal.
    */
   verifyUserToken: (token: string) => Promise<{ id: string; isAnonymous: boolean } | null>;
+  /** False once this instance has answered too many invitation previews (see createPreviewThrottle). */
+  allowPreview: () => boolean;
   db: GatewayDb;
+}
+
+/**
+ * Keeps a stuck lock or slow query from pinning this instance's one connection.
+ * It has to run inside the transaction: settings on a role don't apply through
+ * `set local role`.
+ */
+export const TRANSACTION_LIMITS_SQL =
+  "select set_config('lock_timeout', '2s', true), set_config('statement_timeout', '5s', true)";
+
+/**
+ * Auth turning a token down is a 4xx. Anything else, a 429 included, means it
+ * couldn't answer, which must not read as a sign-out.
+ */
+export function authCouldNotAnswer(status: number | undefined): boolean {
+  return !(status && status >= 400 && status < 500 && status !== 429);
+}
+
+/**
+ * Guests reach previewInvite with no sign-in, and each one costs a transaction on
+ * the database the live games share, so nothing else slows a flood of them. The
+ * count is per running instance of the function: a limit on the damage, not an
+ * exact rate.
+ */
+export function createPreviewThrottle(limit = 120, windowMs = 60_000, now: () => number = Date.now): () => boolean {
+  let windowStart = now();
+  let used = 0;
+  return () => {
+    const time = now();
+    if (time - windowStart >= windowMs) {
+      windowStart = time;
+      used = 0;
+    }
+    used += 1;
+    return used <= limit;
+  };
 }
 
 /**
@@ -125,10 +163,14 @@ function isCurrentApiKey(value: string, keys: ApiKeys): boolean {
 type Args = Record<string, unknown>;
 
 /** What one argument may be. The hub still judges the value: this is only its type. */
-type Kind = "text" | "textOrNull" | "whole" | "cursor" | "game" | "puzzle";
+type Kind = "text" | "textOrNull" | "code" | "whole" | "cursor" | "game" | "puzzle";
 
 const GAME_IDS = ["rainbow", "crosspuns", "cluevoyance", "wtf", "yodel", "hamburgle", "priceiswhat"];
 const INT4_MAX = 2147483647;
+/** Well past any real code. Guests can reach these, and the hub hashes them. */
+const CODE_MAX = 64;
+/** A group picture is at most 60 KB of JPEG, so about 82 KB once encoded. */
+const BODY_MAX = 128 * 1024;
 const WIRE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const PUZZLE_ID = /^[A-Za-z0-9:_-]{1,64}$/;
 
@@ -140,6 +182,7 @@ const has = (object: object, key: string) => Object.prototype.hasOwnProperty.cal
 const FITS: Record<Kind, (value: unknown) => boolean> = {
   text: isText,
   textOrNull: (value) => value === null || isText(value),
+  code: (value) => isText(value) && value.length <= CODE_MAX,
   whole: (value) => Number.isInteger(value) && Math.abs(value as number) <= INT4_MAX,
   cursor: (value) =>
     isPlainObject(value) &&
@@ -187,17 +230,17 @@ export const OPERATIONS: Readonly<Record<string, Operation>> = {
     params: (a) => [a.noticeVersion],
   },
   previewInvite: {
-    required: { code: "text" },
+    required: { code: "code" },
     sql: "select social.preview_invite($1::text, $2::text) as result",
     params: (a) => [a.code],
   },
   acceptFriendInvite: {
-    required: { code: "text", noticeVersion: "whole" },
+    required: { code: "code", noticeVersion: "whole" },
     sql: "select social.accept_friend_invite($1::text, $2::text, $3::int) as result",
     params: (a) => [a.code, a.noticeVersion],
   },
   findFriendByCode: {
-    required: { friendCode: "text" },
+    required: { friendCode: "code" },
     sql: "select social.find_friend_by_code($1::text, $2::text) as result",
     params: (a) => [a.friendCode],
   },
@@ -249,7 +292,7 @@ export const OPERATIONS: Readonly<Record<string, Operation>> = {
     params: (a) => [a.name, a.myName, a.noticeVersion],
   },
   joinGroup: {
-    required: { code: "text", myName: "text", noticeVersion: "whole" },
+    required: { code: "code", myName: "text", noticeVersion: "whole" },
     sql: "select social.join_group($1::text, $2::text, $3::text, $4::int) as result",
     params: (a) => [a.code, a.myName, a.noticeVersion],
   },
@@ -502,7 +545,15 @@ async function shareCompletions(globalId: string, puzzleId: string, groupId: str
 
 /** Exactly { op, args }, with op a string. Anything else is not a request. */
 async function readRequest(req: Request): Promise<{ op: string; args: unknown } | null> {
-  const body: unknown = await req.json().catch(() => null);
+  if (Number(req.headers.get("content-length") ?? 0) > BODY_MAX) return null;
+  const text = await req.text().catch(() => "");
+  if (text.length > BODY_MAX) return null;
+  let body: unknown = null;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    return null;
+  }
   if (!isPlainObject(body) || !isText(body.op)) return null;
   if (Object.keys(body).some((key) => key !== "op" && key !== "args")) return null;
   return { op: body.op, args: body.args };
@@ -523,7 +574,7 @@ async function answerRequest(req: Request, deps: GatewayDeps): Promise<Answer> {
   const token = bearerToken(req, deps.keys);
 
   if (op === "previewInvite") {
-    if (!argsFit(operation, args)) return UNAVAILABLE;
+    if (!argsFit(operation, args) || !deps.allowPreview()) return UNAVAILABLE;
     const caller = await previewCaller(token, deps);
     return asGateway(deps.db, (tx) => hubAnswer(tx, operation.sql!, [caller, ...operation.params(args)]));
   }

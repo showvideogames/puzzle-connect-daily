@@ -9,7 +9,9 @@ import type { OpName, Operations } from "@/social/contract";
 import {
   COMPLETIONS_SQL,
   OPERATIONS,
+  authCouldNotAnswer,
   corsHeaders,
+  createPreviewThrottle,
   handleSocialGateway,
   readApiKeys,
   serverSecretKey,
@@ -121,6 +123,7 @@ function setup(overrides: Partial<World> = {}, deps: Partial<GatewayDeps> = {}) 
   const fullDeps: GatewayDeps = {
     keys: { publishable: [PUBLISHABLE], secret: [SECRET] },
     verifyUserToken,
+    allowPreview: () => true,
     db,
     ...deps,
   };
@@ -611,6 +614,86 @@ describe("social-gateway: previewInvite", () => {
     const { deps } = setup({ hubAnswer: refusal });
 
     expect((await preview(deps, guest)).body).toEqual(refusal);
+  });
+
+  it("refuses a preview past the throttle before any Auth or database work", async () => {
+    const { deps, statements, verifyUserToken } = setup({}, { allowPreview: () => false });
+
+    expect((await preview(deps)).body).toEqual(UNAVAILABLE);
+
+    expect(statements).toEqual([]);
+    expect(verifyUserToken).not.toHaveBeenCalled();
+  });
+
+  it("leaves everything but previews out of the throttle", async () => {
+    const allowPreview = vi.fn(() => false);
+    const { deps } = setup({}, { allowPreview });
+
+    expect((await send(deps, "listFriends", {})).body).toEqual(HUB_ANSWER);
+
+    expect(allowPreview).not.toHaveBeenCalled();
+  });
+});
+
+describe("social-gateway: limits on what a request can cost", () => {
+  it.each<[string, unknown, Record<string, string> | undefined]>([
+    ["previewInvite", { code: "c".repeat(65) }, guest],
+    ["acceptFriendInvite", { code: "c".repeat(65), noticeVersion: 1 }, undefined],
+    ["joinGroup", { code: "c".repeat(65), myName: "Ada", noticeVersion: 1 }, undefined],
+    ["findFriendByCode", { friendCode: "c".repeat(65) }, undefined],
+  ])("%s refuses an overlong code before reaching the hub", async (op, args, headers) => {
+    const { deps, statements } = setup();
+
+    expect((await send(deps, op, args, headers)).body).toEqual(UNAVAILABLE);
+
+    expect(statements.some(({ text }) => /preview_invite|accept_friend_invite|join_group|find_friend_by_code/.test(text))).toBe(false);
+  });
+
+  it("still takes a code at the limit", async () => {
+    const { deps } = setup();
+
+    expect((await send(deps, "previewInvite", { code: "c".repeat(64) }, guest)).body).toEqual(HUB_ANSWER);
+  });
+
+  it("refuses an oversized body by its header and by its real size, with no sign-in check", async () => {
+    const { deps, statements, verifyUserToken } = setup();
+    const oversized = { op: "listFriends", args: {}, padding: "x".repeat(128 * 1024) };
+
+    expect((await post(deps, oversized)).body).toEqual(UNAVAILABLE);
+    expect((await post(deps, { op: "listFriends", args: {} }, { ...signedIn, "content-length": "200000" })).body).toEqual(UNAVAILABLE);
+
+    expect(statements).toEqual([]);
+    expect(verifyUserToken).not.toHaveBeenCalled();
+  });
+
+  it("takes a request carrying the largest group picture", async () => {
+    const { deps } = setup();
+    const photo = `data:image/jpeg;base64,${"A".repeat(Math.ceil(61440 / 3) * 4)}`;
+    const args = { groupId: "g", emblemId: "e", photo, accentColor: "#123456" };
+
+    expect((await send(deps, "setGroupAppearance", args)).body).toEqual(HUB_ANSWER);
+  });
+
+  it("throttles previews by the minute, then lets them through again", () => {
+    let time = 1_000;
+    const allow = createPreviewThrottle(2, 60_000, () => time);
+
+    expect([allow(), allow(), allow()]).toEqual([true, true, false]);
+    time += 59_999;
+    expect(allow()).toBe(false);
+    time += 1;
+    expect(allow()).toBe(true);
+  });
+
+  it.each<[number | undefined, boolean]>([
+    [400, false],
+    [401, false],
+    [403, false],
+    [429, true],
+    [500, true],
+    [undefined, true],
+  ])("Auth status %s: could not answer is %s", (status, expected) => {
+    expect(authCouldNotAnswer(status)).toBe(expected);
   });
 });
 

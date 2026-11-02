@@ -254,6 +254,55 @@ describe("Account isolation", () => {
     assert.equal(await hubPersons(outsider), 1);
   });
 
+  test("a non-tester holding real invitations joins nothing", async () => {
+    const owner = await person("Inviting owner");
+    const outsider = await makeAccount("Holder of links", { allowed: false });
+    const { code } = await ok(owner, "createFriendInvite", { noticeVersion: NOTICE });
+    const { groupId, inviteCode } = await makeGroup(owner);
+    const puzzle = await newPuzzle();
+
+    await refused(outsider, "acceptFriendInvite", { code, noticeVersion: NOTICE }, "game_disabled");
+    await refused(outsider, "joinGroup", { code: inviteCode, myName: "Holder", noticeVersion: NOTICE }, "game_disabled");
+    await refused(outsider, "listResults", { gameId: "rainbow", puzzleId: puzzle.id, groupId }, "game_disabled");
+
+    assert.equal(await hubPersons(outsider), 0);
+    assert.equal(await memberships(groupId), 1);
+  });
+
+  test("taking someone off the list shuts them out at once, and their data stays until it's deleted", async () => {
+    const [leaving, friend] = await people("Off the list", "Their friend");
+    await befriend(leaving, friend);
+
+    await db.query("delete from social.beta_testers where global_user_id = $1", [leaving.globalId]);
+
+    await refused(leaving, "getMe", {}, "game_disabled");
+    await refused(leaving, "listFriends", {}, "game_disabled");
+    assert.equal(await hubPersons(leaving), 1);
+
+    // The way a tester actually leaves: their hub data goes first, then the row.
+    await db.query("select social.delete_person($1)", [leaving.globalId]);
+    assert.equal(await hubPersons(leaving), 0);
+    assert.equal((await ok(friend, "listFriends")).length, 0);
+  });
+
+  test("a held lock costs a refused request in seconds, not a stuck connection", async () => {
+    const tester = await person("Waits on a lock");
+    const blocker = await db.connect();
+    try {
+      await blocker.query("begin");
+      await blocker.query("lock table social.persons in access exclusive mode");
+      const started = Date.now();
+      const res = await gw(tester, "getMe");
+      const waited = Date.now() - started;
+      assert.equal(outcomeOf(res), "unavailable");
+      assert.ok(waited >= 1500 && waited < 4500, `waited ${waited} ms`);
+    } finally {
+      await blocker.query("rollback");
+      blocker.release();
+    }
+    await ok(tester, "getMe");
+  });
+
   test("no token on anything but previewInvite gets not_signed_in", async () => {
     const operations = Object.keys(OPERATIONS).filter((op) => op !== "previewInvite");
     assert.ok(operations.length >= 30, "the list of operations came back short");
@@ -667,6 +716,21 @@ describe("Locked details", () => {
       assert.deepEqual(row.summary, { solved: true, mistakes: 2 });
       assert.ok(!("detail" in row));
     }
+  });
+
+  test("a viewer still playing, or who finished it from the archive, stays locked", async () => {
+    const [viewer, friend] = await people("Mid-game viewer", "Finisher");
+    await befriend(viewer, friend);
+
+    const midGame = await newPuzzle();
+    const { marker } = await play(friend, midGame);
+    await play(viewer, midGame, { status: "in_progress" });
+    assertLocked(await resultsRaw(viewer, midGame.id), marker);
+
+    const fromArchive = await newPuzzle();
+    const archived = await play(friend, fromArchive);
+    await play(viewer, fromArchive, { entryContext: "archive_calendar" });
+    assertLocked(await resultsRaw(viewer, fromArchive.id), archived.marker);
   });
 
   test("finishing the same puzzle opens it, and a different puzzle doesn't", async () => {

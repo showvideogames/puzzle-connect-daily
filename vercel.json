@@ -1,5 +1,4 @@
 {
-  "git": { "deploymentEnabled": { "feat/friends-flow-local": false } },
   "redirects": [
     { "source": "/favicon.svg", "destination": "/icons/rainbow-favicon-32x32-2cbde970.png", "permanent": false },
     { "source": "/favicon-16x16.png", "destination": "/icons/rainbow-favicon-32x32-2cbde970.png", "permanent": false },
