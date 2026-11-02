@@ -16,13 +16,47 @@
  * Runs the REAL GameBoard against the in-memory Supabase fake, with reduced
  * motion (the solve animation is skipped; the loss cascade's timing is not).
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { FakeSupabase } from "./fakeSupabase";
 import type { Puzzle } from "@/lib/types";
 
 const db = new FakeSupabase();
+
+// Friends' results, for the tests that switch the beta on: a stand-in client
+// for someone signed in with one friend who hasn't finished, so the popup's
+// own row comes from what this board passes.
+const social = vi.hoisted(() => {
+  const call = vi.fn(async (op: string) => {
+    const answers: Record<string, unknown> = {
+      getMe: { displayName: "Alex", animalId: "fox", backgroundColor: "#DED1F2", friendCode: "AAA-222", friendCount: 1, groupCount: 0 },
+      listFriendRequests: { incoming: [], outgoing: [] },
+      listFriends: [{ animalId: "owl", backgroundColor: "#F8D0BD", friendRef: "f1", name: "Sam", since: "2026-10-30T18:00:00.000Z" }],
+      listResults: [],
+      listMyGroups: [],
+    };
+    return op in answers ? { ok: true, data: answers[op] } : { ok: false, outcome: "unavailable" };
+  });
+  return {
+    call,
+    value: {
+      api: {
+        client: { call, forget: () => undefined },
+        puzzleId: () => "not-this-board",
+        today: () => new Date(),
+        linkUrl: (code: string) => `http://rainbow.test/join/${code}`,
+        share: async () => "done" as const,
+      },
+      source: {
+        read: () => ({ state: { scope: "scope-1", credential: "token" }, accountId: "u1", storedOwner: "u1", generation: 1, checkRunning: false }),
+        subscribe: () => () => undefined,
+      },
+      signIn: async () => null,
+    },
+  };
+});
+vi.mock("@/components/social/appSocial", () => ({ appSocial: () => social.value }));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -196,6 +230,11 @@ describe("Daily win", () => {
     const flame = await within(d).findByTestId("streak-flame");
     expect(flame.dataset.earned).toBe("true");
     expect(flame.textContent).toContain("1 day streak");
+    // The result word stays the popup's only heading; Up next follows a Full
+    // game with Mini; with the Friends beta off there is no Friends section.
+    expect(within(d).getAllByRole("heading")).toHaveLength(1);
+    expect(within(d).getByRole("link", { name: /Mini Categories/ }).getAttribute("href")).toBe("/mini");
+    expect(within(d).queryByTestId("friends-results")).toBeNull();
     expect(finalizes()).toBe(1);
     expect(streakRows()).toHaveLength(1);
     expect(streakRows()[0].current_streak).toBe(1);
@@ -365,5 +404,90 @@ describe("modes without Daily credit", () => {
     expect(finalizes()).toBe(0);
     expect(streakRows()).toHaveLength(0);
     expect(db.tables.game_sessions).toHaveLength(0);
+  }, 30_000);
+});
+
+/**
+ * With the Friends beta on, what the board hands the popup: the official Daily
+ * only, this puzzle's id, and this game's own outcome for the player's row
+ * (the stand-in server has no row for them). Rendered by the real board; the
+ * social client is the stand-in above.
+ */
+describe("Friends' results from the real board (beta on)", () => {
+  const misses = [["y2", "g2", "b2", "r2"]];
+  const ops = () => social.call.mock.calls.map(([op]) => op);
+  const myRow = async (dialog: HTMLElement) => {
+    await within(dialog).findByText("No friends have finished this puzzle yet", {}, { timeout: 5_000 });
+    const row = within(dialog).getAllByTestId("friends-result-row")[0];
+    expect(row.dataset.you).toBe("true");
+    return row;
+  };
+
+  beforeEach(() => {
+    vi.stubEnv("VITE_SHARED_SOCIAL", "beta");
+    social.call.mockClear();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("a Daily win shows my row with this game's mistakes, and asks about this board's puzzle", async () => {
+    const view = renderBoard();
+    await settle();
+    for (const set of misses) await guess(view.container, set);
+    await win(view.container);
+    const d = await popup();
+    expect((await myRow(d)).textContent).toBe("Alex (you)1 mistake");
+    expect(social.call).toHaveBeenCalledWith("listResults", { gameId: "rainbow", puzzleId: FULL.id });
+  }, 30_000);
+
+  it("a Daily loss shows my row as Not solved", async () => {
+    const view = renderBoard();
+    await settle();
+    await lose(view.container);
+    const d = await popup(12_000);
+    expect((await myRow(d)).textContent).toBe("Alex (you)Not solved");
+  }, 40_000);
+
+  it.each([
+    ["Archive", { isArchive: true, entryContext: "archive_calendar" as const }],
+    ["Beta", { betaMode: true }],
+  ])("%s shows no Friends' results and never asks the social client", async (_label, props) => {
+    const view = renderBoard(props as BoardProps);
+    await settle();
+    await win(view.container);
+    const d = await popup();
+    await settle(300);
+    expect(within(d).queryByTestId("friends-results")).toBeNull();
+    expect(social.call).not.toHaveBeenCalled();
+    // Up next is still there.
+    expect(within(d).getByRole("link", { name: /Mini Categories/ })).toBeTruthy();
+  }, 30_000);
+
+  it("a Mini Daily offers Rainbow Categories next and never asks for results", async () => {
+    const MINI: Puzzle = {
+      id: "mini-1",
+      format: "mini",
+      date: "2026-09-16",
+      designerName: "Sam West",
+      alphabetizeCompleted: true,
+      groups: [
+        { category: "Green", words: ["mg1", "mg2", "mg3"], difficulty: 2 },
+        { category: "Blue", words: ["mb1", "mb2", "mb3"], difficulty: 3 },
+        { category: "Red", words: ["mr1", "mr2", "mr3"], difficulty: 4 },
+      ],
+      rainbowHerring: null,
+    } as Puzzle;
+    db.tables.puzzles = [...db.tables.puzzles, { id: MINI.id, format: "mini", date: MINI.date, rainbow_herring: null, is_published: true, is_beta: false }];
+    const view = renderBoard({ puzzle: MINI });
+    await settle();
+    for (const g of MINI.groups) await guess(view.container, g.words);
+    const d = await popup();
+    const rainbow = within(d).getByRole("link", { name: /Rainbow Categories/ });
+    expect(rainbow.getAttribute("href")).toBe("/");
+    expect(within(d).queryByRole("link", { name: /Mini Categories/ })).toBeNull();
+    // Signed in with a friend: the honest note, not results.
+    expect(await within(d).findByText("Friends' results are shared for the daily Rainbow Categories 4×4 for now.", {}, { timeout: 5_000 })).toBeTruthy();
+    expect(ops()).not.toContain("listResults");
   }, 30_000);
 });

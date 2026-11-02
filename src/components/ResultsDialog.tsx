@@ -1,13 +1,19 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { Check, Share2, X } from "lucide-react";
 import { ResultGrid, type ResultRow } from "./ResultGrid";
 import { StreakCelebration } from "./StreakCelebration";
 import { SpotRainbowPrompt } from "./SpotRainbowPrompt";
+import { FriendsBoundary, FriendsCard, FriendsPlaceholder } from "./results/FriendsSection";
+import { UpNext } from "./results/UpNext";
+import { socialBetaOn } from "@/components/social/socialFlag";
 import { displayStreakOf, loadStatsFromSupabase, winRateOf } from "@/lib/gameStats";
 import type { GameStats } from "@/lib/types";
 import type { PuzzleFormat } from "@/lib/puzzleFormat";
 import type { ResolvedTheme } from "@/lib/themes";
+
+// The social client comes only with this section, so it never enters the main chunk.
+const FriendsResults = lazy(() => import("./results/FriendsResults"));
 
 interface ResultsDialogProps {
   open: boolean;
@@ -58,13 +64,26 @@ interface ResultsDialogProps {
    * popup usually opens by itself, with nothing focused to go back to.
    */
   returnFocusRef?: RefObject<HTMLElement>;
+  /** Which game this is: Up next offers the other one, and Friends' results follow it. */
+  gameFormat: PuzzleFormat["id"];
+  /**
+   * The official Daily (not Archive, Beta or custom). Only it has friends'
+   * results; every other game shows no Friends' results section.
+   */
+  officialDaily: boolean;
+  puzzleId: string;
+  /** This game's own outcome, for the player's own row before the server has one. */
+  solved: boolean;
+  mistakes: number;
 }
 
 /**
- * The end-of-game results popup. Everything in it is the board's own: the
+ * The end-of-game results popup. The personal part is the board's own: the
  * share squares, the Share action, the result wording, the stats My Stats
- * shows, the flame streak pill and the Spot the Rainbow invitation. It only
- * reads — opening, closing and reopening it never saves anything.
+ * shows, the flame streak pill and the Spot the Rainbow invitation, all shown
+ * at once. Friends' results load on their own inside their section (beta flag,
+ * official Daily only), so they never hold up the rest. It only reads —
+ * opening, closing and reopening it never saves anything.
  */
 export function ResultsDialog({
   open,
@@ -83,9 +102,15 @@ export function ResultsDialog({
   spotTheme,
   onSpotRainbow,
   returnFocusRef,
+  gameFormat,
+  officialDaily,
+  puzzleId,
+  solved,
+  mistakes,
 }: ResultsDialogProps) {
   const [stats, setStats] = useState<GameStats | null>(null);
   const shareRef = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => onOpenChange(false), [onOpenChange]);
 
   useEffect(() => {
     if (!open || !statsFormat || statsPending) return;
@@ -119,6 +144,8 @@ export function ResultsDialog({
       ]
     : [];
 
+  const showFriends = officialDaily && socialBetaOn();
+
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
@@ -147,11 +174,12 @@ export function ResultsDialog({
               e.preventDefault();
               target.focus({ preventScroll: true });
             }}
-            className="pointer-events-auto relative w-full max-w-sm
+            className="pointer-events-auto relative w-full max-w-[26rem]
               max-h-[calc(100vh-24px)] max-h-[calc(100dvh-24px)]
-              flex flex-col bg-card rounded-2xl shadow-2xl
+              flex flex-col bg-card rounded-3xl shadow-2xl
               animate-pop motion-reduce:animate-none focus:outline-none"
           >
+            {/* Outside the scrolling body, so it never scrolls away. */}
             <DialogPrimitive.Close
               aria-label="Close results"
               className="absolute right-2 top-2 z-10 w-11 h-11 flex items-center justify-center rounded-full
@@ -161,22 +189,27 @@ export function ResultsDialog({
               <X className="w-5 h-5" />
             </DialogPrimitive.Close>
 
-            <div className="min-h-0 overflow-y-auto overscroll-contain px-5 sm:px-6 pt-8 pb-5 text-center">
-              {resultRows.length > 0 && <ResultGrid rows={resultRows} />}
-
-              <DialogPrimitive.Title asChild>
-                <h2 className="mt-4 text-2xl sm:text-[1.75rem] font-extrabold tracking-tight leading-tight">{headline}</h2>
-              </DialogPrimitive.Title>
-              {timeLabel && (
-                <p className="text-sm font-semibold tabular-nums mt-2">⏳ {timeLabel}</p>
-              )}
+            <div className="min-h-0 overflow-y-auto overscroll-contain px-5 sm:px-6 pt-10 pb-5 text-center">
+              {/* The squares and the result word side by side when they fit,
+                  stacked when they don't. */}
+              <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+                {resultRows.length > 0 && <ResultGrid rows={resultRows} />}
+                <div className={resultRows.length > 0 ? "text-left" : "text-center"}>
+                  <DialogPrimitive.Title asChild>
+                    <h2 className="text-[2rem] sm:text-[2.25rem] font-extrabold tracking-tight leading-tight">{headline}</h2>
+                  </DialogPrimitive.Title>
+                  {timeLabel && (
+                    <p className="text-base font-semibold tabular-nums mt-1">⏳ {timeLabel}</p>
+                  )}
+                </div>
+              </div>
 
               {summary && (
                 <div className="mt-3" data-testid="results-summary">
                   {summary.facts.length > 0 && (
-                    <p className="text-sm font-semibold">{summary.facts.join(" · ")}</p>
+                    <p className="text-[15px] font-semibold">{summary.facts.join(" · ")}</p>
                   )}
-                  <p className="mt-1 text-sm text-muted-foreground">{summary.note}</p>
+                  <p className="mt-1 text-[15px] text-muted-foreground">{summary.note}</p>
                 </div>
               )}
 
@@ -184,15 +217,15 @@ export function ResultsDialog({
                 <dl className="mt-4 grid grid-cols-3 divide-x divide-border" data-testid="results-stats">
                   {statItems.map((item) => (
                     <div key={item.label} className="flex flex-col-reverse items-center px-1">
-                      <dt className="text-xs sm:text-sm text-muted-foreground leading-tight">{item.label}</dt>
-                      <dd className="text-2xl sm:text-3xl font-extrabold tabular-nums leading-none mb-1">{item.value}</dd>
+                      <dt className="text-[15px] text-muted-foreground leading-tight">{item.label}</dt>
+                      <dd className="text-2xl font-extrabold tabular-nums leading-none mb-1">{item.value}</dd>
                     </div>
                   ))}
                 </dl>
               )}
 
               {streakShown && streakMoves !== null && (
-                <StreakCelebration streak={streak} animate={streakMoves} className="mt-4" />
+                <StreakCelebration streak={streak} animate={streakMoves} className="mt-3" />
               )}
 
               {onShare && (
@@ -211,18 +244,25 @@ export function ResultsDialog({
               )}
 
               {spotTheme && (
-                <>
-                  <div className="my-4 h-px bg-border" aria-hidden="true" />
-                  {/* A size container, so the prompt's text scales with the
-                      popup's width the way it does with the board's. */}
-                  <div style={{ containerType: "inline-size" }}>
-                    <SpotRainbowPrompt theme={spotTheme} onClick={onSpotRainbow} className="py-2.5" />
-                  </div>
-                </>
+                // A size container, so the prompt's text scales with the
+                // popup's width the way it does with the board's.
+                <div className="mt-3" style={{ containerType: "inline-size" }}>
+                  <SpotRainbowPrompt theme={spotTheme} onClick={onSpotRainbow} className="py-2.5" />
+                </div>
               )}
 
+              {showFriends && (
+                <FriendsBoundary>
+                  <Suspense fallback={<FriendsCard pending><FriendsPlaceholder /></FriendsCard>}>
+                    <FriendsResults format={gameFormat} puzzleId={puzzleId} solved={solved} mistakes={mistakes} onClose={close} />
+                  </Suspense>
+                </FriendsBoundary>
+              )}
+
+              <UpNext format={gameFormat} onNavigate={close} />
+
               <DialogPrimitive.Close
-                className="mt-4 text-sm font-semibold underline underline-offset-4 text-foreground/80 hover:text-foreground
+                className="mt-4 min-h-11 px-2 text-[15px] font-semibold underline underline-offset-4 text-foreground/80 hover:text-foreground
                   rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Back to board
