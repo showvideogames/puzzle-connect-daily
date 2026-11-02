@@ -10,7 +10,7 @@
  * page that merely happens to render nothing wrong, while asking for the
  * other format's rows, still fails.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { afterAll, describe, it, expect, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
@@ -48,6 +48,13 @@ import { MiniArchivePuzzle } from "@/pages/Mini";
 import { MINI_FORMAT, FULL_FORMAT, progressStorageId } from "@/lib/puzzleFormat";
 import { saveProgress } from "@/lib/gameProgress";
 import { getPuzzleById, isPuzzleId } from "@/lib/puzzles";
+
+// The calendars open on the current month, so a date a few days back is off
+// screen during the first days of any month. Hold the clock mid-month.
+vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 5, 15, 12) });
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 const TODAY = new Date().toLocaleDateString("en-CA");
 const daysAgo = (n: number) => {
