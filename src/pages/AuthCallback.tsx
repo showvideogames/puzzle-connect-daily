@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ensureAccount, handleCallback } from "@/lib/platformSignIn";
+import { ensureAccount, handleCallback, type CallbackResult } from "@/lib/platformSignIn";
+
+/**
+ * The one exchange this page load gets. A new session changes the player, and
+ * OnboardingGate rebuilds every page when that happens, so this page mounts
+ * again once the code has gone from the address bar. That mount must hear how
+ * the exchange went, not report that no code came back.
+ */
+let exchange: Promise<CallbackResult> | null = null;
 
 /**
  * /auth/callback — the ONLY page that turns a sign-in code into a session.
@@ -19,7 +27,8 @@ export default function AuthCallback() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const result = await handleCallback();
+      exchange ??= handleCallback();
+      const result = await exchange;
       if (cancelled) return;
       if (!result.ok) {
         setFailure(result.errorMessage ?? "Sign-in did not complete.");
