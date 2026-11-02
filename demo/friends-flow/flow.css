@@ -1,0 +1,14 @@
+/* The bar's buttons, matching the select in ../onboarding/preview.css. Everything
+   else on the page is that file and the real screens. */
+
+.flow-bar-button {
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #fff;
+  color: #28232c;
+  font: inherit;
+  cursor: pointer;
+}
+.flow-bar-button:disabled { opacity: .55; cursor: default; }

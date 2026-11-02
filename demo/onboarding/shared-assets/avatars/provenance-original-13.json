@@ -1,0 +1,119 @@
+{
+  "libraryFileId": "libfile_586557a96c7481918ff7d76e48ac1ff3",
+  "version": 5,
+  "files": [
+    {
+      "animal": "rabbit",
+      "width": 1254,
+      "height": 1254,
+      "rgba": true,
+      "sha256": "1d7856ccf308ba66f1f5dfd8ad8aaa432d88a11da9d49618789051bdcd652d1a"
+    },
+    {
+      "animal": "red-panda",
+      "width": 1254,
+      "height": 1254,
+      "rgba": true,
+      "sha256": "af64b3510b69499134bbf6314323a93f784ea8c72ef22a3601a952aff9c9d0a5"
+    },
+    {
+      "animal": "raccoon",
+      "width": 1254,
+      "height": 1254,
+      "rgba": true,
+      "sha256": "b74a31a54cf157330622377809235af2780b228d95d8c2d273e204a1567d7c37"
+    },
+    {
+      "animal": "owl",
+      "width": 1254,
+      "height": 1254,
+      "rgba": true,
+      "sha256": "de07e0b3ad88f55d71cc659de9df846d3e1f4c548a3caa73bcc54a85e57d3ef0"
+    },
+    {
+      "animal": "penguin",
+      "width": 1254,
+      "height": 1254,
+      "rgba": true,
+      "sha256": "8448e9d5334e0552f09ccae90abd96706dd9bc2c23dc6dde89481bd6dc5a670e"
+    },
+    {
+      "animal": "cat",
+      "width": 1254,
+      "height": 1254,
+      "rgba": true,
+      "sha256": "38aa891278b0f9f971814295526702da4453e2b2452000111b61e06fb2372c74"
+    },
+    {
+      "animal": "frog",
+      "width": 1254,
+      "height": 1254,
+      "rgba": true,
+      "sha256": "b77644500a0db26b3c27a5ac433afa57108cdabb7f0447a6ea6abf1d24095cc1"
+    },
+    {
+      "animal": "saint-bernard",
+      "width": 1254,
+      "height": 1254,
+      "rgba": true,
+      "sha256": "2778389d8cab3a81b29a614b1ce51dbb28216e777432c15c9c06bc330ce10263"
+    },
+    {
+      "animal": "fox",
+      "width": 1254,
+      "height": 1254,
+      "rgba": true,
+      "sha256": "07e9715705304b46633fa31679014f887db58c6515b966c59d1b5657c9a3da3f"
+    },
+    {
+      "animal": "otter",
+      "width": 400,
+      "height": 400,
+      "rgba": true,
+      "sha256": "6096427e58ee5e1128e44d1d28099e6039b45949aceb9d7a9e09dc02f828ecbb",
+      "sourceDisc": [
+        2,
+        10,
+        398,
+        389
+      ],
+      "uniformFit": 1.0554089709762533
+    },
+    {
+      "animal": "koala",
+      "width": 400,
+      "height": 400,
+      "rgba": true,
+      "sha256": "5519a954c00afea9d3512c2410796e36f085c06beed020674c8570696034cf2f",
+      "sourceDisc": [
+        0,
+        12,
+        400,
+        389
+      ],
+      "uniformFit": 1.0610079575596818
+    },
+    {
+      "animal": "bear",
+      "width": 1254,
+      "height": 1254,
+      "rgba": true,
+      "sha256": "85aa4c046d4a6cae5eb718717c9fbf97e70a200ad4d66b6067b5d6479bde88d9"
+    },
+    {
+      "animal": "hedgehog",
+      "width": 400,
+      "height": 400,
+      "rgba": true,
+      "sha256": "e398856d3fa3d2eaf4fe124f5c30f906c6f8ece662f693a886c329b9dac9541e",
+      "sourceDisc": [
+        0,
+        11,
+        400,
+        389
+      ],
+      "uniformFit": 1.0582010582010581
+    }
+  ],
+  "otherElevenUnchanged": true
+}

@@ -6,3 +6,12 @@ project_id = "zmauemcjcrdrgfjzkvgd"
 # and scripts/check-feedback-function.mjs.
 [functions.submit-feedback]
 verify_jwt = true
+
+# Off because guests preview invitations with no session, so their request
+# carries no JWT, and a person whose token has expired must get the contract's
+# not_signed_in rather than a refusal from in front of the function. This opens
+# nothing: the function applies its own, stricter checks to every request
+# (current API keys only, sessions confirmed with Supabase Auth, Rainbow's
+# accounts row, the beta allow-list). See supabase/functions/social-gateway/core.ts.
+[functions.social-gateway]
+verify_jwt = false
