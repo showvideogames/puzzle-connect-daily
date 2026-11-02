@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useLayoutEffect, forwardRef, 
 import { isCustomEmoji, customEmojiUrl, customEmojiName } from "@/lib/customEmoji";
 import { categorySwatches } from "@/lib/categoryPalette";
 import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
+import { fitScaleToHeight, rainbowBarReserve } from "@/lib/rainbowWordFit";
 
 const DOUBLE_TAP_DELAY_MS = 250;
 
@@ -23,10 +24,19 @@ const IGNORE_CLICKS_AFTER_DRAG_MS = 600;
 
 const LIFT_SHADOW ="0 14px 28px -8px rgb(0 0 0 / 0.30), 0 6px 12px -4px rgb(0 0 0 / 0.18)";
 
-// Rainbow annotations stay outside the gradient; ordinary tiles use a themed tint.
+// Ordinary annotations use a themed tint; these classes only color the dark
+// band a selected one shows. Rainbow tiles have no ring.
 const COLOR_RING_BORDER_CLASS: Record<string, string> = {
   yellow: "border-group-1", green: "border-group-2",
   blue: "border-group-3", red: "border-group-4",
+};
+
+// A Rainbow tile's annotation is a short colored bar inside its bottom edge.
+// The bar uses its own richer colors (index.css), matching the approved
+// mockup, so the shared category colors stay as they are.
+const COLOR_BAR_CLASS: Record<string, string> = {
+  yellow: "tile-bar-yellow", green: "tile-bar-green",
+  blue: "tile-bar-blue", red: "tile-bar-red",
 };
 
 // Count visible characters/emojis using Intl.Segmenter
@@ -70,6 +80,8 @@ function getLongestWord(word: string): string {
 // font-size only shrinks as a last resort, when the single longest word in
 // the phrase can't fit on its own line at normal size within the tile's
 // actual measured width. Words/phrases that already fit are left untouched.
+// (On fixed-height tiles a rainbow word can also shrink, just enough to
+// clear the color bar: see fitHeight in WordTile.)
 //
 // Returns the shrink as a fraction of the normal size (applied as `em`
 // against the button's own font-size), never an absolute px value, and
@@ -310,8 +322,9 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
     : undefined;
 
   const textRef = useRef<HTMLSpanElement>(null);
-  // Fraction of the tile's normal font-size the text needs to fit (see
-  // computeFitScale); undefined when it already fits at normal size.
+  // Fraction of the tile's normal font-size the text needs to fit its width
+  // (computeFitScale) and, for a rainbow word on a fixed-height tile, to clear
+  // the color bar (fitHeight); undefined when it already fits at normal size.
   const [fitScale, setFitScale] = useState<number | undefined>(undefined);
   const [splitParts, setSplitParts] = useState<[string, string] | undefined>(undefined);
 
@@ -326,25 +339,67 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       // w-full span to its own width; measuring the span would then hide the
       // overflow, leave the word unshrunk, and let it render off-center. The
       // button's content box is stable, so the overflow is detected reliably.
-      // clientWidth is a layout size, so transforms — the drag lift's scale,
-      // the press-down shrink, entrance animations — never skew it: a
-      // lifted tile measures exactly as it does at rest.
+      // clientWidth and offsetWidth are layout sizes, so transforms — the drag
+      // lift's scale, the press-down shrink, entrance animations — never skew
+      // them: a lifted tile measures exactly as it does at rest. A rainbow
+      // tile measures as if it had a plain tile's 1px border: its rim is 4px
+      // on the narrow tablet, and text never shrinks to fit a highlight's
+      // width. (Its height is fitted to clear the bar; see fitHeight below.)
+      const tileInnerWidth = isRainbow ? btn.offsetWidth - 2 : btn.clientWidth;
       const cs = getComputedStyle(btn);
       if (splitLongWords) {
         // Decided from the tile's full inner width and fixed paddings, never
-        // the current padding, which a split itself changes.
-        const split = computeSplitFit(word, btn.clientWidth, cs);
-        setSplitParts(split?.parts);
+        // the current padding, which a split itself changes. The same halves
+        // keep the same state, so this effect's re-run on a change settles.
+        const split = computeSplitFit(word, tileInnerWidth, cs);
+        const parts = split?.parts;
+        setSplitParts((prev) => (prev?.[0] === parts?.[0] && prev?.[1] === parts?.[1] ? prev : parts));
         if (split) {
+          // Two lines, which clear the bar on every fixed-height tile.
           setFitScale(split.scale);
           return;
         }
-        setFitScale(computeFitScale(getLongestWord(word), btn.clientWidth - 2 * TILE_PAD_X, cs));
+        setFitScale(fitHeight(computeFitScale(getLongestWord(word), tileInnerWidth - 2 * TILE_PAD_X, cs), cs));
         return;
       }
       const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-      const available = btn.clientWidth - padX;
-      setFitScale(computeFitScale(getLongestWord(word), available, cs));
+      const available = tileInnerWidth - padX;
+      setFitScale(fitHeight(computeFitScale(getLongestWord(word), available, cs), cs));
+    };
+
+    // From md up a Full tile's height is fixed, so a rainbow word of three
+    // lines would run into the color bar. The bar's room (and 2px above the
+    // word) is kept free whether or not the tile is marked, so marking never
+    // resizes the word, and the font shrinks only as far as that takes; the
+    // md grid rule then lifts a marked tile's word clear of its bar. Phones
+    // and Mini are left out: their tiles grow and their padding clears the bar.
+    // Lines may rewrap at the smaller size; nothing is cut. Layout sizes only,
+    // so selection and the drag lift's scale never enter it.
+    const fitHeight = (widthScale: number | undefined, cs: CSSStyleDeclaration) => {
+      const span = textRef.current;
+      const basePx = parseFloat(cs.fontSize);
+      const fixedHeight = !!isRainbow && !squareTiles
+        && typeof window.matchMedia === "function" && !!window.matchMedia("(min-width: 768px)")?.matches;
+      // splitParts is what the DOM shows now. If it still shows a split this
+      // measure has dropped, the re-run after that render measures instead.
+      if (!fixedHeight || !span || splitParts || !(basePx > 0)) return widthScale;
+      const available = btn.clientHeight - rainbowBarReserve(btn.offsetWidth) - 2;
+      // No layout yet (a hidden board, or before the first layout): nothing to
+      // fit against, so keep the width fit rather than fall to the floor.
+      if (available <= 0 || span.offsetHeight === 0) return widthScale;
+      const previous = span.style.fontSize;
+      const scale = fitScaleToHeight(
+        (s) => {
+          span.style.fontSize = `${s}em`;
+          return span.offsetHeight;
+        },
+        available,
+        widthScale ?? 1,
+        MIN_TILE_FONT_PX / basePx,
+      );
+      // React set the previous value and diffs against it on its next commit.
+      span.style.fontSize = previous;
+      return scale < (widthScale ?? 1) ? scale : widthScale;
     };
 
     measure();
@@ -377,7 +432,7 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
       window.removeEventListener("resize", measure);
       document.fonts?.removeEventListener?.("loadingdone", measure);
     };
-  }, [word, isEmojiPuzzle, isImage, splitLongWords]);
+  }, [word, isEmojiPuzzle, isImage, splitLongWords, isRainbow, squareTiles, splitParts]);
 
   // Arrange Tiles press tracking, via pointer events so mouse and touch take
   // the same path. The listeners go on the window, not the button: the lifted
@@ -518,16 +573,14 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
     ? "tile-neutral bg-tile-selected text-tile-selected-fg shadow-md animate-tile-matched scale-[0.97]"
     : isRainbow
       ? themedRainbow
-        ? `text-white shadow-md border-[3px] md:border-[4px] ${isSelected ? "border-foreground" : "border-transparent"}`
+        ? "tile-rainbow-face text-white"
         : rainbowAnimated
-          ? `rainbow-tile text-white shadow-md border-[3px] md:border-[4px] ${isSelected ? "border-foreground" : "border-transparent"}`
-          // Static rainbow: the smooth blended gradient reads better with
-          // dark ink text than white (much stronger contrast across its
-          // lighter bands), and with the tile's normal hairline border
-          // instead of the animated variant's reserved selection border —
-          // that border read as its own thin multicolor edge against this
-          // softer gradient, which this design intentionally avoids.
-          : `rainbow-tile-static text-[#292825] shadow-md border ${isSelected ? "border-foreground" : "border-tile-border"}`
+          ? "tile-rainbow-face rainbow-tile text-white"
+          // Static rainbow: the smooth blended gradient, with the same plain
+          // white word and the same face as the animated tile, so the setting
+          // changes the art alone. Selection lives in the outlines, not in
+          // these classes.
+          : "tile-rainbow-face rainbow-tile-static text-white"
       : isSelected
         ? "tile-neutral bg-tile-selected text-tile-selected-fg border border-tile-selected"
         : "tile-neutral cloud-tile";
@@ -555,12 +608,14 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         ...(isChecking ? { animationDelay: `${checkingIndex * 0.07}s` } : {}),
       }}
     >
-      {colorRing && (
+      {colorRing && !isRainbow && (
         <span aria-hidden="true" data-tile-mark={tileColor}
-          className={`tile-color-outline pointer-events-none absolute ${colorRing}`} />
+          className={`tile-color-outline pointer-events-none absolute ${colorRing}`}
+          style={isLifted ? { scale: String(LIFT_SCALE) } : undefined} />
       )}
       {(colorRing || isRainbow) && isSelected && <span aria-hidden="true" data-tile-selection
-        className="tile-selection-outline pointer-events-none absolute" />}
+        className="tile-selection-outline pointer-events-none absolute"
+        style={isLifted ? { scale: String(LIFT_SCALE) } : undefined} />}
       <button
         ref={buttonRef}
         onClick={handleClick}
@@ -583,8 +638,8 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
         style={{
           ...(emojiFontSize ? { fontSize: emojiFontSize } : {}),
           // Two lines need the vertical room the single-line padding takes, or a
-          // split word in a thick-bordered (Rainbow, painted) tile on a narrow
-          // phone makes its row taller than a tile row.
+          // split word in a bordered tile on a narrow phone makes its row
+          // taller than a tile row.
           ...(splitParts ? { paddingLeft: SPLIT_PAD_X, paddingRight: SPLIT_PAD_X, paddingTop: 4, paddingBottom: 4 } : {}),
           ...(themedRainbow ? { background: rainbowGradient, textShadow: rainbowTextShadow } : {}),
           // Deliberate drag lift only; selecting a tile never scales it.
@@ -618,8 +673,9 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
           // Wraps only at word boundaries (no mid-word hyphenation) — phrases
           // are free to wrap to as many lines as they need at normal size.
           // fitScale only kicks in when the longest word measures wider than
-          // the tile itself, as a last-resort shrink — in em, so it is always
-          // a fraction of the normal size every other tile uses.
+          // the tile itself, or a rainbow word on a fixed-height tile would
+          // reach the color bar, as a last-resort shrink — in em, so it is
+          // always a fraction of the normal size every other tile uses.
           <span
             ref={textRef}
             data-tile-text
@@ -645,6 +701,10 @@ export const WordTile = forwardRef<HTMLDivElement, WordTileProps>(function WordT
               word
             )}
           </span>
+        )}
+        {colorRing && isRainbow && (
+          <span aria-hidden="true" data-tile-mark={tileColor}
+            className={`tile-color-bar pointer-events-none absolute ${COLOR_BAR_CLASS[tileColor!]}`} />
         )}
       </button>
 
