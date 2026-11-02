@@ -399,7 +399,10 @@ const RECORD_COMPLETION_SQL =
  * daily_home too, so it can't stand alone. The puzzle's own row has the say: it
  * must be published, not beta, not free, and the full format, and the game must
  * finish before the puzzle's date plus 2 days in UTC, which allows for local
- * midnight and refuses a later archive play.
+ * midnight and refuses a later archive play. The one exception is the puzzle the
+ * home page serves now, the newest published full puzzle dated today or
+ * earlier: while no new daily is published it stays the daily, whatever its
+ * date. Archive and Unlimited plays of it still send their own entry_context.
  *
  * Rainbow's server doesn't replay games, so mistakes and the grid are only as
  * trustworthy as Rainbow's own stats: a player can affect only their own row.
@@ -423,7 +426,14 @@ export const COMPLETIONS_SQL = `
      and p.is_beta is false
      and p.is_free_puzzle is not true
      and p.format = 'full'
-     and gs.completed_at < (p.date + 2)::timestamp at time zone 'UTC'
+     and (gs.completed_at < (p.date + 2)::timestamp at time zone 'UTC'
+          or p.id = (select h.id
+                       from public.puzzles h
+                      where h.is_published is true
+                        and h.format = 'full'
+                        and h.date <= (now() at time zone 'UTC')::date
+                      order by h.date desc
+                      limit 1))
 `;
 
 // ── Answers ──

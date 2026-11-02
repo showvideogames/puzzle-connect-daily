@@ -788,8 +788,10 @@ describe("social-gateway: automatic results", () => {
       ["p.is_free_puzzle is not true", (row) => row.is_free_puzzle !== true],
       ["p.format = 'full'", (row) => row.puzzle_format === "full"],
       [
-        "gs.completed_at < (p.date + 2)::timestamp at time zone 'UTC'",
-        (row) => Date.parse(row.completed_at as string) < Date.parse(`${row.puzzle_date}T00:00:00.000Z`) + 2 * DAY,
+        "(gs.completed_at < (p.date + 2)::timestamp at time zone 'UTC' or p.id = (select h.id from public.puzzles h where h.is_published is true and h.format = 'full' and h.date <= (now() at time zone 'UTC')::date order by h.date desc limit 1))",
+        (row) =>
+          Date.parse(row.completed_at as string) < Date.parse(`${row.puzzle_date}T00:00:00.000Z`) + 2 * DAY ||
+          row.home_daily === true,
       ],
     ];
     // The custom and beta pages send daily_home as well, so nearly every row here
@@ -822,6 +824,9 @@ describe("social-gateway: automatic results", () => {
       finished("user_01MINIPUZZLEROW0000", { ...daily, puzzle_format: "mini" }),
       finished("user_01ARCHIVEATTHELIMIT", { ...daily, completed_at: "2026-11-01T00:00:00.000Z" }),
       finished("user_01ARCHIVEWEEKSLATER", { ...daily, completed_at: "2026-11-20T09:00:00.000Z" }),
+      finished("user_01HOMEDAILYWEEKSLATER", { ...daily, completed_at: "2026-11-20T09:00:00.000Z", home_daily: true }),
+      finished("user_01HOMEDAILYINARCHIVE0", { ...daily, completed_at: "2026-11-20T09:00:00.000Z", home_daily: true, entry_context: "archive_calendar" }),
+      finished("user_01HOMEDAILYUNLIMITED0", { ...daily, completed_at: "2026-11-20T09:00:00.000Z", home_daily: true, entry_context: "free_collection" }),
     ];
     const reader = (text: string) => {
       const flat = text.replace(/\s+/g, " ");
@@ -835,6 +840,7 @@ describe("social-gateway: automatic results", () => {
       "user_01OFFICIALDAILYGAME",
       "user_01FREEFLAGNEVERSET0",
       "user_01LATEINLOCALEVENING",
+      "user_01HOMEDAILYWEEKSLATER",
     ]);
   });
 
