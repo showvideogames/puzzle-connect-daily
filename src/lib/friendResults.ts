@@ -15,6 +15,12 @@ export interface FriendResult {
   gameId: string;
   status: "solved" | "not-solved" | "not-played";
   mistakes: number;
+  /**
+   * The server-recorded solve time in whole seconds, present only when the
+   * row's summary carries a positive whole number. Absent means unknown,
+   * never zero. Only the Mini results ranking reads it.
+   */
+  seconds?: number;
   detail: unknown | null;
 }
 

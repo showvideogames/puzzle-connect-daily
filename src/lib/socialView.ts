@@ -82,10 +82,26 @@ function detailOf(row: ResultRow): FriendResult["detail"] {
 
 type Person = Pick<FriendResult, "id" | "name" | "isYou" | "animalId" | "backgroundColor">;
 
+/**
+ * A solve time the summary may carry beyond the contract's Rainbow keys. Kept
+ * only as a positive whole number of seconds; anything else is no time at all,
+ * and the key is left out rather than set to something made up.
+ */
+function secondsOf(summary: unknown): { seconds?: number } {
+  const seconds = (summary as { seconds?: unknown } | null)?.seconds;
+  return typeof seconds === "number" && Number.isSafeInteger(seconds) && seconds > 0 ? { seconds } : {};
+}
+
 function resultFor(person: Person, row: ResultRow | undefined): FriendResult {
   const base = { ...person, gameId: GAME_ID };
   if (!row || !isRainbowSummary(row.summary)) return { ...base, status: "not-played", mistakes: 0, detail: null };
-  return { ...base, status: row.summary.solved ? "solved" : "not-solved", mistakes: row.summary.mistakes, detail: detailOf(row) };
+  return {
+    ...base,
+    status: row.summary.solved ? "solved" : "not-solved",
+    mistakes: row.summary.mistakes,
+    ...secondsOf(row.summary),
+    detail: detailOf(row),
+  };
 }
 
 /**

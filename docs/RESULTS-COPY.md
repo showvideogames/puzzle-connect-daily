@@ -94,7 +94,7 @@ The personal part (squares, message, time, stats, flame, Share, invitation) show
 
 Source: `components/results/FriendsResults.tsx` (loaded only when the section is shown, so the Friends and Groups code is never in the main download) and `components/results/FriendsSection.tsx`.
 
-**When it shows.** Only while the Friends and Groups beta is switched on (`VITE_SHARED_SOCIAL=beta`), and only on the **official Daily**. Never on Archive, Beta or custom puzzles. On the Full Daily it shows results; on the Mini Daily it shows the prompts below, and for someone with friends a note instead of results, because the server shares only the Full Daily for now.
+**When it shows.** Only while the Friends and Groups beta is switched on (`VITE_SHARED_SOCIAL=beta`), and only on the **official Daily**. Never on Archive, Beta or custom puzzles. Both formats ask for results about the board's own puzzle (Full and Mini puzzles have different ids, so each only ever sees its own). On the Mini Daily, results show only once the server returns the player's own Mini result; until the service records Mini results (a separate, approved server change), a player with friends sees the note instead.
 
 Titled `Friends' results` (not a heading). What's inside:
 
@@ -103,14 +103,25 @@ Titled `Friends' results` (not a heading). What's inside:
 | Still checking who is signed in, or loading | Three grey placeholder rows of a fixed height, inside the section only. Screen-reader text `Loading friends' results`. |
 | Signed out | The bear-and-frog heart picture, `Keep your progress. Play with pals.`, `Create an account to save your stats across devices and compare results with friends.`, a large `Create an account` button and a smaller `Sign in`. Both start the same sign-in (the account is made the first time someone signs in). While it opens: `Opening sign-in…`. If it can't start, its reason shows under the buttons. |
 | Signed in, no friends | The same picture, `Puzzles are better with pals.`, `Add friends to see how everyone did on today's puzzle.` and a large `Add friends` button, which closes the popup and opens Add a friend on `/friends`. |
-| Signed in, friends, none finished (Full) | The player's own row, then `No friends have finished this puzzle yet`, then `View all friends`. |
-| Signed in, friends have finished (Full) | One row per person with a result, the player first and highlighted (soft lilac; a matching tint in dark mode): avatar, name, result. The player's row reads `<Display Name> (you)` (`You` with no Display Name yet). Then `View all friends` (opens `/friends`). |
-| Signed in with friends (Mini) | `Friends' results are shared for the daily Rainbow Categories 4×4 for now.` and a `See today's results` link to `/friends`. |
+| Signed in, friends, none finished | The player's own row, then `No friends have finished this puzzle yet`, then `View all friends`. |
+| Signed in, friends have finished | One row per person who finished, ranked (see below), with the player's row highlighted where it ranks (soft lilac; a matching tint in dark mode): avatar, name, result. The player's row reads `<Display Name> (you)` (`You` with no Display Name yet). No rank numbers. Then `View all friends` (opens `/friends`). |
+| Mini, signed in with friends, server has no Mini result for the player | `Friends' results are shared for the daily Rainbow Categories 4×4 for now.` and a `See today's results` link to `/friends`. No list, and no row made up from the game just played. |
 | Something couldn't load | `Couldn't load friends' results right now.` and a `Try again` button. Never shown as an empty list. A read held up only because the account is being re-checked (which Rainbow does on focus and reconnect) is not an error: the placeholder stays and it asks again after a second. |
 
-**Results wording.** Rainbow results, never times: solved with no mistakes `No mistakes`; solved with mistakes `1 mistake` / `3 mistakes`; not solved `Not solved`. Nothing else about anyone's puzzle (no squares, no answers) is ever shown here, even when the server would allow it on the Friends page.
+**Who is listed.** Only people who finished this puzzle: solved, or a completed loss (`Not solved`). People who haven't played or are still playing are left out. The player's row uses the server's result when it has one. On Full only, when the server has none yet, it comes from the game just played; on Mini it never does, because Mini ranks by a time only the server records. Another person's missing name shows as `A Rainbow player`; the player's own row is always `<Display Name> (you)`, or `You` before they choose a name, on the Friends pill and on every group pill.
 
-**Who is listed.** Only people the server returns a result for. Friends without a result for this puzzle are not listed. The player's row uses the server's result when it has one; only when it has none does it come from the game just played. Another person's missing name shows as `A Rainbow player`; the player's own row is always `<Display Name> (you)`, or `You` before they choose a name, on the Friends pill and on every group pill.
+**Order and wording** (`components/results/rankResults.ts`, the same for every pill):
+
+| | Full | Mini |
+| --- | --- | --- |
+| First | Solved, fewest mistakes first. Equal mistakes are a tie; time never counts, even if a row carries one. | Solved with a time, fastest first. Equal times are a tie. |
+| Then | — | Solved with no usable time (missing, zero, or not a whole number of seconds), fewest mistakes first. Never treated as 0 and never first. |
+| Last | Completed losses | Completed losses |
+| Ties | By name, then a fixed id, so the order never jumps around | Same |
+| Solved row says | `No mistakes`, `1 mistake`, `3 mistakes` | `0:42 · 1 mistake`, `1:05 · No mistakes`, `1:00:00 · 2 mistakes` from an hour on; without a usable time `Solved · 2 mistakes` |
+| Loss says | `Not solved` | `Not solved` |
+
+The time is the server-recorded one carried in the result's summary; none is invented, including for the player's own row. Nothing else about anyone's puzzle (no squares, no answers) is ever shown here, even when the server would allow it on the Friends page.
 
 **Groups.** When the player is in any group, pills sit above the list: `Friends`, then one per group (scrolling sideways if they don't fit). Choosing a group loads that group's results, with its own placeholder and its own `Try again`. Groups stay there even with no friends (the Friends pill then shows the Add friends prompt). A group where only the player has finished says `No one else in this group has finished this puzzle yet`.
 

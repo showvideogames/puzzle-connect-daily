@@ -88,6 +88,16 @@ const memberRow = (memberRef: string, name: string, solved: boolean, mistakes: n
   detailLocked: false,
 });
 
+/** A row whose summary also carries a solve time, as the server will send for Mini. */
+const timedRow = (friendRef: string | null, name: string, solved: boolean, mistakes: number, seconds: unknown): ResultRow => ({
+  ...friendRow(friendRef, name, solved, mistakes),
+  summary: { solved, mistakes, seconds } as unknown as ResultRow["summary"],
+});
+const timedMemberRow = (memberRef: string, name: string, solved: boolean, mistakes: number, seconds: unknown, isMe = false): ResultRow => ({
+  ...memberRow(memberRef, name, solved, mistakes, isMe),
+  summary: { solved, mistakes, seconds } as unknown as ResultRow["summary"],
+});
+
 const refused = (outcome: string) => ({ ok: false, outcome }) as unknown as Result<never>;
 const yes = (data: unknown = {}) => ({ ok: true, data });
 
@@ -263,12 +273,13 @@ describe("signed in, Full Daily", () => {
     expect(within(box).queryByText("Sam")).toBeNull();
   });
 
-  it("lists only people with a result, me first and highlighted, in Rainbow wording, and never a puzzle's detail", async () => {
+  it("lists only people who finished, ranked by mistakes with losses last, in Rainbow wording, and never a puzzle's detail", async () => {
     const { call } = stubSocial(SIGNED_IN, {
       listFriends: () => yes([friend("f1", "Sam"), friend("f2", "Jordan"), friend("f3", null), friend("f4", "Casey")]),
       listResults: () =>
         yes([
-          friendRow("f1", "Sam", true, 1, { detail: "🟨🟨🟨🟨\n🟩🟩🟩🟩" }),
+          // Sam's row carries a time; Full never shows or ranks by it.
+          { ...timedRow("f1", "Sam", true, 1, 42), detail: "🟨🟨🟨🟨\n🟩🟩🟩🟩" },
           friendRow(null, "Alex", true, 0, { detail: "🟦🟦🟦🟦" }),
           friendRow("f2", "Jordan", false, 4, { detailLocked: true }),
           friendRow("f3", "", true, 2),
@@ -280,13 +291,14 @@ describe("signed in, Full Daily", () => {
     const box = await section();
     await within(box).findByText("Sam");
     const shown = rows();
-    expect(shown.map((row) => row.textContent)).toEqual(["Alex (you)No mistakes", "Sam1 mistake", "JordanNot solved", "A Rainbow player2 mistakes"]);
+    expect(shown.map((row) => row.textContent)).toEqual(["Alex (you)No mistakes", "Sam1 mistake", "A Rainbow player2 mistakes", "JordanNot solved"]);
     expect(shown[0].dataset.you).toBe("true");
     expect(shown[0].className).toMatch(/bg-\[hsl\(258/);
     expect(shown[1].dataset.you).toBeUndefined();
+    // Casey has no result: not played or still playing, so not listed.
     expect(within(box).queryByText("Casey")).toBeNull();
     expect(within(box).queryByText("Former")).toBeNull();
-    // Results, not times; and no detail grid anywhere in the popup.
+    // Full: results, never times; and no detail grid anywhere in the popup.
     expect(box.textContent).not.toMatch(/🟨|🟩|🟦|\d+:\d\d|seconds/);
     expect(screen.getByTestId("results-dialog").querySelector("[data-cell]")).toBeNull();
     expect(within(box).getByRole("link", { name: "View all friends" }).getAttribute("href")).toBe("/friends");
@@ -329,9 +341,11 @@ describe("signed in, Full Daily", () => {
     expect(await within(box).findByText("3 mistakes")).toBeInTheDocument();
     expect(within(pills).getByRole("button", { name: "Book Nerds" })).toHaveAttribute("aria-pressed", "true");
     expect(call).toHaveBeenCalledWith("listResults", { gameId: "rainbow", puzzleId: "puzzle-1", groupId: "g1" });
-    // Labelled as on the Friends pill: my Display Name, not my name in the group.
-    expect(rows().map((row) => row.textContent)).toEqual(["Alex (you)Not solved", "Sam3 mistakes"]);
-    expect(rows()[0].dataset.you).toBe("true");
+    // Labelled as on the Friends pill: my Display Name, not my name in the
+    // group. My loss ranks after Sam's solve, highlighted where it ranks.
+    expect(rows().map((row) => row.textContent)).toEqual(["Sam3 mistakes", "Alex (you)Not solved"]);
+    expect(rows()[0].dataset.you).toBeUndefined();
+    expect(rows()[1].dataset.you).toBe("true");
     // Back to Friends.
     fireEvent.click(within(pills).getByRole("button", { name: "Friends" }));
     expect(await within(box).findByText("Puzzles are better with pals.")).toBeInTheDocument();
@@ -349,6 +363,29 @@ describe("signed in, Full Daily", () => {
     fireEvent.click(await within(box).findByRole("button", { name: "Book Nerds" }));
     expect(await within(box).findByText("No one else in this group has finished this puzzle yet")).toBeInTheDocument();
     expect(rows().map((row) => row.textContent)).toEqual(["Alex (you)1 mistake"]);
+  });
+
+  it("lists only people who finished in a group too: not played left out, losses shown after solves", async () => {
+    stubSocial(SIGNED_IN, {
+      listFriends: () => yes([friend("f1", "Sam")]),
+      listResults: (args: { groupId?: string }) =>
+        args.groupId
+          ? yes([memberRow("m1", "Alex G", true, 2, true), memberRow("m3", "Lee", false, 4), memberRow("m4", "Bo", true, 0)])
+          : yes([friendRow("f1", "Sam", true, 1)]),
+      listMyGroups: () => yes([group("g1", "Book Nerds")]),
+      listMembers: () => yes([member("m1", "Alex G", true), member("m2", "Pat"), member("m3", "Lee"), member("m4", "Bo")]),
+    });
+    openDialog({ solved: true, mistakes: 2 });
+    const box = await section();
+    await within(box).findByText("Sam");
+    // Friends tab: Sam (1) ranks above me (2), so my row is not pinned first.
+    expect(rows().map((row) => row.textContent)).toEqual(["Sam1 mistake", "Alex (you)2 mistakes"]);
+    expect(rows()[1].dataset.you).toBe("true");
+    fireEvent.click(within(box).getByRole("button", { name: "Book Nerds" }));
+    expect(await within(box).findByText("Bo")).toBeInTheDocument();
+    expect(rows().map((row) => row.textContent)).toEqual(["BoNo mistakes", "Alex (you)2 mistakes", "LeeNot solved"]);
+    // Pat is a member with no result: not listed.
+    expect(within(box).queryByText("Pat")).toBeNull();
   });
 
   it("labels my row You in both tabs when I have no Display Name yet, never A Rainbow player", async () => {
@@ -477,30 +514,117 @@ describe("signed in, Full Daily", () => {
 });
 
 describe("Mini Daily", () => {
-  it("signed in with friends: an honest note and a link to /friends instead of results, and no results asked for", async () => {
-    const { call } = stubSocial(SIGNED_IN, { listFriends: () => yes([friend("f1", "Sam")]) });
-    const { onOpenChange } = openDialog({ gameFormat: "mini", statsFormat: MINI_FORMAT });
+  const MINI = { gameFormat: "mini" as const, statsFormat: MINI_FORMAT, puzzleId: "mini-7" };
+
+  it("with no server row for me: the honest note and its link, no list and no local row, even when friends have rows", async () => {
+    const { call } = stubSocial(SIGNED_IN, {
+      listFriends: () => yes([friend("f1", "Sam")]),
+      listResults: () => yes([timedRow("f1", "Sam", true, 0, 40)]),
+    });
+    const { onOpenChange } = openDialog({ ...MINI, solved: true, mistakes: 0 });
     const box = await section();
     expect(await within(box).findByText("Friends' results are shared for the daily Rainbow Categories 4×4 for now.")).toBeInTheDocument();
     const link = within(box).getByRole("link", { name: "See today's results" });
     expect(link.getAttribute("href")).toBe("/friends");
     expect(within(box).queryAllByTestId("friends-result-row")).toHaveLength(0);
-    expect(opsCalled(call)).not.toContain("listResults");
+    expect(within(box).queryByText("No friends have finished this puzzle yet")).toBeNull();
+    // Asked about this Mini's own puzzle, never the Full one.
+    expect(call).toHaveBeenCalledWith("listResults", { gameId: "rainbow", puzzleId: "mini-7" });
     expectOnlyReads(call);
     fireEvent.click(link);
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(screen.getByTestId("where")).toHaveTextContent("/friends null");
   });
 
+  it("with my server row: a leaderboard by fastest time, shown as m:ss · mistakes, losses and untimed solves placed honestly", async () => {
+    const { call } = stubSocial(SIGNED_IN, {
+      listFriends: () => yes([friend("f1", "Sam"), friend("f2", "Jo"), friend("f3", "Lee"), friend("f4", "Pat"), friend("f5", "Kit")]),
+      listResults: () =>
+        yes([
+          timedRow(null, "Alex", true, 1, 65),
+          timedRow("f1", "Sam", true, 2, 42),
+          timedRow("f2", "Jo", false, 3, 20),
+          // No usable time: never 0 and never first.
+          timedRow("f3", "Lee", true, 0, 0),
+          friendRow("f4", "Pat", true, 0),
+        ]),
+    });
+    openDialog({ ...MINI, solved: true, mistakes: 0 });
+    const box = await section();
+    await within(box).findByText("Sam");
+    expect(rows().map((row) => row.textContent)).toEqual([
+      "Sam0:42 · 2 mistakes",
+      "Alex (you)1:05 · 1 mistake",
+      "LeeSolved · No mistakes",
+      "PatSolved · No mistakes",
+      "JoNot solved",
+    ]);
+    expect(rows()[1].dataset.you).toBe("true");
+    // "(you)" is its own element beside the name, so a long name truncates without hiding it.
+    const suffix = within(rows()[1]).getByTestId("you-suffix");
+    expect(suffix.textContent).toBe(" (you)");
+    expect(suffix.className).toMatch(/\bshrink-0\b/);
+    expect(suffix.previousElementSibling?.textContent).toBe("Alex");
+    expect(suffix.previousElementSibling?.className).toMatch(/\btruncate\b/);
+    expect(within(box).getAllByTestId("you-suffix")).toHaveLength(1);
+    // The Mini wording is two unbreakable pieces in a right-aligned box that may
+    // shrink, so a narrow row wraps between "1:05 ·" and "1 mistake" before the
+    // name gives way; the name area keeps a minimum width for a short name and "(you)".
+    const result = within(rows()[1]).getByTestId("result-text");
+    expect(result.textContent).toBe("1:05 · 1 mistake");
+    expect(result.className).not.toMatch(/\bshrink-0\b|\bmin-w-0\b/);
+    expect(result.className).toMatch(/\btext-right\b/);
+    expect(within(rows()[1]).getByTestId("row-name").className).toMatch(/min-w-\[6\.5rem\]/);
+    const parts = within(result).getAllByTestId("result-part");
+    expect(parts.map((part) => part.textContent)).toEqual(["1:05 ·", "1 mistake"]);
+    expect(parts.every((part) => /\bwhitespace-nowrap\b/.test(part.className))).toBe(true);
+    // A one-part wording stays one piece that never shrinks.
+    expect(within(rows()[4]).queryByTestId("result-text")).toBeNull();
+    expect(within(rows()[4]).getByText("Not solved").className).toMatch(/\bshrink-0\b/);
+    // Kit has no result: not listed.
+    expect(within(box).queryByText("Kit")).toBeNull();
+    expect(within(box).queryByText(/4×4 for now/)).toBeNull();
+    expect(call).toHaveBeenCalledWith("listResults", { gameId: "rainbow", puzzleId: "mini-7" });
+    expectOnlyReads(call);
+  });
+
+  it("with my server row and no other finishers: my row and the honest empty line", async () => {
+    stubSocial(SIGNED_IN, {
+      listFriends: () => yes([friend("f1", "Sam")]),
+      listResults: () => yes([timedRow(null, "Alex", true, 0, 30)]),
+    });
+    openDialog({ ...MINI });
+    const box = await section();
+    expect(await within(box).findByText("No friends have finished this puzzle yet")).toBeInTheDocument();
+    expect(rows().map((row) => row.textContent)).toEqual(["Alex (you)0:30 · No mistakes"]);
+  });
+
+  it("ranks a group tab by time too", async () => {
+    stubSocial(SIGNED_IN, {
+      listFriends: () => yes([friend("f1", "Sam")]),
+      listResults: (args: { groupId?: string }) =>
+        args.groupId
+          ? yes([timedMemberRow("m1", "Alex G", true, 0, 90, true), timedMemberRow("m2", "Bo", true, 3, 31)])
+          : yes([timedRow(null, "Alex", true, 0, 90)]),
+      listMyGroups: () => yes([group("g1", "Book Nerds")]),
+      listMembers: () => yes([member("m1", "Alex G", true), member("m2", "Bo")]),
+    });
+    openDialog({ ...MINI });
+    const box = await section();
+    fireEvent.click(await within(box).findByRole("button", { name: "Book Nerds" }));
+    expect(await within(box).findByText("Bo")).toBeInTheDocument();
+    expect(rows().map((row) => row.textContent)).toEqual(["Bo0:31 · 3 mistakes", "Alex (you)1:30 · No mistakes"]);
+  });
+
   it("signed in with no friends shows the usual prompt", async () => {
     stubSocial(SIGNED_IN);
-    openDialog({ gameFormat: "mini" });
+    openDialog({ ...MINI });
     expect(await within(await section()).findByText("Puzzles are better with pals.")).toBeInTheDocument();
   });
 
   it("signed out shows the sign-in prompt", async () => {
     stubSocial(GUEST);
-    openDialog({ gameFormat: "mini" });
+    openDialog({ ...MINI });
     expect(await within(await section()).findByText("Keep your progress. Play with pals.")).toBeInTheDocument();
   });
 });

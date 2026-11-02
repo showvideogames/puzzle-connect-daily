@@ -25,20 +25,23 @@ import type { Puzzle } from "@/lib/types";
 const db = new FakeSupabase();
 
 // Friends' results, for the tests that switch the beta on: a stand-in client
-// for someone signed in with one friend who hasn't finished, so the popup's
-// own row comes from what this board passes.
+// for someone signed in with one friend. By default the server has no rows,
+// so on Full the popup's own row comes from what this board passes; a test
+// can set `results` to what listResults answers.
 const social = vi.hoisted(() => {
+  const server = { results: [] as unknown[] };
   const call = vi.fn(async (op: string) => {
     const answers: Record<string, unknown> = {
       getMe: { displayName: "Alex", animalId: "fox", backgroundColor: "#DED1F2", friendCode: "AAA-222", friendCount: 1, groupCount: 0 },
       listFriendRequests: { incoming: [], outgoing: [] },
       listFriends: [{ animalId: "owl", backgroundColor: "#F8D0BD", friendRef: "f1", name: "Sam", since: "2026-10-30T18:00:00.000Z" }],
-      listResults: [],
+      listResults: server.results,
       listMyGroups: [],
     };
     return op in answers ? { ok: true, data: answers[op] } : { ok: false, outcome: "unavailable" };
   });
   return {
+    server,
     call,
     value: {
       api: {
@@ -426,6 +429,7 @@ describe("Friends' results from the real board (beta on)", () => {
   beforeEach(() => {
     vi.stubEnv("VITE_SHARED_SOCIAL", "beta");
     social.call.mockClear();
+    social.server.results = [];
   });
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -464,30 +468,51 @@ describe("Friends' results from the real board (beta on)", () => {
     expect(within(d).getByRole("link", { name: /Mini Categories/ })).toBeTruthy();
   }, 30_000);
 
-  it("a Mini Daily offers Rainbow Categories next and never asks for results", async () => {
-    const MINI: Puzzle = {
-      id: "mini-1",
-      format: "mini",
-      date: "2026-09-16",
-      designerName: "Sam West",
-      alphabetizeCompleted: true,
-      groups: [
-        { category: "Green", words: ["mg1", "mg2", "mg3"], difficulty: 2 },
-        { category: "Blue", words: ["mb1", "mb2", "mb3"], difficulty: 3 },
-        { category: "Red", words: ["mr1", "mr2", "mr3"], difficulty: 4 },
-      ],
-      rainbowHerring: null,
-    } as Puzzle;
+  const MINI: Puzzle = {
+    id: "mini-1",
+    format: "mini",
+    date: "2026-09-16",
+    designerName: "Sam West",
+    alphabetizeCompleted: true,
+    groups: [
+      { category: "Green", words: ["mg1", "mg2", "mg3"], difficulty: 2 },
+      { category: "Blue", words: ["mb1", "mb2", "mb3"], difficulty: 3 },
+      { category: "Red", words: ["mr1", "mr2", "mr3"], difficulty: 4 },
+    ],
+    rainbowHerring: null,
+  } as Puzzle;
+
+  async function winMini() {
     db.tables.puzzles = [...db.tables.puzzles, { id: MINI.id, format: "mini", date: MINI.date, rainbow_herring: null, is_published: true, is_beta: false }];
     const view = renderBoard({ puzzle: MINI });
     await settle();
     for (const g of MINI.groups) await guess(view.container, g.words);
-    const d = await popup();
+    return popup();
+  }
+
+  it("a Mini Daily offers Rainbow Categories next, asks about the Mini's own puzzle, and with no row for me keeps the honest note", async () => {
+    const d = await winMini();
     const rainbow = within(d).getByRole("link", { name: /Rainbow Categories/ });
     expect(rainbow.getAttribute("href")).toBe("/");
     expect(within(d).queryByRole("link", { name: /Mini Categories/ })).toBeNull();
-    // Signed in with a friend: the honest note, not results.
+    // The server has no Mini row for me: the honest note, no list, no local row.
     expect(await within(d).findByText("Friends' results are shared for the daily Rainbow Categories 4×4 for now.", {}, { timeout: 5_000 })).toBeTruthy();
-    expect(ops()).not.toContain("listResults");
+    expect(within(d).queryAllByTestId("friends-result-row")).toHaveLength(0);
+    expect(social.call).toHaveBeenCalledWith("listResults", { gameId: "rainbow", puzzleId: MINI.id });
+    expect(ops().filter((op) => op === "listResults")).toHaveLength(1);
+  }, 30_000);
+
+  it("a Mini Daily with my server row shows the timed leaderboard", async () => {
+    const face = { animalId: "owl", backgroundColor: "#F8D0BD", detailLocked: false };
+    social.server.results = [
+      { ...face, isMe: true, name: "Alex", friendRef: null, summary: { solved: true, mistakes: 0, seconds: 42 } },
+      { ...face, isMe: false, name: "Sam", friendRef: "f1", summary: { solved: true, mistakes: 1, seconds: 30 } },
+    ];
+    const d = await winMini();
+    await within(d).findByText("Sam", {}, { timeout: 5_000 });
+    const shown = within(d).getAllByTestId("friends-result-row");
+    expect(shown.map((row) => row.textContent)).toEqual(["Sam0:30 · 1 mistake", "Alex (you)0:42 · No mistakes"]);
+    expect(shown[1].dataset.you).toBe("true");
+    expect(within(d).queryByText(/4×4 for now/)).toBeNull();
   }, 30_000);
 });

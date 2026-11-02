@@ -10,20 +10,21 @@ import type { FriendResult } from "@/lib/friendResults";
 import type { PuzzleFormat } from "@/lib/puzzleFormat";
 import { isBackgroundCheck } from "@/lib/socialView";
 import { FriendsCard, FriendsPlaceholder, LoadProblem } from "./FriendsSection";
+import { rankResults, resultWording, type RankFormat } from "./rankResults";
 
 /**
  * Friends' results in the results popup, through the same client, session and
  * mapping as the Friends page. Loaded lazily, so none of this is in the main
  * chunk. It reads only: nothing here saves, shares or changes a friendship.
  *
- * Only rows listResults returns are shown, and only their summary. Detail is
- * never drawn here, whatever a row carries.
+ * Only people who finished are shown, ranked by rankResults.ts, and only their
+ * summary. Detail is never drawn here, whatever a row carries.
  */
 
 export interface FriendsResultsProps {
   format: PuzzleFormat["id"];
   puzzleId: string;
-  /** This game's own outcome, for my row when the server has none yet. */
+  /** This game's own outcome, for my row on Full when the server has none yet. Never used on Mini. */
   solved: boolean;
   mistakes: number;
   /** Closes the popup, before a link leaves for another page. */
@@ -40,13 +41,6 @@ const bigButton =
 const textLink =
   "inline-flex min-h-11 items-center justify-center rounded px-2 text-[15px] font-semibold underline underline-offset-4 text-foreground/85 " +
   "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
-/** "No mistakes", "1 mistake", "3 mistakes" or "Not solved". Rainbow results, never times. */
-function rainbowWording({ status, mistakes }: Pick<FriendResult, "status" | "mistakes">): string {
-  if (status !== "solved") return "Not solved";
-  if (mistakes === 0) return "No mistakes";
-  return `${mistakes} ${mistakes === 1 ? "mistake" : "mistakes"}`;
-}
 
 function Picture() {
   return <img src={FRIEND_PICTURE} alt={PICTURE_ALT} width={480} height={336} decoding="async" className="mx-auto h-auto w-40" />;
@@ -126,7 +120,43 @@ function Problem({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function Rows({ results, youLabel }: { results: FriendResult[]; youLabel: (result: FriendResult) => string }) {
+const PART_GAP = " · ";
+
+/**
+ * A row's result. A one-part wording ("No mistakes", "Not solved") is one
+ * piece that never shrinks, as before. A Mini time-and-mistakes wording is two
+ * unbreakable pieces, "1:05 ·" and "1 mistake", in a right-aligned box that
+ * may shrink down to its wider piece, so on a narrow screen it wraps between
+ * them before the name has to give way. The text reads the same either way.
+ */
+function ResultText({ wording, mine }: { wording: string; mine: boolean }) {
+  const tone = mine ? "font-bold text-foreground" : "text-foreground/85";
+  const parts = wording.split(PART_GAP);
+  if (parts.length < 2) return <span className={`shrink-0 text-[15px] ${tone}`}>{wording}</span>;
+  return (
+    <span data-testid="result-text" className={`text-right text-[15px] leading-snug ${tone}`}>
+      {parts.map((part, index) => (
+        <span key={index}>
+          {index > 0 && " "}
+          <span data-testid="result-part" className="whitespace-nowrap">{index < parts.length - 1 ? `${part} ·` : part}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+interface RowsProps {
+  results: FriendResult[];
+  format: RankFormat;
+  /** My Display Name, or null before I've chosen one (my row then reads "You"). */
+  myName: string | null;
+}
+
+/**
+ * Already ranked. My row is highlighted where it ranks, not pinned. On my row
+ * only the name truncates; " (you)" is its own span and never shrinks.
+ */
+function Rows({ results, format, myName }: RowsProps) {
   return (
     <ul className="mt-3 space-y-1">
       {results.map((result) => (
@@ -139,10 +169,13 @@ function Rows({ results, youLabel }: { results: FriendResult[]; youLabel: (resul
           }`}
         >
           <ProfileAvatar animalId={result.animalId} backgroundColor={result.backgroundColor} size={40} />
-          <span className="min-w-0 flex-1 truncate text-base font-bold text-foreground">
-            {result.isYou ? youLabel(result) : result.name}
+          {/* Room for a short name and " (you)" before anything truncates. */}
+          <span data-testid="row-name" className="flex min-w-[6.5rem] flex-1 text-base font-bold text-foreground">
+            <span className="min-w-0 truncate">{result.isYou ? (myName ?? "You") : result.name}</span>
+            {/* whitespace-pre keeps the leading space at the start of a flex item. */}
+            {result.isYou && myName && <span data-testid="you-suffix" className="shrink-0 whitespace-pre"> (you)</span>}
           </span>
-          <span className={`shrink-0 text-[15px] ${result.isYou ? "font-bold text-foreground" : "text-foreground/85"}`}>{rainbowWording(result)}</span>
+          <ResultText wording={resultWording(result, format)} mine={result.isYou} />
         </li>
       ))}
     </ul>
@@ -162,15 +195,15 @@ function ViewAll({ onClose }: { onClose: () => void }) {
 }
 
 /**
- * Who has a result, me first. When the server returns a row for me, that row
- * is used; only when it returns none does my row come from this game's own
- * outcome.
+ * The rows to show, ranked (rankResults.ts). When the server returns a row for
+ * me, that row is used. On Full only, when it returns none, my row comes from
+ * this game's own outcome; Mini never does that, because a Mini row is ranked
+ * by a time only the server records.
  */
-function finished(results: readonly FriendResult[], mine: Pick<FriendResult, "status" | "mistakes">): FriendResult[] {
-  const shown = results
-    .map((result) => (result.isYou && result.status === "not-played" ? { ...result, ...mine } : result))
-    .filter((result) => result.isYou || result.status !== "not-played");
-  return [...shown.filter((result) => result.isYou), ...shown.filter((result) => !result.isYou)];
+function shownRows(results: readonly FriendResult[], format: RankFormat, mine: Pick<FriendResult, "status" | "mistakes">): FriendResult[] {
+  const withMine =
+    format === "full" ? results.map((result) => (result.isYou && result.status === "not-played" ? { ...result, ...mine } : result)) : results;
+  return rankResults(withMine, format);
 }
 
 type Load<T> = { kind: "loading" } | { kind: "error" } | { kind: "ready"; data: T };
@@ -226,20 +259,21 @@ function useRead<T extends object>(read: () => Promise<T | { outcome: string }>)
 interface GroupTabProps {
   api: SocialApi;
   groupId: string;
+  format: RankFormat;
   mine: Pick<FriendResult, "status" | "mistakes">;
-  youLabel: () => string;
+  myName: string | null;
   onClose: () => void;
 }
 
-function GroupTab({ api, groupId, mine, youLabel, onClose }: GroupTabProps) {
+function GroupTab({ api, groupId, format, mine, myName, onClose }: GroupTabProps) {
   const read = useCallback(() => readGroup(api, groupId), [api, groupId]);
   const [state, retry] = useRead<{ results: FriendResult[] }>(read);
   if (state.kind === "loading") return <FriendsPlaceholder />;
   if (state.kind === "error") return <Problem onRetry={retry} />;
-  const rows = finished(state.data.results, mine);
+  const rows = shownRows(state.data.results, format, mine);
   return (
     <>
-      <Rows results={rows} youLabel={youLabel} />
+      <Rows results={rows} format={format} myName={myName} />
       {!rows.some((result) => !result.isYou) && <Quiet>No one else in this group has finished this puzzle yet</Quiet>}
       <ViewAll onClose={onClose} />
     </>
@@ -255,9 +289,10 @@ const pillOn = "border-foreground bg-foreground text-background";
 const pillOff = "border-border bg-card text-foreground hover:bg-secondary";
 
 function SignedIn({ api, format, puzzleId, solved, mistakes, onClose }: FriendsResultsProps & { api: SocialApi }) {
-  // The client's own reads, asked about this puzzle rather than whatever is
-  // today's. Mini has no shared results, so it asks about none.
-  const pinned = useMemo<SocialApi>(() => ({ ...api, puzzleId: () => (format === "full" ? puzzleId : null) }), [api, format, puzzleId]);
+  // The client's own reads, asked about this board's own puzzle rather than
+  // whatever is today's. Full and Mini puzzles have different ids, so each
+  // format only ever sees its own results.
+  const pinned = useMemo<SocialApi>(() => ({ ...api, puzzleId: () => puzzleId }), [api, puzzleId]);
   const read = useCallback(() => readPerson(pinned), [pinned]);
   const [state, retry] = useRead<PersonData>(read);
   const [tab, setTab] = useState<string>(FRIENDS_TAB);
@@ -267,8 +302,11 @@ function SignedIn({ api, format, puzzleId, solved, mistakes, onClose }: FriendsR
 
   const { me, results, groups } = state.data;
   const hasFriends = results.some((result) => !result.isYou);
+  const serverHasMine = results.some((result) => result.isYou && result.status !== "not-played");
 
-  if (format === "mini") {
+  // Mini results are shared only once the service records them. Until the
+  // server returns my own Mini row, the honest note stays, with no list.
+  if (format === "mini" && !serverHasMine) {
     if (!hasFriends) return <NoFriends onClose={onClose} />;
     return (
       <div className="mt-3 text-center" data-testid="friends-results-mini">
@@ -280,9 +318,9 @@ function SignedIn({ api, format, puzzleId, solved, mistakes, onClose }: FriendsR
 
   const mine = { status: solved ? ("solved" as const) : ("not-solved" as const), mistakes };
   const openGroup = groups.find((group) => group.groupId === tab);
-  const rows = finished(results, mine);
+  const rows = shownRows(results, format, mine);
   // The same in every tab: my Display Name, or "You" before I've chosen one.
-  const youLabel = () => (me.displayName ? `${me.displayName} (you)` : "You");
+  const myName = me.displayName || null;
 
   return (
     <>
@@ -306,12 +344,12 @@ function SignedIn({ api, format, puzzleId, solved, mistakes, onClose }: FriendsR
       )}
 
       {openGroup ? (
-        <GroupTab key={openGroup.groupId} api={pinned} groupId={openGroup.groupId} mine={mine} youLabel={youLabel} onClose={onClose} />
+        <GroupTab key={openGroup.groupId} api={pinned} groupId={openGroup.groupId} format={format} mine={mine} myName={myName} onClose={onClose} />
       ) : !hasFriends ? (
         <NoFriends onClose={onClose} />
       ) : (
         <>
-          <Rows results={rows} youLabel={youLabel} />
+          <Rows results={rows} format={format} myName={myName} />
           {!rows.some((result) => !result.isYou) && <Quiet>No friends have finished this puzzle yet</Quiet>}
           <ViewAll onClose={onClose} />
         </>
