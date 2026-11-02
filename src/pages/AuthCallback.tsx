@@ -3,7 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ensureAccount, handleCallback } from "@/lib/platformSignIn";
 
-type Finish = { ok: true; returnTo: string } | { ok: false; message: string };
+/** Where to go next, or the sentence to show instead. */
+interface Finish {
+  returnTo: string;
+  failure: string | null;
+}
 
 /**
  * The one sign-in this page load finishes: the code exchange, then the account
@@ -17,13 +21,13 @@ let finishing: Promise<Finish> | null = null;
 async function finishSignIn(): Promise<Finish> {
   try {
     const result = await handleCallback();
-    if (!result.ok) return { ok: false, message: result.errorMessage ?? "Sign-in did not complete." };
+    if (!result.ok) return { returnTo: "/", failure: result.errorMessage ?? "Sign-in did not complete." };
     const account = await ensureAccount();
     // not_platform_linked has already signed the session out locally.
-    if (!account.ok) return { ok: false, message: account.message };
-    return { ok: true, returnTo: result.returnTo };
+    if (!account.ok) return { returnTo: "/", failure: account.message };
+    return { returnTo: result.returnTo, failure: null };
   } catch {
-    return { ok: false, message: "Sign-in did not complete." };
+    return { returnTo: "/", failure: "Sign-in did not complete." };
   }
 }
 
@@ -46,8 +50,8 @@ export default function AuthCallback() {
       finishing ??= finishSignIn();
       const outcome = await finishing;
       if (cancelled) return;
-      if (!outcome.ok) {
-        setFailure(outcome.message);
+      if (outcome.failure !== null) {
+        setFailure(outcome.failure);
         return;
       }
       toast.success("Signed in");
