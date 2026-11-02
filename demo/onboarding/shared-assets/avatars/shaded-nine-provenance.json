@@ -1,0 +1,41 @@
+{
+  "library_file_id": "libfile_6cf4c543e9748191ac519d341f945465",
+  "version": 0,
+  "framing": "unchanged: original disc geometry matches previous nine",
+  "sha256": {
+    "panda": "0f2460358c699c44fea7d119988659e57f2c0114165ea19c2680fa79989ff25c",
+    "tiger": "0aaabc3431c0a88137a8c51a9466712b5c6f515d7b0c9ea5562a4f48834a4a5b",
+    "lion": "e1e1c206328c227f0264f7a096865aeed00ed4474cfdaac63dcd88004af56a6b",
+    "elephant": "bbfca77b02c99d412b3126686d32500a5326cdbe38e9e4b190dd2e4de1dc50cf",
+    "giraffe": "3f02f00be9fb6af1fc973427cb68468d73801b1b1c1202efd77903b36bb22996",
+    "mouse": "23872d97356e9e8968265f8e716dd43ccb8c95b9b6ee2d3dfddf860e90bfd3c7",
+    "squirrel": "17a190639a957f845e07c0420f893e5b2883aee4a17c0d3b5531e5d4717c8644",
+    "sloth": "b94f024eae83704f9e706433d018a4d312edeaa7077fbfb834c7974d3c0c9c5e",
+    "deer": "574eaffa77f5914fc4e8e82bdc9fecbe8812e89f71de578c25f41f9f8ec4b52b"
+  },
+  "unchanged_other_pngs": {
+    "rabbit.png": "1d7856ccf308ba66f1f5dfd8ad8aaa432d88a11da9d49618789051bdcd652d1a",
+    "framing-original-nine.png": "7748f0f68db4c19c2ca07dd086fad5e7a19b9d3bf07996e00dfcc77cf1b650cf",
+    "red-panda.png": "af64b3510b69499134bbf6314323a93f784ea8c72ef22a3601a952aff9c9d0a5",
+    "raccoon.png": "b74a31a54cf157330622377809235af2780b228d95d8c2d273e204a1567d7c37",
+    "hamburger.png": "4d33cfd11c818f360936d0b55048b607c4e2ed3eaefdea00ff729e1523cb6683",
+    "owl.png": "de07e0b3ad88f55d71cc659de9df846d3e1f4c548a3caa73bcc54a85e57d3ef0",
+    "ghost.png": "0f39515560dacfdfeda99e417ef273314819cfbce9c2a70a5a1bba9af35d7535",
+    "soccer.png": "98b1ca967594f9c4a24658464687df5cd0005d0d11cf0e03387cb05676e7ded3",
+    "penguin.png": "8448e9d5334e0552f09ccae90abd96706dd9bc2c23dc6dde89481bd6dc5a670e",
+    "cat.png": "38aa891278b0f9f971814295526702da4453e2b2452000111b61e06fb2372c74",
+    "framing-original-four.png": "70a8017d12ba65054954c112f535537738f9da07f4af0297d5cb5da4fc92144c",
+    "frog.png": "b77644500a0db26b3c27a5ac433afa57108cdabb7f0447a6ea6abf1d24095cc1",
+    "football.png": "57676d78242f1ed18a01319d1c1d3d1ef5c90bb593a1b3c9f6438aa90f0b5080",
+    "saint-bernard.png": "2778389d8cab3a81b29a614b1ce51dbb28216e777432c15c9c06bc330ce10263",
+    "basketball.png": "05e558c7c06c534c925deb72ceca5344fcce7553ee8d1d5174b51b257e4df2df",
+    "frankenstein.png": "bdd84ed4323d4049f8a27f877ff2bbc7ee11f97a917264924b277824c1ed6569",
+    "pizza.png": "fd815467e8ed53d468ffb1d5373a380d61dabd7b542f94c31c2ce8f4e0019836",
+    "fox.png": "07e9715705304b46633fa31679014f887db58c6515b966c59d1b5657c9a3da3f",
+    "otter.png": "6096427e58ee5e1128e44d1d28099e6039b45949aceb9d7a9e09dc02f828ecbb",
+    "koala.png": "5519a954c00afea9d3512c2410796e36f085c06beed020674c8570696034cf2f",
+    "baseball-bat.png": "b9ce8a9bf4e1e78be9a767c73ca85c13945762d8b0dea41cd3dd1c239bf0f0ee",
+    "bear.png": "85aa4c046d4a6cae5eb718717c9fbf97e70a200ad4d66b6067b5d6479bde88d9",
+    "hedgehog.png": "e398856d3fa3d2eaf4fe124f5c30f906c6f8ece662f693a886c329b9dac9541e"
+  }
+}

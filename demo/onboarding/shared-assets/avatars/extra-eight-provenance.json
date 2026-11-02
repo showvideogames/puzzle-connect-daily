@@ -1,0 +1,236 @@
+{
+  "libraryFileId": "libfile_2bfff1376070819193530d3b9d1d5fea",
+  "version": 0,
+  "files": [
+    {
+      "avatar": "basketball",
+      "sha256": "05e558c7c06c534c925deb72ceca5344fcce7553ee8d1d5174b51b257e4df2df",
+      "source_crop_box": [
+        162,
+        8,
+        482,
+        328
+      ],
+      "original_disc_box": [
+        166,
+        15,
+        476,
+        312
+      ],
+      "output_size": [
+        320,
+        320
+      ],
+      "disc_in_output": [
+        4,
+        7,
+        314,
+        304
+      ],
+      "opaque_interior_exact_rgb_pixels": 40767,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 906
+    },
+    {
+      "avatar": "football",
+      "sha256": "57676d78242f1ed18a01319d1c1d3d1ef5c90bb593a1b3c9f6438aa90f0b5080",
+      "source_crop_box": [
+        543,
+        8,
+        863,
+        328
+      ],
+      "original_disc_box": [
+        547,
+        15,
+        857,
+        312
+      ],
+      "output_size": [
+        320,
+        320
+      ],
+      "disc_in_output": [
+        4,
+        7,
+        314,
+        304
+      ],
+      "opaque_interior_exact_rgb_pixels": 29985,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 966
+    },
+    {
+      "avatar": "soccer",
+      "sha256": "98b1ca967594f9c4a24658464687df5cd0005d0d11cf0e03387cb05676e7ded3",
+      "source_crop_box": [
+        162,
+        308,
+        482,
+        628
+      ],
+      "original_disc_box": [
+        166,
+        314,
+        476,
+        611
+      ],
+      "output_size": [
+        320,
+        320
+      ],
+      "disc_in_output": [
+        4,
+        6,
+        314,
+        303
+      ],
+      "opaque_interior_exact_rgb_pixels": 40583,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 1562
+    },
+    {
+      "avatar": "baseball-bat",
+      "sha256": "b9ce8a9bf4e1e78be9a767c73ca85c13945762d8b0dea41cd3dd1c239bf0f0ee",
+      "source_crop_box": [
+        543,
+        308,
+        863,
+        628
+      ],
+      "original_disc_box": [
+        547,
+        314,
+        857,
+        611
+      ],
+      "output_size": [
+        320,
+        320
+      ],
+      "disc_in_output": [
+        4,
+        6,
+        314,
+        303
+      ],
+      "opaque_interior_exact_rgb_pixels": 24521,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 1196
+    },
+    {
+      "avatar": "pizza",
+      "sha256": "fd815467e8ed53d468ffb1d5373a380d61dabd7b542f94c31c2ce8f4e0019836",
+      "source_crop_box": [
+        162,
+        608,
+        482,
+        928
+      ],
+      "original_disc_box": [
+        166,
+        614,
+        476,
+        912
+      ],
+      "output_size": [
+        320,
+        320
+      ],
+      "disc_in_output": [
+        4,
+        6,
+        314,
+        304
+      ],
+      "opaque_interior_exact_rgb_pixels": 29132,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 1381
+    },
+    {
+      "avatar": "hamburger",
+      "sha256": "4d33cfd11c818f360936d0b55048b607c4e2ed3eaefdea00ff729e1523cb6683",
+      "source_crop_box": [
+        543,
+        608,
+        863,
+        928
+      ],
+      "original_disc_box": [
+        547,
+        614,
+        857,
+        912
+      ],
+      "output_size": [
+        320,
+        320
+      ],
+      "disc_in_output": [
+        4,
+        6,
+        314,
+        304
+      ],
+      "opaque_interior_exact_rgb_pixels": 43279,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 1037
+    },
+    {
+      "avatar": "ghost",
+      "sha256": "0f39515560dacfdfeda99e417ef273314819cfbce9c2a70a5a1bba9af35d7535",
+      "source_crop_box": [
+        162,
+        908,
+        482,
+        1228
+      ],
+      "original_disc_box": [
+        166,
+        914,
+        476,
+        1211
+      ],
+      "output_size": [
+        320,
+        320
+      ],
+      "disc_in_output": [
+        4,
+        6,
+        314,
+        303
+      ],
+      "opaque_interior_exact_rgb_pixels": 40857,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 1651
+    },
+    {
+      "avatar": "frankenstein",
+      "sha256": "bdd84ed4323d4049f8a27f877ff2bbc7ee11f97a917264924b277824c1ed6569",
+      "source_crop_box": [
+        162,
+        1208,
+        482,
+        1528
+      ],
+      "original_disc_box": [
+        166,
+        1214,
+        476,
+        1518
+      ],
+      "output_size": [
+        1254,
+        1254
+      ],
+      "disc_in_output": [
+        15.675,
+        23.5125,
+        1230.4875,
+        1214.8125
+      ],
+      "method": "Targeted imagegen removal of upper-left hair nub, then low-alpha exterior speck cleanup. Visually faithful but NOT pixel-identical source. Original crop framing scaled from320 to1254."
+    }
+  ]
+}

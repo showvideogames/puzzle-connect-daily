@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.app.json",
+  "compilerOptions": {
+    "paths": { "@/*": ["../../src/*"] }
+  },
+  "include": [".", "../../src/vite-env.d.ts"]
+}

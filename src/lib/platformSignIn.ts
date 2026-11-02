@@ -52,6 +52,7 @@ export const ACCOUNTS_ENABLED: boolean =
 
 export const HUB_UNAVAILABLE = "Sign-in is temporarily unavailable. You can keep playing and try again later.";
 export const NOT_RAINBOW_ACCOUNT = "That sign-in is not a Rainbow Categories account.";
+export const SIGN_IN_CHANGED = "Your sign-in changed while it was being checked.";
 
 /** The one, exactly allow-listed, callback address. The real destination is kept locally. */
 export function callbackUrl(): string {
@@ -148,6 +149,26 @@ export function forgetHubTokens(): void {
   }
 }
 
+/** The user id in a stored session's text. Null when it can't be parsed or has no usable id. */
+export function sessionOwner(session: string): string | null {
+  try {
+    const id = JSON.parse(session)?.user?.id;
+    return typeof id === "string" && id !== "" ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Who holds the stored session: a user id, null when nothing is stored, undefined when we can't tell. */
+export function storedSessionOwner(): string | null | undefined {
+  try {
+    const session = localStorage.getItem(AUTH_STORAGE_KEY);
+    return session === null ? null : sessionOwner(session) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export interface RainbowAccount {
   user_id: string;
   /** The permanent identity key: the shared provider's subject (`user_…`). */
@@ -174,8 +195,47 @@ type AccountListener = (account: RainbowAccount | null) => void;
 let currentAccount: RainbowAccount | null = null;
 const accountListeners = new Set<AccountListener>();
 
+// What the newest check said is tracked apart from currentAccount, because a
+// failed check deliberately leaves currentAccount in place for the UI.
+// ensureAccount() calls can overlap (the callback page and onboarding both run
+// one), so each takes a number and the answer comes from the newest. An older
+// check's late ok is dropped and touches none of this, and so is the ok of a
+// check whose stored session changed under it. A confirmation still records who
+// it confirmed and counts only while that person is currentAccount.
+let accountChecksRunning = 0;
+let latestAccountCheck = 0;
+let latestCheckConfirmedUserId: string | null = null;
+let latestCheckSaidNotAnAccount = false;
+let signInGeneration = 0;
+
+/**
+ * A sign-in ended or failed somewhere publishAccount() cannot see. The account
+ * stays on screen, but no earlier answer counts, and a check still running
+ * began too early to earn a new one.
+ */
+export function forgetAccountConfirmation(): void {
+  latestAccountCheck += 1;
+  latestCheckConfirmedUserId = null;
+  latestCheckSaidNotAnAccount = false;
+  signInGeneration += 1;
+}
+
+/**
+ * Moves when a different person is published or a confirmation is forgotten,
+ * so anything kept per sign-in compares it. A re-check that publishes the same
+ * person, or fails at ensure_account, leaves it alone. One that fails earlier,
+ * at onboarding's user check, forgets the confirmation and so moves it.
+ */
+export function accountSignInGeneration(): number {
+  return signInGeneration;
+}
+
 function publishAccount(account: RainbowAccount | null): void {
+  // Only the generation moves here: forgetting would retire the check that is
+  // publishing this very answer.
+  if (account?.user_id !== currentAccount?.user_id) signInGeneration += 1;
   currentAccount = account;
+  if (!account) forgetAccountConfirmation();
   for (const listener of accountListeners) listener(account);
 }
 
@@ -183,6 +243,29 @@ function publishAccount(account: RainbowAccount | null): void {
 export function getCurrentAccount(): RainbowAccount | null {
   return currentAccount;
 }
+
+/**
+ * What the account checks have settled, which getCurrentAccount() cannot say
+ * because it keeps the last account through a re-check and a failed check.
+ *
+ *   confirmed       nothing running, and the newest check confirmed the person
+ *                   who is currentAccount
+ *   not_an_account  nothing running, and the newest check's own answer was
+ *                   not_platform_linked. not_signed_in does not count: the
+ *                   server saw no session, which says nothing about one still
+ *                   stored here
+ *   unsettled       everything else: no check yet, one running, one failed, or
+ *                   the answer was forgotten
+ */
+export function accountCheckState(): "confirmed" | "not_an_account" | "unsettled" {
+  if (accountChecksRunning > 0) return "unsettled";
+  if (latestCheckSaidNotAnAccount) return "not_an_account";
+  if (latestCheckConfirmedUserId !== null && latestCheckConfirmedUserId === currentAccount?.user_id) return "confirmed";
+  return "unsettled";
+}
+
+/** Whether a check is running now, which accountCheckState() can't say: its "unsettled" also covers one that failed. */
+export const accountCheckRunning = () => accountChecksRunning > 0;
 
 /** Subscribe to changes of the current account; returns the unsubscribe function. */
 export function subscribeToCurrentAccount(listener: AccountListener): () => void {
@@ -208,9 +291,97 @@ export interface EnsureAccountResult {
  * person stays a guest.
  */
 export async function ensureAccount(): Promise<EnsureAccountResult> {
+  const thisCheck = beginAccountCheck();
+  let confirmedUserId: string | null = null;
+  try {
+    const result = await askServerForAccount(thisCheck);
+    if (!thisCheck.droppedOk) confirmedUserId = result.account?.user_id ?? null;
+    return result;
+  } finally {
+    endAccountCheck(thisCheck, confirmedUserId);
+  }
+}
+
+interface AccountCheck {
+  number: number;
+  /** Who held the stored session as this check opened, as storedSessionOwner() says. */
+  startedFor: string | null | undefined;
+  /** The server said ok, and that answer came too late to count. */
+  droppedOk: boolean;
+}
+
+/** Opens a check. */
+function beginAccountCheck(): AccountCheck {
+  latestAccountCheck += 1;
+  accountChecksRunning += 1;
+  return { number: latestAccountCheck, startedFor: storedSessionOwner(), droppedOk: false };
+}
+
+/**
+ * Whether this check still speaks for the sign-in: nothing newer has opened or
+ * been forgotten, and a session it began with still has the same owner. A check
+ * that began with no readable session has no owner to compare, so a session
+ * arriving during it changes nothing. A token refresh keeps the owner.
+ */
+function isCurrentCheck(check: AccountCheck): boolean {
+  if (check.number !== latestAccountCheck) return false;
+  return typeof check.startedFor !== "string" || storedSessionOwner() === check.startedFor;
+}
+
+/** Closes a check. confirmedUserId is who it confirmed, or null if nobody. */
+function endAccountCheck(check: AccountCheck, confirmedUserId: string | null): void {
+  accountChecksRunning -= 1;
+  // An older check finishing late can spoil a confirmation but never set one,
+  // and a dropped ok does neither.
+  if (check.number === latestAccountCheck) {
+    latestCheckConfirmedUserId = confirmedUserId;
+    latestCheckSaidNotAnAccount = false;
+  } else if (confirmedUserId === null && !check.droppedOk) {
+    latestCheckConfirmedUserId = null;
+  }
+}
+
+/**
+ * This check's own answer that the auth user is not a Rainbow account.
+ * publishAccount(null) retires every running check, this one included, so
+ * whether this is the newest must be read before it and recorded after it.
+ */
+function publishNotAnAccount(thisCheck: AccountCheck): void {
+  const newest = thisCheck.number === latestAccountCheck;
+  publishAccount(null);
+  latestCheckSaidNotAnAccount = newest;
+}
+
+/**
+ * A late ok changes no account state, and nobody is told. The callback page and
+ * onboarding overlap in an ordinary sign-in, so the caller of the older check
+ * still hears ok when the answer is about whoever is signed in now: its work can
+ * carry on, and the newest check does the publishing. Otherwise the answer is
+ * about someone else, and the caller gets an honest failure.
+ */
+function dropLateOk(check: AccountCheck, account: RainbowAccount): EnsureAccountResult {
+  check.droppedOk = true;
+  return storedSessionOwner() === account.user_id
+    ? { ok: true, account, reason: "ok", message: "" }
+    : { ok: false, account: null, reason: "unavailable", message: SIGN_IN_CHANGED };
+}
+
+/** One row of the ensure_account answer. Only an `ok` row fills in the account's fields. */
+type AccountAnswer = RainbowAccount & { outcome?: string };
+
+async function askServerForAccount(thisCheck: AccountCheck): Promise<EnsureAccountResult> {
   const { data, error } = await supabase.rpc("ensure_account");
   if (error) return { ok: false, account: null, reason: "unavailable", message: error.message };
-  const row = (Array.isArray(data) ? data[0] : data) as (RainbowAccount & { outcome?: string }) | null | undefined;
+  const row = (Array.isArray(data) ? data[0] : data) as AccountAnswer | null | undefined;
+  const result = applyAccountAnswer(thisCheck, row);
+  // The auth user exists but is not a Rainbow account. Drop the local session
+  // so the app carries on as a guest.
+  if (result.reason === "not_platform_linked") await supabase.auth.signOut({ scope: "local" });
+  return result;
+}
+
+/** Applies the server's answer to an open check, and says what it amounted to. */
+function applyAccountAnswer(check: AccountCheck, row: AccountAnswer | null | undefined): EnsureAccountResult {
   switch (row?.outcome) {
     case "ok": {
       if (!row.user_id) break;
@@ -220,14 +391,12 @@ export async function ensureAccount(): Promise<EnsureAccountResult> {
         email: row.email ?? null,
         created_at: row.created_at,
       };
+      if (!isCurrentCheck(check)) return dropLateOk(check, account);
       publishAccount(account);
       return { ok: true, account, reason: "ok", message: "" };
     }
     case "not_platform_linked":
-      // The auth user exists but is not a Rainbow account. Drop the local
-      // session so the app carries on as a guest.
-      publishAccount(null);
-      await supabase.auth.signOut({ scope: "local" });
+      publishNotAnAccount(check);
       return { ok: false, account: null, reason: "not_platform_linked", message: NOT_RAINBOW_ACCOUNT };
     case "not_signed_in":
       publishAccount(null);

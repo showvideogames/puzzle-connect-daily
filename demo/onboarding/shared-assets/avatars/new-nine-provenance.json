@@ -1,0 +1,267 @@
+{
+  "libraryFileId": "libfile_07aa9eb4409c8191832841e57a404e17",
+  "version": 0,
+  "files": [
+    {
+      "animal": "panda",
+      "sha256": "366ecb3a4907342b812d43ed74c8cc271f8c1c27c6982783df0ebde8d758f697",
+      "source_crop_box": [
+        48,
+        6,
+        448,
+        406
+      ],
+      "original_disc_box": [
+        50,
+        12,
+        446,
+        400
+      ],
+      "output_size": [
+        400,
+        400
+      ],
+      "disc_in_output": [
+        2,
+        6,
+        398,
+        394
+      ],
+      "opaque_interior_exact_rgb_pixels": 77748,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 1997
+    },
+    {
+      "animal": "tiger",
+      "sha256": "d83a0d96dc51b961bf806794e1cf07ac18dd0e1e814f492d962c1ae62c793aae",
+      "source_crop_box": [
+        455,
+        6,
+        855,
+        406
+      ],
+      "original_disc_box": [
+        457,
+        12,
+        853,
+        400
+      ],
+      "output_size": [
+        400,
+        400
+      ],
+      "disc_in_output": [
+        2,
+        6,
+        398,
+        394
+      ],
+      "opaque_interior_exact_rgb_pixels": 76611,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 2030
+    },
+    {
+      "animal": "lion",
+      "sha256": "d60e641795bafc8051fb0dccd782593bf84ab3a9547cd91ade3faf421cba34b7",
+      "source_crop_box": [
+        861,
+        6,
+        1261,
+        406
+      ],
+      "original_disc_box": [
+        861,
+        12,
+        1261,
+        400
+      ],
+      "output_size": [
+        400,
+        400
+      ],
+      "disc_in_output": [
+        0,
+        6,
+        400,
+        394
+      ],
+      "opaque_interior_exact_rgb_pixels": 93558,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 1994
+    },
+    {
+      "animal": "elephant",
+      "sha256": "5f4d2d8100fb83f311fe40d3a03f675a073dd7952e970b7bf20dcb536fae5291",
+      "source_crop_box": [
+        48,
+        392,
+        448,
+        792
+      ],
+      "original_disc_box": [
+        50,
+        401,
+        446,
+        782
+      ],
+      "output_size": [
+        400,
+        400
+      ],
+      "disc_in_output": [
+        2,
+        9,
+        398,
+        390
+      ],
+      "opaque_interior_exact_rgb_pixels": 85140,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 2368
+    },
+    {
+      "animal": "giraffe",
+      "sha256": "fefbf04681f31d71ba4796749a75cd7fb7d9ea68a885fdcf78f826dda8061ada",
+      "source_crop_box": [
+        455,
+        392,
+        855,
+        792
+      ],
+      "original_disc_box": [
+        457,
+        401,
+        853,
+        782
+      ],
+      "output_size": [
+        400,
+        400
+      ],
+      "disc_in_output": [
+        2,
+        9,
+        398,
+        390
+      ],
+      "opaque_interior_exact_rgb_pixels": 59309,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 2262
+    },
+    {
+      "animal": "mouse",
+      "sha256": "ca06d747328d96d27720a3e40ebede80004783cb7938bcd008d6004e59efb2cd",
+      "source_crop_box": [
+        861,
+        392,
+        1261,
+        792
+      ],
+      "original_disc_box": [
+        861,
+        401,
+        1261,
+        782
+      ],
+      "output_size": [
+        400,
+        400
+      ],
+      "disc_in_output": [
+        0,
+        9,
+        400,
+        390
+      ],
+      "opaque_interior_exact_rgb_pixels": 74725,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 2924
+    },
+    {
+      "animal": "squirrel",
+      "sha256": "4c46bf0b0b2eab96f052ef701d457e01532dab4d3bf1a1ab488f19488c992d99",
+      "source_crop_box": [
+        48,
+        773,
+        448,
+        1173
+      ],
+      "original_disc_box": [
+        50,
+        783,
+        446,
+        1163
+      ],
+      "output_size": [
+        400,
+        400
+      ],
+      "disc_in_output": [
+        2,
+        10,
+        398,
+        390
+      ],
+      "opaque_interior_exact_rgb_pixels": 74505,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 1878
+    },
+    {
+      "animal": "sloth",
+      "sha256": "a366f310798dc2895bbfe3cd527287ce14a7d79f00b361276c4bc4ef7f89ebc0",
+      "source_crop_box": [
+        455,
+        773,
+        855,
+        1173
+      ],
+      "original_disc_box": [
+        457,
+        783,
+        853,
+        1163
+      ],
+      "output_size": [
+        400,
+        400
+      ],
+      "disc_in_output": [
+        2,
+        10,
+        398,
+        390
+      ],
+      "opaque_interior_exact_rgb_pixels": 84412,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 1833
+    },
+    {
+      "animal": "deer",
+      "sha256": "57ad1f98ccfe7872a46a065a6c29aa86347cd977d37ce0ea2316f6a8c8f6bbff",
+      "source_crop_box": [
+        861,
+        773,
+        1261,
+        1173
+      ],
+      "original_disc_box": [
+        861,
+        783,
+        1261,
+        1163
+      ],
+      "output_size": [
+        400,
+        400
+      ],
+      "disc_in_output": [
+        0,
+        10,
+        400,
+        390
+      ],
+      "opaque_interior_exact_rgb_pixels": 61647,
+      "interior_rgb_difference": 0,
+      "edge_only_decontaminated_pixels": 2918
+    }
+  ]
+}

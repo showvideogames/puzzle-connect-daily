@@ -32,5 +32,9 @@
   },
   "include": [
     "src"
+  ],
+  "exclude": [
+    "src/social/conformance.ts",
+    "src/test/rainbowSocialConformance.test.ts"
   ]
 }

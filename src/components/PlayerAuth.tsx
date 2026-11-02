@@ -19,6 +19,8 @@ interface PlayerAuthProps {
    * row), so the dropdown grows rightward and stays on-screen.
    */
   dropdownAlign?: "left" | "right";
+  /** Adds "Edit profile" to the signed-in menu. Without it the menu is unchanged. */
+  onEditProfile?: () => void;
 }
 
 function PersonIcon({ filled, className }: { filled: boolean; className?: string }) {
@@ -50,7 +52,7 @@ function PersonIcon({ filled, className }: { filled: boolean; className?: string
  * (see lib/platformSignIn.ts) this component renders nothing for a guest, so
  * the whole game is guest-only without any other change.
  */
-export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, hideTrigger = false, dropdownAlign = "right" }: PlayerAuthProps) {
+export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, hideTrigger = false, dropdownAlign = "right", onEditProfile }: PlayerAuthProps) {
   const [showAuth, setShowAuth] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -150,6 +152,14 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
             </div>
             {!confirmDelete ? (
               <div className="py-1">
+                {onEditProfile && (
+                  <button
+                    onClick={() => { setShowDropdown(false); onEditProfile(); }}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-secondary transition-colors"
+                  >
+                    Edit profile
+                  </button>
+                )}
                 <button
                   onClick={() => { setShowDropdown(false); onSignOut(); }}
                   className="w-full text-left px-4 py-2.5 text-sm hover:bg-secondary transition-colors"

@@ -1,0 +1,113 @@
+/* Preview-only styling: the banner, page gutters and provisional covers.
+   Plain CSS, because Tailwind only scans src/. */
+
+.preview-root {
+  min-height: 100dvh;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 16px;
+  background: #4a315d;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.preview-bar-title { margin: 0; flex: 1 1 auto; }
+.preview-bar-select select {
+  max-width: 100%;
+  height: 32px;
+  border-radius: 8px;
+  border: 0;
+  padding: 0 8px;
+  background: #fff;
+  color: #28232c;
+  font: inherit;
+}
+.preview-bar-note { margin: 0; flex: 1 1 100%; opacity: .85; font-size: 12px; }
+@media (max-width: 480px) {
+  .preview-bar-select, .preview-bar-select select { width: 100%; }
+}
+
+.preview-body { padding: 12px 16px 24px; }
+@media (min-width: 640px) { .preview-body { padding: 28px 24px 40px; } }
+
+.preview-page { max-width: 64rem; margin: 0 auto; }
+.preview-editor { max-width: 28rem; margin: 0 auto; padding: 24px; }
+.preview-social { max-width: 34rem; margin: 0 auto; padding: 24px; }
+.preview-social h1 { margin: 0 0 4px; }
+.preview-saved { margin: 0 0 16px; padding: 10px 12px; border-radius: 12px; background: hsl(var(--secondary)); font-size: 14px; }
+
+/* A stand-in for whatever page the player came from. */
+.preview-previous { max-width: 34rem; margin: 0 auto; padding: 28px 24px; text-align: center; }
+.preview-previous-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 20px 0; }
+.preview-previous-tiles span { aspect-ratio: 1.3; border-radius: 10px; background: hsl(var(--tile)); }
+.preview-signin { max-width: 26rem; margin: 24px auto; padding: 28px; text-align: center; }
+.preview-tag {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.cover {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #efe8da;
+}
+.cover-fill { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cover-logo { position: relative; max-width: 74%; max-height: 62%; object-fit: contain; }
+.cover-chip {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgb(20 16 26 / .68);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.cover-rainbow {
+  background: linear-gradient(100deg, hsl(5 74% 90%), hsl(48 89% 88%) 34%, hsl(125 38% 88%) 66%, hsl(203 59% 88%));
+}
+.cover-rainbow .cover-logo { max-width: 62%; max-height: 72%; }
+
+/* Crossword cells drawn in CSS behind the real logo. */
+.cover-crosspuns {
+  background-color: #fff6e0;
+  background-image:
+    linear-gradient(rgb(11 31 61 / .1) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(11 31 61 / .1) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.cover-cluevoyance { background: #1d1038; }
+.cover-cluevoyance .cover-fill { object-position: center 35%; }
+
+.cover-hamburgle { background: linear-gradient(135deg, #ffe7ae, #ffc14d); }
+.cover-icon { position: relative; height: 76%; aspect-ratio: 1; border-radius: 22%; }
+
+.cover-yodel .cover-fill { object-position: left top; }
+
+.cover-price { background: radial-gradient(circle at 50% 45%, #fdf6e9, #f1e4cc); }
+.cover-price .cover-logo { max-height: 78%; }
+
+.cover-wtf { background: linear-gradient(135deg, #5a2c1a, #2c130b); }
+.cover-candy { position: absolute; width: 34%; max-width: 170px; opacity: .95; }
+.cover-candy-left { left: -6%; bottom: -14%; transform: rotate(-16deg); }
+.cover-candy-right { right: -6%; top: -14%; transform: rotate(14deg); }
