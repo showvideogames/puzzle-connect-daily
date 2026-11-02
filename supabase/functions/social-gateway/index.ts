@@ -5,6 +5,7 @@ import {
   authCouldNotAnswer,
   createPreviewThrottle,
   handleSocialGateway,
+  readAccess,
   readApiKeys,
   serverSecretKey,
   transactionPoolerUrl,
@@ -64,6 +65,7 @@ Deno.serve((req) =>
       return error || !data.user ? null : { id: data.user.id, isAnonymous: data.user.is_anonymous === true };
     },
     allowPreview,
+    access: readAccess(env("SOCIAL_ACCESS")),
     db,
   }),
 );

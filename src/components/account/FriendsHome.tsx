@@ -20,6 +20,10 @@ interface FriendsHomeProps {
   today?: Date;
   /** What an opened row offers. Null for a row with nothing to offer. */
   rowActions?: (result: FriendResult) => ReactNode;
+  /** Opens the profile editor, from the top of both tabs. */
+  onEditProfile?: () => void;
+  /** Shown at the end of the Friends tab, such as the people this person has blocked. */
+  friendsFooter?: ReactNode;
 }
 
 const tabButton =
@@ -32,7 +36,7 @@ const tabButton =
  * played can be opened, and so can anyone with actions. A friend code is there
  * to read out or copy.
  */
-export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, onAddFriend, groups, today = new Date(), rowActions }: FriendsHomeProps) {
+export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, onAddFriend, groups, today = new Date(), rowActions, onEditProfile, friendsFooter }: FriendsHomeProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [copied, setCopied] = useState<"yes" | "no" | null>(null);
 
@@ -47,8 +51,15 @@ export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, o
 
   return (
     <main className={`${accountPanel} mx-auto w-full max-w-[32rem] px-5 py-5 sm:px-8 sm:py-7`} data-testid="friends-home">
-      <h1 className="font-tile text-[2rem] font-extrabold leading-[1.1] tracking-tight text-foreground sm:text-[2.5rem]">Friends</h1>
-      <p className={`mt-0.5 text-base ${quietText}`}>{gameName}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-tile text-[2rem] font-extrabold leading-[1.1] tracking-tight text-foreground sm:text-[2.5rem]">Friends</h1>
+          <p className={`mt-0.5 text-base ${quietText}`}>{gameName}</p>
+        </div>
+        {onEditProfile && (
+          <button type="button" onClick={onEditProfile} className={`${outlineAction} mt-1 h-11 shrink-0 px-4 text-base`}>Edit profile</button>
+        )}
+      </div>
 
       <Tabs.Root value={tab} onValueChange={(value) => onTabChange(value as FriendsTab)} className="mt-3">
         <Tabs.List aria-label="Friends and groups" className="flex gap-1 rounded-xl bg-secondary p-1">
@@ -77,6 +88,7 @@ export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, o
           <p role="status" className={`mt-1 min-h-6 text-center text-base ${quietText}`}>
             {copied === "yes" ? "Copied." : copied === "no" ? "We couldn't copy that. You can read it out instead." : ""}
           </p>
+          {friendsFooter}
         </Tabs.Content>
 
         <Tabs.Content value="groups" className="mt-4 focus-visible:outline-none">{groups}</Tabs.Content>

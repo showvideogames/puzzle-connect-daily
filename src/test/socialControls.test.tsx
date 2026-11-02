@@ -421,3 +421,125 @@ describe("handing over a link", () => {
     expect(linkAnswer("done", LINK)).toBeUndefined();
   });
 });
+
+describe("Edit profile", () => {
+  const editor = async (answers: Record<string, Answer> = {}) => {
+    const made = open({ setProfile: () => yes(), ...answers });
+    fireEvent.click(await screen.findByRole("button", { name: "Edit profile" }));
+    return made;
+  };
+
+  it("opens the same editor from Friends and saves the name, avatar and color with setProfile", async () => {
+    const { call, onNote } = await editor();
+
+    fireEvent.change(screen.getByLabelText("Display Name"), { target: { value: "Alexa" } });
+    fireEvent.click(screen.getByLabelText(/^owl$/i));
+    fireEvent.click(screen.getAllByRole("radio").find((radio) => radio.getAttribute("value") === "#CCE6CA")!);
+    click("Save changes");
+
+    await waitFor(() => expect(call).toHaveBeenCalledWith("setProfile", { displayName: "Alexa", animalId: "owl", backgroundColor: "#CCE6CA" }));
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    expect(onNote).toHaveBeenCalledWith("Profile saved.");
+  });
+
+  it("keeps the editor and what was typed when the save is refused", async () => {
+    const { onNote } = await editor({ setProfile: () => refused("bad_name") });
+
+    fireEvent.change(screen.getByLabelText("Display Name"), { target: { value: "Alexa" } });
+    click("Save changes");
+
+    await waitFor(() => expect(onNote).toHaveBeenCalled());
+    expect(screen.getByLabelText("Display Name")).toHaveValue("Alexa");
+    expect(onNote).not.toHaveBeenCalledWith("Profile saved.");
+  });
+
+  it("Cancel goes back without saving", async () => {
+    const { call } = await editor();
+
+    click("Cancel");
+
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    expect(opsCalled(call)).not.toContain("setProfile");
+  });
+
+  it("opens straight into the editor when asked to, as Settings does", async () => {
+    const made = makeApi({});
+    render(
+      <SocialScreens api={made.api} signedIn code={null} tab="friends" onTab={vi.fn()} onNote={vi.fn()} onLeaveLink={vi.fn()} onSignIn={vi.fn()} onNameLater={vi.fn()} guest={<p>guest</p>} waiting={<p>waiting</p>} startEditingProfile />,
+    );
+    expect(await screen.findByRole("button", { name: "Save changes" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Display Name")).toHaveValue("Alex");
+  });
+});
+
+describe("Blocked", () => {
+  const unblockOf = async (name: string) => {
+    const row = (await screen.findAllByTestId("blocked-person")).find((item) => item.textContent?.includes(name))!;
+    return row;
+  };
+
+  it("lists the people this person blocked, and Unblock asks first, then calls unblock with that ref and reloads", async () => {
+    let blocks = [{ blockRef: "b1", name: "Sam" }];
+    const { call } = open({
+      listBlocks: () => yes(blocks),
+      unblock: () => {
+        blocks = [];
+        return yes();
+      },
+    });
+
+    const row = await unblockOf("Sam");
+    fireEvent.click(within(row).getByRole("button", { name: "Unblock" }));
+    expect(opsCalled(call)).not.toContain("unblock");
+    expect(within(row).getByText(/Unblock Sam\?/)).toBeInTheDocument();
+    fireEvent.click(within(row).getAllByRole("button", { name: "Unblock" })[0]);
+
+    await waitFor(() => expect(call).toHaveBeenCalledWith("unblock", { blockRef: "b1" }));
+    await waitFor(() => expect(screen.queryByTestId("blocked-person")).toBeNull());
+  });
+
+  it("Cancel leaves the person blocked", async () => {
+    const { call } = open({ listBlocks: () => yes([{ blockRef: "b1", name: "Sam" }]), unblock: () => yes() });
+
+    const row = await unblockOf("Sam");
+    fireEvent.click(within(row).getByRole("button", { name: "Unblock" }));
+    fireEvent.click(within(row).getByRole("button", { name: "Cancel" }));
+
+    expect(opsCalled(call)).not.toContain("unblock");
+    expect(within(row).getByRole("button", { name: "Unblock" })).toBeInTheDocument();
+  });
+
+  it("shows nothing when nobody is blocked", async () => {
+    open({ listBlocks: () => yes([]) });
+    await screen.findByTestId("friends-home");
+    expect(screen.queryByRole("region", { name: "Blocked" })).toBeNull();
+  });
+
+  it("a refused unblock keeps the person and says why", async () => {
+    open({ listBlocks: () => yes([{ blockRef: "b1", name: "Sam" }]), unblock: () => refused("unavailable") });
+
+    const row = await unblockOf("Sam");
+    fireEvent.click(within(row).getByRole("button", { name: "Unblock" }));
+    fireEvent.click(within(row).getAllByRole("button", { name: "Unblock" })[0]);
+
+    expect(await within(row).findByRole("alert")).not.toBeEmptyDOMElement();
+  });
+
+  it("shows someone just blocked without leaving the page", async () => {
+    let blocks: { blockRef: string; name: string }[] = [];
+    open({
+      listFriends: () => yes(blocks.length ? [] : [friend("f1", "Sam")]),
+      listBlocks: () => yes(blocks),
+      block: () => {
+        blocks = [{ blockRef: "b1", name: "Sam" }];
+        return yes({ blockRef: "b1" });
+      },
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Sam/ }));
+    click("Block");
+    fireEvent.click(within(screen.getByTestId("inline-confirm")).getByRole("button", { name: "Block" }));
+
+    expect(await unblockOf("Sam")).toBeInTheDocument();
+  });
+});

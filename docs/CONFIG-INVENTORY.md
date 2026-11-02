@@ -19,7 +19,7 @@ Supabase address or another game's table prefix appears in `src/`,
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | its anon / publishable key | public by design |
 | `VITE_PLATFORM_DISCOVERY_URL` | the shared sign-in service's OpenID discovery document | empty = accounts OFF (guest-only build) |
 | `VITE_ACCOUNTS_ENABLED` | emergency switch; `"false"` hides every sign-in surface | anything else = on |
-| `VITE_SHARED_SOCIAL` | Friends and Groups. `beta` turns on the routes, menu row and live connection, and the gateway's allow-list still decides who gets in. `mock` is for local previews and refused in production builds | anything else = off |
+| `VITE_SHARED_SOCIAL` | Friends and Groups. `beta` turns on the routes, menu row and live connection. Who gets in is the gateway's `SOCIAL_ACCESS`. `mock` is for local previews and refused in production builds | anything else = off |
 | `VITE_TURNSTILE_SITE_KEY` | Cloudflare Turnstile for the feedback form | public site key |
 | `VITE_MINI_SHARE_URL` | where Mini share text points | defaults to rainbowcategories.com/mini |
 | `VITE_SUPPORT_URL` | the "Keep the Puzzles Coming" link | empty hides the button |
@@ -46,6 +46,13 @@ Supabase address or another game's table prefix appears in `src/`,
 | Edge function `submit-feedback` secrets | `TURNSTILE_SECRET_KEY` (plus the Supabase-injected `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`) | function secrets |
 | Migration ledger | `supabase_migrations.schema_migrations` holding `0001`, `0002`, … | written by `supabase db push`; the beta reset clears the beta-era rows |
 | `supabase/config.toml` → `project_id` | the linked project ref | the CLI link only |
+
+## Supabase project: the social-gateway Edge Function
+
+| Setting | What it does | Values |
+|---|---|---|
+| `SOCIAL_ACCESS` (function secret) | Who may use Friends and Groups | exactly `everyone` = every signed-in Rainbow account; anything else, or unset = only `social.beta_testers` |
+| Verify JWT | Off, as designed: guests open invitation previews, and the function checks tokens itself | off |
 
 ## The shared sign-in service (WorkOS)
 

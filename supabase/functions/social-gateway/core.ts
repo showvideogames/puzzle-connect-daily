@@ -16,8 +16,8 @@
  *      trusted on its own claims, and not an anonymous user: `not_signed_in`.
  *   5. The global id comes from Rainbow's own `accounts` row, found by the auth
  *      user id. No row: `not_linked`. Never from args.
- *   6. The beta allow-list. Anyone else gets `game_disabled`, so the feature
- *      behaves as if it doesn't exist.
+ *   6. The beta allow-list, unless access is `everyone`. Anyone else gets
+ *      `game_disabled`, so the feature behaves as if it doesn't exist.
  *   7. A strict check of the arguments, per operation: `unavailable`.
  *   8. One transaction as social_gateway: ensure_person, then the one mapped
  *      function. Its JSON goes back exactly.
@@ -61,7 +61,19 @@ export interface GatewayDeps {
   verifyUserToken: (token: string) => Promise<{ id: string; isAnonymous: boolean } | null>;
   /** False once this instance has answered too many invitation previews (see createPreviewThrottle). */
   allowPreview: () => boolean;
+  /**
+   * Who may use Friends and Groups: the beta allow-list, or every signed-in
+   * Rainbow account. Every other check is the same either way.
+   */
+  access: GatewayAccess;
   db: GatewayDb;
+}
+
+export type GatewayAccess = "allow-list" | "everyone";
+
+/** The SOCIAL_ACCESS setting. Anything but exactly `everyone` keeps the allow-list. */
+export function readAccess(value: string | undefined): GatewayAccess {
+  return value === "everyone" ? "everyone" : "allow-list";
 }
 
 /**
@@ -498,6 +510,11 @@ async function isBetaTester(globalId: string, db: GatewayDb): Promise<boolean> {
   return rows[0]?.allowed === true;
 }
 
+/** Every Rainbow account when access is `everyone`, otherwise only the allow-list. */
+async function mayUse(globalId: string, deps: GatewayDeps): Promise<boolean> {
+  return deps.access === "everyone" || isBetaTester(globalId, deps.db);
+}
+
 /** The global id for an invitation's flags. Null for anyone who isn't a usable account, however that came about. */
 async function previewCaller(token: string | null, deps: GatewayDeps): Promise<string | null> {
   if (!token) return null;
@@ -505,7 +522,7 @@ async function previewCaller(token: string | null, deps: GatewayDeps): Promise<s
     const user = await deps.verifyUserToken(token);
     if (!user || user.isAnonymous) return null;
     const globalId = await readGlobalId(user.id, deps.db);
-    return globalId && (await isBetaTester(globalId, deps.db)) ? globalId : null;
+    return globalId && (await mayUse(globalId, deps)) ? globalId : null;
   } catch (error) {
     logFailure("the preview's caller check", error);
     return null;
@@ -608,7 +625,7 @@ async function answerRequest(req: Request, deps: GatewayDeps): Promise<Answer> {
   const globalId = await readGlobalId(user.id, deps.db);
   if (!globalId) return refuse("not_linked");
 
-  if (!(await isBetaTester(globalId, deps.db))) return refuse("game_disabled");
+  if (!(await mayUse(globalId, deps))) return refuse("game_disabled");
 
   if (!argsFit(operation, args)) return UNAVAILABLE;
 

@@ -162,6 +162,23 @@ describe("beta", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("/friends");
   });
 
+  it("offers Edit profile to someone signed in, which opens the editor on /friends", () => {
+    vi.stubEnv("VITE_SHARED_SOCIAL", "beta");
+    render(menu({ user: { id: "u1", email: null } }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
+    expect(screen.getByTestId("where")).toHaveTextContent("/friends");
+  });
+
+  it("offers no Edit profile to a guest, or with the flag off", () => {
+    vi.stubEnv("VITE_SHARED_SOCIAL", "beta");
+    const { unmount } = render(menu());
+    expect(screen.queryByRole("button", { name: "Edit profile" })).toBeNull();
+    unmount();
+    vi.stubEnv("VITE_SHARED_SOCIAL", "");
+    render(menu({ user: { id: "u1", email: null } }));
+    expect(screen.queryByRole("button", { name: "Edit profile" })).toBeNull();
+  });
+
   it("still lets a page choose where the row goes", () => {
     vi.stubEnv("VITE_SHARED_SOCIAL", "beta");
     const onOpenSocial = vi.fn();

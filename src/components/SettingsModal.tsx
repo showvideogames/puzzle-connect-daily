@@ -4,7 +4,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Switch } from "@/components/ui/switch";
 import { GameSettings } from "@/lib/settings";
 import { Link, useNavigate } from "react-router-dom";
-import { BookOpen, Archive as ArchiveIcon, Gamepad2, Grid2x2, PlusCircle, Star, Users, X } from "lucide-react";
+import { BookOpen, Archive as ArchiveIcon, Gamepad2, Grid2x2, PlusCircle, Star, UserPen, Users, X } from "lucide-react";
 import { PlayerAuth } from "./PlayerAuth";
 import { socialBetaOn } from "@/components/social/socialFlag";
 import { ACCOUNTS_ENABLED } from "@/lib/platformSignIn";
@@ -60,6 +60,21 @@ function SocialRow({ onClose, onOpen }: { onClose: () => void; onOpen: () => voi
 function BetaSocialRow({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   return <SocialRow onClose={onClose} onOpen={() => navigate("/friends")} />;
+}
+
+/** The profile editor that Friends & Groups uses, opened straight away. */
+function BetaEditProfileRow({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={() => { onClose(); navigate("/friends", { state: { editProfile: true } }); }}
+      className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
+        hover:bg-secondary transition-colors active:scale-95"
+    >
+      <UserPen className="w-4 h-4 text-slate" />
+      Edit profile
+    </button>
+  );
 }
 
 export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback, showMenuLinks = false, showCreateLink = false, onHowToPlayClick, user = null, onSignOut, format = FULL_FORMAT, onEditProfile, onOpenGames, onOpenSocial }: SettingsModalProps) {
@@ -231,6 +246,7 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                     ) : socialBetaOn() && (
                       <BetaSocialRow onClose={onClose} />
                     )}
+                    {user && !onEditProfile && socialBetaOn() && <BetaEditProfileRow onClose={onClose} />}
                     {user && (
                       <Link
                         to="/favorites"

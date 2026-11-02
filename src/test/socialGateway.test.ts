@@ -13,6 +13,7 @@ import {
   corsHeaders,
   createPreviewThrottle,
   handleSocialGateway,
+  readAccess,
   readApiKeys,
   serverSecretKey,
   transactionPoolerUrl,
@@ -125,6 +126,7 @@ function setup(overrides: Partial<World> = {}, deps: Partial<GatewayDeps> = {}) 
     keys: { publishable: [PUBLISHABLE], secret: [SECRET] },
     verifyUserToken,
     allowPreview: () => true,
+    access: "allow-list",
     db,
     ...deps,
   };
@@ -1054,3 +1056,44 @@ describe("social-gateway: reading the project's keys", () => {
     expect(serverSecretKey(env)).toEqual(feedback.serverSecretKey(env));
   });
 });
+
+describe("social-gateway: access for every Rainbow account", () => {
+  it("reads only exactly `everyone` as open", () => {
+    expect(readAccess("everyone")).toBe("everyone");
+    for (const value of [undefined, "", "Everyone", "all", "true", " everyone"]) expect(readAccess(value)).toBe("allow-list");
+  });
+
+  it("lets a Rainbow account off the list in, without asking the list", async () => {
+    const { deps, statements } = setup({ tester: false }, { access: "everyone" });
+
+    expect((await send(deps, "listFriends", {})).body).toEqual(HUB_ANSWER);
+
+    expect(statements.map(named)).not.toContain("social.is_beta_tester");
+  });
+
+  it("still refuses the same account while access is the allow-list", async () => {
+    const { deps } = setup({ tester: false });
+
+    expect((await send(deps, "listFriends", {})).body).toEqual({ ok: false, outcome: "game_disabled" });
+  });
+
+  it.each<[string, Partial<World>, Partial<GatewayDeps>, Record<string, string>, string]>([
+    ["no token", {}, {}, guest, "not_signed_in"],
+    ["a token Auth refuses", {}, {}, { apikey: PUBLISHABLE, authorization: "Bearer refused" }, "not_signed_in"],
+    ["an anonymous user", {}, { verifyUserToken: async () => ({ id: USER_ID, isAnonymous: true }) }, signedIn, "not_signed_in"],
+    ["an auth user with no Rainbow account", { account: false }, {}, signedIn, "not_linked"],
+  ])("keeps every other check when open: %s", async (_label, world, depsOverride, headers, outcome) => {
+    const { deps } = setup(world, { access: "everyone", ...depsOverride });
+
+    expect((await send(deps, "listFriends", {}, headers)).body).toEqual({ ok: false, outcome });
+  });
+
+  it("gives an invitation's flags to any Rainbow account when open", async () => {
+    const { deps, statements } = setup({ tester: false }, { access: "everyone" });
+
+    await send(deps, "previewInvite", { code: "abc" });
+
+    expect(last(statements).params).toEqual([GLOBAL_ID, "abc"]);
+  });
+});
+

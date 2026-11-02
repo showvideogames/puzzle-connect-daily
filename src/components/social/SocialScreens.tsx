@@ -9,6 +9,7 @@ import { hasDisplayName, newProfile, type SharedProfile } from "@/lib/sharedProf
 import { NO_RESULTS_NOTE, friendChangeProblem, isBackgroundCheck, profileFromMe, socialProblem } from "@/lib/socialView";
 import type { Result } from "@/social/contract";
 import { AddFriendFlow } from "./AddFriendFlow";
+import { BlockedPeople } from "./BlockedPeople";
 import { GroupFlow } from "./GroupFlow";
 import { FriendLinkCard, GroupLinkCard } from "./LinkCards";
 import { MyGroups } from "./MyGroups";
@@ -44,6 +45,8 @@ interface SocialScreensProps {
   /** What shows until the first answer. */
   waiting: ReactNode;
   editorClassName?: string;
+  /** Opens straight into the profile editor, as Edit profile in Settings does. */
+  startEditingProfile?: boolean;
 }
 
 /**
@@ -67,6 +70,7 @@ export function SocialScreens({
   guest,
   waiting,
   editorClassName = "mx-auto w-full max-w-[32rem] px-5 py-5 sm:px-8 sm:py-7",
+  startEditingProfile = false,
 }: SocialScreensProps) {
   const live = useLive();
   const loadNo = useRef(0);
@@ -74,6 +78,8 @@ export function SocialScreens({
   const [failed, setFailed] = useState(false);
   const [addingFriend, setAddingFriend] = useState(false);
   const [choosingName, setChoosingName] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(startEditingProfile);
+  const [blockVersion, setBlockVersion] = useState(0);
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
 
   /** Only the newest read paints, and only while this person is still here. */
@@ -136,13 +142,25 @@ export function SocialScreens({
       throw new Error(answer.outcome);
     }
     await load();
-    if (live.current) setChoosingName(false);
+    if (!live.current) return;
+    setChoosingName(false);
+    setEditingProfile(false);
+    onNote("Profile saved.");
   };
 
   if (choosingName) {
     return (
       <main className={`${accountPanel} ${editorClassName}`}>
         <ProfileForm mode="setup" initial={profile ?? newProfile()} onCancel={() => setChoosingName(false)} onSave={saveProfile} />
+      </main>
+    );
+  }
+
+  // Someone with no Display Name yet gets the setup form below instead.
+  if (editingProfile && signedIn && hasDisplayName(profile)) {
+    return (
+      <main className={`${accountPanel} ${editorClassName}`}>
+        <ProfileForm mode="edit" initial={profile ?? newProfile()} onCancel={() => setEditingProfile(false)} onSave={saveProfile} />
       </main>
     );
   }
@@ -171,7 +189,12 @@ export function SocialScreens({
       <FriendActions
         name={result.name}
         onRemove={async () => afterChange(await api.client.call("removeFriend", { friendRef: result.id }))}
-        onBlock={async () => afterChange(await api.client.call("block", { ref: result.id }))}
+        onBlock={async () => {
+          const answer = await api.client.call("block", { ref: result.id });
+          const problem = await afterChange(answer);
+          if (answer.ok) setBlockVersion((version) => version + 1);
+          return problem;
+        }}
       />
     );
 
@@ -215,6 +238,8 @@ export function SocialScreens({
           groups={<MyGroups api={api} groups={loaded.groups ?? []} displayName={displayName} onNote={onNote} onLink={onLink} onReload={load} onOpen={setOpenGroupId} />}
           today={api.today()}
           rowActions={friendActions}
+          onEditProfile={() => setEditingProfile(true)}
+          friendsFooter={<BlockedPeople api={api} version={blockVersion} />}
         />
       )}
     </WaitingRequests>
