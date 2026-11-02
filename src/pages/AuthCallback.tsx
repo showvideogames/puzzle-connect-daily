@@ -3,6 +3,34 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ensureAccount, handleCallback } from "@/lib/platformSignIn";
 
+/** Where to go next, or the sentence to show instead. */
+interface Finish {
+  returnTo: string;
+  failure: string | null;
+}
+
+/**
+ * The one sign-in this page load finishes: the code exchange, then the account
+ * check. A new session changes the player, and OnboardingGate rebuilds every
+ * page when that happens, so this page mounts again after the code has left the
+ * address bar, and after a sign-in that isn't a Rainbow account has been signed
+ * out again. Every mount hears this one answer.
+ */
+let finishing: Promise<Finish> | null = null;
+
+async function finishSignIn(): Promise<Finish> {
+  try {
+    const result = await handleCallback();
+    if (!result.ok) return { returnTo: "/", failure: result.errorMessage ?? "Sign-in did not complete." };
+    const account = await ensureAccount();
+    // not_platform_linked has already signed the session out locally.
+    if (!account.ok) return { returnTo: "/", failure: account.message };
+    return { returnTo: result.returnTo, failure: null };
+  } catch {
+    return { returnTo: "/", failure: "Sign-in did not complete." };
+  }
+}
+
 /**
  * /auth/callback — the ONLY page that turns a sign-in code into a session.
  *
@@ -19,21 +47,15 @@ export default function AuthCallback() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const result = await handleCallback();
+      finishing ??= finishSignIn();
+      const outcome = await finishing;
       if (cancelled) return;
-      if (!result.ok) {
-        setFailure(result.errorMessage ?? "Sign-in did not complete.");
-        return;
-      }
-      const account = await ensureAccount();
-      if (cancelled) return;
-      if (!account.ok) {
-        // not_platform_linked has already signed the session out locally.
-        setFailure(account.message);
+      if (outcome.failure !== null) {
+        setFailure(outcome.failure);
         return;
       }
       toast.success("Signed in");
-      navigate(result.returnTo, { replace: true });
+      navigate(outcome.returnTo, { replace: true });
     })();
     return () => {
       cancelled = true;
