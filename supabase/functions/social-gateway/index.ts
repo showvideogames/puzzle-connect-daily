@@ -7,6 +7,7 @@ import {
   handleSocialGateway,
   readApiKeys,
   serverSecretKey,
+  transactionPoolerUrl,
   type GatewayDb,
 } from "./core.ts";
 
@@ -24,17 +25,20 @@ const admin = secretKey
     })
   : null;
 
-// Prepared statements are off, because the connection can come through a
+const hosted = env("SUPABASE_URL")?.startsWith("https://") === true;
+
+// Prepared statements are off, because the hosted connection comes through the
 // transaction pooler. One connection per instance, because the live games share
 // this database's connections. TLS on the hosted project; the local stack has
-// none. Notices are dropped, so nothing the database says reaches a log by itself.
+// neither. Notices are dropped, so nothing the database says reaches a log by
+// itself.
 const sql = dbUrl
-  ? postgres(dbUrl, {
+  ? postgres(hosted ? transactionPoolerUrl(dbUrl) : dbUrl, {
       prepare: false,
       max: 1,
       idle_timeout: 20,
       connect_timeout: 10,
-      ssl: env("SUPABASE_URL")?.startsWith("https://") ? "require" : false,
+      ssl: hosted ? "require" : false,
       connection: { application_name: "social-gateway" },
       onnotice: () => {},
     })

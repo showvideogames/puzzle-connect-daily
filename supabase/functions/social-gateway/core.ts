@@ -73,6 +73,18 @@ export const TRANSACTION_LIMITS_SQL =
   "select set_config('lock_timeout', '2s', true), set_config('statement_timeout', '5s', true)";
 
 /**
+ * The project's transaction pooler: the same host and password on its own port.
+ * Each running instance of this function holds a connection, and one player's
+ * page load can start several, so going direct would spend the connections the
+ * live games share. The pooler caps them.
+ */
+export function transactionPoolerUrl(dbUrl: string): string {
+  const url = new URL(dbUrl);
+  url.port = "6543";
+  return url.href;
+}
+
+/**
  * Auth turning a token down is a 4xx. Anything else, a 429 included, means it
  * couldn't answer, which must not read as a sign-out.
  */

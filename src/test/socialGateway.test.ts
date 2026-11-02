@@ -15,6 +15,7 @@ import {
   handleSocialGateway,
   readApiKeys,
   serverSecretKey,
+  transactionPoolerUrl,
   type GatewayDb,
   type GatewayDeps,
   type Queries,
@@ -683,6 +684,12 @@ describe("social-gateway: limits on what a request can cost", () => {
     expect(allow()).toBe(false);
     time += 1;
     expect(allow()).toBe(true);
+  });
+
+  it("reaches the pooler on the same host and login, and keeps a password's escaping", () => {
+    expect(transactionPoolerUrl("postgresql://postgres:p%40ss%2Fword@db.example.supabase.co:5432/postgres")).toBe(
+      "postgresql://postgres:p%40ss%2Fword@db.example.supabase.co:6543/postgres",
+    );
   });
 
   it.each<[number | undefined, boolean]>([
