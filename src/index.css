@@ -258,18 +258,37 @@ html {
     border-color: hsl(var(--foreground));
     color: hsl(var(--tile-selected-fg));
   }
-  /* Space is reserved by the board, independent of annotation/selection.
-     The transparent gap exposes the actual page background in either theme. */
-  .tile-shell { --tile-selection-ink: #000; }
+  /* Highlights stay inside each tile's own box, except that an outline may
+     reach past it: a selected rainbow's by its stroke less
+     --tile-rainbow-inset (2px, 3px at md) in either theme, and dark's other
+     selections by --tile-stroke-out (1-2px). Adjacent selected tiles keep 2px
+     of page between them at the tightest gaps, and nothing reaches past a tile
+     on the narrow tablet. The --tile-bar-* tokens hold cqw, which resolves
+     where they are used, so they work on the button and the bar, whose
+     container is the shell, but not on the shell itself. */
+  .tile-shell {
+    --tile-selection-ink: #000;
+    --tile-radius: clamp(11px,1.2vw,14px);
+    --tile-stroke: 3px;
+    --tile-stroke-out: 1px;
+    --tile-rainbow-inset: 1px;
+    --tile-bar-height: clamp(7px, 9cqw, 13px);
+    --tile-bar-bottom: clamp(3px, 3cqw, 5px);
+    --tile-bar-border: clamp(1px, 1cqw, 2px);
+  }
   .dark .tile-shell { --tile-selection-ink: #fff; }
+  @media (min-width: 768px) {
+    .tile-shell { --tile-stroke: 4px; --tile-stroke-out: 2px; }
+  }
+  /* z-index: these spans come before the `relative` button in the DOM. Their
+     transition matches the lifted button's, which .tile-base sets to 200ms. */
   .tile-color-outline {
-    inset: -6px;
-    border-width: 3px;
-    border-radius: calc(clamp(11px,1.2vw,14px) + 6px);
+    z-index: 1;
+    transition: scale 200ms cubic-bezier(0, 0, 0.2, 1);
   }
   /* Ordinary annotations: retain the existing pastel treatment in light
-     mode, and use a restrained tint over charcoal in dark mode. The same
-     border box is reserved whether marked, selected, both, or neither. */
+     mode, and use a restrained tint over charcoal in dark mode. Only a
+     selected dark annotation shows this band. */
   .tile-shell[data-tile-kind="ordinary"] > .tile-color-outline { display: none; }
   .tile-neutral[data-tile-color="yellow"] { --mark-color: var(--group-1); --mark-tint: #49422b; }
   .tile-neutral[data-tile-color="green"] { --mark-color: var(--group-2); --mark-tint: #304534; }
@@ -280,7 +299,7 @@ html {
     color: hsl(var(--ink));
     border-color: transparent;
     /* Match the unmarked light tile so painting/erasing cannot change its
-       intrinsic height on narrow screens. Outlines live outside this box. */
+       intrinsic height on narrow screens. Outlines paint over this box. */
     border-width: 1px;
   }
   .dark .tile-neutral[data-tile-color] {
@@ -289,8 +308,9 @@ html {
     color: hsl(var(--foreground));
     border-color: hsl(var(--mark-color));
   }
-  /* Selection keeps the annotation's fill and color edge. A separate
-     neutral stroke sits immediately outside the annotation, never over it. */
+  /* Selection keeps the annotation's fill. A separate neutral stroke covers
+     this border, at the tile's edge in light and reaching past it in dark;
+     dark's color band sits inside it. */
   .tile-neutral[data-tile-color][aria-pressed="true"] {
     border-color: transparent;
     box-shadow: none;
@@ -300,68 +320,73 @@ html {
     border-color: hsl(var(--mark-color));
     box-shadow: none;
   }
-  /* Unmarked selection has the same bold weight as marked selection. */
-  .tile-neutral:not([data-tile-color])[aria-pressed="true"] {
-    border-color: var(--tile-selection-ink);
-    box-shadow: 0 0 0 2px var(--tile-selection-ink);
-  }
+  /* Light unmarked selection is fill only, from the button's own classes.
+     Dark adds a bold edge; its small outward shadow fits the compact gaps. */
   .dark .tile-neutral:not([data-tile-color])[aria-pressed="true"] {
+    border-color: var(--tile-selection-ink);
     box-shadow: 0 0 0 1px var(--tile-selection-ink);
   }
   @media (min-width: 768px) {
-    .tile-neutral:not([data-tile-color])[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--tile-selection-ink); }
     .dark .tile-neutral:not([data-tile-color])[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--tile-selection-ink); }
   }
-  .tile-shell[data-tile-kind="rainbow"] > button[aria-pressed="true"] {
-    border-color: transparent;
+  /* Non-wide Full boards keep gap 6 at md, so the outline stays at the phone
+     size. */
+  @media (min-width: 768px) {
+    .gap-1\.5:not(.md\:gap-3) > .tile-shell { --tile-stroke: 3px; }
   }
-  .tile-shell[data-tile-kind="rainbow"] > .rainbow-tile-static[aria-pressed="true"] {
-    border-color: hsl(var(--tile-border));
+  /* At these widths the wide Full board runs edge to edge (no side margin from
+     768 to about 846; the upper bound's extra width covers an always-visible
+     scrollbar), so nothing may reach past a tile. The outline sits on the tile
+     and the rainbow insets by the same amount, selected or not. */
+  @media (min-width: 768px) and (max-width: 864.98px) {
+    .md\:gap-3 > .tile-shell { --tile-rainbow-inset: var(--tile-stroke); --tile-stroke-out: 0px; }
+    .dark .md\:gap-3 > .tile-shell > .tile-neutral:not([data-tile-color])[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--tile-selection-ink); }
   }
   .tile-selection-outline {
-    inset: -3px;
-    border: 3px solid var(--tile-selection-ink);
-    border-radius: calc(clamp(11px,1.2vw,14px) + 3px);
+    inset: 0;
+    border: var(--tile-stroke) solid var(--tile-selection-ink);
+    border-radius: var(--tile-radius);
+    z-index: 1;
+    transition: scale 200ms cubic-bezier(0, 0, 0.2, 1);
   }
-  /* Ordinary annotations gain a 2px outside color band on selection;
-     its outer edge meets the neutral stroke's inner edge. */
-  .tile-shell[data-tile-kind="ordinary"][data-tile-selected="true"] > .tile-color-outline {
+  /* Dark's white outline reaches past the tile by the same amount as a plain
+     selected tile's, so every selected ordinary tile has one outer size. */
+  .dark .tile-selection-outline {
+    inset: calc(-1 * var(--tile-stroke-out));
+    border-radius: calc(var(--tile-radius) + var(--tile-stroke-out));
+  }
+  /* Dark ordinary annotations gain a color band on selection, directly inside
+     the neutral stroke. Derived from the stroke, so on every board 2px stay
+     visible and the band runs 1px under the stroke, where no dark seam can
+     show between them at any pixel position. Light shows the stroke alone. */
+  .dark .tile-shell[data-tile-kind="ordinary"][data-tile-selected="true"] > .tile-color-outline {
     display: block;
-    inset: -2px;
-    border-width: 2px;
-    border-radius: calc(clamp(11px,1.2vw,14px) + 2px);
+    inset: calc(var(--tile-stroke) - var(--tile-stroke-out) - 1px);
+    border-width: 3px;
+    border-radius: max(calc(var(--tile-radius) - var(--tile-stroke) + var(--tile-stroke-out) + 1px), 2px);
   }
-  .tile-shell[data-tile-kind="ordinary"][data-tile-selected="true"] > .tile-selection-outline {
-    inset: -5px;
-    border-radius: calc(clamp(11px,1.2vw,14px) + 5px);
+  /* Both themes: the outline starts where the rainbow face's rim ends. */
+  .tile-shell[data-tile-kind="rainbow"] > .tile-selection-outline {
+    inset: calc(var(--tile-rainbow-inset) - var(--tile-stroke));
+    border-radius: calc(var(--tile-radius) + var(--tile-stroke) - var(--tile-rainbow-inset));
   }
-  /* Rainbow: unchanged gradient, 3px gap, category ring, neutral selection.
-     The grid reserves the maximum footprint even when nothing is selected. */
-  .tile-shell[data-tile-kind="rainbow"][data-tile-selected="true"]:has(> [data-tile-mark]) > .tile-selection-outline {
-    inset: -9px;
-    border-radius: calc(clamp(11px,1.2vw,14px) + 9px);
+  /* A rainbow's color mark. It sits inside the button, so it lifts with the
+     tile, stays clear of the selection outline and takes taps as the tile. */
+  .tile-color-bar {
+    inset-inline: 18%;
+    bottom: var(--tile-bar-bottom);
+    height: var(--tile-bar-height);
+    border: var(--tile-bar-border) solid #fff;
+    border-radius: calc(var(--tile-bar-height) * 0.35);
   }
+  /* The bar's own richer colors, from the approved mockup, in both themes. */
+  .tile-bar-red { background-color: #E8262B; }
+  .tile-bar-yellow { background-color: #FFC20E; }
+  .tile-bar-green { background-color: #1FAE4B; }
+  .tile-bar-blue { background-color: #1E6FF0; }
   .tile-keyboard-focus:focus-visible {
     outline: 2px dashed currentColor;
-    outline-offset: -7px;
-  }
-  .tile-mark-grid { gap: 22px; padding: 9px; }
-  @media (max-width: 374px) {
-    /* Preserve readable labels after reserving the external selection edge. */
-    .tile-base { padding-left: 4px; padding-right: 4px; }
-  }
-  @media (min-width: 768px) {
-    .tile-color-outline { inset: -8px; border-width: 4px; border-radius: calc(clamp(11px,1.2vw,14px) + 8px); }
-    .tile-selection-outline { inset: -4px; border-width: 4px; border-radius: calc(clamp(11px,1.2vw,14px) + 4px); }
-    .tile-shell[data-tile-kind="ordinary"][data-tile-selected="true"] > .tile-selection-outline {
-      inset: -6px;
-      border-radius: calc(clamp(11px,1.2vw,14px) + 6px);
-    }
-    .tile-shell[data-tile-kind="rainbow"][data-tile-selected="true"]:has(> [data-tile-mark]) > .tile-selection-outline {
-      inset: -12px;
-      border-radius: calc(clamp(11px,1.2vw,14px) + 12px);
-    }
-    .tile-mark-grid { gap: 28px; padding: 12px; }
+    outline-offset: -8px;
   }
   .dark button.game-secondary {
     background: transparent;
@@ -452,19 +477,20 @@ html {
 
 /* Shared by .rainbow-tile-static below, the reduced-motion override above,
    and the solved-rainbow-card/popup elements in GameBoard.tsx that also
-   respect the Rainbow Animation setting. A smoothly blended diagonal
-   gradient (loosely based on the Share/Result grid's yellow/green/blue/
-   purple/red palette, ResultGrid.tsx's RAINBOW_GRADIENT) rather than
-   distinct color bands — meant to read as one designed background, not
-   five rainbow stripes. */
+   respect the Rainbow Animation setting. The approved mockup's brighter
+   blend, warm toward the upper left, blue and purple toward the lower
+   right — meant to read as one designed background, not rainbow stripes. */
 :root {
   --rainbow-static-gradient: linear-gradient(
     135deg,
-    #F6D968 0%,
-    #A8D783 22%,
-    #7DB9DD 46%,
-    #A98DDB 70%,
-    #E9786D 100%
+    #FF5F57 0%,
+    #FDBC53 20%,
+    #F4F050 32%,
+    #7FEF85 45%,
+    #2BACF9 60%,
+    #4578FD 70%,
+    #8B55FB 82%,
+    #E043FC 100%
   );
 }
 
@@ -484,11 +510,81 @@ html {
   animation: rainbow-shift 3s ease-in-out infinite;
 }
 
+/* One clock for every Rainbow tile on a board. Moving a node restarts its own
+   CSS animation, so a dragged tile fell out of step; these tiles own no
+   animation and read a position animated once on the wrapper around the grid.
+   It is the wrapper, not the grid, because .animate-shake on the grid would
+   replace the grid's animation. Only board tiles join this clock, so other
+   Rainbow elements keep their own animation. The @supports test only admits
+   browsers that also have @property; older ones keep the per-tile animation. */
+@property --rainbow-shift-x {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 0%;
+}
+@keyframes rainbow-shift-shared {
+  0% { --rainbow-shift-x: 0%; }
+  50% { --rainbow-shift-x: 100%; }
+  100% { --rainbow-shift-x: 0%; }
+}
+@supports (transition-behavior: allow-discrete) {
+  div:has(> .grid > .tile-shell > .rainbow-tile) { animation: rainbow-shift-shared 3s ease-in-out infinite; }
+  .tile-shell > .rainbow-tile {
+    animation: none;
+    background-position: var(--rainbow-shift-x) 50%;
+  }
+}
+
 /* "Rainbow Animation" setting off — its own static treatment (not the
    animated gradient frozen in place). Applied instead of .rainbow-tile,
    never alongside it. */
 .rainbow-tile-static {
   background-image: var(--rainbow-static-gradient);
+}
+
+/* WordTile's rainbow button, wherever its art comes from. It sits out here
+   because .rainbow-tile's `background` shorthand would beat a rule in @layer
+   utilities. The art stops at a transparent rim so the whole tile stays
+   tappable. !important because a themed tile's inline `background` shorthand
+   resets the clip and origin. The art is positioned from the outer edge, so
+   the rim never holds wrapped art and the art is identical selected and
+   unselected. On a selected tile it runs under the outline, which hides that
+   rim, so no seam can show at a fractional pixel position. */
+.tile-rainbow-face {
+  border: var(--tile-rainbow-inset) solid transparent;
+  background-clip: padding-box !important;
+  background-origin: border-box !important;
+}
+.tile-shell[data-tile-selected="true"] > .tile-rainbow-face { background-clip: border-box !important; }
+/* A marked rainbow's focus ring moves out to run just inside the rim, clear
+   of the bar instead of through it. */
+.tile-rainbow-face:has(> .tile-color-bar):focus-visible {
+  outline-offset: calc(-1 * var(--tile-rainbow-inset) - 2px);
+}
+/* The static rainbow keeps the dark focus ring: white dashes vanish on its
+   yellow band. */
+.rainbow-tile-static.tile-keyboard-focus:focus-visible { outline-color: #292825; }
+/* A word that still reaches the bar (only emoji, or text already at the
+   smallest size) stays readable on top of it instead of being cut by it. */
+.tile-rainbow-face:has(> .tile-color-bar) > [data-tile-text] { position: relative; z-index: 1; }
+/* From md up a Full tile's height is fixed, so a long word could reach the bar.
+   The last row keeps the bar's height free: the word stays centered until it
+   would reach the bar, then slides up as far as the tile has room. On these
+   tiles WordTile shrinks a word that would not clear the bar, so only emoji or
+   text already at the minimum size can still reach it. Tile height does not
+   change. Mini is left out because its tile can grow and its padding already
+   clears the bar. min-content keeps a word wider than the tile centered, as
+   the flex layout does.
+   !important because a split word sets its padding inline. */
+@media (min-width: 768px) {
+  .tile-rainbow-face.md\:h-\[110px\]:has(> .tile-color-bar):has(> [data-tile-text]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto minmax(calc(var(--tile-bar-bottom) + var(--tile-bar-height) + 2px), 1fr);
+    justify-items: center;
+    padding-block: 0 !important;
+  }
+  .tile-rainbow-face.md\:h-\[110px\]:has(> .tile-color-bar) > [data-tile-text] { grid-row: 2; min-width: min-content; }
 }
 
 /* ── Rainbow curtain reveal: wipes in left to right ── */
@@ -527,22 +623,20 @@ html {
    line (big emoji answers) can still grow the bar instead of overflowing. */
 .board-bars {
   container-type: inline-size;
-  --board-gap: 22px;
-  --board-padding: 18px;
-  --solved-row-h: calc((100cqw - var(--board-padding) - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols) * 4 / 5);
+  --board-gap: 6px;
+  --solved-row-h: calc((100cqw - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols) * 4 / 5);
 }
 @media (min-width: 768px) {
-  .board-bars { --solved-row-h: 110px; --board-gap: 28px; --board-padding: 24px; }
-  .board-bars.board-bars-wide { --board-gap: 28px; }
+  .board-bars { --solved-row-h: 110px; }
+  .board-bars.board-bars-wide { --board-gap: 12px; }
 }
 .board-bars.board-bars-square {
-  --board-gap: 22px;
-  --solved-row-h: calc((100cqw - var(--board-padding) - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols) * 4 / 5);
+  --board-gap: 8px;
+  --solved-row-h: calc((100cqw - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols) * 4 / 5);
 }
 @media (min-width: 768px) {
   .board-bars.board-bars-square {
-    --board-gap: 28px;
-    --solved-row-h: calc((100cqw - var(--board-padding) - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols));
+    --solved-row-h: calc((100cqw - (var(--board-cols) - 1) * var(--board-gap)) / var(--board-cols));
   }
 }
 .solved-bar {

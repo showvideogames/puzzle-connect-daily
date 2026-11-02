@@ -142,11 +142,28 @@ test.describe("Public Mini — the Rainbow tile can also be colour-marked", () =
     await page.getByRole("button", { name: "Green paint" }).click();
     await tile(page, herring[0]).click();
 
-    // The annotation is a dedicated inset ring drawn inside the tile, kept
-    // separate from the tile's own selection border on purpose.
-    const ring = page.locator(`[data-word="${herring[0]}"] span[aria-hidden="true"]`);
-    await expect(ring).toHaveCount(1);
-    await expect(ring).toHaveClass(/border-/);
+    // The annotation is a short coloured bar inside the bottom of the Rainbow
+    // tile, kept separate from the tile's selection outline on purpose: it
+    // sits in the tile's own button, and no ordinary-tile ring is drawn.
+    const shell = page.locator(`[data-word="${herring[0]}"]`);
+    const marks = shell.locator("[data-tile-mark]");
+    await expect(marks).toHaveCount(1);
+    await expect(marks).toHaveAttribute("data-tile-mark", "green");
+
+    const bar = tile(page, herring[0]).locator('[data-tile-mark="green"]');
+    await expect(bar).toHaveCount(1);
+    await expect(bar).toHaveClass(/\btile-color-bar\b/);
+    await expect(bar).toHaveClass(/\btile-bar-green\b/);
+    await expect(shell.locator(".tile-color-outline")).toHaveCount(0);
+
+    // What the player sees: the bar's own green, edged in white.
+    await expect(bar).toHaveCSS("background-color", "rgb(31, 174, 75)");
+    await expect(bar).toHaveCSS("border-top-color", "rgb(255, 255, 255)");
+
+    // Painting annotates; it neither turns the tile back into an ordinary
+    // one nor selects it.
+    await expect(shell).toHaveAttribute("data-tile-kind", "rainbow");
+    await expect(tile(page, herring[0])).toHaveAttribute("aria-pressed", "false");
   });
 });
 

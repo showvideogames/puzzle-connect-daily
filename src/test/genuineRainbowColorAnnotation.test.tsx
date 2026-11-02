@@ -101,8 +101,9 @@ function renderBoard(puzzle: Puzzle) {
 
 const tileButton = (container: HTMLElement, word: string) =>
   container.querySelector(`[data-word="${word}"] button`) as HTMLButtonElement;
-const ring = (container: HTMLElement, word: string) =>
-  container.querySelector(`[data-word="${word}"] > [data-tile-mark]`);
+// A rainbow's mark is a bar inside its button; an ordinary tile's sits beside it.
+const mark = (container: HTMLElement, word: string) =>
+  container.querySelector(`[data-word="${word}"] [data-tile-mark]`);
 
 /** Selects and submits exactly the puzzle's real Rainbow words — the one and
  *  only way `isRainbow` ever becomes true for those tiles. */
@@ -148,15 +149,24 @@ describe("genuine Rainbow discovery + category color (Full)", () => {
     expect(tileButton(container, "y2").className).not.toContain("rainbow-tile");
   });
 
-  it.each(["Yellow paint", "Green paint", "Blue paint", "Red paint"] as const)(
-    "every genuine Rainbow word can receive %s, gradient + ring together",
-    async (label) => {
+  it.each([
+    ["Yellow paint", "tile-bar-yellow"],
+    ["Green paint", "tile-bar-green"],
+    ["Blue paint", "tile-bar-blue"],
+    ["Red paint", "tile-bar-red"],
+  ])(
+    "every genuine Rainbow word can receive %s, gradient + %s bar together",
+    async (label, barClass) => {
       const { container } = renderBoard(fullPuzzle);
       await findGenuineRainbow(container, fullPuzzle.rainbowHerring!);
       paint(container, label, "y1");
       const btn = tileButton(container, "y1");
       expect(btn.className).toContain("rainbow-tile");
-      expect(ring(container, "y1")).not.toBeNull();
+      const bar = mark(container, "y1");
+      expect(bar).not.toBeNull();
+      expect(bar!.className).toContain(barClass);
+      expect(bar!.className).not.toMatch(/\bbg-group-/);
+      expect(bar!.closest("button")).toBe(btn);
     }
   );
 
@@ -170,36 +180,37 @@ describe("genuine Rainbow discovery + category color (Full)", () => {
 
     const btn = tileButton(container, "g1");
     expect(btn.getAttribute("aria-pressed")).toBe("true");
-    expect(btn.className).toContain("border-foreground");
-    const r = ring(container, "g1");
+    expect(btn.parentElement!.querySelector("[data-tile-selection]")).not.toBeNull();
+    const r = mark(container, "g1");
     expect(r).not.toBeNull();
-    expect(r!.className).toContain("border-group-2");
+    expect(r!.className).toContain("tile-bar-green");
+    expect(r!.className).not.toMatch(/\bbg-group-/);
   });
 
-  it("erasing category paint removes only the ring — the genuine gradient stays", async () => {
+  it("erasing category paint removes only the bar — the genuine gradient stays", async () => {
     const { container } = renderBoard(fullPuzzle);
     await findGenuineRainbow(container, fullPuzzle.rainbowHerring!);
     paint(container, "Blue paint", "b1");
-    expect(ring(container, "b1")).not.toBeNull();
+    expect(mark(container, "b1")).not.toBeNull();
 
     fireEvent.click(screen.getByLabelText("Eraser"));
     fireEvent.click(tileButton(container, "b1"));
 
     const btn = tileButton(container, "b1");
     expect(btn.className).toContain("rainbow-tile");
-    expect(ring(container, "b1")).toBeNull();
+    expect(mark(container, "b1")).toBeNull();
   });
 
-  it("Clear Colors removes the ring without touching genuine Rainbow discovery", async () => {
+  it("Clear Colors removes the bar without touching genuine Rainbow discovery", async () => {
     const { container } = renderBoard(fullPuzzle);
     await findGenuineRainbow(container, fullPuzzle.rainbowHerring!);
     paint(container, "Red paint", "r1");
-    expect(ring(container, "r1")).not.toBeNull();
+    expect(mark(container, "r1")).not.toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /clear colors/i }));
 
-    // The category ring is gone...
-    expect(ring(container, "r1")).toBeNull();
+    // The category bar is gone...
+    expect(mark(container, "r1")).toBeNull();
     // ...but the real Rainbow gradient — gameplay state, not paint — is
     // completely unaffected on every one of its words.
     for (const w of fullPuzzle.rainbowHerring!) {
@@ -211,14 +222,15 @@ describe("genuine Rainbow discovery + category color (Full)", () => {
     const { container, unmount } = renderBoard(fullPuzzle);
     await findGenuineRainbow(container, fullPuzzle.rainbowHerring!);
     paint(container, "Yellow paint", "g1");
-    expect(ring(container, "g1")).not.toBeNull();
+    expect(mark(container, "g1")).not.toBeNull();
     unmount();
 
     const second = renderBoard(fullPuzzle);
     await settle();
     expect(tileButton(second.container, "g1").className).toContain("rainbow-tile");
-    expect(ring(second.container, "g1")).not.toBeNull();
-    expect(ring(second.container, "g1")!.className).toContain("border-group-1");
+    expect(mark(second.container, "g1")).not.toBeNull();
+    expect(mark(second.container, "g1")!.className).toContain("tile-bar-yellow");
+    expect(mark(second.container, "g1")!.className).not.toMatch(/\bbg-group-/);
   });
 });
 
@@ -232,12 +244,13 @@ describe("genuine Rainbow discovery + category color (Mini)", () => {
     paint(container, "Red paint", "mg1");
     const btn = tileButton(container, "mg1");
     expect(btn.className).toContain("rainbow-tile");
-    const r = ring(container, "mg1");
+    const r = mark(container, "mg1");
     expect(r).not.toBeNull();
-    expect(r!.className).toContain("border-group-4");
+    expect(r!.className).toContain("tile-bar-red");
+    expect(r!.className).not.toMatch(/\bbg-group-/);
   });
 
-  it("the Eraser clears only the ring on a Mini board too", async () => {
+  it("the Eraser clears only the bar on a Mini board too", async () => {
     const { container } = renderBoard(miniPuzzle);
     await findGenuineRainbow(container, miniPuzzle.rainbowHerring!);
     paint(container, "Blue paint", "mb1");
@@ -246,7 +259,7 @@ describe("genuine Rainbow discovery + category color (Mini)", () => {
 
     const btn = tileButton(container, "mb1");
     expect(btn.className).toContain("rainbow-tile");
-    expect(ring(container, "mb1")).toBeNull();
+    expect(mark(container, "mb1")).toBeNull();
   });
 });
 
@@ -257,7 +270,7 @@ describe("ordinary annotations preserve palette and erase behavior", () => {
     const btn = tileButton(container, "b2");
     expect(btn.parentElement!.querySelector("[data-tile-mark=\"green\"]")).not.toBeNull();
     expect(btn.className).not.toContain("rainbow-tile");
-    expect(ring(container, "b2")).not.toBeNull();
+    expect(mark(container, "b2")).not.toBeNull();
   });
 
   it("Clear Colors still clears an ordinary painted tile", () => {
