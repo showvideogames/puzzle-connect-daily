@@ -23,6 +23,8 @@ interface GroupPageProps {
   problem?: string | null;
   today: Date;
   onBack: () => void;
+  canInvite?: boolean;
+  invitationProblem?: string | null;
   onDelete?: () => Promise<string | void>;
   onEditPicture?: () => void;
   onMembers?: () => void;
@@ -36,7 +38,7 @@ interface GroupPageProps {
 }
 
 /** One group: who is in it, how they did today, and for its owner, the link. */
-export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave, onEditPicture, onMembers, description, descriptionProblem, onEditDescription, onDelete }: GroupPageProps) {
+export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave, onEditPicture, onMembers, description, descriptionProblem, onEditDescription, onDelete, canInvite, invitationProblem }: GroupPageProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const id = useId();
 
@@ -50,6 +52,7 @@ export function GroupPage({ group, results, problem, today, onBack, onShare, onC
       </div>
 
       {description && <p className="mt-4 whitespace-pre-wrap break-words text-base" data-testid="group-description">{description}</p>}
+      {invitationProblem && <p role="alert" className="mt-3 text-destructive">{invitationProblem}</p>}
       {descriptionProblem && <p role="alert" className="mt-3 text-destructive">{descriptionProblem}</p>}
       {group.isOwner && onEditDescription && <button type="button" className={`${outlineAction} mt-3 min-h-11 w-full`} onClick={onEditDescription}>Edit description</button>}
 
@@ -72,7 +75,7 @@ export function GroupPage({ group, results, problem, today, onBack, onShare, onC
         </ul>
       )}
 
-      {group.isOwner && group.inviteCode && (
+      {(canInvite ?? group.isOwner) && group.inviteCode && (
         <section className={`${accountCard} mt-3`} aria-labelledby={`${id}-link`}>
           <h2 id={`${id}-link`} className={accountCardTitle}>Send an invitation</h2>
           <p className={`mt-0.5 text-base ${quietText}`}>Share a link with someone you know.</p>
@@ -80,7 +83,7 @@ export function GroupPage({ group, results, problem, today, onBack, onShare, onC
         </section>
       )}
 
-      {group.isOwner && onDelete && <div className="mt-4 [&_button]:min-h-11">
+      {group.isOwner && onDelete && <div className="mt-4 [&_button]:min-h-11 [&_button]:h-auto">
         <InlineConfirm label="Delete group" question={`Permanently delete ${group.name} for everyone? Members keep their personal game history.`} confirmLabel="Delete group permanently" onConfirm={onDelete} />
       </div>}
 

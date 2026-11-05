@@ -53,3 +53,9 @@ Deploy SQL and gateway first, then separately enable `VITE_GROUP_DESCRIPTIONS=tr
 `0006_group_owner_actions.sql` adds transferGroupOwnership and deleteGroup. Both lock the group and recheck current ownership. Transfer targets must be existing members of that same group; both memberships and the existing invitation code are retained. The former owner immediately loses owner privileges. Deletion cascades group-owned memberships/invitations and removes group access; it never deletes people or their personal result cards. No invitation-link invalidation policy was added.
 
 `VITE_GROUP_OWNER_ACTIONS` defaults off. SQL and gateway must be deployed and verified before enabling it. Both UI actions require confirmation; refused/uncertain outcomes stay visible and direct the user to refresh before retrying. Tests exercise the real SQL roles and preserve personal result cards through deletion. All live data is untouched by this local implementation.
+
+## Delegated invitations (0007)
+
+`0007_group_invite_permissions.sql` adds an explicit membership permission, default false. Only the current owner can grant/revoke it. getGroupInvitation returns the existing invitation code only to the owner or a currently authorized member; only owners receive the list of granted member references. Legacy listMyGroups/member responses remain unchanged. Leaving or removal ends the grant, and rejoining starts without it.
+
+`VITE_GROUP_INVITE_PERMISSIONS` defaults off pending SQL/gateway rollout. The UI hides invitation controls until access is known, confirms grants/revocations, and rechecks permission before each Share/Copy. Revocation blocks future code access through the app; already-shared reusable links retain their existing behavior. No automatic rotation, expiry, new link type or recipient policy was invented. The revocation confirmation explains this existing limitation.

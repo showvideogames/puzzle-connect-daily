@@ -15,6 +15,7 @@ function Preview() {
     let members = [...initial];
     return {
       client: { forget() {}, async call(op: string, args: { memberRef?: string }) {
+        if (op === 'getGroupInvitation') return { ok: true, data: { canInvite: true, inviteCode: null, grantedMemberRefs: [] } };
         if (op === 'getGroupDescription') return { ok: true, data: { description: null } };
         if (op === 'listMembers') return { ok: true, data: members };
         if (op === 'listResults') return { ok: true, data: [] };

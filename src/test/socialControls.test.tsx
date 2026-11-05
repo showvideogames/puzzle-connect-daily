@@ -289,6 +289,23 @@ describe("a group's page", () => {
     return made;
   }
 
+  it("requires an explicit owner confirmation to grant invitation permission", async () => {
+    vi.stubEnv("VITE_GROUP_INVITE_PERMISSIONS", "true");
+    const { call } = await openGroup({ getGroupInvitation: () => yes({ canInvite: true, inviteCode: CODE, grantedMemberRefs: [] }), setMemberInvitePermission: () => yes() });
+    await screen.findByText("Jordan");click("View members");click("Allow invitations for Jordan");click("Cancel");expect(opsCalled(call)).not.toContain("setMemberInvitePermission");
+    click("Allow invitations for Jordan");click("Allow invitations");
+    expect(await screen.findByRole("button", { name: "Stop invitations for Jordan" })).toBeInTheDocument();
+    expect(call).toHaveBeenCalledWith("setMemberInvitePermission", { groupId: "g1", memberRef: "m2", allowed: true });
+  });
+
+  it("allows a delegated member to share but rechecks permission before every share", async () => {
+    vi.stubEnv("VITE_GROUP_INVITE_PERMISSIONS", "true");let allowed=true;
+    const { share } = await openGroup({ getGroupInvitation: () => yes({ canInvite: allowed, inviteCode: allowed ? CODE : null, grantedMemberRefs: [] }) }, group({ isOwner: false, inviteCode: null }));
+    await screen.findByRole("button", { name: "Share invite link" });allowed=false;click("Share invite link");
+    expect(await screen.findByText("You no longer have invitation permission.")).toBeInTheDocument();expect(share).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Share invite link" })).toBeNull();
+  });
+
   it("transfers ownership only after confirmation and exits with the member-preserving outcome", async () => {
     vi.stubEnv("VITE_GROUP_OWNER_ACTIONS", "true");
     const { call, onNote } = await openGroup({ transferGroupOwnership: () => yes() });

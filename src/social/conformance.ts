@@ -81,6 +81,8 @@ const DECLARED_ARGS: { [O in OpName]: readonly FieldsOf<Operations[O]['args']>[]
   setGroupDescription: ['groupId', 'description'],
   renameGroup: ['groupId', 'name'],
   setGroupAppearance: ['groupId', 'emblemId', 'photo', 'accentColor'],
+  getGroupInvitation: ['groupId'],
+  setMemberInvitePermission: ['groupId','memberRef','allowed'],
   transferGroupOwnership: ['groupId','memberRef'],
   deleteGroup: ['groupId'],
   removeMember: ['groupId', 'memberRef'],
@@ -125,6 +127,8 @@ const DECLARED_FIELDS: { [O in Exclude<OpName, 'previewInvite' | 'listResults'>]
   setGroupDescription: ['description'],
   renameGroup: [],
   setGroupAppearance: ['photoVersion'],
+  getGroupInvitation: ['canInvite','inviteCode','grantedMemberRefs'],
+  setMemberInvitePermission: [],
   transferGroupOwnership: [],
   deleteGroup: [],
   removeMember: [],
@@ -184,6 +188,8 @@ const SAMPLE_ARGS: { [O in OpName]: Operations[O]['args'] } = {
   setGroupDescription: { groupId: 'no-such-group', description: null },
   renameGroup: { groupId: 'no-such-group', name: 'Group' },
   setGroupAppearance: { groupId: 'no-such-group', emblemId: 'campfire', photo: null, accentColor: '#DED1F2' },
+  getGroupInvitation: { groupId: 'no-such-group' },
+  setMemberInvitePermission: { groupId: 'no-such-group', memberRef: 'no-such-ref', allowed: true },
   transferGroupOwnership: { groupId: 'no-such-group', memberRef: 'no-such-ref' },
   deleteGroup: { groupId: 'no-such-group' },
   removeMember: { groupId: 'no-such-group', memberRef: 'no-such-ref' },
@@ -290,6 +296,13 @@ function checkResultRow(row: unknown): void {
 }
 
 function checkData(op: OpName, data: unknown): void {
+  if (op === 'getGroupInvitation') {
+    check(isRecord(data) && hasExactly(data, DECLARED_FIELDS.getGroupInvitation), 'getGroupInvitation returned the wrong fields');
+    check(typeof data.canInvite === 'boolean' && (data.inviteCode === null || typeof data.inviteCode === 'string'), 'invalid invitation access');
+    check(Array.isArray(data.grantedMemberRefs) && data.grantedMemberRefs.every(ref => typeof ref === 'string'), 'invalid member references');
+    check(data.canInvite || data.inviteCode === null, 'an unauthorized member received an invitation code');
+    return;
+  }
   if (op === 'listGroupOrder') {
     check(isRecord(data) && hasExactly(data, ['groupIds']), 'listGroupOrder returned the wrong fields');
     check(Array.isArray(data.groupIds) && data.groupIds.length <= LIMITS.groupsJoinedTotal && data.groupIds.every(id => typeof id === 'string'), 'listGroupOrder returned invalid group ids');
@@ -771,6 +784,8 @@ async function fullFlow(world: MockWorld): Promise<void> {
   const extra = await makeGroup(alice, "Transfer club", "Alice");
   await join(bob, extra.inviteCode, "Bob");
   const target = (await membersOf(alice, extra.groupId)).find(m => !m.isMe)!;
+  must(await alice.call("setMemberInvitePermission", { groupId: extra.groupId, memberRef: target.memberRef, allowed: true }), "setMemberInvitePermission");
+  must(await bob.call("getGroupInvitation", { groupId: extra.groupId }), "getGroupInvitation");
   must(await alice.call("transferGroupOwnership", { groupId: extra.groupId, memberRef: target.memberRef }), "transferGroupOwnership");
   must(await bob.call("deleteGroup", { groupId: extra.groupId }), "deleteGroup");
   await friendsOf(alice);

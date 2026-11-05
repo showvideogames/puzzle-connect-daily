@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const DRAFT = readFileSync(new URL('../fixtures/hub-eb238dd.sql', import.meta.url), 'utf8');
-const PATCH = ['0002_png_group_photos.sql', '0003_private_friend_preferences.sql', '0004_private_group_order.sql', '0005_group_descriptions.sql', '0006_group_owner_actions.sql'].map(file => readFileSync(new URL(`../patches/${file}`, import.meta.url), 'utf8')).join('\n');
+const PATCH = ['0002_png_group_photos.sql', '0003_private_friend_preferences.sql', '0004_private_group_order.sql', '0005_group_descriptions.sql', '0006_group_owner_actions.sql', '0007_group_invite_permissions.sql'].map(file => readFileSync(new URL(`../patches/${file}`, import.meta.url), 'utf8')).join('\n');
 const UNINSTALL = readFileSync(new URL('../fixtures/uninstall.sql', import.meta.url), 'utf8');
 
 // Read from the contract's own file, so the lists in the SQL can't drift from it.
@@ -35,6 +35,7 @@ const ENTRY_FUNCTIONS = [
   'ensure_person',
   'find_friend_by_code',
   'get_group_description',
+  'get_group_invitation',
   'is_beta_tester',
   'join_group',
   'leave_group',
@@ -60,6 +61,7 @@ const ENTRY_FUNCTIONS = [
   'set_group_appearance',
   'set_group_description',
   'set_group_order',
+  'set_member_invite_permission',
   'set_profile',
   'transfer_group_ownership',
   'unblock',
@@ -76,6 +78,8 @@ const RESULT_ROW_KEYS = ['isMe', 'name', ...FACE_KEYS, 'summary', 'detailLocked'
 
 /** The exact keys of each function's data, or of each row of a list. */
 const ALLOWED_KEYS = {
+  get_group_invitation: ['canInvite','inviteCode','grantedMemberRefs'],
+  set_member_invite_permission: [],
   delete_group: [],
   transfer_group_ownership: [],
   get_group_description: ['description'],
@@ -1922,6 +1926,8 @@ test('the draft hub', { skip }, async (t) => {
       await ok('set_group_order',a,[groupId]);
       assert.deepEqual(await ok('list_group_order',a),{groupIds:[groupId]});
       const target=(await ok('list_members',a,groupId)).find(m=>!m.isMe).memberRef;
+      await ok('set_member_invite_permission',a,groupId,target,true);
+      assert.equal((await ok('get_group_invitation',b,groupId)).canInvite,true);
       await ok('transfer_group_ownership',a,groupId,target);
       await ok('delete_group',b,groupId);
     });

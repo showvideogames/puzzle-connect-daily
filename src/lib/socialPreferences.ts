@@ -20,3 +20,5 @@ export function applyGroupOrder<T extends { groupId?: string }>(groups: T[], ids
 export const groupDescriptionsEnabled = () => import.meta.env.VITE_GROUP_DESCRIPTIONS === 'true';
 
 export const groupOwnerActionsEnabled = () => import.meta.env.VITE_GROUP_OWNER_ACTIONS === 'true';
+
+export const groupInvitePermissionsEnabled = () => import.meta.env.VITE_GROUP_INVITE_PERMISSIONS === 'true';

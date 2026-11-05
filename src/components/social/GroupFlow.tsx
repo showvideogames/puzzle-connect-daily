@@ -1,4 +1,5 @@
-import { groupDescriptionsEnabled, groupOwnerActionsEnabled } from "@/lib/socialPreferences";
+import type { Operations } from "@/social/contract";
+import { groupDescriptionsEnabled, groupOwnerActionsEnabled, groupInvitePermissionsEnabled } from "@/lib/socialPreferences";
 import { GroupDescriptionEditor } from "@/components/account/GroupDescriptionEditor";
 import { useEffect, useState } from "react";
 import { GroupMembers } from "@/components/account/GroupMembers";
@@ -23,8 +24,11 @@ interface GroupFlowProps {
 
 /** The group page, through the client. A link is built only from a code the owner's own row holds. */
 export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowProps) {
-  const { groupId, inviteCode, name } = group;
+  const { groupId, inviteCode: legacyInviteCode, name } = group;
   const live = useLive();
+  const [invitation, setInvitation] = useState<Operations["getGroupInvitation"]["data"] | undefined>(undefined);
+  const [invitationProblem, setInvitationProblem] = useState<string | null>(null);
+  const inviteCode = groupInvitePermissionsEnabled() ? invitation?.inviteCode ?? null : legacyInviteCode;
   const [description, setDescription] = useState<string | null | undefined>(undefined);
   const [descriptionProblem, setDescriptionProblem] = useState<string | null>(null);
   const [editingDescription, setEditingDescription] = useState(false);
@@ -75,6 +79,22 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     return () => { current = false; clearTimeout(retry); };
   }, [api, groupId]);
 
+  useEffect(() => {
+    if (!groupInvitePermissionsEnabled()) return;
+    let current = true;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const read = async () => {
+      const answer = await api.client.call("getGroupInvitation", { groupId });
+      if (!current) return;
+      if (answer.ok === false) {
+        if (isBackgroundCheck(answer.outcome)) retry = setTimeout(() => void read(), RETRY_MS);
+        else setInvitationProblem("We couldn't load invitation permissions.");
+      } else { setInvitation(answer.data); setInvitationProblem(null); }
+    };
+    void read();
+    return () => { current = false; clearTimeout(retry); };
+  }, [api, groupId]);
+
   const leave = async () => {
     const answer = await api.client.call("leaveGroup", { groupId });
     if (!live.current) return undefined;
@@ -83,15 +103,27 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     return undefined;
   };
 
+  const shareCode = async () => {
+    if (!groupInvitePermissionsEnabled()) return inviteCode;
+    const answer = await api.client.call("getGroupInvitation", { groupId });
+    if (!live.current) return null;
+    if (answer.ok === false) { setInvitationProblem("We couldn't check invitation permission. Please try again."); return null; }
+    setInvitation(answer.data);
+    if (!answer.data.canInvite) { setInvitationProblem("You no longer have invitation permission."); return null; }
+    setInvitationProblem(null);
+    return answer.data.inviteCode;
+  };
   const share = async () => {
-    if (!inviteCode) return false;
-    const url = api.linkUrl(inviteCode);
+    const code = await shareCode();
+    if (!code) return false;
+    const url = api.linkUrl(code);
     return linkAnswer(await api.share(url), url);
   };
 
   const copy = async () => {
-    if (!inviteCode) return false;
-    const url = api.linkUrl(inviteCode);
+    const code = await shareCode();
+    if (!code) return false;
+    const url = api.linkUrl(code);
     return linkAnswer(await copyLink(url), url);
   };
 
@@ -105,7 +137,12 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     }} />
   </main>;
 
-  if (showMembers) return <GroupMembers group={group} members={members} problem={problem} note={memberNote} onBack={() => setShowMembers(false)} onTransfer={groupOwnerActionsEnabled() ? async member => {
+  if (showMembers) return <GroupMembers group={group} members={members} problem={problem} note={memberNote} onBack={() => setShowMembers(false)} invitationProblem={invitationProblem} grantedInviters={invitation?.grantedMemberRefs} onInvitePermission={groupInvitePermissionsEnabled() && invitation ? async (member, allowed) => {
+    const answer = await api.client.call("setMemberInvitePermission", { groupId, memberRef: member.memberRef, allowed });
+    if (!live.current) return;
+    if (answer.ok === false) return "We couldn't change invitation permission. Please refresh before trying again.";
+    setInvitation(current => current ? { ...current, grantedMemberRefs: allowed ? [...new Set([...current.grantedMemberRefs, member.memberRef])] : current.grantedMemberRefs.filter(ref => ref !== member.memberRef) } : current);
+  } : undefined} onTransfer={groupOwnerActionsEnabled() ? async member => {
     const answer = await api.client.call("transferGroupOwnership", { groupId, memberRef: member.memberRef });
     if (!live.current) return;
     if (answer.ok === false) return "We couldn't transfer ownership. Refresh the group before trying again.";
@@ -140,7 +177,7 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     }} />
   </main>;
 
-  return <GroupPage group={group} results={results} problem={problem} today={api.today()} onBack={onBack} onShare={share} onCopy={copy} onLeave={leave} onEditPicture={() => setEditingPicture(true)} onMembers={() => setShowMembers(true)} onDelete={groupOwnerActionsEnabled() ? async () => {
+  return <GroupPage group={{ ...group, inviteCode }} canInvite={groupInvitePermissionsEnabled() ? invitation?.canInvite === true : group.isOwner} invitationProblem={invitationProblem} results={results} problem={problem} today={api.today()} onBack={onBack} onShare={share} onCopy={copy} onLeave={leave} onEditPicture={() => setEditingPicture(true)} onMembers={() => setShowMembers(true)} onDelete={groupOwnerActionsEnabled() ? async () => {
     const answer = await api.client.call("deleteGroup", { groupId });
     if (!live.current) return;
     if (answer.ok === false) return "We couldn't delete the group. Refresh it before trying again.";

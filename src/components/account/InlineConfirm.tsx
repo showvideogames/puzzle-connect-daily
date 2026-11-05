@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { quietAction, secondaryAction } from "./accountStyles";
+import { primaryAction, quietAction, secondaryAction } from "./accountStyles";
 
 interface InlineConfirmProps {
   /** The quiet button. */
   label: string;
+  tone?: "danger" | "primary";
   question: string;
   confirmLabel: string;
   /** Answers with a sentence when it was refused, and nothing when it went through. */
@@ -17,7 +18,7 @@ const confirmColors = { background: "hsl(0 84% 60%)", borderColor: "transparent"
  * A second step without a popup, in the same shape as Delete account in the
  * account menu: the question, then the action, then Cancel.
  */
-export function InlineConfirm({ label, question, confirmLabel, onConfirm }: InlineConfirmProps) {
+export function InlineConfirm({ label, question, confirmLabel, onConfirm, tone = "danger" }: InlineConfirmProps) {
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export function InlineConfirm({ label, question, confirmLabel, onConfirm }: Inli
       <p className="text-base text-foreground">{question}</p>
       {problem && <p role="alert" className="mt-1 text-base font-medium text-destructive">{problem}</p>}
       <div className="mt-2 flex gap-2.5">
-        <button type="button" onClick={() => void confirm()} disabled={busy} className={`${secondaryAction} h-11 flex-1 text-base`} style={confirmColors}>
+        <button type="button" onClick={() => void confirm()} disabled={busy} className={`${tone === "danger" ? secondaryAction : primaryAction} h-11 flex-1 text-base`} style={tone === "danger" ? confirmColors : undefined}>
           {confirmLabel}
         </button>
         <button

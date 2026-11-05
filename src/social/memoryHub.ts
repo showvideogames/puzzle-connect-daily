@@ -212,6 +212,7 @@ interface Membership {
   joinedAt: number;
   noticeVersion: number;
   privatePosition?: number;
+  mayInvite?: boolean;
 }
 
 interface Removal {
@@ -967,6 +968,22 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
         group.accentColor = accentColor;
         group.photo = photo;
         return done({ photoVersion: group.photoVersion });
+      });
+    },
+
+    getGroupInvitation(me, { groupId }) {
+      const found = membership(me,groupId);
+      if (!found) return fail("not_a_member");
+      const owner = found.group.owner === me.id;
+      const canInvite = owner || found.mine.mayInvite === true;
+      return done({ canInvite, inviteCode: canInvite ? found.group.code : null, grantedMemberRefs: owner ? [...found.group.members.values()].filter(m => m.mayInvite).map(m => m.memberRef).sort() : [] });
+    },
+    setMemberInvitePermission(me, { groupId, memberRef, allowed }) {
+      return asOwner(me,groupId,group => {
+        const target = [...group.members.values()].find(m => m.memberRef === memberRef);
+        if (!target || target.person === me.id || typeof allowed !== "boolean") return fail("not_found");
+        target.mayInvite = allowed;
+        return done(NOTHING);
       });
     },
 
