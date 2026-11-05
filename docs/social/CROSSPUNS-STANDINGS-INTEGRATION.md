@@ -8,7 +8,8 @@
 - Per-puzzle points: first 3, second 2, third 1. Competition ties: ranks 1, 1, 3 earn 3, 3, 1. Submission order must not break equal-time ties.
 - Current members bring prior results into group standings. Do not filter by join date.
 - Departed members no longer contribute to group totals or history; personal history stays intact.
-- Weeks run Monday–Sunday. The date basis for late solves in weekly/monthly/yearly standings is still pending (published date versus solved date).
+- Updated direction: rolling last 7 / 30 / 365 local calendar days, including today, replaces Monday–Sunday weeks. The date basis for late solves in standings is still pending (published date versus solved date).
+- Rankings remain common to the whole group. For either-direction blocks, the requested row is anonymous rather than omitted. No CSS blur of identifying data is acceptable.
 
 ## Actual source inspected
 
@@ -30,13 +31,18 @@ Six tests cover 3/2/1, multiple tie patterns, history on joining, departure/rejo
 
 ## Integration decisions still pending
 
-1. Block privacy: a canonical ranking including hidden members can expose their influence through visible placements/points. Ranking only visible members preserves existing row privacy but gives different viewers different standings. Hiding standings while a group contains a blocked relationship is another safe option. The user has been asked to choose; no change to block privacy has been made.
+1. Block privacy: Deb chose visible common rankings with masked blocked rows. `crosspunsStandingsView.ts` now supplies a tested, unconnected server-side projection: blocked rows contain only `blocked`, `rank`, and the generic label. No name, member/account/global id, avatar, nickname, points, puzzle count, times, dates, details or link is emitted. Ranking happens before masking. This does not yet change the shared service: `audience_global_ids` and `list_results` both exclude blocked results and must remain unchanged for ordinary friend/puzzle reads. A dedicated authorized standings reader is needed.
+   **Substantive limitation:** `list_members` shows the whole roster, including blocked members. In a two-person group, the anonymous other row is inferable. Public CrossPuns times and repeated ranking comparisons can also identify a player or reveal participation. Rank-only masking prevents direct field disclosure but cannot promise anonymity or zero puzzle inference against outside knowledge. This was reported; no claim of that stronger guarantee or new production privacy policy was made.
 2. Period attribution: for a late solve, use the puzzle's publication date or the player's solve date? The user has been asked. If solve date is selected, clarify/apply the existing device-local convention consistently at the server boundary. All-time scoring itself does not need this choice.
 
 ## Next concrete implementation
 
-- Resolve block handling, then build a membership-authorized read contract for shared groups. Resolve shared person ids to CrossPuns accounts server-side; never return global ids, account ids or player keys. Reuse the actual first-solve source precedence above and explicitly test imported legacy records.
+- Confirm that rank-only masking with the stated inference limitation meets the intended privacy requirement, then build a dedicated membership-authorized read contract for shared groups. Resolve shared person ids to CrossPuns accounts server-side; never return global ids, account ids or player keys. Reuse the actual first-solve source precedence above and explicitly test imported legacy records.
 - Read prior results for current memberships only; do not mutate personal history or copy legacy group memberships. Keep friends' forward-only rule separate from group-history policy.
 - Apply the calculator's competition semantics server-side, with bounded pagination and stable ordering. Test unauthorized/blocked/departed callers, join/remove/rejoin, prior history, duplicate sources, equal seconds and same totals. Preserve answer-detail spoiler gates; aggregate points must never include answers.
 - Verify source table availability/privileges and the target schema before proposing rollout. Add local schema fixtures and SQL tests before proposing rollout. Existing result cards alone are not proof of complete backfilled history.
 - Add a disabled-by-default Rainbow clubhouse panel only after the read contract is real. No CrossPuns website rollout or production writes are authorized here.
+
+## Rolling activity and privacy projection verification
+
+The Rainbow friend activity UI now shows the last seven local calendar dates through today. Shared range helpers cover 7/30/365 days, including DST and leap-year boundaries; they do not decide which date a CrossPuns solve belongs to. No 30/365-day standings UI or source filter is implied by these helpers. The standings projection is pure code, not a deployed endpoint or cosmetic client blur.

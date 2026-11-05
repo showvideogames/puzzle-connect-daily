@@ -28,9 +28,9 @@ export function FriendWeek({api, friend}: {api: SocialApi; friend: FriendResult}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, key]);
   const current = read?.key === key ? read : null;
-  return <section className="mt-6" aria-label="This week's activity">
-    <h2 className="text-xl font-bold">This week</h2>
-    <p className={quietText}>Full Daily · Monday–Sunday · your local time</p>
+  return <section className="mt-6" aria-label="Last 7 days of activity">
+    <h2 className="text-xl font-bold">Last 7 days</h2>
+    <p className={quietText}>Full Daily · including today · your local time</p>
     {!current ? <p role="status">Loading weekly activity…</p> : current.failed ? <div role="status"><p>Weekly activity couldn't be loaded.</p><button className="min-h-11 underline" onClick={() => setRevision(value => value+1)}>Try again</button></div> :
       <ol className="mt-3 space-y-3">{socialWeek(api.today()).map(day => {
         const result = current.days?.find(row => row.date===day.date)?.result;

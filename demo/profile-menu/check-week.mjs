@@ -6,8 +6,8 @@ try{
   await page.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
   for(const width of [320,1440]){
    await page.setViewportSize({width,height:1000});await page.goto('http://127.0.0.1:5215/preferences.html?weekly=1');await page.getByRole('button',{name:/Jordan.*Profile/}).click();
-   const week=page.getByRole('region',{name:"This week's activity"});await week.getByText('View details',{exact:true}).waitFor();
-   assert.equal(await week.getByText('Upcoming',{exact:true}).count(),3);assert.equal(await week.getByText('No published puzzle',{exact:true}).count(),1);
+   const week=page.getByRole('region',{name:"Last 7 days of activity"});await week.getByText('View details',{exact:true}).waitFor();
+   assert.equal(await week.getByText('Upcoming',{exact:true}).count(),0);assert.equal(await week.getByText('No published puzzle',{exact:true}).count(),4);
    assert.equal(await week.getByText('Finish this same puzzle to see their details.',{exact:true}).count(),2);
    await week.getByText('View details',{exact:true}).click();await week.getByLabel('Guess 1: All yellow',{exact:true}).waitFor();
    for(const theme of ['light','dark']){
@@ -18,5 +18,5 @@ try{
   }
   assert.deepEqual(errors,[]);await page.close();
  }
- console.log('PASS: Monday–Sunday dated activity, per-puzzle locks and unlock, missing/future days, account switch, LA/Auckland, 320/1440 light/dark.');
+ console.log('PASS: rolling last-seven-day activity, per-puzzle locks and unlock, missing/future days, account switch, LA/Auckland, 320/1440 light/dark.');
 }finally{await browser.close();}
