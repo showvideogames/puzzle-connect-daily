@@ -77,6 +77,8 @@ const DECLARED_ARGS: { [O in OpName]: readonly FieldsOf<Operations[O]['args']>[]
   listMembers: ['groupId', 'after', 'limit'],
   leaveGroup: ['groupId'],
   renameMeInGroup: ['groupId', 'name'],
+  getGroupDescription: ['groupId'],
+  setGroupDescription: ['groupId', 'description'],
   renameGroup: ['groupId', 'name'],
   setGroupAppearance: ['groupId', 'emblemId', 'photo', 'accentColor'],
   removeMember: ['groupId', 'memberRef'],
@@ -117,6 +119,8 @@ const DECLARED_FIELDS: { [O in Exclude<OpName, 'previewInvite' | 'listResults'>]
   listMembers: ['memberRef', 'name', 'animalId', 'backgroundColor', 'isOwner', 'isMe', 'joinedAt'],
   leaveGroup: ['closed'],
   renameMeInGroup: [],
+  getGroupDescription: ['description'],
+  setGroupDescription: ['description'],
   renameGroup: [],
   setGroupAppearance: ['photoVersion'],
   removeMember: [],
@@ -172,6 +176,8 @@ const SAMPLE_ARGS: { [O in OpName]: Operations[O]['args'] } = {
   listMembers: { groupId: 'no-such-group' },
   leaveGroup: { groupId: 'no-such-group' },
   renameMeInGroup: { groupId: 'no-such-group', name: 'Sam' },
+  getGroupDescription: { groupId: 'no-such-group' },
+  setGroupDescription: { groupId: 'no-such-group', description: null },
   renameGroup: { groupId: 'no-such-group', name: 'Group' },
   setGroupAppearance: { groupId: 'no-such-group', emblemId: 'campfire', photo: null, accentColor: '#DED1F2' },
   removeMember: { groupId: 'no-such-group', memberRef: 'no-such-ref' },
@@ -778,6 +784,8 @@ async function fullFlow(world: MockWorld): Promise<void> {
   must(await alice.call("setGroupOrder", { groupIds: [groupId] }), "setGroupOrder");
   must(await alice.call("listGroupOrder", {}), "listGroupOrder");
   await groupsOf(bob);
+  must(await alice.call("setGroupDescription", { groupId, description: "Weekly puzzles" }), "setGroupDescription");
+  must(await bob.call("getGroupDescription", { groupId }), "getGroupDescription");
   must(await bob.call('renameMeInGroup', { groupId, name: 'Beatrice' }), 'renameMeInGroup');
   must(await alice.call('renameGroup', { groupId, name: 'Puzzle club' }), 'renameGroup');
 
@@ -1211,6 +1219,7 @@ export function socialConformanceScenarios(makeWorld: MakeWorld): SocialScenario
     scenario('contract: the version, the limits and the game statuses are the published ones', async () => {
       const published: Limits = {
         groupNameMax: 40,
+        groupDescriptionMax: 500,
         nameMax: 24,
         groupsCreatedTotal: 20,
         groupsCreatedPerDay: 5,

@@ -1,4 +1,4 @@
-import { groupOrderEnabled } from "@/lib/socialPreferences";
+import { groupDescriptionsEnabled, groupOrderEnabled } from "@/lib/socialPreferences";
 import type { GroupAppearance } from "@/components/account/GroupAppearanceForm";
 import { GroupsTab, type GroupSummary } from "@/components/account/GroupsTab";
 import { SHARING_NOTICE_VERSION } from "@/lib/sharingNotice";
@@ -36,6 +36,11 @@ export function MyGroups({ api, groups, displayName, onNote, onLink, onReload, o
     if (!live.current) return;
     // The group exists now, so saving again from the form would make a second one.
     if (styled.ok === false) onNote(groupPictureProblem(styled.outcome));
+    if (groupDescriptionsEnabled() && group.description) {
+      const described = await client.call("setGroupDescription", { groupId, description: group.description });
+      if (!live.current) return;
+      if (described.ok === false) onNote(styled.ok === false ? "Your group was created, but we couldn't save its picture or description. Open the group to try again." : "Your group was created, but we couldn't save its description. Open the group to try again.");
+    }
     await onReload();
   };
 

@@ -497,6 +497,8 @@ const CASES: { [O in OpName]: Case<O> } = {
   },
   leaveGroup: { args: { groupId: "g" }, fn: "social.leave_group", params: ["g"] },
   renameMeInGroup: { args: { groupId: "g", name: "A" }, fn: "social.rename_me_in_group", params: ["g", "A"] },
+  getGroupDescription: { args: { groupId: "g1" }, fn: "social.get_group_description", params: ["g1"] },
+  setGroupDescription: { args: { groupId: "g1", description: "Weekly puzzles" }, fn: "social.set_group_description", params: ["g1", "Weekly puzzles"] },
   renameGroup: { args: { groupId: "g", name: "G" }, fn: "social.rename_group", params: ["g", "G"] },
   setGroupAppearance: {
     args: { groupId: "g", emblemId: "book", photo: null, accentColor: "#DED1F2" },

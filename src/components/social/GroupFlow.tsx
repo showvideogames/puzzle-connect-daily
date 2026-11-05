@@ -1,3 +1,5 @@
+import { groupDescriptionsEnabled } from "@/lib/socialPreferences";
+import { GroupDescriptionEditor } from "@/components/account/GroupDescriptionEditor";
 import { useEffect, useState } from "react";
 import { GroupMembers } from "@/components/account/GroupMembers";
 import { groupMemberView, type GroupMemberView } from "@/lib/socialView";
@@ -23,6 +25,9 @@ interface GroupFlowProps {
 export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowProps) {
   const { groupId, inviteCode, name } = group;
   const live = useLive();
+  const [description, setDescription] = useState<string | null | undefined>(undefined);
+  const [descriptionProblem, setDescriptionProblem] = useState<string | null>(null);
+  const [editingDescription, setEditingDescription] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [members, setMembers] = useState<GroupMemberView[] | null>(null);
   const [memberNote, setMemberNote] = useState<string | null>(null);
@@ -54,6 +59,22 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     };
   }, [api, groupId]);
 
+  useEffect(() => {
+    if (!groupDescriptionsEnabled()) return;
+    let current = true;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const read = async () => {
+      const answer = await api.client.call("getGroupDescription", { groupId });
+      if (!current) return;
+      if (answer.ok === false) {
+        if (isBackgroundCheck(answer.outcome)) retry = setTimeout(() => void read(), RETRY_MS);
+        else setDescriptionProblem("We couldn't load the group description.");
+      } else { setDescription(answer.data.description); setDescriptionProblem(null); }
+    };
+    void read();
+    return () => { current = false; clearTimeout(retry); };
+  }, [api, groupId]);
+
   const leave = async () => {
     const answer = await api.client.call("leaveGroup", { groupId });
     if (!live.current) return undefined;
@@ -73,6 +94,16 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     const url = api.linkUrl(inviteCode);
     return linkAnswer(await copyLink(url), url);
   };
+
+  if (editingDescription && group.isOwner && description !== undefined) return <main className={`${accountPanel} mx-auto w-full max-w-[32rem] p-5 sm:p-8`}>
+    <h1 className="mb-5 font-tile text-2xl font-bold">Edit description</h1>
+    <GroupDescriptionEditor initial={description} onCancel={() => setEditingDescription(false)} onSave={async value => {
+      const answer = await api.client.call("setGroupDescription", { groupId, description: value });
+      if (!live.current) return;
+      if (answer.ok === false) return "We couldn't save the description. Please try again.";
+      setDescription(answer.data.description);
+    }} />
+  </main>;
 
   if (showMembers) return <GroupMembers group={group} members={members} problem={problem} note={memberNote} onBack={() => setShowMembers(false)} onRemove={async member => {
     try {
@@ -104,5 +135,5 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     }} />
   </main>;
 
-  return <GroupPage group={group} results={results} problem={problem} today={api.today()} onBack={onBack} onShare={share} onCopy={copy} onLeave={leave} onEditPicture={() => setEditingPicture(true)} onMembers={() => setShowMembers(true)} />;
+  return <GroupPage group={group} results={results} problem={problem} today={api.today()} onBack={onBack} onShare={share} onCopy={copy} onLeave={leave} onEditPicture={() => setEditingPicture(true)} onMembers={() => setShowMembers(true)} description={description} descriptionProblem={descriptionProblem} onEditDescription={groupDescriptionsEnabled() && description !== undefined ? () => setEditingDescription(true) : undefined} />;
 }

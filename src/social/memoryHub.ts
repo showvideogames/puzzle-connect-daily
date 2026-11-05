@@ -232,6 +232,7 @@ interface Group {
   photoVersion: number;
   members: Map<string, Membership>;
   removed: Map<string, Removal>;
+  description?: string | null;
 }
 
 interface ResultCard {
@@ -932,6 +933,18 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       if (clean === null) return fail('bad_my_name');
       found.mine.name = clean;
       return done(NOTHING);
+    },
+
+    getGroupDescription(me, { groupId }) {
+      const found = membership(me,groupId);
+      return found ? done({ description: found.group.description ?? null }) : fail('not_a_member');
+    },
+    setGroupDescription(me, { groupId, description }) {
+      return asOwner(me,groupId,group => {
+        if (description !== null && (typeof description !== 'string' || [...description].length > limits.groupDescriptionMax)) return fail('bad_description');
+        group.description = description === null ? null : cleanName(description,limits.groupDescriptionMax);
+        return done({description:group.description});
+      });
     },
 
     renameGroup(me, { groupId, name }) {

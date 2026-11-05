@@ -25,6 +25,9 @@ interface GroupPageProps {
   onBack: () => void;
   onEditPicture?: () => void;
   onMembers?: () => void;
+  description?: string | null;
+  descriptionProblem?: string | null;
+  onEditDescription?: () => void;
   onShare: () => Promise<LinkAnswer> | LinkAnswer;
   onCopy: () => Promise<LinkAnswer> | LinkAnswer;
   /** Answers with a sentence when leaving was refused. */
@@ -32,7 +35,7 @@ interface GroupPageProps {
 }
 
 /** One group: who is in it, how they did today, and for its owner, the link. */
-export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave, onEditPicture, onMembers }: GroupPageProps) {
+export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave, onEditPicture, onMembers, description, descriptionProblem, onEditDescription }: GroupPageProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const id = useId();
 
@@ -44,6 +47,10 @@ export function GroupPage({ group, results, problem, today, onBack, onShare, onC
         <h1 className="mt-2 font-tile text-[1.75rem] font-extrabold leading-[1.15] tracking-tight text-foreground [overflow-wrap:anywhere] [text-wrap:balance] sm:text-4xl">{group.name}</h1>
         <p className={`text-base ${quietText}`}>{memberWords(group.memberCount)}</p>
       </div>
+
+      {description && <p className="mt-4 whitespace-pre-wrap break-words text-base" data-testid="group-description">{description}</p>}
+      {descriptionProblem && <p role="alert" className="mt-3 text-destructive">{descriptionProblem}</p>}
+      {group.isOwner && onEditDescription && <button type="button" className={`${outlineAction} mt-3 min-h-11 w-full`} onClick={onEditDescription}>Edit description</button>}
 
       {group.isOwner && onEditPicture && <button type="button" className={`${outlineAction} mt-4 h-11 w-full`} onClick={onEditPicture}>Edit group picture</button>}
 

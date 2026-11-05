@@ -102,6 +102,7 @@ function find(code = "K7M-4PX") {
 }
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   Reflect.deleteProperty(navigator, "share");
   Reflect.deleteProperty(navigator, "clipboard");
@@ -288,6 +289,31 @@ describe("a group's page", () => {
     return made;
   }
 
+  it("edits the description only after it loads, keeps Cancel local, and saves plain text", async () => {
+    vi.stubEnv("VITE_GROUP_DESCRIPTIONS", "true");
+    const { call } = await openGroup({ getGroupDescription: () => yes({ description: "Weekly puzzles" }), setGroupDescription: () => yes({ description: "New description" }) });
+    await screen.findByText("Weekly puzzles"); click("Edit description");
+    fireEvent.change(screen.getByLabelText("Group description"), { target: { value: "Unsaved" } }); click("Cancel");
+    expect(opsCalled(call)).not.toContain("setGroupDescription"); click("Edit description");
+    expect(screen.getByLabelText("Group description")).toHaveValue("Weekly puzzles");
+    fireEvent.change(screen.getByLabelText("Group description"), { target: { value: "New description" } }); click("Save description");
+    expect(await screen.findByTestId("group-description")).toHaveTextContent("New description");
+    expect(call).toHaveBeenCalledWith("setGroupDescription", { groupId: "g1", description: "New description" });
+  });
+
+  it("keeps a refused description draft", async () => {
+    vi.stubEnv("VITE_GROUP_DESCRIPTIONS", "true");
+    await openGroup({ getGroupDescription: () => yes({ description: "Weekly puzzles" }), setGroupDescription: () => refused("not_the_creator") });
+    await screen.findByText("Weekly puzzles"); click("Edit description"); click("Save description");
+    expect(await screen.findByRole("alert")).toHaveTextContent("couldn't save"); expect(screen.getByLabelText("Group description")).toHaveValue("Weekly puzzles");
+  });
+
+  it("shows descriptions as text to members without an owner editor", async () => {
+    vi.stubEnv("VITE_GROUP_DESCRIPTIONS", "true");
+    await openGroup({ getGroupDescription: () => yes({ description: "<script>plain text</script>" }) }, group({ isOwner: false, inviteCode: null }));
+    expect(await screen.findByTestId("group-description")).toHaveTextContent("<script>plain text</script>"); expect(screen.queryByRole("button", { name: "Edit description" })).toBeNull();
+  });
+
   it("shows a separate member roster and removes only after confirmation", async () => {
     const { call } = await openGroup({ removeMember: () => yes() });
     await screen.findByText("Jordan");
@@ -448,6 +474,20 @@ describe("a group's page", () => {
     click("Back");
     expect(await screen.findByTestId("groups-tab")).toBeInTheDocument();
   });
+});
+
+it("does not recreate a group when saving its optional description is refused", async () => {
+  vi.stubEnv("VITE_GROUP_DESCRIPTIONS", "true");
+  const { call, onNote } = open({ createGroup: () => yes({ groupId: "g1", inviteCode: CODE }), setGroupAppearance: () => yes({ photoVersion: 1 }), setGroupDescription: () => refused("unavailable") }, "groups");
+  await screen.findByTestId("groups-tab"); click("Make a group");
+  fireEvent.change(screen.getByLabelText("Group name"), { target: { value: "Club" } });
+  fireEvent.change(screen.getByLabelText("Group description (optional)"), { target: { value: "Weekly puzzles" } });
+  click("Save group");
+  await waitFor(() => expect(onNote).toHaveBeenCalledWith("Your group was created, but we couldn't save its description. Open the group to try again."));
+  await screen.findByTestId("groups-tab");
+  expect(opsCalled(call).filter(op => op === "createGroup")).toHaveLength(1);
+  expect(call).toHaveBeenCalledWith("setGroupDescription", { groupId: "g1", description: "Weekly puzzles" });
+  expect(screen.queryByTestId("group-form")).toBeNull();
 });
 
 describe("handing over a link", () => {

@@ -16,3 +16,5 @@ export function applyGroupOrder<T extends { groupId?: string }>(groups: T[], ids
   const positions = new Map(ids.map((id, i) => [id, i]));
   return [...groups].sort((a,b) => (positions.get(a.groupId ?? '') ?? Infinity) - (positions.get(b.groupId ?? '') ?? Infinity));
 }
+
+export const groupDescriptionsEnabled = () => import.meta.env.VITE_GROUP_DESCRIPTIONS === 'true';

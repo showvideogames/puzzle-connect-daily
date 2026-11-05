@@ -1,3 +1,5 @@
+import { groupDescriptionsEnabled } from "@/lib/socialPreferences";
+import { LIMITS } from "@/social/contract";
 import { useId, useRef, useState, type FormEvent } from "react";
 import { GROUP_EMBLEMS, groupEmblemSrc, type GroupEmblemId } from "@/lib/groupEmblems";
 import { checkUpload, photoFile, prepareGroupPhoto } from "@/lib/groupPicture";
@@ -11,6 +13,7 @@ import { SharingNotice } from "./SharingNotice";
 
 export interface GroupAppearance {
   name: string;
+  description?: string | null;
   emblemId: GroupEmblemId;
   photo: string | null;
   accentColor: ProfileColor;
@@ -29,6 +32,7 @@ const GROUP_NAME_MAX = 40;
 
 /** A group's name, picture (a preset emblem or an upload) and color, with a live preview. */
 export function GroupAppearanceForm({ initial, onSave, onCancel, pictureOnly = false }: GroupAppearanceFormProps) {
+  const [description, setDescription] = useState(initial.description ?? "");
   const [name, setName] = useState(initial.name);
   const [emblemId, setEmblemId] = useState(initial.emblemId);
   const [photo, setPhoto] = useState(initial.photo);
@@ -86,7 +90,7 @@ export function GroupAppearanceForm({ initial, onSave, onCancel, pictureOnly = f
     setBusy(true);
     setProblem(null);
     try {
-      await onSave({ name: trimmed, emblemId, photo, accentColor: color });
+      await onSave({ name: trimmed, emblemId, photo, accentColor: color, ...(!pictureOnly && groupDescriptionsEnabled() ? { description: description.trim() || null } : {}) });
     } catch {
       setProblem("We couldn't save that. Please try again.");
     } finally {
@@ -114,6 +118,12 @@ export function GroupAppearanceForm({ initial, onSave, onCancel, pictureOnly = f
           className="h-12 w-full rounded-xl border border-input bg-background px-3.5 text-base text-foreground
             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_46%_52%)]"
         />
+      </div>}
+
+      {!pictureOnly && groupDescriptionsEnabled() && <div>
+        <label htmlFor={`${id}-description`} className="block font-semibold">Group description (optional)</label>
+        <textarea id={`${id}-description`} value={description} maxLength={LIMITS.groupDescriptionMax} disabled={busy} onChange={event => setDescription(event.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-input bg-background p-3 text-foreground" />
+        <p className={`text-sm ${quietText}`}>Visible to members. Up to {LIMITS.groupDescriptionMax} characters.</p>
       </div>}
 
       <fieldset className="min-w-0">

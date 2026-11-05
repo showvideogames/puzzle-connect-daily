@@ -73,6 +73,7 @@ export const DEFAULT_EMBLEM = 'campfire';
 export const LIMITS = {
   /** Characters in a group's name. */
   groupNameMax: 40,
+  groupDescriptionMax: 500,
   /** Characters in a display name, or a name in a group. */
   nameMax: 24,
   groupsCreatedTotal: 20,
@@ -114,6 +115,7 @@ export const OUTCOMES = [
   'invite_used',
   'own_invite',
   'bad_name',
+  'bad_description',
   'bad_my_name',
   'too_many_created',
   'too_many_groups',
@@ -314,6 +316,8 @@ export interface Operations {
   listMembers: { args: { groupId: string; after?: Pick<MemberRow, 'joinedAt' | 'memberRef'>; limit?: number }; data: MemberRow[] };
   leaveGroup: { args: { groupId: string }; data: { closed: boolean } };
   renameMeInGroup: { args: { groupId: string; name: string }; data: NoData };
+  getGroupDescription: { args: { groupId: string }; data: { description: string | null } };
+  setGroupDescription: { args: { groupId: string; description: string | null }; data: { description: string | null } };
   renameGroup: { args: { groupId: string; name: string }; data: NoData };
   setGroupAppearance: { args: { groupId: string; emblemId: string; photo: string | null; accentColor: string }; data: { photoVersion: number } };
   removeMember: { args: { groupId: string; memberRef: string }; data: NoData };

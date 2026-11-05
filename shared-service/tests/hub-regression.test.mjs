@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const DRAFT = readFileSync(new URL('../fixtures/hub-eb238dd.sql', import.meta.url), 'utf8');
-const PATCH = ['0002_png_group_photos.sql', '0003_private_friend_preferences.sql', '0004_private_group_order.sql'].map(file => readFileSync(new URL(`../patches/${file}`, import.meta.url), 'utf8')).join('\n');
+const PATCH = ['0002_png_group_photos.sql', '0003_private_friend_preferences.sql', '0004_private_group_order.sql', '0005_group_descriptions.sql'].map(file => readFileSync(new URL(`../patches/${file}`, import.meta.url), 'utf8')).join('\n');
 const UNINSTALL = readFileSync(new URL('../fixtures/uninstall.sql', import.meta.url), 'utf8');
 
 // Read from the contract's own file, so the lists in the SQL can't drift from it.
@@ -33,6 +33,7 @@ const ENTRY_FUNCTIONS = [
   'delete_person',
   'ensure_person',
   'find_friend_by_code',
+  'get_group_description',
   'is_beta_tester',
   'join_group',
   'leave_group',
@@ -56,6 +57,7 @@ const ENTRY_FUNCTIONS = [
   'set_display_name',
   'set_friend_preference',
   'set_group_appearance',
+  'set_group_description',
   'set_group_order',
   'set_profile',
   'unblock',
@@ -72,6 +74,8 @@ const RESULT_ROW_KEYS = ['isMe', 'name', ...FACE_KEYS, 'summary', 'detailLocked'
 
 /** The exact keys of each function's data, or of each row of a list. */
 const ALLOWED_KEYS = {
+  get_group_description: ['description'],
+  set_group_description: ['description'],
   list_friend_preferences: ['friendRef', 'favorite', 'nickname'],
   set_friend_preference: ['friendRef', 'favorite', 'nickname'],
   list_group_order: ['groupIds'],
@@ -125,6 +129,7 @@ const HUB_OUTCOMES = new Set([
   'bad_emblem',
   'bad_my_name',
   'bad_name',
+  'bad_description',
   'bad_result',
   'cannot_remove_self',
   'game_disabled',
@@ -1907,6 +1912,8 @@ test('the draft hub', { skip }, async (t) => {
       assert.deepEqual(await ok('list_friend_preferences',a),[{friendRef,favorite:true,nickname:'Pal'}]);
       assert.deepEqual(await ok('list_friend_preferences',b),[]);
       const {groupId} = await ok('create_group',a,'Ordered club','Parker');
+      await ok('set_group_description',a,groupId,'Weekly puzzles');
+      assert.deepEqual(await ok('get_group_description',a,groupId),{description:'Weekly puzzles'});
       await ok('set_group_order',a,[groupId]);
       assert.deepEqual(await ok('list_group_order',a),{groupIds:[groupId]});
     });
@@ -2021,6 +2028,7 @@ test('what the hub saved is still there, and still guarded, after the database c
 
     await ok('set_friend_preference', ada, friendRef, true, 'Pal');
     await ok('set_group_order', ada, [groupId]);
+    await ok('set_group_description', ada, groupId, 'Weekly puzzles');
     await finish(ada);
 
     /** Everything that must come back the same. No function shows a notice version, so those are read from the tables. */
@@ -2029,6 +2037,7 @@ test('what the hub saved is still there, and still guarded, after the database c
       ben: await ok('ensure_person', ben, 'rainbow'),
       preferences: await ok('list_friend_preferences', ada),
       order: await ok('list_group_order', ada),
+      description: await ok('get_group_description', ada, groupId),
       adasFriends: await ok('list_friends', ada),
       bensFriends: await ok('list_friends', ben),
       adasGroups: await ok('list_my_groups', ada),

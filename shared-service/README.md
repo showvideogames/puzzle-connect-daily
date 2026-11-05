@@ -41,3 +41,9 @@ Deploy the SQL and updated gateway before enabling `VITE_SOCIAL_PREFERENCES=true
 `0004_private_group_order.sql` adds a nullable position to each existing membership, and separate listGroupOrder/setGroupOrder gateway operations. It does not change listMyGroups, listMembers or listResults responses or their sorting. Each caller can order only their complete current membership list; invalid/duplicate/stale lists are rejected before updates. New memberships have no position and append after ordered memberships; leaving/removal deletes the membership's position naturally. No membership, score or personal history is created or removed by saving an order.
 
 Deploy SQL and the gateway before enabling `VITE_GROUP_ORDER=true` (off by default). This is independent of the friend-preference and PNG flags. Position ties use existing joining time and membership ID. The UI offers a local draft with accessible Up/Down controls, Save and Cancel. The existing guarded schema teardown also covers these functions.
+
+## Clubhouse descriptions (0005)
+
+`0005_group_descriptions.sql` adds optional plain text to groups, with member-only reads and owner-only writes through getGroupDescription/setGroupDescription. The local implementation uses a 500-character storage bound (a reversible implementation limit, not a new product policy). Blank/null clears the description. Old group/list/invite response shapes, photos, memberships and histories stay unchanged. The UI escapes text, preserves line breaks, and keeps a refused edit as a draft.
+
+Deploy SQL and gateway first, then separately enable `VITE_GROUP_DESCRIPTIONS=true` (default off). Group creation sets the description only after the group exists; a failed description save reports partial completion and does not create another group. All patches are applied together by the disposable SQL regression suite, including database restart and guarded teardown tests.
