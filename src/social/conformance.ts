@@ -77,7 +77,7 @@ const DECLARED_ARGS: { [O in OpName]: readonly FieldsOf<Operations[O]['args']>[]
   listMembers: ['groupId', 'after', 'limit'],
   leaveGroup: ['groupId'],
   renameMeInGroup: ['groupId', 'name'],
-  crossPunsStandings: ['groupId','offset'],
+  crossPunsStandings: ['groupId','offset','days','through'],
   getGroupDescription: ['groupId'],
   setGroupDescription: ['groupId', 'description'],
   renameGroup: ['groupId', 'name'],

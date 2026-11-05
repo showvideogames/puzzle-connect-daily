@@ -32,6 +32,7 @@ if (new URLSearchParams(location.search).has('weekly')) {
 if(new URLSearchParams(location.search).has('standings')) {
   for(const [person,seconds] of [['River',10],['Jordan',10]] as const){
     world.signIn('crosspuns',person);
+    world.hub.seedCrossPunsPublication('old-crosspuns','2026-11-01');
     await world.hub.serverFor('crosspuns').recordCompletion({gameId:'crosspuns',puzzleId:'old-crosspuns',globalUserId:world.globalIdOf(person),completedAt:new Date(world.now()).toISOString(),summary:{seconds},detail:null});
   }
   const friends=await alice.call('listFriends',{});

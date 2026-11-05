@@ -1,12 +1,12 @@
 # Current status — 2026-11-05
 
-All-time standings are implemented locally: dedicated shared SQL reader (0008), authenticated gateway operation, typed client/memory/conformance parity and Rainbow clubhouse panel. `VITE_CROSSPUNS_STANDINGS` defaults OFF. No deployment, hosted writes or CrossPuns website rollout occurred.
+All-time and publication-date rolling standings (7/30/365 days) are implemented locally: dedicated shared SQL readers (0008/0009), authenticated gateway operation, typed client/memory/conformance parity and Rainbow clubhouse panel. `VITE_CROSSPUNS_STANDINGS` defaults OFF. No deployment, hosted writes or CrossPuns website rollout occurred.
 
 Deb accepted inference from small groups. Shared ranks are calculated before per-viewer masking; blocked rows contain only rank and generic label, with no source identity, scores or puzzle data. Existing block/result paths remain unchanged. Prior privacy-choice blockers in the historical notes below are resolved.
 
-Verified: 1,904 app assertions, 105 service assertions, typecheck/lint/build, and 320/1440 light/dark browser flows including both block directions and account switching. Local SQL fixtures cover actual relevant source columns; target hosted schema/permissions still require verification before rollout.
+Verified: 1,907 app assertions, 109 service assertions, typecheck/lint/build, and 320/1440 light/dark browser flows including both block directions and account switching. Local SQL fixtures cover actual relevant source columns; target hosted schema/permissions still require verification before rollout.
 
-Remaining product decision: publication date versus solve date for rolling 7/30/365-day scoring. Other games scoring remains undecided. No missing access prevents local all-time implementation; it is done.
+Deb chose publication date. Rolling periods are implemented, including late solves and earlier membership history. Other games scoring remains undecided. Target schema/privilege verification and coordinated release remain outstanding; nothing is deployed. Historical pending-decision notes below are superseded.
 
 ---
 

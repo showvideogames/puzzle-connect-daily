@@ -497,7 +497,7 @@ const CASES: { [O in OpName]: Case<O> } = {
   },
   leaveGroup: { args: { groupId: "g" }, fn: "social.leave_group", params: ["g"] },
   renameMeInGroup: { args: { groupId: "g", name: "A" }, fn: "social.rename_me_in_group", params: ["g", "A"] },
-  crossPunsStandings: { args: {groupId:"club",offset:0}, fn:"social.crosspuns_standings", params:["club",0] },
+  crossPunsStandings: { args: {groupId:"club",offset:0}, fn:"social.crosspuns_standings_period", params:["club",0,null,null] },
   getGroupDescription: { args: { groupId: "g1" }, fn: "social.get_group_description", params: ["g1"] },
   setGroupDescription: { args: { groupId: "g1", description: "Weekly puzzles" }, fn: "social.set_group_description", params: ["g1", "Weekly puzzles"] },
   renameGroup: { args: { groupId: "g", name: "G" }, fn: "social.rename_group", params: ["g", "G"] },
@@ -542,6 +542,12 @@ describe("social-gateway: the operation table", () => {
     expect(hub[1].role).toBe("social_gateway");
     expect(hub[1].params).toEqual([GLOBAL_ID, ...params]);
     expect(new Set(hub[1].text.match(/\$\d+/g)).size).toBe(1 + params.length);
+  });
+
+  it("passes rolling publication-date parameters only as bound values",async()=>{
+    const {deps,statements}=setup();
+    expect((await send(deps,"crossPunsStandings",{groupId:"club",offset:50,days:30,through:"2024-03-01"})).body).toEqual(HUB_ANSWER);
+    expect(statements.at(-1)!.params).toEqual([GLOBAL_ID,"club",50,30,"2024-03-01"]);
   });
 
   it.each(["true", 1, null, undefined])("refuses invalid favorite values before a database write: %s", async favorite => {

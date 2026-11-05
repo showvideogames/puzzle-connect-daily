@@ -142,6 +142,8 @@ export interface MemoryHub {
   transportFor(game: GameId): SocialTransport;
   /** The game-server route. No token reaches it, and nothing on a transport reaches it either. */
   serverFor(game: GameId): SocialServerRoute;
+  /** Test-only publication metadata; never infer it from completion time. */
+  seedCrossPunsPublication(puzzleId: string, date: string): void;
   /** One game deleted its account: only that game's link goes (D5). */
   unlinkGame(game: GameId, globalUserId: string): void;
   /** For conformance checks. No operation shows which games someone is in. */
@@ -396,6 +398,7 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
   const blocks = new Map<string, Block>();
   const friendInvites = new Map<string, FriendInvite>();
   const groups = new Map<string, Group>();
+  const crossPunsDates = new Map<string,string>();
   const results = new Map<string, ResultCard>();
 
   /** Exactly 12 characters of 0-9a-z, whatever the id source gives. The tries only stop a source that gives nothing usable. */
@@ -938,15 +941,23 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       return done(NOTHING);
     },
 
-    crossPunsStandings(me, {groupId,offset}) {
+    crossPunsStandings(me, {groupId,offset,days,through}) {
       const found=membership(me,groupId);
       if(!found)return fail('not_a_member');
       if(!Number.isSafeInteger(offset)||offset<0||offset>10000)return fail('not_found');
+      let from: string | undefined;
+      if(days!==undefined || through!==undefined){
+        if(![7,30,365].includes(days as number)||!through||!/^\d{4}-\d{2}-\d{2}$/.test(through))return fail('not_found');
+        const end=new Date(`${through}T12:00:00Z`);
+        if(!Number.isFinite(end.getTime())||end.toISOString().slice(0,10)!==through)return fail('not_found');
+        end.setUTCDate(end.getUTCDate()-days!+1);from=end.toISOString().slice(0,10);
+      }
       const members=[...found.group.members.values()];
       const byPerson=new Map(members.map(m=>[m.person,m.memberRef]));
       const history=[...results].flatMap(([key,card])=>{
         const [game,puzzleId]=key.split('\n');
         const memberRef=byPerson.get(card.person);
+        if(from && (!crossPunsDates.has(puzzleId)||crossPunsDates.get(puzzleId)!<from||crossPunsDates.get(puzzleId)!>through!))return [];
         return game==='crosspuns'&&memberRef&&'seconds' in card.summary ? [{memberRef,puzzleId,seconds:card.summary.seconds}] : [];
       });
       const ranked=crossPunsStandings(members,history);
@@ -1161,6 +1172,7 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       const person = known === undefined ? undefined : people.get(known);
       return person ? [...person.games] : [];
     },
+    seedCrossPunsPublication(puzzleId,date) { crossPunsDates.set(puzzleId,date); },
     seedDisplayName(globalUserId, name) {
       personFor(globalUserId).displayName = name;
     },

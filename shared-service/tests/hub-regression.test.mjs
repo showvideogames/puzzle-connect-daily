@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const DRAFT = readFileSync(new URL('../fixtures/hub-eb238dd.sql', import.meta.url), 'utf8');
-const PATCH = ['0002_png_group_photos.sql', '0003_private_friend_preferences.sql', '0004_private_group_order.sql', '0005_group_descriptions.sql', '0006_group_owner_actions.sql', '0007_group_invite_permissions.sql', '0008_crosspuns_standings.sql'].map(file => readFileSync(new URL(`../patches/${file}`, import.meta.url), 'utf8')).join('\n');
+const PATCH = ['0002_png_group_photos.sql', '0003_private_friend_preferences.sql', '0004_private_group_order.sql', '0005_group_descriptions.sql', '0006_group_owner_actions.sql', '0007_group_invite_permissions.sql', '0008_crosspuns_standings.sql','0009_crosspuns_rolling.sql'].map(file => readFileSync(new URL(`../patches/${file}`, import.meta.url), 'utf8')).join('\n');
 const UNINSTALL = readFileSync(new URL('../fixtures/uninstall.sql', import.meta.url), 'utf8');
 
 // Read from the contract's own file, so the lists in the SQL can't drift from it.
@@ -30,6 +30,7 @@ const ENTRY_FUNCTIONS = [
   'create_friend_invite',
   'create_group',
   'crosspuns_standings',
+  'crosspuns_standings_period',
   'decline_friend_request',
   'delete_group',
   'delete_person',
@@ -1923,6 +1924,7 @@ test('the draft hub', { skip }, async (t) => {
       assert.deepEqual(await ok('list_friend_preferences',b),[]);
       const {groupId,inviteCode} = await ok('create_group',a,'Ordered club','Parker');
       await ok('join_group',b,inviteCode,'Riley');
+      await refused('unavailable','crosspuns_standings_period',a,groupId,0,7,'2026-11-05');
       await refused('unavailable','crosspuns_standings',a,groupId,0); // this base fixture has no CrossPuns tables
       await ok('set_group_description',a,groupId,'Weekly puzzles');
       assert.deepEqual(await ok('get_group_description',a,groupId),{description:'Weekly puzzles'});

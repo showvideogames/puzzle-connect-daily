@@ -287,7 +287,7 @@ export type ResultRow = FriendResultRow | MemberResultRow;
 
 /** One entry per operation in section 5 of the contract, except recordCompletion. List operations answer with an array of rows. */
 export interface Operations {
-  crossPunsStandings: { args: { groupId: string; offset: number }; data: {rows: import('./crosspunsStandingsView').CrossPunsStandingView[]; total: number} };
+  crossPunsStandings: { args: { groupId: string; offset: number; days?: 7 | 30 | 365; through?: string }; data: {rows: import('./crosspunsStandingsView').CrossPunsStandingView[]; total: number} };
   getMe: { args: NoArgs; data: Face & { displayName: string | null; friendCode: string; friendCount: number; groupCount: number } };
   setDisplayName: { args: { name: string }; data: { displayName: string } };
   setProfile: { args: Profile; data: Profile };

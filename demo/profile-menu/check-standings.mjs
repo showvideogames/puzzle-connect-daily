@@ -11,8 +11,12 @@ try{
   const masked=board.getByTestId('standing-row').filter({hasText:'This player is blocked'});assert.equal((await masked.textContent()).trim(),'1This player is blocked');assert.equal(await masked.getByRole('link').count(),0);
   assert.equal(await board.getByLabel('Rank 1',{exact:true}).count(),2);
   for(const theme of ['light','dark']){await page.evaluate(d=>document.documentElement.classList.toggle('dark',d),theme==='dark');await page.waitForTimeout(150);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:`evidence/standings-${width}-${theme}.png`,fullPage:true});}
+  for(const days of [7,30,365]){
+   await board.getByLabel('Period',{exact:true}).selectOption(String(days));await board.getByText('3 pts',{exact:true}).waitFor();assert.equal(await board.getByLabel('Rank 1',{exact:true}).count(),2);assert.equal(await board.getByText('Jordan',{exact:true}).count(),0);
+   if(days===7)for(const theme of ['light','dark']){await page.evaluate(d=>document.documentElement.classList.toggle('dark',d),theme==='dark');await page.waitForTimeout(100);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:`evidence/standings-period-${width}-${theme}.png`,fullPage:true});}
+  }
   await page.getByRole('button',{name:'Switch account',exact:true}).click();assert.equal(await board.count(),0);
   await page.getByRole('tab',{name:'Groups',exact:true}).click();await page.getByRole('button',{name:/Coffee Club/}).click();await board.getByText('This player is blocked',{exact:true}).waitFor();assert.equal(await board.getByText('River',{exact:true}).count(),0);assert.equal(await board.getByText('Jordan',{exact:true}).count(),1);
  }
- assert.deepEqual(errors,[]);console.log('PASS: all-time standings, canonical ties, masked rows in either block direction, account switching, 320/1440 light/dark, no overflow/errors.');
+ assert.deepEqual(errors,[]);console.log('PASS: all-time and 7/30/365-day publication periods, canonical ties, masked rows in either block direction, account switching, 320/1440 light/dark, no overflow/errors.');
 }finally{await browser.close();}
