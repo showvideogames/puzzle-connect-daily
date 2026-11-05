@@ -1,10 +1,11 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { GROUP_EMBLEMS, groupEmblemSrc, type GroupEmblemId } from "@/lib/groupEmblems";
-import { checkUpload, prepareGroupPhoto } from "@/lib/groupPicture";
+import { checkUpload, photoFile, prepareGroupPhoto } from "@/lib/groupPicture";
 import type { ProfileColor } from "@/lib/sharedProfile";
 import { GROUP_VISIBILITY_NOTE } from "@/lib/sharingNotice";
 import { outlineAction, primaryAction, quietText, secondaryAction } from "./accountStyles";
 import { ColorChoices, selectedRing } from "./ColorChoices";
+import { GroupPhotoCropper } from "./GroupPhotoCropper";
 import { GroupEmblem } from "./GroupEmblem";
 import { SharingNotice } from "./SharingNotice";
 
@@ -17,6 +18,8 @@ export interface GroupAppearance {
 
 interface GroupAppearanceFormProps {
   initial: GroupAppearance;
+  /** Existing group picture edit: the separate name operation is not part of this save. */
+  pictureOnly?: boolean;
   onSave: (appearance: GroupAppearance) => Promise<void> | void;
   onCancel?: () => void;
 }
@@ -25,11 +28,13 @@ interface GroupAppearanceFormProps {
 const GROUP_NAME_MAX = 40;
 
 /** A group's name, picture (a preset emblem or an upload) and color, with a live preview. */
-export function GroupAppearanceForm({ initial, onSave, onCancel }: GroupAppearanceFormProps) {
+export function GroupAppearanceForm({ initial, onSave, onCancel, pictureOnly = false }: GroupAppearanceFormProps) {
   const [name, setName] = useState(initial.name);
   const [emblemId, setEmblemId] = useState(initial.emblemId);
   const [photo, setPhoto] = useState(initial.photo);
   const [color, setColor] = useState(initial.accentColor);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const originalFile = useRef<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -52,7 +57,7 @@ export function GroupAppearanceForm({ initial, onSave, onCancel }: GroupAppearan
     setPreparing(true);
     try {
       const prepared = await prepareGroupPhoto(file);
-      if (isLatest()) setPhoto(prepared);
+      if (isLatest()) { setPhoto(prepared); originalFile.current = file; }
     } catch (error) {
       if (isLatest()) setProblem((error as Error).message);
     } finally {
@@ -66,6 +71,8 @@ export function GroupAppearanceForm({ initial, onSave, onCancel }: GroupAppearan
     setPreparing(false);
     setEmblemId(next);
     setPhoto(null);
+    originalFile.current = null;
+    setCropFile(null);
   };
 
   const submit = async (event: FormEvent) => {
@@ -94,7 +101,7 @@ export function GroupAppearanceForm({ initial, onSave, onCancel }: GroupAppearan
         <p className="text-center font-tile text-lg font-bold text-foreground [overflow-wrap:anywhere]">{name.trim() || "Your group"}</p>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      {!pictureOnly && <div className="flex flex-col gap-1.5">
         <label htmlFor={`${id}-name`} className="text-base font-semibold text-foreground">Group name</label>
         <input
           id={`${id}-name`}
@@ -107,7 +114,7 @@ export function GroupAppearanceForm({ initial, onSave, onCancel }: GroupAppearan
           className="h-12 w-full rounded-xl border border-input bg-background px-3.5 text-base text-foreground
             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_46%_52%)]"
         />
-      </div>
+      </div>}
 
       <fieldset className="min-w-0">
         <legend className="mb-2 text-base font-semibold text-foreground">Choose a picture</legend>
@@ -152,6 +159,12 @@ export function GroupAppearanceForm({ initial, onSave, onCancel }: GroupAppearan
           />
         </div>
       </fieldset>
+
+      {photo && <button type="button" disabled={preparing || busy} className={`${outlineAction} h-12 text-base`} onClick={() => {
+        try { setCropFile(originalFile.current ?? photoFile(photo)); }
+        catch (error) { setProblem((error as Error).message); }
+      }}>Adjust picture</button>}
+      {cropFile && <GroupPhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onApply={prepared => { setPhoto(prepared); setCropFile(null); }} />}
 
       <ColorChoices legend="Choose a group color" value={color} onChange={setColor} />
 

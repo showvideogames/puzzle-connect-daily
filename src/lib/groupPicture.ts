@@ -34,6 +34,34 @@ export function centerSquare(width: number, height: number): { sx: number; sy: n
   return { sx: (width - size) / 2, sy: (height - size) / 2, size };
 }
 
+export interface PhotoCrop {
+  /** Position within the available travel, from left/top (0) to right/bottom (1). */
+  x: number;
+  y: number;
+  zoom: number;
+}
+export const DEFAULT_CROP: PhotoCrop = { x: 0.5, y: 0.5, zoom: 1 };
+const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
+
+/** Square source area shared by the crop preview and final encoder. */
+export function cropSquare(width: number, height: number, crop: PhotoCrop = DEFAULT_CROP) {
+  const finite = (value: number, fallback: number) => Number.isFinite(value) ? value : fallback;
+  const size = Math.min(width, height) / clamp(finite(crop.zoom, 1), 1, 3);
+  return {
+    sx: (width - size) * clamp(finite(crop.x, 0.5), 0, 1),
+    sy: (height - size) * clamp(finite(crop.y, 0.5), 0, 1),
+    size,
+  };
+}
+
+/** Re-edit an existing stored JPEG without sending or replacing it until Save. */
+export function photoFile(photo: string): File {
+  const match = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(photo);
+  if (!match) throw new Error("Please upload the original picture to adjust it.");
+  const bytes = Uint8Array.from(atob(match[1]), character => character.charCodeAt(0));
+  return new File([bytes], "group-picture.jpg", { type: "image/jpeg" });
+}
+
 function loadImage(file: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -61,7 +89,7 @@ function toDataUrl(blob: Blob): Promise<string> {
 }
 
 /** The picture's center as a 256x256 JPEG under the size limit. Rejects with a player-facing message. */
-export async function prepareGroupPhoto(file: File): Promise<string> {
+export async function prepareGroupPhoto(file: File, crop: PhotoCrop = DEFAULT_CROP): Promise<string> {
   const image = await loadImage(file);
   try {
     const canvas = document.createElement("canvas");
@@ -72,7 +100,7 @@ export async function prepareGroupPhoto(file: File): Promise<string> {
     // Transparent PNGs would turn black as JPEG.
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, PHOTO_SIZE, PHOTO_SIZE);
-    const { sx, sy, size } = centerSquare(image.naturalWidth, image.naturalHeight);
+    const { sx, sy, size } = cropSquare(image.naturalWidth, image.naturalHeight, crop);
     context.drawImage(image, sx, sy, size, size, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
     for (const quality of [0.88, 0.8, 0.7, 0.6, 0.5, 0.4]) {
       const blob = await toBlob(canvas, quality);

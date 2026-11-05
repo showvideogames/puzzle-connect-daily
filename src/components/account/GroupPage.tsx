@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import type { FriendResult } from "@/lib/friendResults";
 import { leaveGroupQuestion, memberWords } from "@/lib/socialView";
-import { accountCard, accountCardTitle, accountPanel, quietText } from "./accountStyles";
+import { accountCard, accountCardTitle, accountPanel, outlineAction, quietText } from "./accountStyles";
 import { BackLink } from "./BackLink";
 import { GroupEmblem } from "./GroupEmblem";
 import type { GroupSummary } from "./GroupsTab";
@@ -23,6 +23,7 @@ interface GroupPageProps {
   problem?: string | null;
   today: Date;
   onBack: () => void;
+  onEditPicture?: () => void;
   onShare: () => Promise<LinkAnswer> | LinkAnswer;
   onCopy: () => Promise<LinkAnswer> | LinkAnswer;
   /** Answers with a sentence when leaving was refused. */
@@ -30,7 +31,7 @@ interface GroupPageProps {
 }
 
 /** One group: who is in it, how they did today, and for its owner, the link. */
-export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave }: GroupPageProps) {
+export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave, onEditPicture }: GroupPageProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const id = useId();
 
@@ -42,6 +43,8 @@ export function GroupPage({ group, results, problem, today, onBack, onShare, onC
         <h1 className="mt-2 font-tile text-[1.75rem] font-extrabold leading-[1.15] tracking-tight text-foreground [overflow-wrap:anywhere] [text-wrap:balance] sm:text-4xl">{group.name}</h1>
         <p className={`text-base ${quietText}`}>{memberWords(group.memberCount)}</p>
       </div>
+
+      {group.isOwner && onEditPicture && <button type="button" className={`${outlineAction} mt-4 h-11 w-full`} onClick={onEditPicture}>Edit group picture</button>}
 
       <TodayHeading today={today} />
       {problem && <p role="alert" className="mt-2 text-base font-medium text-destructive">{problem}</p>}

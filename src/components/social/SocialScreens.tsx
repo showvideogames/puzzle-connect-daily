@@ -224,6 +224,7 @@ export function SocialScreens({
           key={openGroup.groupId}
           api={api}
           group={openGroup}
+          onReload={load}
           onBack={() => setOpenGroupId(null)}
           onLeft={(note) => {
             setOpenGroupId(null);

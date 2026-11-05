@@ -288,6 +288,31 @@ describe("a group's page", () => {
     return made;
   }
 
+  it("lets an owner edit a picture through the existing appearance operation", async () => {
+    const { call } = await openGroup({ setGroupAppearance: () => yes({ photoVersion: 2 }) });
+    click("Edit group picture");
+    expect(screen.queryByLabelText("Group name")).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "Game night" }));
+    click("Save group");
+    await screen.findByTestId("group-page");
+    expect(call).toHaveBeenCalledWith("setGroupAppearance", expect.objectContaining({ groupId: "g1", emblemId: "cards-dice" }));
+    expect(opsCalled(call)).not.toContain("renameGroup");
+    expect(opsCalled(call)).not.toContain("createGroup");
+  });
+
+  it("keeps the picture draft after a refused save, and offers no editor to members", async () => {
+    await openGroup({ setGroupAppearance: () => refused("not_owner") });
+    click("Edit group picture");
+    click("Save group");
+    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't save that");
+    expect(screen.getByTestId("group-form")).toBeInTheDocument();
+  });
+
+  it("doesn't offer picture editing to a non-owner", async () => {
+    await openGroup({}, group({ isOwner: false, inviteCode: null }));
+    expect(screen.queryByRole("button", { name: "Edit group picture" })).toBeNull();
+  });
+
   it("shows the group, its members, and asks for today's results for this group", async () => {
     const { call } = await openGroup({});
     await screen.findByText("Jordan");
