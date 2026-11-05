@@ -1,3 +1,4 @@
+import { GroupOrderEditor } from "./GroupOrderEditor";
 import { useState } from "react";
 import { memberWords } from "@/lib/socialView";
 import { outlineAction, primaryAction, quietText } from "./accountStyles";
@@ -15,6 +16,7 @@ interface GroupsTabProps {
   onCreate: (group: GroupAppearance) => Promise<void> | void;
   /** Left out, the rows are plain and open nothing. */
   onOpen?: (groupId: string) => void;
+  onReorder?: (ids: string[]) => Promise<string | void>;
 }
 
 const startingGroup: GroupAppearance = { name: "", emblemId: "cards-dice", photo: null, accentColor: "#DED1F2" };
@@ -32,8 +34,11 @@ function GroupLine({ group }: { group: GroupSummary }) {
 }
 
 /** The player's groups, and the existing group form for making another. */
-export function GroupsTab({ groups, onCreate, onOpen }: GroupsTabProps) {
+export function GroupsTab({ groups, onCreate, onOpen, onReorder }: GroupsTabProps) {
+  const [ordering, setOrdering] = useState(false);
   const [making, setMaking] = useState(false);
+
+  if (ordering && onReorder) return <GroupOrderEditor groups={groups} onCancel={() => setOrdering(false)} onSave={onReorder} />;
 
   if (making) {
     return (
@@ -74,6 +79,7 @@ export function GroupsTab({ groups, onCreate, onOpen }: GroupsTabProps) {
           })}
         </ul>
       )}
+      {onReorder && groups.length > 1 && groups.every(g => g.groupId) && <button type="button" onClick={() => setOrdering(true)} className={`${outlineAction} mt-3 min-h-11 w-full`}>Reorder groups</button>}
       <button type="button" onClick={() => setMaking(true)} className={`${primaryAction} mt-3 h-14 w-full text-lg`}>Make a group</button>
     </div>
   );

@@ -11,6 +11,7 @@ const social = {
     client: {
       forget() {},
       async call(op: string, args: { displayName?: string }) {
+        if (op === 'listGroupOrder') return { ok: true, data: { groupIds: [] } };
         if (op === 'getMe') return { ok: true, data: { displayName: name, animalId: 'fox', backgroundColor: '#DED1F2', friendCode: 'ABC-234', friendCount: 0, groupCount: 0 } };
         if (op === 'listFriendRequests') return { ok: true, data: { incoming: Array.from({ length: incoming }, (_, i) => ({ requestRef: `r${i}` })), outgoing: [] } };
         if (op === 'setProfile') { name = args.displayName ?? name; return { ok: true, data: {} }; }

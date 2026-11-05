@@ -71,6 +71,8 @@ const DECLARED_ARGS: { [O in OpName]: readonly FieldsOf<Operations[O]['args']>[]
   listBlocks: [],
   createGroup: ['name', 'myName', 'noticeVersion'],
   joinGroup: ['code', 'myName', 'noticeVersion'],
+  listGroupOrder: [],
+  setGroupOrder: ['groupIds'],
   listMyGroups: [],
   listMembers: ['groupId', 'after', 'limit'],
   leaveGroup: ['groupId'],
@@ -109,6 +111,8 @@ const DECLARED_FIELDS: { [O in Exclude<OpName, 'previewInvite' | 'listResults'>]
   listBlocks: ['blockRef', 'name'],
   createGroup: ['groupId', 'inviteCode'],
   joinGroup: ['groupId'],
+  listGroupOrder: ['groupIds'],
+  setGroupOrder: [],
   listMyGroups: ['groupId', 'name', 'emblemId', 'accentColor', 'photo', 'photoVersion', 'memberCount', 'isOwner', 'myName', 'inviteCode'],
   listMembers: ['memberRef', 'name', 'animalId', 'backgroundColor', 'isOwner', 'isMe', 'joinedAt'],
   leaveGroup: ['closed'],
@@ -162,6 +166,8 @@ const SAMPLE_ARGS: { [O in OpName]: Operations[O]['args'] } = {
   listBlocks: {},
   createGroup: { name: 'Group', myName: 'Sam', noticeVersion: NOTICE },
   joinGroup: { code: 'no-such-code', myName: 'Sam', noticeVersion: NOTICE },
+  listGroupOrder: {},
+  setGroupOrder: { groupIds: [] },
   listMyGroups: {},
   listMembers: { groupId: 'no-such-group' },
   leaveGroup: { groupId: 'no-such-group' },
@@ -272,6 +278,12 @@ function checkResultRow(row: unknown): void {
 }
 
 function checkData(op: OpName, data: unknown): void {
+  if (op === 'listGroupOrder') {
+    check(isRecord(data) && hasExactly(data, ['groupIds']), 'listGroupOrder returned the wrong fields');
+    check(Array.isArray(data.groupIds) && data.groupIds.length <= LIMITS.groupsJoinedTotal && data.groupIds.every(id => typeof id === 'string'), 'listGroupOrder returned invalid group ids');
+    check(new Set(data.groupIds).size === data.groupIds.length, 'listGroupOrder returned duplicate group ids');
+    return;
+  }
   if (op === 'previewInvite') {
     check(isRecord(data) && (hasExactly(data, FRIEND_PREVIEW_FIELDS) || hasExactly(data, GROUP_PREVIEW_FIELDS)), `previewInvite returned the wrong fields: ${JSON.stringify(data)}`);
     if ('isMember' in data) checkGroupPreview(data);
@@ -763,6 +775,8 @@ async function fullFlow(world: MockWorld): Promise<void> {
   await join(bob, inviteCode, 'Bee');
   await join(carol, inviteCode, 'Cee');
   await groupsOf(alice);
+  must(await alice.call("setGroupOrder", { groupIds: [groupId] }), "setGroupOrder");
+  must(await alice.call("listGroupOrder", {}), "listGroupOrder");
   await groupsOf(bob);
   must(await bob.call('renameMeInGroup', { groupId, name: 'Beatrice' }), 'renameMeInGroup');
   must(await alice.call('renameGroup', { groupId, name: 'Puzzle club' }), 'renameGroup');

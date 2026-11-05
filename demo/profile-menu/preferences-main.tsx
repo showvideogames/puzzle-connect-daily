@@ -13,6 +13,11 @@ for (const friend of [bob,carol]) {
   const invite=await alice.call('createFriendInvite',{noticeVersion:1});
   if (invite.ok) await friend.call('acceptFriendInvite',{code:invite.data.code,noticeVersion:1});
 }
+for (const name of ['Coffee Club','Puzzle Pals','Book Club']) {
+  world.advance(1000);
+  const made=await alice.call('createGroup',{name,myName:'River',noticeVersion:1});
+  if(made.ok)await bob.call('joinGroup',{code:made.data.inviteCode,myName:'Jordan',noticeVersion:1});
+}
 const api: SocialApi = { client:alice, puzzleId:()=>null, today:()=>new Date(2026,10,5), linkUrl:()=>'', share:async()=>'done' };
 function Preview() {
   const [tab,setTab]=useState<FriendsTab>('friends');

@@ -187,7 +187,7 @@ function isCurrentApiKey(value: string, keys: ApiKeys): boolean {
 type Args = Record<string, unknown>;
 
 /** What one argument may be. The hub still judges the value: this is only its type. */
-type Kind = "boolean" | "text" | "textOrNull" | "code" | "whole" | "cursor" | "game" | "puzzle";
+type Kind = "groupIds" | "boolean" | "text" | "textOrNull" | "code" | "whole" | "cursor" | "game" | "puzzle";
 
 const GAME_IDS = ["rainbow", "crosspuns", "cluevoyance", "wtf", "yodel", "hamburgle", "priceiswhat"];
 const INT4_MAX = 2147483647;
@@ -204,6 +204,7 @@ const isPlainObject = (value: unknown): value is Args =>
 const has = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
 
 const FITS: Record<Kind, (value: unknown) => boolean> = {
+  groupIds: (value) => Array.isArray(value) && value.length <= 50 && value.every(id => typeof id === "string" && id.length > 0 && id.length <= 64),
   boolean: (value) => typeof value === "boolean",
   text: isText,
   textOrNull: (value) => value === null || isText(value),
@@ -327,6 +328,8 @@ export const OPERATIONS: Readonly<Record<string, Operation>> = {
     sql: "select social.join_group($1::text, $2::text, $3::text, $4::int) as result",
     params: (a) => [a.code, a.myName, a.noticeVersion],
   },
+  listGroupOrder: { required: {}, sql: "select social.list_group_order($1::text) as result", params: noParams },
+  setGroupOrder: { required: { groupIds: "groupIds" }, sql: "select social.set_group_order($1::text, $2::text[]) as result", params: a => [a.groupIds] },
   listMyGroups: { required: {}, sql: "select social.list_my_groups($1::text) as result", params: noParams },
   listMembers: {
     required: { groupId: "text" },

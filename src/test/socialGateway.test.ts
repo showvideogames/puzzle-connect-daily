@@ -487,6 +487,8 @@ const CASES: { [O in OpName]: Case<O> } = {
   listBlocks: { args: {}, fn: "social.list_blocks", params: [] },
   createGroup: { args: { name: "G", myName: "A", noticeVersion: NOTICE }, fn: "social.create_group", params: ["G", "A", NOTICE] },
   joinGroup: { args: { code: "c", myName: "A", noticeVersion: NOTICE }, fn: "social.join_group", params: ["c", "A", NOTICE] },
+  listGroupOrder: { args: {}, fn: "social.list_group_order", params: [] },
+  setGroupOrder: { args: { groupIds: ["g1", "g2"] }, fn: "social.set_group_order", params: [["g1", "g2"]] },
   listMyGroups: { args: {}, fn: "social.list_my_groups", params: [] },
   listMembers: {
     args: { groupId: "g", after: AFTER_ROW, limit: 5 },

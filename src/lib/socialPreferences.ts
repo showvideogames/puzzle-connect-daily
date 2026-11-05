@@ -10,3 +10,9 @@ export function applyFriendPreferences(results: FriendResult[], preferences: Fri
   });
   return [...rows.filter(row => !row.isYou && row.favorite), ...rows.filter(row => row.isYou || !row.favorite)];
 }
+
+export const groupOrderEnabled = () => import.meta.env.VITE_GROUP_ORDER === 'true';
+export function applyGroupOrder<T extends { groupId?: string }>(groups: T[], ids: string[]): T[] {
+  const positions = new Map(ids.map((id, i) => [id, i]));
+  return [...groups].sort((a,b) => (positions.get(a.groupId ?? '') ?? Infinity) - (positions.get(b.groupId ?? '') ?? Infinity));
+}

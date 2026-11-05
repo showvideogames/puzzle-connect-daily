@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const DRAFT = readFileSync(new URL('../fixtures/hub-eb238dd.sql', import.meta.url), 'utf8');
-const PATCH = readFileSync(new URL('../patches/0002_png_group_photos.sql', import.meta.url), 'utf8');
+const PATCH = ['0002_png_group_photos.sql', '0003_private_friend_preferences.sql', '0004_private_group_order.sql'].map(file => readFileSync(new URL(`../patches/${file}`, import.meta.url), 'utf8')).join('\n');
 const UNINSTALL = readFileSync(new URL('../fixtures/uninstall.sql', import.meta.url), 'utf8');
 
 // Read from the contract's own file, so the lists in the SQL can't drift from it.
@@ -38,8 +38,10 @@ const ENTRY_FUNCTIONS = [
   'leave_group',
   'let_back_in',
   'list_blocks',
+  'list_friend_preferences',
   'list_friend_requests',
   'list_friends',
+  'list_group_order',
   'list_members',
   'list_my_groups',
   'list_removed',
@@ -52,7 +54,9 @@ const ENTRY_FUNCTIONS = [
   'replace_invite',
   'send_friend_request',
   'set_display_name',
+  'set_friend_preference',
   'set_group_appearance',
+  'set_group_order',
   'set_profile',
   'unblock',
 ];
@@ -68,6 +72,10 @@ const RESULT_ROW_KEYS = ['isMe', 'name', ...FACE_KEYS, 'summary', 'detailLocked'
 
 /** The exact keys of each function's data, or of each row of a list. */
 const ALLOWED_KEYS = {
+  list_friend_preferences: ['friendRef', 'favorite', 'nickname'],
+  set_friend_preference: ['friendRef', 'favorite', 'nickname'],
+  list_group_order: ['groupIds'],
+  set_group_order: [],
   accept_friend_invite: ['friendRef', 'name'],
   accept_friend_request: ['friendRef', 'name'],
   block: ['blockRef'],
@@ -1891,6 +1899,18 @@ test('the draft hub', { skip }, async (t) => {
       assert.equal(await count(`from social.persons`), before);
     });
 
+    await t.test('private preferences and navigation order use the caller’s relationships only', async () => {
+      const a = await player('Parker', 'rainbow');
+      const b = await player('Riley', 'rainbow');
+      const { friendRef } = await befriend(a,b);
+      await ok('set_friend_preference',a,friendRef,true,'Pal');
+      assert.deepEqual(await ok('list_friend_preferences',a),[{friendRef,favorite:true,nickname:'Pal'}]);
+      assert.deepEqual(await ok('list_friend_preferences',b),[]);
+      const {groupId} = await ok('create_group',a,'Ordered club','Parker');
+      await ok('set_group_order',a,[groupId]);
+      assert.deepEqual(await ok('list_group_order',a),{groupIds:[groupId]});
+    });
+
     await t.test('every answer in this whole run holds exactly its declared keys, and every function was heard from', async () => {
       const sameKeys = (row, keys) => JSON.stringify(Object.keys(row).sort()) === JSON.stringify([...keys].sort());
       const seen = new Set();
@@ -1999,12 +2019,16 @@ test('what the hub saved is still there, and still guarded, after the database c
     const removed = (await ok('list_members', ada, groupId)).find((m) => m.name === 'Dee');
     await ok('remove_member', ada, groupId, removed.memberRef);
 
+    await ok('set_friend_preference', ada, friendRef, true, 'Pal');
+    await ok('set_group_order', ada, [groupId]);
     await finish(ada);
 
     /** Everything that must come back the same. No function shows a notice version, so those are read from the tables. */
     const saved = async () => ({
       ada: await ok('ensure_person', ada, 'rainbow'),
       ben: await ok('ensure_person', ben, 'rainbow'),
+      preferences: await ok('list_friend_preferences', ada),
+      order: await ok('list_group_order', ada),
       adasFriends: await ok('list_friends', ada),
       bensFriends: await ok('list_friends', ben),
       adasGroups: await ok('list_my_groups', ada),
@@ -2021,6 +2045,8 @@ test('what the hub saved is still there, and still guarded, after the database c
 
     const after = await saved();
     assert.deepEqual(after, before);
+    assert.deepEqual(after.preferences, [{ friendRef, favorite: true, nickname: "Pal" }]);
+    assert.deepEqual(after.order, { groupIds: [groupId] });
 
     // The same answers would prove nothing if they were empty, so here is what they hold.
     assert.deepEqual(after.ada, { displayName: 'Ada', animalId: 'owl', backgroundColor: '#CCE1F1', friendCode: after.ada.friendCode, friendCount: 2, groupCount: 1 });

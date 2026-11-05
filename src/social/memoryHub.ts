@@ -211,6 +211,7 @@ interface Membership {
   name: string;
   joinedAt: number;
   noticeVersion: number;
+  privatePosition?: number;
 }
 
 interface Removal {
@@ -861,6 +862,19 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       group.members.set(me.id, newMembership(me.id, shownName, noticeVersion));
       me.activity.push({ kind: 'join', at: now() });
       return done({ groupId: group.id });
+    },
+
+    listGroupOrder(me) {
+      const membership = (g: Group) => g.members.get(me.id) as Membership;
+      const ordered = groupsOf(me.id).sort((a,b) => (membership(a).privatePosition ?? Infinity) - (membership(b).privatePosition ?? Infinity) || membership(a).joinedAt - membership(b).joinedAt || membership(a).memberRef.localeCompare(membership(b).memberRef));
+      return done({ groupIds: ordered.map(g => g.id) });
+    },
+
+    setGroupOrder(me, { groupIds }) {
+      const current = groupsOf(me.id);
+      if (!Array.isArray(groupIds) || groupIds.length > limits.groupsJoinedTotal || groupIds.length !== current.length || new Set(groupIds).size !== groupIds.length || groupIds.some(id => !current.some(g => g.id === id))) return fail('not_found');
+      groupIds.forEach((id, position) => { (groups.get(id)?.members.get(me.id) as Membership).privatePosition = position; });
+      return done(NOTHING);
     },
 
     listMyGroups(me) {

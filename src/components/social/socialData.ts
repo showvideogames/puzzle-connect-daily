@@ -1,4 +1,4 @@
-import { applyFriendPreferences, socialPreferencesEnabled } from "@/lib/socialPreferences";
+import { applyGroupOrder, groupOrderEnabled, applyFriendPreferences, socialPreferencesEnabled } from "@/lib/socialPreferences";
 import type { GroupInvitePreview } from "@/components/account/GroupInviteCard";
 import type { GroupView } from "@/components/account/GroupPage";
 import type { FriendResult } from "@/lib/friendResults";
@@ -69,12 +69,18 @@ export async function readPerson(api: SocialApi): Promise<PersonData | { outcome
     if (preferences.ok === false) return { outcome: preferences.outcome };
     results = applyFriendPreferences(results, preferences.data);
   }
+  let orderedGroups = groups.data.map(groupView);
+  if (groupOrderEnabled()) {
+    const order = await client.call("listGroupOrder", {});
+    if (order.ok === false) return { outcome: order.outcome };
+    orderedGroups = applyGroupOrder(orderedGroups, order.data.groupIds);
+  }
   return {
     me: me.data,
     incoming: requests.data.incoming,
     outgoing: requests.data.outgoing,
     results,
-    groups: groups.data.map(groupView),
+    groups: orderedGroups,
     noResults: rows === null,
   };
 }

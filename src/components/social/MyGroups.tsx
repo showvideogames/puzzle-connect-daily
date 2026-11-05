@@ -1,3 +1,4 @@
+import { groupOrderEnabled } from "@/lib/socialPreferences";
 import type { GroupAppearance } from "@/components/account/GroupAppearanceForm";
 import { GroupsTab, type GroupSummary } from "@/components/account/GroupsTab";
 import { SHARING_NOTICE_VERSION } from "@/lib/sharingNotice";
@@ -38,5 +39,13 @@ export function MyGroups({ api, groups, displayName, onNote, onLink, onReload, o
     await onReload();
   };
 
-  return <GroupsTab groups={groups} onCreate={makeGroup} onOpen={onOpen} />;
+  return <GroupsTab groups={groups} onCreate={makeGroup} onOpen={onOpen} onReorder={groupOrderEnabled() ? async groupIds => {
+    const answer = await client.call("setGroupOrder", { groupIds });
+    if (!live.current) return;
+    if (answer.ok === false) {
+      if (answer.outcome === "not_found") { await onReload(); return "Your groups have changed. Cancel and reopen the order editor to refresh."; }
+      return "We couldn't save that order. Please try again.";
+    }
+    await onReload();
+  } : undefined} />;
 }

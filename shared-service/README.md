@@ -34,4 +34,10 @@ The last command requires the isolated Vite preview on port 5215 and local Chrom
 
 `0003_private_friend_preferences.sql` and the two new gateway operations store a viewer's favorite/nickname on the existing friendship. Preferences cascade away on unfriend/block/account deletion; they never change public profiles or results. The 24-character nickname limit reuses the existing display-name limit; null clears it. Both sides can set independent preferences. Table access is denied to app roles, with authenticated identity resolved by the existing gateway.
 
-Deploy the SQL and updated gateway before enabling `VITE_SOCIAL_PREFERENCES=true`. This flag defaults off. Existing listFriends responses remain unchanged. The new table/functions also need inclusion in any future shared-hub uninstall allow-list; the old guarded uninstall should refuse an incomplete teardown rather than drop unexpected objects. No uninstall was performed.
+Deploy the SQL and updated gateway before enabling `VITE_SOCIAL_PREFERENCES=true`. This flag defaults off. Existing listFriends responses remain unchanged. The existing uninstall is schema-scoped with an outside-dependency guard, so it covers these additions without an allow-list change. It is exercised only on throwaway PGlite databases; no hosted uninstall was performed.
+
+## Private group ordering (0004)
+
+`0004_private_group_order.sql` adds a nullable position to each existing membership, and separate listGroupOrder/setGroupOrder gateway operations. It does not change listMyGroups, listMembers or listResults responses or their sorting. Each caller can order only their complete current membership list; invalid/duplicate/stale lists are rejected before updates. New memberships have no position and append after ordered memberships; leaving/removal deletes the membership's position naturally. No membership, score or personal history is created or removed by saving an order.
+
+Deploy SQL and the gateway before enabling `VITE_GROUP_ORDER=true` (off by default). This is independent of the friend-preference and PNG flags. Position ties use existing joining time and membership ID. The UI offers a local draft with accessible Up/Down controls, Save and Cancel. The existing guarded schema teardown also covers these functions.

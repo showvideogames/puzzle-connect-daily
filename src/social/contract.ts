@@ -307,6 +307,8 @@ export interface Operations {
   listBlocks: { args: NoArgs; data: BlockRow[] };
   createGroup: { args: { name: string; myName: string; noticeVersion: number }; data: { groupId: string; inviteCode: string } };
   joinGroup: { args: { code: string; myName: string; noticeVersion: number }; data: { groupId: string } };
+  listGroupOrder: { args: NoArgs; data: { groupIds: string[] } };
+  setGroupOrder: { args: { groupIds: string[] }; data: NoData };
   listMyGroups: { args: NoArgs; data: GroupRow[] };
   /** `after` is the last row of the previous page; rows come in joining order. */
   listMembers: { args: { groupId: string; after?: Pick<MemberRow, 'joinedAt' | 'memberRef'>; limit?: number }; data: MemberRow[] };
