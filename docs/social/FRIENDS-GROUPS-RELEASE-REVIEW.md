@@ -1,6 +1,6 @@
 # Friends & Groups release review — 2026-11-05
 
-**Status: local candidate reviewed; hosted schema/permission verification blocked by missing configured credentials. Not approved or ready to deploy.** No hosted queries, migrations, data/permission changes, pushes, merges or deployments occurred during this review.
+**Status: local candidate reviewed; hosted catalog/schema/permission checks completed through the existing authorized dashboard session. Release still requires separate authorization and hosted flow verification.** Only catalog SELECTs were run. No migrations, application-data/permission changes, pushes, merges or deployments occurred.
 
 ## Candidate and current main
 
@@ -25,17 +25,21 @@
 - Browser reruns pass: actual Daily/secondary headers at 320/390/768/1440 light/dark; notification/profile/account flows; transparent crop/resizing; rolling activity with same-puzzle locks and LA/Auckland timezone contexts; all-time/7/30/365 standings with shared ties, both block directions and account switching. Synthetic fixtures only, external requests blocked. Relevant evidence captures refreshed.
 - Source comparison and current-main reads were read-only. Original worktrees were not modified.
 
-## Exact hosted verification blocker
+## Hosted verification — completed
 
-Target from `supabase/config.toml`: **zmauemcjcrdrgfjzkvgd**. No `SUPABASE_ACCESS_TOKEN`, `DATABASE_URL` or `SUPABASE_DB_URL` is configured in this execution environment; the documented Supabase token files in the source/original CrossPuns repositories and the standard token path are absent. This is missing access, not an automatic approval rejection or evidence of a bad live schema.
+The existing signed-in Chrome dashboard provided authorized access to the confirmed project **zmauemcjcrdrgfjzkvgd**. A separate SQL-editor snippet was used for catalog-only SELECTs; the existing score-repair query was left untouched. No credentials were extracted. The dashboard created a query snippet as part of its normal editor behavior; no application rows, migrations, settings or permissions were changed.
 
-`shared-service/review-target.mjs` is prepared and syntax-checked. It refuses to run without a token. With configured authorized access, it makes only static catalog SELECT requests using the Management API's `read_only: true`, saving columns, constraints, role flags, function owners/search paths/hashes/execute grants and source SELECT/RLS metadata. It never reads player/account rows or applies anything. The missing-token run exited before any network request; no target-schema evidence file exists yet.
+See `evidence/target-schema-review.md` for the observed results and exact comparison fingerprints. Shared columns/defaults/nullability, 56 non-NOT-NULL constraints and execution rights for the five boundary roles match the disposable baseline. All 13 shared tables are postgres-owned with RLS and owner-only table ACLs. All 34 security-definer functions use `social, pg_temp`; all 74 functions are postgres-owned. Anonymous, authenticated and service_role have no function execute grants; social_gateway has 32 and social_game_server has two, matching the baseline function-by-function.
 
-Smallest next step: configure authorized Supabase management read access in the execution environment (never paste credentials into chat or commit them), or supply an authorized equivalent catalog connection. Then run and review the catalog evidence. Compare the live social baseline with the fixture and verify that the intended security-definer owner can read CrossPuns source tables under their actual RLS/ownership configuration. Check function ACLs and schema drift before any deployment decision.
+The source columns needed for standings exist. The intended postgres definer owns and can SELECT all four CrossPuns source tables, has BYPASSRLS, and those tables do not force RLS. This supports the planned read contract without any new hosted grants. Both social service roles remain NOLOGIN and postgres has membership in them.
+
+Function source/signature/return/security/search-path fingerprints match for 73 functions. The sole source-text difference is `social.trimmed`: hosted SQL uses Unicode escapes for the same whitespace code points that the fixture includes literally. Its displayed body is the same btrim/coalesce operation; preserve the live helper. The two existing functions replaced by the PNG patch match exactly. Source-text hashes are drift checks, not cryptographic security attestations or runtime flow tests.
+
+Command-line management credentials remain absent; that is no longer a blocker to this catalog review. `shared-service/review-target.mjs` remains available for future authorized API evidence collection, but was not used against the host. No API JSON report is claimed. New feature functions/tables are not installed; release remains a separate action.
 
 ## Proposed release sequence — not executed
 
-1. Complete the catalog-only target review above. Resolve any ownership, ACL, baseline or source-column mismatch without applying these patches blindly.
+1. Review the completed catalog evidence above. Recheck it if the hosted baseline changes before release; preserve the live Unicode-escaped trimming helper.
 2. Review/apply the shared-service patches in filename order, **0002 through 0009**, under separate release authorization. `release-patch-manifest.json` records SHA-256 hashes. They deliberately live outside Rainbow migrations; do not install the test baseline/fixtures in production.
 3. Deploy the matching gateway/portable revision only after the SQL is available. Keep old three-argument all-time SQL intact; new gateway rolling reads require 0009. Portable files include the two standings calculation/projection helpers.
 4. Release the Rainbow frontend and enable only verified feature flags: VITE_GROUP_PNG, VITE_SOCIAL_PREFERENCES, VITE_GROUP_ORDER, VITE_GROUP_DESCRIPTIONS, VITE_GROUP_OWNER_ACTIONS, VITE_GROUP_INVITE_PERMISSIONS, VITE_CROSSPUNS_STANDINGS. All default off. Preserve the existing shared-social setting; no other site is part of this release.
