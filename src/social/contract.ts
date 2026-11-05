@@ -180,7 +180,7 @@ export interface GroupRow {
   name: string;
   emblemId: string;
   accentColor: string;
-  /** A data:image/jpeg;base64, URL or null. When set, it shows instead of the emblem. */
+  /** A data:image/jpeg;base64, or data:image/png;base64, URL or null. When set, it shows instead of the emblem. */
   photo: string | null;
   photoVersion: number;
   memberCount: number;

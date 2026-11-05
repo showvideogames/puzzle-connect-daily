@@ -331,6 +331,28 @@ function jpegSize(bytes: readonly number[]): { width: number; height: number } |
   return null;
 }
 
+/** Structural PNG validation matching the proposed hub patch; not a pixel decoder. */
+function pngSize(bytes: readonly number[]): { width: number; height: number } | null {
+  if (bytes.length < 57 || [137,80,78,71,13,10,26,10].some((v,i) => bytes[i] !== v)) return null;
+  const u32 = (at: number) => bytes[at] * 16777216 + bytes[at+1] * 65536 + bytes[at+2] * 256 + bytes[at+3];
+  let width = 0, height = 0, data = false;
+  for (let at = 8; at + 12 <= bytes.length;) {
+    const length = u32(at);
+    if (length > bytes.length - at - 12) return null;
+    const tag = String.fromCharCode(...bytes.slice(at+4, at+8));
+    if (at === 8) {
+      if (tag !== 'IHDR' || length !== 13) return null;
+      width = u32(16); height = u32(20);
+      if (!width || !height || width > 2147483647 || height > 2147483647 || bytes[24] !== 8 || ![2,6].includes(bytes[25]) || bytes[26] !== 0 || bytes[27] !== 0 || bytes[28] !== 0) return null;
+    } else if (tag === 'IDAT') { if (length > 0) data = true; }
+    else if (tag === 'IEND') return length === 0 && at + 12 === bytes.length && data ? { width, height } : null;
+    else if (['IHDR','acTL','fcTL','fdAT'].includes(tag)) return null;
+    else if (tag !== 'PLTE' && (bytes[at+4] & 32) === 0) return null;
+    at += length + 12;
+  }
+  return null;
+}
+
 // -- Results ----------------------------------------------------------------
 
 const COMPLETION_KEYS: readonly string[] = ['gameId', 'puzzleId', 'globalUserId', 'completedAt', 'summary', 'detail'];
@@ -513,13 +535,16 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
 
   /** What a good picture earns is null. The base64 length test comes first, so an absurd upload is never decoded. */
   function photoRefusal(photo: unknown): Outcome | null {
-    if (typeof photo !== 'string' || !photo.startsWith(PHOTO_PREFIX)) return 'not_a_picture';
-    const encoded = photo.slice(PHOTO_PREFIX.length);
+    if (typeof photo !== 'string') return 'not_a_picture';
+    const png = photo.startsWith('data:image/png;base64,');
+    const prefix = png ? 'data:image/png;base64,' : PHOTO_PREFIX;
+    if (!photo.startsWith(prefix)) return 'not_a_picture';
+    const encoded = photo.slice(prefix.length);
     if (encoded.length > Math.ceil(limits.photoBytes / 3) * 4) return 'too_big';
     const bytes = decodeBase64(encoded);
     if (!bytes) return 'not_a_picture';
     if (bytes.length > limits.photoBytes) return 'too_big';
-    const size = jpegSize(bytes);
+    const size = png ? pngSize(bytes) : jpegSize(bytes);
     if (!size) return 'not_a_picture';
     return size.width === limits.photoEdge && size.height === limits.photoEdge ? null : 'wrong_size';
   }

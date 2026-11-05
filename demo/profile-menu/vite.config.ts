@@ -12,7 +12,7 @@ export default defineConfig({
     { find: /^(\.\/|\.\.\/social\/)appSocial$/, replacement: path.join(here, 'fixtureSocial.ts') },
     { find: '@', replacement: path.join(root, 'src') },
   ] },
-  define: { 'import.meta.env.VITE_SHARED_SOCIAL': JSON.stringify('beta'), 'import.meta.env.VITE_PLATFORM_DISCOVERY_URL': JSON.stringify('http://127.0.0.1:9/fixture') },
+  define: { 'import.meta.env.VITE_GROUP_PNG': JSON.stringify('true'), 'import.meta.env.VITE_SHARED_SOCIAL': JSON.stringify('beta'), 'import.meta.env.VITE_PLATFORM_DISCOVERY_URL': JSON.stringify('http://127.0.0.1:9/fixture') },
   cacheDir: path.join(root, 'node_modules/.vite-profile-menu'),
   server: { host: '127.0.0.1', port: 5215, strictPort: true, fs: { allow: [root] } },
 });

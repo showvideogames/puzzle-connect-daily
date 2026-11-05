@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { DEFAULT_CROP, cropSquare, prepareGroupPhoto, type PhotoCrop } from "@/lib/groupPicture";
+import { DEFAULT_CROP, cropSquare, transparentGroupPhotos, prepareGroupPhoto, type PhotoCrop } from "@/lib/groupPicture";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { primaryAction, secondaryAction } from "./accountStyles";
 
@@ -53,6 +53,7 @@ export function GroupPhotoCropper({ file, onApply, onCancel }: Props) {
       <div
         role="img" aria-label="Circular crop preview" data-testid="group-crop-preview"
         className="relative mx-auto aspect-square w-full max-w-[260px] touch-none overflow-hidden rounded-full border-[3px] border-[hsl(258_46%_52%)] bg-white"
+        style={transparentGroupPhotos() ? { backgroundImage: "conic-gradient(#ddd 25%, #fff 0 50%, #ddd 0 75%, #fff 0)", backgroundSize: "20px 20px" } : undefined}
         onPointerDown={event => {
           if (busy || !dimensions) return;
           drag.current = { x: event.clientX, y: event.clientY, crop };
@@ -77,7 +78,7 @@ export function GroupPhotoCropper({ file, onApply, onCancel }: Props) {
           <input aria-label={label} type="range" min="0" max="1" step="0.01" value={crop[axis]} disabled={busy || !dimensions} onChange={event => setCrop({ ...crop, [axis]: Number(event.target.value) })} className="min-w-0 flex-1 accent-[hsl(258_46%_52%)]" />
         </label>)}
       </div>
-      <p className="text-xs text-muted-foreground">Transparent areas currently use a white background.</p>
+      <p className="text-xs text-muted-foreground">{transparentGroupPhotos() ? "Transparent background kept." : "Transparent areas currently use a white background."}</p>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <div className="flex gap-2">
         <button type="button" onClick={onCancel} className={`${secondaryAction} h-11 flex-1`}>Cancel crop</button>
