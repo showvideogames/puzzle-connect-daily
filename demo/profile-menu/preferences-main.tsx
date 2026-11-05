@@ -29,6 +29,14 @@ if (new URLSearchParams(location.search).has('weekly')) {
     for(const person of people) await world.hub.serverFor('rainbow').recordCompletion({gameId:'rainbow',puzzleId,globalUserId:world.globalIdOf(person),completedAt:new Date(world.now()).toISOString(),summary:{solved:true,mistakes:1},detail:'🟨🟨🟨🟨'});
   }
 }
+if(new URLSearchParams(location.search).has('standings')) {
+  for(const [person,seconds] of [['River',10],['Jordan',10]] as const){
+    world.signIn('crosspuns',person);
+    await world.hub.serverFor('crosspuns').recordCompletion({gameId:'crosspuns',puzzleId:'old-crosspuns',globalUserId:world.globalIdOf(person),completedAt:new Date(world.now()).toISOString(),summary:{seconds},detail:null});
+  }
+  const friends=await alice.call('listFriends',{});
+  if(friends.ok)await alice.call('block',{ref:friends.data.find(f=>f.name==='Jordan')!.friendRef});
+}
 const api: SocialApi = { client:alice, puzzleId:()=>'fixture-day', today:()=>new Date(2026,10,5), linkUrl:()=>'', share:async()=>'done' };
 if (new URLSearchParams(location.search).has('weekly')) api.weekPuzzles=async()=>[{id:'week-mon',date:'2026-11-02'},{id:'week-wed',date:'2026-11-04'},{id:'fixture-day',date:'2026-11-05'}];
 function Preview() {

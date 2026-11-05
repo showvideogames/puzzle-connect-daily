@@ -1,3 +1,15 @@
+# Current status — 2026-11-05
+
+All-time standings are implemented locally: dedicated shared SQL reader (0008), authenticated gateway operation, typed client/memory/conformance parity and Rainbow clubhouse panel. `VITE_CROSSPUNS_STANDINGS` defaults OFF. No deployment, hosted writes or CrossPuns website rollout occurred.
+
+Deb accepted inference from small groups. Shared ranks are calculated before per-viewer masking; blocked rows contain only rank and generic label, with no source identity, scores or puzzle data. Existing block/result paths remain unchanged. Prior privacy-choice blockers in the historical notes below are resolved.
+
+Verified: 1,904 app assertions, 105 service assertions, typecheck/lint/build, and 320/1440 light/dark browser flows including both block directions and account switching. Local SQL fixtures cover actual relevant source columns; target hosted schema/permissions still require verification before rollout.
+
+Remaining product decision: publication date versus solve date for rolling 7/30/365-day scoring. Other games scoring remains undecided. No missing access prevents local all-time implementation; it is done.
+
+---
+
 # CrossPuns standings: source review and local scoring
 
 2026-11-05. Local implementation only; nothing enabled, pushed or deployed.
@@ -27,7 +39,7 @@ Read-only checkout: `/Users/westbookair/Documents/Codex/2026-10-29/task-3/claude
 
 `src/social/crosspunsStandings.ts` is a pure calculator accepting already-authorized members and eligible, deduplicated first-solve results. It awards competition points per puzzle, sums all supplied history, ranks equal totals equally, and excludes departed memberships without modifying inputs. It recalculates placements among the supplied current members, matching the existing dynamic membership model. Stable display ordering does not break score ties. Invalid/duplicate source results fail explicitly rather than silently choosing a time.
 
-Six tests cover 3/2/1, multiple tie patterns, history on joining, departure/rejoin without personal-history mutation, replay/invalid input rejection and empty/no-result groups. Typecheck and lint pass. The module is NOT wired to production UI or transport and has no claim of remote persistence.
+Six tests cover 3/2/1, multiple tie patterns, history on joining, departure/rejoin without personal-history mutation, replay/invalid input rejection and empty/no-result groups. Typecheck and lint pass. Historical foundation status: this was initially unwired; the current integration above supersedes that stage.
 
 ## Integration decisions still pending
 

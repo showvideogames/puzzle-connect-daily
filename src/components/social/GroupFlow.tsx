@@ -1,5 +1,6 @@
+import {CrossPunsStandingsPanel} from "./CrossPunsStandingsPanel";
 import type { Operations } from "@/social/contract";
-import { groupDescriptionsEnabled, groupOwnerActionsEnabled, groupInvitePermissionsEnabled } from "@/lib/socialPreferences";
+import { crossPunsStandingsEnabled, groupDescriptionsEnabled, groupOwnerActionsEnabled, groupInvitePermissionsEnabled } from "@/lib/socialPreferences";
 import { GroupDescriptionEditor } from "@/components/account/GroupDescriptionEditor";
 import { useEffect, useState } from "react";
 import { GroupMembers } from "@/components/account/GroupMembers";
@@ -177,7 +178,7 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     }} />
   </main>;
 
-  return <GroupPage group={{ ...group, inviteCode }} canInvite={groupInvitePermissionsEnabled() ? invitation?.canInvite === true : group.isOwner} invitationProblem={invitationProblem} results={results} problem={problem} today={api.today()} onBack={onBack} onShare={share} onCopy={copy} onLeave={leave} onEditPicture={() => setEditingPicture(true)} onMembers={() => setShowMembers(true)} onDelete={groupOwnerActionsEnabled() ? async () => {
+  return <GroupPage standings={crossPunsStandingsEnabled() ? <CrossPunsStandingsPanel api={api} groupId={groupId}/> : undefined} group={{ ...group, inviteCode }} canInvite={groupInvitePermissionsEnabled() ? invitation?.canInvite === true : group.isOwner} invitationProblem={invitationProblem} results={results} problem={problem} today={api.today()} onBack={onBack} onShare={share} onCopy={copy} onLeave={leave} onEditPicture={() => setEditingPicture(true)} onMembers={() => setShowMembers(true)} onDelete={groupOwnerActionsEnabled() ? async () => {
     const answer = await api.client.call("deleteGroup", { groupId });
     if (!live.current) return;
     if (answer.ok === false) return "We couldn't delete the group. Refresh it before trying again.";

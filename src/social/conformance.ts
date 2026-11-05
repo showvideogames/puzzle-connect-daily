@@ -77,6 +77,7 @@ const DECLARED_ARGS: { [O in OpName]: readonly FieldsOf<Operations[O]['args']>[]
   listMembers: ['groupId', 'after', 'limit'],
   leaveGroup: ['groupId'],
   renameMeInGroup: ['groupId', 'name'],
+  crossPunsStandings: ['groupId','offset'],
   getGroupDescription: ['groupId'],
   setGroupDescription: ['groupId', 'description'],
   renameGroup: ['groupId', 'name'],
@@ -123,6 +124,7 @@ const DECLARED_FIELDS: { [O in Exclude<OpName, 'previewInvite' | 'listResults'>]
   listMembers: ['memberRef', 'name', 'animalId', 'backgroundColor', 'isOwner', 'isMe', 'joinedAt'],
   leaveGroup: ['closed'],
   renameMeInGroup: [],
+  crossPunsStandings: ['rows','total'],
   getGroupDescription: ['description'],
   setGroupDescription: ['description'],
   renameGroup: [],
@@ -184,6 +186,7 @@ const SAMPLE_ARGS: { [O in OpName]: Operations[O]['args'] } = {
   listMembers: { groupId: 'no-such-group' },
   leaveGroup: { groupId: 'no-such-group' },
   renameMeInGroup: { groupId: 'no-such-group', name: 'Sam' },
+  crossPunsStandings: { groupId: 'no-such-group', offset:0 },
   getGroupDescription: { groupId: 'no-such-group' },
   setGroupDescription: { groupId: 'no-such-group', description: null },
   renameGroup: { groupId: 'no-such-group', name: 'Group' },
@@ -296,6 +299,16 @@ function checkResultRow(row: unknown): void {
 }
 
 function checkData(op: OpName, data: unknown): void {
+  if(op==='crossPunsStandings') {
+    check(isRecord(data)&&hasExactly(data,['rows','total'])&&Array.isArray(data.rows)&&data.rows.length<=50&&Number.isInteger(data.total), 'Invalid standings page');
+    for(const row of data.rows) {
+      check(isRecord(row)&&hasExactly(row,row.blocked===true?['blocked','rank','label']:['blocked','rank','memberRef','name','points']), 'Standings leaked fields');
+      check(Number.isInteger(row.rank)&&Number(row.rank)>0, 'Invalid rank');
+      if(row.blocked===true)check(row.label==='This player is blocked','Invalid anonymous label');
+      else check(row.blocked===false&&typeof row.memberRef==='string'&&typeof row.name==='string'&&Number.isInteger(row.points),'Invalid visible standing');
+    }
+    return;
+  }
   if (op === 'getGroupInvitation') {
     check(isRecord(data) && hasExactly(data, DECLARED_FIELDS.getGroupInvitation), 'getGroupInvitation returned the wrong fields');
     check(typeof data.canInvite === 'boolean' && (data.inviteCode === null || typeof data.inviteCode === 'string'), 'invalid invitation access');
@@ -783,6 +796,7 @@ async function fullFlow(world: MockWorld): Promise<void> {
   const { friendRef } = must(await bob.call('acceptFriendInvite', { code, noticeVersion: NOTICE }), 'acceptFriendInvite');
   const extra = await makeGroup(alice, "Transfer club", "Alice");
   await join(bob, extra.inviteCode, "Bob");
+  must(await alice.call("crossPunsStandings", {groupId:extra.groupId,offset:0}), "crossPunsStandings");
   const target = (await membersOf(alice, extra.groupId)).find(m => !m.isMe)!;
   must(await alice.call("setMemberInvitePermission", { groupId: extra.groupId, memberRef: target.memberRef, allowed: true }), "setMemberInvitePermission");
   must(await bob.call("getGroupInvitation", { groupId: extra.groupId }), "getGroupInvitation");

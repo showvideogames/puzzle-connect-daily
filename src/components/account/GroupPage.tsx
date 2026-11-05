@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import type { FriendResult } from "@/lib/friendResults";
 import { leaveGroupQuestion, memberWords } from "@/lib/socialView";
 import { accountCard, accountCardTitle, accountPanel, outlineAction, quietText } from "./accountStyles";
@@ -23,6 +23,7 @@ interface GroupPageProps {
   problem?: string | null;
   today: Date;
   onBack: () => void;
+  standings?: ReactNode;
   canInvite?: boolean;
   invitationProblem?: string | null;
   onDelete?: () => Promise<string | void>;
@@ -38,7 +39,7 @@ interface GroupPageProps {
 }
 
 /** One group: who is in it, how they did today, and for its owner, the link. */
-export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave, onEditPicture, onMembers, description, descriptionProblem, onEditDescription, onDelete, canInvite, invitationProblem }: GroupPageProps) {
+export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave, onEditPicture, onMembers, description, descriptionProblem, onEditDescription, onDelete, canInvite, invitationProblem, standings }: GroupPageProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const id = useId();
 
@@ -74,6 +75,8 @@ export function GroupPage({ group, results, problem, today, onBack, onShare, onC
           ))}
         </ul>
       )}
+
+      {standings}
 
       {(canInvite ?? group.isOwner) && group.inviteCode && (
         <section className={`${accountCard} mt-3`} aria-labelledby={`${id}-link`}>

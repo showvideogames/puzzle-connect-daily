@@ -1,3 +1,5 @@
+import {crossPunsStandings} from './crosspunsStandings';
+import {crossPunsStandingsView} from './crosspunsStandingsView';
 import { AVATAR_IDS, CURRENT_NOTICE_VERSION, DEFAULT_AVATAR, DEFAULT_COLOR, DEFAULT_EMBLEM, GAME_STATUS, GROUP_EMBLEM_IDS, LIMITS, PROFILE_COLORS, RESULT_SHAPES } from './contract';
 import type {
   CompletionInput,
@@ -934,6 +936,22 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       if (clean === null) return fail('bad_my_name');
       found.mine.name = clean;
       return done(NOTHING);
+    },
+
+    crossPunsStandings(me, {groupId,offset}) {
+      const found=membership(me,groupId);
+      if(!found)return fail('not_a_member');
+      if(!Number.isSafeInteger(offset)||offset<0||offset>10000)return fail('not_found');
+      const members=[...found.group.members.values()];
+      const byPerson=new Map(members.map(m=>[m.person,m.memberRef]));
+      const history=[...results].flatMap(([key,card])=>{
+        const [game,puzzleId]=key.split('\n');
+        const memberRef=byPerson.get(card.person);
+        return game==='crosspuns'&&memberRef&&'seconds' in card.summary ? [{memberRef,puzzleId,seconds:card.summary.seconds}] : [];
+      });
+      const ranked=crossPunsStandings(members,history);
+      const people=new Map(members.map(m=>[m.memberRef,{name:m.name,blockedEitherWay:blockedEitherWay(me.id,m.person)}]));
+      return done({rows:crossPunsStandingsView(ranked.rows.slice(offset,offset+50),people),total:members.length});
     },
 
     getGroupDescription(me, { groupId }) {

@@ -22,3 +22,5 @@ export const groupDescriptionsEnabled = () => import.meta.env.VITE_GROUP_DESCRIP
 export const groupOwnerActionsEnabled = () => import.meta.env.VITE_GROUP_OWNER_ACTIONS === 'true';
 
 export const groupInvitePermissionsEnabled = () => import.meta.env.VITE_GROUP_INVITE_PERMISSIONS === 'true';
+
+export const crossPunsStandingsEnabled = () => import.meta.env.VITE_CROSSPUNS_STANDINGS === 'true';

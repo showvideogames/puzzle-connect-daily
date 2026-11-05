@@ -350,6 +350,7 @@ export const OPERATIONS: Readonly<Record<string, Operation>> = {
     sql: "select social.rename_me_in_group($1::text, $2::text, $3::text) as result",
     params: (a) => [a.groupId, a.name],
   },
+  crossPunsStandings: { required: { groupId: "text", offset: "whole" }, sql: "select social.crosspuns_standings($1::text, $2::text, $3::int) as result", params: a => [a.groupId,a.offset] },
   getGroupDescription: { required: { groupId: "text" }, sql: "select social.get_group_description($1::text, $2::text) as result", params: a => [a.groupId] },
   setGroupDescription: { required: { groupId: "text", description: "textOrNull" }, sql: "select social.set_group_description($1::text, $2::text, $3::text) as result", params: a => [a.groupId, a.description] },
   renameGroup: {
