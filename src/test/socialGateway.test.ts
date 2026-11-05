@@ -479,6 +479,8 @@ const CASES: { [O in OpName]: Case<O> } = {
   declineFriendRequest: { args: { requestRef: "r" }, fn: "social.decline_friend_request", params: ["r"] },
   cancelFriendRequest: { args: { requestRef: "r" }, fn: "social.cancel_friend_request", params: ["r"] },
   listFriends: { args: {}, fn: "social.list_friends", params: [] },
+  listFriendPreferences: { args: {}, fn: "social.list_friend_preferences", params: [] },
+  setFriendPreference: { args: { friendRef: "ref", favorite: true, nickname: "Pal" }, fn: "social.set_friend_preference", params: ["ref", true, "Pal"] },
   removeFriend: { args: { friendRef: "f" }, fn: "social.remove_friend", params: ["f"] },
   block: { args: { ref: "f" }, fn: "social.block", params: ["f"] },
   unblock: { args: { blockRef: "b" }, fn: "social.unblock", params: ["b"] },
@@ -531,6 +533,12 @@ describe("social-gateway: the operation table", () => {
     expect(hub[1].role).toBe("social_gateway");
     expect(hub[1].params).toEqual([GLOBAL_ID, ...params]);
     expect(new Set(hub[1].text.match(/\$\d+/g)).size).toBe(1 + params.length);
+  });
+
+  it.each(["true", 1, null, undefined])("refuses invalid favorite values before a database write: %s", async favorite => {
+    const { deps, statements } = setup();
+    expect((await send(deps, "setFriendPreference", { friendRef: "ref", favorite, nickname: null })).body).toEqual(UNAVAILABLE);
+    expect(statements.map(named)).toEqual(["public.accounts", "social.is_beta_tester"]);
   });
 
   it("getMe is answered by ensure_person alone", async () => {

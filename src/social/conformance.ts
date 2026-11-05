@@ -63,6 +63,8 @@ const DECLARED_ARGS: { [O in OpName]: readonly FieldsOf<Operations[O]['args']>[]
   declineFriendRequest: ['requestRef'],
   cancelFriendRequest: ['requestRef'],
   listFriends: [],
+  listFriendPreferences: [],
+  setFriendPreference: ['friendRef', 'favorite', 'nickname'],
   removeFriend: ['friendRef'],
   block: ['ref'],
   unblock: ['blockRef'],
@@ -99,6 +101,8 @@ const DECLARED_FIELDS: { [O in Exclude<OpName, 'previewInvite' | 'listResults'>]
   declineFriendRequest: [],
   cancelFriendRequest: [],
   listFriends: ['friendRef', 'name', 'animalId', 'backgroundColor', 'since'],
+  listFriendPreferences: ['friendRef', 'favorite', 'nickname'],
+  setFriendPreference: ['friendRef', 'favorite', 'nickname'],
   removeFriend: [],
   block: ['blockRef'],
   unblock: [],
@@ -126,7 +130,7 @@ const REQUEST_ROW_FIELDS: readonly unknown[] = ['requestRef', 'name', 'animalId'
 /** Every result row, before its one ref and, when it isn't locked, its detail. */
 const RESULT_ROW_FIELDS: readonly unknown[] = ['isMe', 'name', 'animalId', 'backgroundColor', 'summary', 'detailLocked'];
 
-const LIST_OPS: readonly OpName[] = ['listFriends', 'listBlocks', 'listMyGroups', 'listMembers', 'listRemoved', 'listResults'];
+const LIST_OPS: readonly OpName[] = ['listFriendPreferences', 'listFriends', 'listBlocks', 'listMyGroups', 'listMembers', 'listRemoved', 'listResults'];
 
 const TIMESTAMP_FIELDS: readonly string[] = ['expiresAt', 'since', 'joinedAt', 'sentAt'];
 const CODE_FIELDS: readonly string[] = ['code', 'inviteCode'];
@@ -150,6 +154,8 @@ const SAMPLE_ARGS: { [O in OpName]: Operations[O]['args'] } = {
   declineFriendRequest: { requestRef: 'no-such-ref' },
   cancelFriendRequest: { requestRef: 'no-such-ref' },
   listFriends: {},
+  listFriendPreferences: {},
+  setFriendPreference: { friendRef: "no-such-ref", favorite: true, nickname: null },
   removeFriend: { friendRef: 'no-such-ref' },
   block: { ref: 'no-such-ref' },
   unblock: { blockRef: 'no-such-ref' },
@@ -188,12 +194,12 @@ function check(condition: unknown, message: string): asserts condition {
 }
 
 function must<T>(result: Result<T>, label: string): T {
-  if (!result.ok) throw new Error(`${label}: expected success, got ${result.outcome}`);
+  if (result.ok === false) throw new Error(`${label}: expected success, got ${result.outcome}`);
   return result.data;
 }
 
 function refused(result: Result<unknown>, outcome: Outcome, label: string): void {
-  check(!result.ok && result.outcome === outcome, `${label}: expected ${outcome}, got ${JSON.stringify(result)}`);
+  check(result.ok === false && result.outcome === outcome, `${label}: expected ${outcome}, got ${JSON.stringify(result)}`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -739,6 +745,8 @@ async function fullFlow(world: MockWorld): Promise<void> {
   must(await guest.call('previewInvite', { code }), 'previewInvite');
   const { friendRef } = must(await bob.call('acceptFriendInvite', { code, noticeVersion: NOTICE }), 'acceptFriendInvite');
   await friendsOf(alice);
+  must(await alice.call("setFriendPreference", { friendRef, favorite: true, nickname: "Pal" }), "setFriendPreference");
+  must(await alice.call("listFriendPreferences", {}), "listFriendPreferences");
 
   const dave = world.signIn('crosspuns', 'dave');
   check((await sendRequest(dave, alice)).name === 'Alice', 'the lookup should show who it found');
@@ -2526,7 +2534,7 @@ export function socialConformanceScenarios(makeWorld: MakeWorld): SocialScenario
       const { requestRef } = must(await alice[0].call('findFriendByCode', { friendCode }), 'the first lookup');
       for (let i = 1; i < LIMITS.friendLookupsPerDay; i++) {
         const answer = await alice[i % alice.length].call('findFriendByCode', { friendCode: i % 2 === 0 ? friendCode : NO_SUCH_FRIEND_CODE });
-        check(answer.ok || answer.outcome === 'not_found', `lookup ${i} should still be allowed`);
+        check(answer.ok === true || answer.outcome === 'not_found', `lookup ${i} should still be allowed`);
       }
 
       for (const player of alice) {

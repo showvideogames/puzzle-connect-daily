@@ -29,3 +29,9 @@ node demo/profile-menu/check-transparency.mjs
 ```
 
 The last command requires the isolated Vite preview on port 5215 and local Chrome. It blocks non-local requests and captures 320px/1440px, light/dark views. Service tests exercise the real SQL under the gateway role, including preservation of pre-upgrade JPEG data, transparent round trips, owner restrictions, malformed/oversized input and helper permissions. The regression suite also covers persistence and existing social behavior. No live account or service credentials are used.
+
+## Private friend preferences (0003)
+
+`0003_private_friend_preferences.sql` and the two new gateway operations store a viewer's favorite/nickname on the existing friendship. Preferences cascade away on unfriend/block/account deletion; they never change public profiles or results. The 24-character nickname limit reuses the existing display-name limit; null clears it. Both sides can set independent preferences. Table access is denied to app roles, with authenticated identity resolved by the existing gateway.
+
+Deploy the SQL and updated gateway before enabling `VITE_SOCIAL_PREFERENCES=true`. This flag defaults off. Existing listFriends responses remain unchanged. The new table/functions also need inclusion in any future shared-hub uninstall allow-list; the old guarded uninstall should refuse an incomplete teardown rather than drop unexpected objects. No uninstall was performed.

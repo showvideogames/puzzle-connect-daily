@@ -167,6 +167,7 @@ interface Friendship {
   since: number;
   /** Which notice each person saw. */
   notices: Map<string, number>;
+  preferences?: Map<string, { favorite: boolean; nickname: string | null }>;
 }
 
 interface FriendRequest {
@@ -764,6 +765,24 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
           return { friendRef: f.ref, name: displayNameOf(friend), ...faceOf(friend), since: iso(f.since) };
         }),
       );
+    },
+
+    listFriendPreferences(me) {
+      return done(friendshipsOf(me.id).flatMap(f => {
+        const preference = f.preferences?.get(me.id);
+        return preference ? [{ friendRef: f.ref, ...preference }] : [];
+      }));
+    },
+
+    setFriendPreference(me, { friendRef, favorite, nickname }) {
+      const friendship = friendships.get(friendRef);
+      if (!friendship || (friendship.a !== me.id && friendship.b !== me.id)) return fail('not_found');
+      if (typeof favorite !== 'boolean') return fail('unavailable');
+      const name = nickname === null ? null : cleanName(nickname, limits.nameMax);
+      if (nickname !== null && name === null) return fail('bad_name');
+      friendship.preferences ??= new Map();
+      friendship.preferences.set(me.id, { favorite, nickname: name });
+      return done({ friendRef, favorite, nickname: name });
     },
 
     removeFriend(me, { friendRef }) {

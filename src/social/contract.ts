@@ -163,6 +163,13 @@ export interface FriendRow extends Face {
   since: string;
 }
 
+export interface FriendPreference {
+  friendRef: string;
+  favorite: boolean;
+  /** Private to the viewer; never a public profile edit. Null clears it. */
+  nickname: string | null;
+}
+
 export interface FriendRequestRow extends Face {
   requestRef: string;
   name: string | null;
@@ -292,6 +299,8 @@ export interface Operations {
   declineFriendRequest: { args: { requestRef: string }; data: NoData };
   cancelFriendRequest: { args: { requestRef: string }; data: NoData };
   listFriends: { args: NoArgs; data: FriendRow[] };
+  listFriendPreferences: { args: NoArgs; data: FriendPreference[] };
+  setFriendPreference: { args: FriendPreference; data: FriendPreference };
   removeFriend: { args: { friendRef: string }; data: NoData };
   block: { args: { ref: string }; data: { blockRef: string } };
   unblock: { args: { blockRef: string }; data: NoData };

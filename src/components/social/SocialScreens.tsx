@@ -1,3 +1,5 @@
+import { FriendPreferences } from "@/components/account/FriendPreferences";
+import { socialPreferencesEnabled } from "@/lib/socialPreferences";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { DisplayNameGate } from "@/components/account/DisplayNameGate";
 import { FriendActions } from "@/components/account/FriendActions";
@@ -190,6 +192,13 @@ export function SocialScreens({
   /** A friend's id is their friendRef. Nothing can be done to your own row. */
   const friendActions = (result: FriendResult) =>
     result.isYou ? null : (
+      <div>
+      {socialPreferencesEnabled() && <FriendPreferences friend={result} onSave={async preference => {
+        const answer = await api.client.call("setFriendPreference", { friendRef: result.id, ...preference });
+        if (!live.current) return;
+        if (answer.ok === false) return answer.outcome === "bad_name" ? "Please use a nickname of 24 characters or fewer." : "We couldn't save those preferences. Please try again.";
+        await load();
+      }} />}
       <FriendActions
         name={result.name}
         onRemove={async () => afterChange(await api.client.call("removeFriend", { friendRef: result.id }))}
@@ -200,6 +209,7 @@ export function SocialScreens({
           return problem;
         }}
       />
+      </div>
     );
 
   const openGroup = loaded.groups?.find((group) => group.groupId === openGroupId);

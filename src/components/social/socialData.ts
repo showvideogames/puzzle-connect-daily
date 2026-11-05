@@ -1,3 +1,4 @@
+import { applyFriendPreferences, socialPreferencesEnabled } from "@/lib/socialPreferences";
 import type { GroupInvitePreview } from "@/components/account/GroupInviteCard";
 import type { GroupView } from "@/components/account/GroupPage";
 import type { FriendResult } from "@/lib/friendResults";
@@ -62,11 +63,17 @@ export async function readPerson(api: SocialApi): Promise<PersonData | { outcome
   if (rows !== null && !Array.isArray(rows)) return { outcome: rows.outcome };
   const groups = await client.call("listMyGroups", {});
   if (groups.ok === false) return { outcome: groups.outcome };
+  let results = friendResults({ me: me.data, friends: friends.data, rows: Array.isArray(rows) ? rows : [] });
+  if (socialPreferencesEnabled()) {
+    const preferences = await client.call("listFriendPreferences", {});
+    if (preferences.ok === false) return { outcome: preferences.outcome };
+    results = applyFriendPreferences(results, preferences.data);
+  }
   return {
     me: me.data,
     incoming: requests.data.incoming,
     outgoing: requests.data.outgoing,
-    results: friendResults({ me: me.data, friends: friends.data, rows: Array.isArray(rows) ? rows : [] }),
+    results,
     groups: groups.data.map(groupView),
     noResults: rows === null,
   };

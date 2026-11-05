@@ -187,7 +187,7 @@ function isCurrentApiKey(value: string, keys: ApiKeys): boolean {
 type Args = Record<string, unknown>;
 
 /** What one argument may be. The hub still judges the value: this is only its type. */
-type Kind = "text" | "textOrNull" | "code" | "whole" | "cursor" | "game" | "puzzle";
+type Kind = "boolean" | "text" | "textOrNull" | "code" | "whole" | "cursor" | "game" | "puzzle";
 
 const GAME_IDS = ["rainbow", "crosspuns", "cluevoyance", "wtf", "yodel", "hamburgle", "priceiswhat"];
 const INT4_MAX = 2147483647;
@@ -204,6 +204,7 @@ const isPlainObject = (value: unknown): value is Args =>
 const has = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
 
 const FITS: Record<Kind, (value: unknown) => boolean> = {
+  boolean: (value) => typeof value === "boolean",
   text: isText,
   textOrNull: (value) => value === null || isText(value),
   code: (value) => isText(value) && value.length <= CODE_MAX,
@@ -294,6 +295,12 @@ export const OPERATIONS: Readonly<Record<string, Operation>> = {
     params: (a) => [a.requestRef],
   },
   listFriends: { required: {}, sql: "select social.list_friends($1::text) as result", params: noParams },
+  listFriendPreferences: { required: {}, sql: "select social.list_friend_preferences($1::text) as result", params: noParams },
+  setFriendPreference: {
+    required: { friendRef: "text", favorite: "boolean", nickname: "textOrNull" },
+    sql: "select social.set_friend_preference($1::text, $2::text, $3::boolean, $4::text) as result",
+    params: (a) => [a.friendRef, a.favorite, a.nickname],
+  },
   removeFriend: {
     required: { friendRef: "text" },
     sql: "select social.remove_friend($1::text, $2::text) as result",

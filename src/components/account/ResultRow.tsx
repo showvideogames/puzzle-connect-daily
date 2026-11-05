@@ -20,7 +20,9 @@ export function ResultRow({ result, open, onToggle, actions }: ResultRowProps) {
     <>
       <ProfileAvatar animalId={result.animalId} backgroundColor={result.backgroundColor} size={56} />
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-lg font-bold leading-tight text-foreground">{result.isYou ? "You" : result.name}</span>
+        <span className="block truncate text-lg font-bold leading-tight text-foreground">{result.isYou ? "You" : result.nickname || result.name}</span>
+        {!result.isYou && result.favorite && <span className="block text-sm text-slate">★ Favorite</span>}
+        {!result.isYou && result.nickname && <span className="block truncate text-sm text-slate">{result.name}</span>}
         <span className={`block text-base leading-snug ${quietText}`}>{resultSummary(result)}</span>
       </span>
     </>
