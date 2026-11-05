@@ -12,10 +12,11 @@ interface Props {
  today:Date;
  resultsAvailable:boolean;
  actions:ReactNode;
+ activity?:ReactNode;
  onBack:()=>void;
 }
 /** A friend's public face and the viewer's private preferences. No level/XP is implied. */
-export function FriendProfile({friend,viewer,today,resultsAvailable,actions,onBack}:Props){
+export function FriendProfile({friend,viewer,today,resultsAvailable,actions,activity,onBack}:Props){
  const heading=useRef<HTMLHeadingElement>(null);
  useEffect(()=>{heading.current?.focus();},[]);
  return <main className={`${accountPanel} mx-auto w-full max-w-[32rem] px-5 pb-5 pt-2 sm:px-8 sm:pb-8`} data-testid="friend-profile">
@@ -34,6 +35,7 @@ export function FriendProfile({friend,viewer,today,resultsAvailable,actions,onBa
    </section>
    {viewer&&<section className={`${accountCard} mt-3`} aria-label="Your result today"><p className="font-semibold">Your result</p><p className={quietText}>{resultSummary(viewer)}</p></section>}
   </>:<p className={`${quietText} mt-3`}>Today's puzzle results aren't available right now.</p>}
+  {activity}
   <div className="mt-5 [&_button]:min-h-11">{actions}</div>
  </main>;
 }

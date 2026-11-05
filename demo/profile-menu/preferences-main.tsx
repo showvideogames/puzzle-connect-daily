@@ -24,7 +24,13 @@ world.advance(1000);
 for (const person of new URLSearchParams(location.search).has('completed') ? ['Jordan','River'] : ['Jordan']) {
   await world.hub.serverFor('rainbow').recordCompletion({gameId:'rainbow',puzzleId:'fixture-day',globalUserId:world.globalIdOf(person),completedAt:new Date(world.now()).toISOString(),summary:{solved:true,mistakes:0},detail:'🟨🟨🟨🟨\n🟩🟩🟩🟩'});
 }
+if (new URLSearchParams(location.search).has('weekly')) {
+  for (const [puzzleId, people] of [['week-mon',['River','Jordan']],['week-wed',['Jordan']]] as const) {
+    for(const person of people) await world.hub.serverFor('rainbow').recordCompletion({gameId:'rainbow',puzzleId,globalUserId:world.globalIdOf(person),completedAt:new Date(world.now()).toISOString(),summary:{solved:true,mistakes:1},detail:'🟨🟨🟨🟨'});
+  }
+}
 const api: SocialApi = { client:alice, puzzleId:()=>'fixture-day', today:()=>new Date(2026,10,5), linkUrl:()=>'', share:async()=>'done' };
+if (new URLSearchParams(location.search).has('weekly')) api.weekPuzzles=async()=>[{id:'week-mon',date:'2026-11-02'},{id:'week-wed',date:'2026-11-04'},{id:'fixture-day',date:'2026-11-05'}];
 function Preview() {
   const [tab,setTab]=useState<FriendsTab>('friends');
   const [account,setAccount]=useState('River');

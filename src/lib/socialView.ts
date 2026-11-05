@@ -82,7 +82,7 @@ function detailOf(row: ResultRow): FriendResult["detail"] {
 
 type Person = Pick<FriendResult, "id" | "name" | "isYou" | "animalId" | "backgroundColor">;
 
-function resultFor(person: Person, row: ResultRow | undefined): FriendResult {
+export function resultFor(person: Person, row: ResultRow | undefined): FriendResult {
   const base = { ...person, gameId: GAME_ID };
   if (!row || !isRainbowSummary(row.summary)) return { ...base, status: "not-played", mistakes: 0, detail: null };
   return { ...base, status: row.summary.solved ? "solved" : "not-solved", mistakes: row.summary.mistakes, detail: detailOf(row) };

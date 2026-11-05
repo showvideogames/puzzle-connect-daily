@@ -1,3 +1,4 @@
+import { FriendWeek } from "./FriendWeek";
 import { FriendProfile } from "@/components/account/FriendProfile";
 import { FriendPreferences } from "@/components/account/FriendPreferences";
 import { socialPreferencesEnabled } from "@/lib/socialPreferences";
@@ -233,7 +234,7 @@ export function SocialScreens({
           }}
         />
       ) : profileFriend ? (
-        <FriendProfile friend={profileFriend} viewer={loaded.results?.find(result => result.isYou)} today={api.today()} resultsAvailable={!loaded.noResults} actions={friendActions(profileFriend)} onBack={() => setProfileFriendId(null)} />
+        <FriendProfile friend={profileFriend} viewer={loaded.results?.find(result => result.isYou)} today={api.today()} resultsAvailable={!loaded.noResults} actions={friendActions(profileFriend)} activity={api.weekPuzzles ? <FriendWeek key={profileFriend.id} api={api} friend={profileFriend} /> : undefined} onBack={() => setProfileFriendId(null)} />
       ) : openGroup ? (
         <GroupFlow
           key={openGroup.groupId}

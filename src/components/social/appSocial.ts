@@ -1,5 +1,5 @@
 import { accountCheckRunning, accountCheckState, accountSignInGeneration, getCurrentAccount, signInWithPlatform, storedSessionOwner, subscribeToCurrentAccount } from "@/lib/platformSignIn";
-import { getTodaysPuzzle } from "@/lib/puzzles";
+import { getSocialWeekPuzzles, getTodaysPuzzle } from "@/lib/puzzles";
 import { createGatewayTransport, readStoredAccessToken } from "@/lib/socialTransport";
 import type { SessionState } from "@/social/contract";
 import { createRainbowSocial, rainbowSession } from "@/social/rainbowAdapter";
@@ -56,6 +56,7 @@ export function appSocial(): AppSocial {
         credentialFor: readStoredAccessToken,
       }),
       puzzleId: todaysPuzzleId,
+      weekPuzzles: getSocialWeekPuzzles,
       today: () => new Date(),
       linkUrl: (code) => `${location.origin}/join/${encodeURIComponent(code)}`,
       share: shareOrCopy,
