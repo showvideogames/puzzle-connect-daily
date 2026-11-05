@@ -320,6 +320,8 @@ export interface Operations {
   setGroupDescription: { args: { groupId: string; description: string | null }; data: { description: string | null } };
   renameGroup: { args: { groupId: string; name: string }; data: NoData };
   setGroupAppearance: { args: { groupId: string; emblemId: string; photo: string | null; accentColor: string }; data: { photoVersion: number } };
+  transferGroupOwnership: { args: { groupId: string; memberRef: string }; data: NoData };
+  deleteGroup: { args: { groupId: string }; data: NoData };
   removeMember: { args: { groupId: string; memberRef: string }; data: NoData };
   listRemoved: { args: { groupId: string }; data: RemovedRow[] };
   letBackIn: { args: { groupId: string; removedRef: string }; data: NoData };

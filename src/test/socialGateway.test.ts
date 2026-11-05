@@ -505,6 +505,8 @@ const CASES: { [O in OpName]: Case<O> } = {
     fn: "social.set_group_appearance",
     params: ["g", "book", null, "#DED1F2"],
   },
+  transferGroupOwnership: { args: { groupId: "g1", memberRef: "m1" }, fn: "social.transfer_group_ownership", params: ["g1","m1"] },
+  deleteGroup: { args: { groupId: "g1" }, fn: "social.delete_group", params: ["g1"] },
   removeMember: { args: { groupId: "g", memberRef: "m" }, fn: "social.remove_member", params: ["g", "m"] },
   listRemoved: { args: { groupId: "g" }, fn: "social.list_removed", params: ["g"] },
   letBackIn: { args: { groupId: "g", removedRef: "x" }, fn: "social.let_back_in", params: ["g", "x"] },

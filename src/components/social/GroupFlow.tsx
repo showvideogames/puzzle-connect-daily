@@ -1,4 +1,4 @@
-import { groupDescriptionsEnabled } from "@/lib/socialPreferences";
+import { groupDescriptionsEnabled, groupOwnerActionsEnabled } from "@/lib/socialPreferences";
 import { GroupDescriptionEditor } from "@/components/account/GroupDescriptionEditor";
 import { useEffect, useState } from "react";
 import { GroupMembers } from "@/components/account/GroupMembers";
@@ -17,7 +17,7 @@ interface GroupFlowProps {
   group: GroupView;
   onBack: () => void;
   onReload: () => Promise<void>;
-  /** Says what happened to the group. */
+  /** Exit the clubhouse with a confirmed membership/ownership outcome. */
   onLeft: (note: string) => void;
 }
 
@@ -105,7 +105,12 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     }} />
   </main>;
 
-  if (showMembers) return <GroupMembers group={group} members={members} problem={problem} note={memberNote} onBack={() => setShowMembers(false)} onRemove={async member => {
+  if (showMembers) return <GroupMembers group={group} members={members} problem={problem} note={memberNote} onBack={() => setShowMembers(false)} onTransfer={groupOwnerActionsEnabled() ? async member => {
+    const answer = await api.client.call("transferGroupOwnership", { groupId, memberRef: member.memberRef });
+    if (!live.current) return;
+    if (answer.ok === false) return "We couldn't transfer ownership. Refresh the group before trying again.";
+    onLeft(`${member.name} is now the owner of ${name}. You remain a member.`);
+  } : undefined} onRemove={async member => {
     try {
       const answer = await api.client.call("removeMember", { groupId, memberRef: member.memberRef });
       if (!live.current) return;
@@ -135,5 +140,10 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     }} />
   </main>;
 
-  return <GroupPage group={group} results={results} problem={problem} today={api.today()} onBack={onBack} onShare={share} onCopy={copy} onLeave={leave} onEditPicture={() => setEditingPicture(true)} onMembers={() => setShowMembers(true)} description={description} descriptionProblem={descriptionProblem} onEditDescription={groupDescriptionsEnabled() && description !== undefined ? () => setEditingDescription(true) : undefined} />;
+  return <GroupPage group={group} results={results} problem={problem} today={api.today()} onBack={onBack} onShare={share} onCopy={copy} onLeave={leave} onEditPicture={() => setEditingPicture(true)} onMembers={() => setShowMembers(true)} onDelete={groupOwnerActionsEnabled() ? async () => {
+    const answer = await api.client.call("deleteGroup", { groupId });
+    if (!live.current) return;
+    if (answer.ok === false) return "We couldn't delete the group. Refresh it before trying again.";
+    onLeft(`${name} was deleted. Personal game history was kept.`);
+  } : undefined} description={description} descriptionProblem={descriptionProblem} onEditDescription={groupDescriptionsEnabled() && description !== undefined ? () => setEditingDescription(true) : undefined} />;
 }

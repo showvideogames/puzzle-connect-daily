@@ -970,6 +970,18 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       });
     },
 
+    transferGroupOwnership(me, { groupId, memberRef }) {
+      return asOwner(me,groupId,group => {
+        const target = [...group.members.values()].find(m => m.memberRef === memberRef);
+        if (!target) return fail("not_found");
+        group.owner = target.person;
+        return done(NOTHING);
+      });
+    },
+    deleteGroup(me, { groupId }) {
+      return asOwner(me,groupId,group => { groups.delete(group.id); return done(NOTHING); });
+    },
+
     removeMember(me, { groupId, memberRef }) {
       return asOwner(me, groupId, (group) => {
         const member = [...group.members.values()].find((m) => m.memberRef === memberRef);

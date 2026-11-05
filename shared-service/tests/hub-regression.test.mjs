@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const DRAFT = readFileSync(new URL('../fixtures/hub-eb238dd.sql', import.meta.url), 'utf8');
-const PATCH = ['0002_png_group_photos.sql', '0003_private_friend_preferences.sql', '0004_private_group_order.sql', '0005_group_descriptions.sql'].map(file => readFileSync(new URL(`../patches/${file}`, import.meta.url), 'utf8')).join('\n');
+const PATCH = ['0002_png_group_photos.sql', '0003_private_friend_preferences.sql', '0004_private_group_order.sql', '0005_group_descriptions.sql', '0006_group_owner_actions.sql'].map(file => readFileSync(new URL(`../patches/${file}`, import.meta.url), 'utf8')).join('\n');
 const UNINSTALL = readFileSync(new URL('../fixtures/uninstall.sql', import.meta.url), 'utf8');
 
 // Read from the contract's own file, so the lists in the SQL can't drift from it.
@@ -30,6 +30,7 @@ const ENTRY_FUNCTIONS = [
   'create_friend_invite',
   'create_group',
   'decline_friend_request',
+  'delete_group',
   'delete_person',
   'ensure_person',
   'find_friend_by_code',
@@ -60,6 +61,7 @@ const ENTRY_FUNCTIONS = [
   'set_group_description',
   'set_group_order',
   'set_profile',
+  'transfer_group_ownership',
   'unblock',
 ];
 
@@ -74,6 +76,8 @@ const RESULT_ROW_KEYS = ['isMe', 'name', ...FACE_KEYS, 'summary', 'detailLocked'
 
 /** The exact keys of each function's data, or of each row of a list. */
 const ALLOWED_KEYS = {
+  delete_group: [],
+  transfer_group_ownership: [],
   get_group_description: ['description'],
   set_group_description: ['description'],
   list_friend_preferences: ['friendRef', 'favorite', 'nickname'],
@@ -1911,11 +1915,15 @@ test('the draft hub', { skip }, async (t) => {
       await ok('set_friend_preference',a,friendRef,true,'Pal');
       assert.deepEqual(await ok('list_friend_preferences',a),[{friendRef,favorite:true,nickname:'Pal'}]);
       assert.deepEqual(await ok('list_friend_preferences',b),[]);
-      const {groupId} = await ok('create_group',a,'Ordered club','Parker');
+      const {groupId,inviteCode} = await ok('create_group',a,'Ordered club','Parker');
+      await ok('join_group',b,inviteCode,'Riley');
       await ok('set_group_description',a,groupId,'Weekly puzzles');
       assert.deepEqual(await ok('get_group_description',a,groupId),{description:'Weekly puzzles'});
       await ok('set_group_order',a,[groupId]);
       assert.deepEqual(await ok('list_group_order',a),{groupIds:[groupId]});
+      const target=(await ok('list_members',a,groupId)).find(m=>!m.isMe).memberRef;
+      await ok('transfer_group_ownership',a,groupId,target);
+      await ok('delete_group',b,groupId);
     });
 
     await t.test('every answer in this whole run holds exactly its declared keys, and every function was heard from', async () => {

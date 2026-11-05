@@ -81,6 +81,8 @@ const DECLARED_ARGS: { [O in OpName]: readonly FieldsOf<Operations[O]['args']>[]
   setGroupDescription: ['groupId', 'description'],
   renameGroup: ['groupId', 'name'],
   setGroupAppearance: ['groupId', 'emblemId', 'photo', 'accentColor'],
+  transferGroupOwnership: ['groupId','memberRef'],
+  deleteGroup: ['groupId'],
   removeMember: ['groupId', 'memberRef'],
   listRemoved: ['groupId'],
   letBackIn: ['groupId', 'removedRef'],
@@ -123,6 +125,8 @@ const DECLARED_FIELDS: { [O in Exclude<OpName, 'previewInvite' | 'listResults'>]
   setGroupDescription: ['description'],
   renameGroup: [],
   setGroupAppearance: ['photoVersion'],
+  transferGroupOwnership: [],
+  deleteGroup: [],
   removeMember: [],
   listRemoved: ['removedRef', 'name'],
   letBackIn: [],
@@ -180,6 +184,8 @@ const SAMPLE_ARGS: { [O in OpName]: Operations[O]['args'] } = {
   setGroupDescription: { groupId: 'no-such-group', description: null },
   renameGroup: { groupId: 'no-such-group', name: 'Group' },
   setGroupAppearance: { groupId: 'no-such-group', emblemId: 'campfire', photo: null, accentColor: '#DED1F2' },
+  transferGroupOwnership: { groupId: 'no-such-group', memberRef: 'no-such-ref' },
+  deleteGroup: { groupId: 'no-such-group' },
   removeMember: { groupId: 'no-such-group', memberRef: 'no-such-ref' },
   listRemoved: { groupId: 'no-such-group' },
   letBackIn: { groupId: 'no-such-group', removedRef: 'no-such-ref' },
@@ -762,6 +768,11 @@ async function fullFlow(world: MockWorld): Promise<void> {
   const { code } = await makeFriendInvite(alice);
   must(await guest.call('previewInvite', { code }), 'previewInvite');
   const { friendRef } = must(await bob.call('acceptFriendInvite', { code, noticeVersion: NOTICE }), 'acceptFriendInvite');
+  const extra = await makeGroup(alice, "Transfer club", "Alice");
+  await join(bob, extra.inviteCode, "Bob");
+  const target = (await membersOf(alice, extra.groupId)).find(m => !m.isMe)!;
+  must(await alice.call("transferGroupOwnership", { groupId: extra.groupId, memberRef: target.memberRef }), "transferGroupOwnership");
+  must(await bob.call("deleteGroup", { groupId: extra.groupId }), "deleteGroup");
   await friendsOf(alice);
   must(await alice.call("setFriendPreference", { friendRef, favorite: true, nickname: "Pal" }), "setFriendPreference");
   must(await alice.call("listFriendPreferences", {}), "listFriendPreferences");

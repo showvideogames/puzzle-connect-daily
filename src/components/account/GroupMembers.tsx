@@ -11,11 +11,12 @@ interface Props {
   problem?: string | null;
   note?: string | null;
   onBack: () => void;
+  onTransfer?: (member: GroupMemberView) => Promise<string | void>;
   onRemove: (member: GroupMemberView) => Promise<string | void>;
 }
 
 /** The membership roster stays separate from result sorting and never shows puzzle details. */
-export function GroupMembers({ group, members, problem, note, onBack, onRemove }: Props) {
+export function GroupMembers({ group, members, problem, note, onBack, onRemove, onTransfer }: Props) {
   return <main className={`${accountPanel} mx-auto w-full max-w-[32rem] px-5 pb-5 pt-2 sm:px-8`}>
     <BackLink onClick={onBack} />
     <h1 className="font-tile text-2xl font-bold">Members</h1>
@@ -32,6 +33,7 @@ export function GroupMembers({ group, members, problem, note, onBack, onRemove }
           </div>
         </div>
         {group.isOwner && !member.isMe && !member.isOwner && <div className="mt-2 [&_button]:min-h-11">
+          {onTransfer && <InlineConfirm label={`Make ${member.name} owner`} question={`Make ${member.name} the owner of ${group.name}? You will remain a member and lose owner controls.`} confirmLabel="Transfer ownership" onConfirm={() => onTransfer(member)} />}
           <InlineConfirm label={`Remove ${member.name}`} question={`Remove ${member.name} from ${group.name}? They will lose access to this group.`} confirmLabel="Remove member" onConfirm={() => onRemove(member)} />
         </div>}
       </li>)}

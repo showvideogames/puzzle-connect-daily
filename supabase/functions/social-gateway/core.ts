@@ -362,6 +362,8 @@ export const OPERATIONS: Readonly<Record<string, Operation>> = {
     sql: "select social.set_group_appearance($1::text, $2::text, $3::text, $4::text, $5::text) as result",
     params: (a) => [a.groupId, a.emblemId, a.photo, a.accentColor],
   },
+  transferGroupOwnership: { required: { groupId: "text", memberRef: "text" }, sql: "select social.transfer_group_ownership($1::text, $2::text, $3::text) as result", params: a => [a.groupId,a.memberRef] },
+  deleteGroup: { required: { groupId: "text" }, sql: "select social.delete_group($1::text, $2::text) as result", params: a => [a.groupId] },
   removeMember: {
     required: { groupId: "text", memberRef: "text" },
     sql: "select social.remove_member($1::text, $2::text, $3::text) as result",

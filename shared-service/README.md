@@ -47,3 +47,9 @@ Deploy SQL and the gateway before enabling `VITE_GROUP_ORDER=true` (off by defau
 `0005_group_descriptions.sql` adds optional plain text to groups, with member-only reads and owner-only writes through getGroupDescription/setGroupDescription. The local implementation uses a 500-character storage bound (a reversible implementation limit, not a new product policy). Blank/null clears the description. Old group/list/invite response shapes, photos, memberships and histories stay unchanged. The UI escapes text, preserves line breaks, and keeps a refused edit as a draft.
 
 Deploy SQL and gateway first, then separately enable `VITE_GROUP_DESCRIPTIONS=true` (default off). Group creation sets the description only after the group exists; a failed description save reports partial completion and does not create another group. All patches are applied together by the disposable SQL regression suite, including database restart and guarded teardown tests.
+
+## Explicit owner actions (0006)
+
+`0006_group_owner_actions.sql` adds transferGroupOwnership and deleteGroup. Both lock the group and recheck current ownership. Transfer targets must be existing members of that same group; both memberships and the existing invitation code are retained. The former owner immediately loses owner privileges. Deletion cascades group-owned memberships/invitations and removes group access; it never deletes people or their personal result cards. No invitation-link invalidation policy was added.
+
+`VITE_GROUP_OWNER_ACTIONS` defaults off. SQL and gateway must be deployed and verified before enabling it. Both UI actions require confirmation; refused/uncertain outcomes stay visible and direct the user to refresh before retrying. Tests exercise the real SQL roles and preserve personal result cards through deletion. All live data is untouched by this local implementation.

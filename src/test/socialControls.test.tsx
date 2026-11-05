@@ -289,6 +289,36 @@ describe("a group's page", () => {
     return made;
   }
 
+  it("transfers ownership only after confirmation and exits with the member-preserving outcome", async () => {
+    vi.stubEnv("VITE_GROUP_OWNER_ACTIONS", "true");
+    const { call, onNote } = await openGroup({ transferGroupOwnership: () => yes() });
+    await screen.findByText("Jordan"); click("View members");
+    expect(screen.queryByRole("button", { name: "Make Alex owner" })).toBeNull();
+    click("Make Jordan owner"); click("Cancel"); expect(opsCalled(call)).not.toContain("transferGroupOwnership");
+    click("Make Jordan owner"); click("Transfer ownership");
+    await waitFor(() => expect(onNote).toHaveBeenCalledWith("Jordan is now the owner of Book Nerds. You remain a member."));
+    expect(call).toHaveBeenCalledWith("transferGroupOwnership", { groupId: "g1", memberRef: "m2" });
+    expect(opsCalled(call)).not.toContain("leaveGroup");
+  });
+
+  it("confirms group deletion, keeps refused deletion visible and does not delete personal data", async () => {
+    vi.stubEnv("VITE_GROUP_OWNER_ACTIONS", "true");
+    const { call } = await openGroup({ deleteGroup: () => refused("not_the_creator") });
+    click("Delete group"); click("Cancel"); expect(opsCalled(call)).not.toContain("deleteGroup");
+    click("Delete group"); click("Delete group permanently");
+    expect(await screen.findByRole("alert")).toHaveTextContent("couldn't delete");
+    expect(screen.getByTestId("group-page")).toBeInTheDocument();
+    expect(call).toHaveBeenCalledWith("deleteGroup", { groupId: "g1" });
+    expect(opsCalled(call)).not.toContain("deleteMySocialData");
+  });
+
+  it("offers neither ownership transfer nor deletion to a regular member", async () => {
+    vi.stubEnv("VITE_GROUP_OWNER_ACTIONS", "true");
+    await openGroup({}, group({ isOwner: false, inviteCode: null }));
+    await screen.findByText("Jordan");expect(screen.queryByRole("button", { name: "Delete group" })).toBeNull();click("View members");
+    expect(screen.queryByRole("button", { name: /Make .* owner/ })).toBeNull();
+  });
+
   it("edits the description only after it loads, keeps Cancel local, and saves plain text", async () => {
     vi.stubEnv("VITE_GROUP_DESCRIPTIONS", "true");
     const { call } = await openGroup({ getGroupDescription: () => yes({ description: "Weekly puzzles" }), setGroupDescription: () => yes({ description: "New description" }) });

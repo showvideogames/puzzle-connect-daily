@@ -23,6 +23,7 @@ interface GroupPageProps {
   problem?: string | null;
   today: Date;
   onBack: () => void;
+  onDelete?: () => Promise<string | void>;
   onEditPicture?: () => void;
   onMembers?: () => void;
   description?: string | null;
@@ -35,7 +36,7 @@ interface GroupPageProps {
 }
 
 /** One group: who is in it, how they did today, and for its owner, the link. */
-export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave, onEditPicture, onMembers, description, descriptionProblem, onEditDescription }: GroupPageProps) {
+export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave, onEditPicture, onMembers, description, descriptionProblem, onEditDescription, onDelete }: GroupPageProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const id = useId();
 
@@ -78,6 +79,10 @@ export function GroupPage({ group, results, problem, today, onBack, onShare, onC
           <InviteLinkButtons onShare={onShare} onCopy={onCopy} />
         </section>
       )}
+
+      {group.isOwner && onDelete && <div className="mt-4 [&_button]:min-h-11">
+        <InlineConfirm label="Delete group" question={`Permanently delete ${group.name} for everyone? Members keep their personal game history.`} confirmLabel="Delete group permanently" onConfirm={onDelete} />
+      </div>}
 
       <div className="mt-3 flex justify-center">
         <InlineConfirm label="Leave group" question={leaveGroupQuestion(group.name)} confirmLabel="Leave" onConfirm={onLeave} />
