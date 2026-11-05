@@ -1,0 +1,37 @@
+{
+  "status": "local-unapplied",
+  "order": [
+    {
+      "path": "shared-service/patches/0002_png_group_photos.sql",
+      "sha256": "6cfa862c73d07ef0b2f0c09c1ca5a865a172fa77324293a199a3249872837256"
+    },
+    {
+      "path": "shared-service/patches/0003_private_friend_preferences.sql",
+      "sha256": "ececf7c125a3d08800e220d6727d8e9d8c5c1b5909c6b5944c96365e7979eddc"
+    },
+    {
+      "path": "shared-service/patches/0004_private_group_order.sql",
+      "sha256": "d2f6fd4d7553d2d1a7dc93f734f3d5d785473cc944feebba1f3401538a41b807"
+    },
+    {
+      "path": "shared-service/patches/0005_group_descriptions.sql",
+      "sha256": "c7e04ef70e32c343f2f3bae3719386b44e8330bcf47e2506d5680a3ab8e8f79d"
+    },
+    {
+      "path": "shared-service/patches/0006_group_owner_actions.sql",
+      "sha256": "4ddf4205c0a261cb0e89ffc718c71eebf53bc25ad208bcd30167ddea74e1b6ec"
+    },
+    {
+      "path": "shared-service/patches/0007_group_invite_permissions.sql",
+      "sha256": "ba0d3027ad398f18293167d4c1ebd07f08ad8288abe284d27a2651bf1f828d21"
+    },
+    {
+      "path": "shared-service/patches/0008_crosspuns_standings.sql",
+      "sha256": "032668b57e8cb12118c82da4bce8a1bb29e4ce813d7ba90bab09c82b53630717"
+    },
+    {
+      "path": "shared-service/patches/0009_crosspuns_rolling.sql",
+      "sha256": "01bd5579a069f6d0995277fa6bbddb6e02c1f188ac0de33e0af84440512281f6"
+    }
+  ]
+}

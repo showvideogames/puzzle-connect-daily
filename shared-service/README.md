@@ -79,3 +79,9 @@ Only 7/30/365 and valid ISO date strings are accepted; malformed/incomplete peri
 The panel exposes All time / Last 7 / Last 30 / Last 365 days, resets paging when periods change, refreshes at local day changes/focus and discards stale responses. Boundaries use the existing viewer-local calendar, not UTC timestamp truncation; backend dates are explicit date-only values. Mock-only publication metadata is seeded separately and is never guessed from completion time. Per-puzzle detail gates and ordinary block behavior are unchanged.
 
 SQL tests cover both inclusive edges, outside-edge exclusion, leap-year 365-day boundaries, late solves counted by publication date, invalid arguments, all-time compatibility and masked rolling rows. Combined regressions include 0009. Browser checks cover every period, shared ties, either-direction masks and account switching at 320/1440 light/dark.
+
+## Release review
+
+See `docs/social/FRIENDS-GROUPS-RELEASE-REVIEW.md` for current-main evidence, review findings, rollout/rollback boundaries and the hosted-access blocker. `release-patch-manifest.json` records the exact ordered patch hashes. `review-target.mjs` performs catalog-only Management API queries with read_only=true after authorized credentials are configured; it makes no request without a token and never reads player rows.
+
+The strengthened standings tests use verbatim CrossPuns table definitions and publication helper in `fixtures/crosspuns-eb238dd.sql`, with only an auth FK scaffold. Source migrations match current CrossPuns main. This is stronger than the earlier minimal fixture, but still does not claim that all hosted RLS, triggers or permissions were exercised. Whole-chain additive reapplication preserves populated fixture data.

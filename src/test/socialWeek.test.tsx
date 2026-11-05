@@ -61,3 +61,11 @@ it('uses fixed 30 and 365 day windows rather than calendar months or years',()=>
  expect(year).toHaveLength(365);expect(year[0].date).toBe('2023-03-03');expect(year[364].date).toBe('2024-03-01');
  expect(new Set(year.map(day=>day.date)).size).toBe(365);
 });
+
+it('keeps rendered dates tied to the fetched snapshot until the clock refreshes',async()=>{
+ const {api}=fixture();const view=render(<FriendWeek api={api} friend={friend}/>);await screen.findByText('View details');
+ api.today=()=>new Date(2026,10,6,0,1);view.rerender(<FriendWeek api={api} friend={{...friend,nickname:'Pal'}}/>);
+ expect(document.querySelector('time[datetime="2026-11-06"]')).toBeNull();
+ fireEvent.focus(window);await screen.findByText('View details');
+ expect(document.querySelector('time[datetime="2026-11-06"]')).not.toBeNull();
+});

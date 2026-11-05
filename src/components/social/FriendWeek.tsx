@@ -19,7 +19,7 @@ export function FriendWeek({api, friend}: {api: SocialApi; friend: FriendResult}
   }, [api]);
   useEffect(() => {
     let active = true;
-    void readFriendWeek(api, friend, api.today()).then(
+    void readFriendWeek(api, friend, new Date(`${date}T12:00:00`)).then(
       days => {if(active) setRead({key, days});},
       () => {if(active) setRead({key, failed:true});},
     );
@@ -32,7 +32,7 @@ export function FriendWeek({api, friend}: {api: SocialApi; friend: FriendResult}
     <h2 className="text-xl font-bold">Last 7 days</h2>
     <p className={quietText}>Full Daily · including today · your local time</p>
     {!current ? <p role="status">Loading weekly activity…</p> : current.failed ? <div role="status"><p>Weekly activity couldn't be loaded.</p><button className="min-h-11 underline" onClick={() => setRevision(value => value+1)}>Try again</button></div> :
-      <ol className="mt-3 space-y-3">{socialWeek(api.today()).map(day => {
+      <ol className="mt-3 space-y-3">{socialWeek(new Date(`${date}T12:00:00`)).map(day => {
         const result = current.days?.find(row => row.date===day.date)?.result;
         return <li key={day.date} className={accountCard}>
           <h3 className="font-semibold"><time dateTime={day.date}>{day.day.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})}</time></h3>

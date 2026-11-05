@@ -1,27 +1,24 @@
-import {readFileSync} from 'node:fs';import {PGlite} from '@electric-sql/pglite';import {beforeAll,afterAll,it,expect} from 'vitest';
+import {readFileSync,readdirSync} from 'node:fs';import {PGlite} from '@electric-sql/pglite';import {beforeAll,afterAll,it,expect} from 'vitest';
 const db=new PGlite();const users=['user_alice0000001','user_bob000000001','user_carol000001','user_dave0000001'];let group:string,code:string;let refs:string[]=[];
 async function call(fn:string,args:unknown[]){await db.exec('set role social_gateway');try{return (await db.query<{r:{ok:boolean;outcome?:string;data:any}}>(`select social.${fn}(${args.map((_,i)=>`$${i+1}`).join(',')}) r`,args)).rows[0].r;}finally{await db.exec('reset role');}}
 beforeAll(async()=>{
  await db.exec('create role anon nologin;create role authenticated nologin;create role service_role nologin;');
  await db.exec(readFileSync('shared-service/fixtures/hub-eb238dd.sql','utf8'));
- // Minimal exact source columns/uniqueness from CrossPuns migrations 0002/0007.
- await db.exec(`create table public.xw_accounts(id uuid primary key default gen_random_uuid(),global_user_id text unique,player_key uuid unique default gen_random_uuid());
- create table public.xw_puzzles(id uuid primary key default gen_random_uuid(),publish_date date);
- create table public.xw_times(id uuid primary key default gen_random_uuid(),puzzle_id uuid,player_key uuid,seconds int,created_at timestamptz default now(),unique(puzzle_id,player_key));
- create table public.xw_solves(account_id uuid,puzzle_id uuid,seconds int,used_help boolean,solved_at timestamptz,primary key(account_id,puzzle_id));
- create function public.xw_today_local() returns date language sql as $$select (now() at time zone 'Pacific/Kiritimati')::date$$;`);
+ // Real table definitions and publication helper, with a minimal auth FK target.
+ await db.exec('create schema auth; create table auth.users(id uuid primary key);');
+ await db.exec(readFileSync('shared-service/fixtures/crosspuns-eb238dd.sql','utf8'));
  await db.exec(readFileSync('shared-service/patches/0008_crosspuns_standings.sql','utf8'));
  await db.exec(readFileSync('shared-service/patches/0009_crosspuns_rolling.sql','utf8'));
  for(const who of users){await call('ensure_person',[who,'rainbow']);await call('set_profile',[who,who,'fox','#DED1F2']);await db.query('insert into public.xw_accounts(global_user_id) values($1)',[who]);}
  ({groupId:group,inviteCode:code}=(await call('create_group',[users[0],'Club','Alice',1])).data);
  for(let i=1;i<4;i++)await call('join_group',[users[i],code,['Alice','Bob','Carol','Dave'][i],1]);
  const members=(await call('list_members',[users[0],group])).data;refs=['Alice','Bob','Carol','Dave'].map(name=>members.find((m:any)=>m.name===name).memberRef);
- const puzzle=(await db.query<{id:string}>("insert into public.xw_puzzles(publish_date) values('2020-01-01') returning id")).rows[0].id;
- for(let i=0;i<4;i++)await db.query("insert into public.xw_solves select id,$2,$3,false,'2020-01-01' from public.xw_accounts where global_user_id=$1",[users[i],puzzle,[99,10,30,40][i]]);
+ const puzzle=(await db.query<{id:string}>("insert into public.xw_puzzles(publish_date,size,title,width,height,data) values('2020-01-01','mini','Fixture',2,2,'{}') returning id")).rows[0].id;
+ for(let i=0;i<4;i++)await db.query("insert into public.xw_solves(account_id,puzzle_id,seconds,used_help,solved_at) select id,$2,$3,false,'2020-01-01' from public.xw_accounts where global_user_id=$1",[users[i],puzzle,[99,10,30,40][i]]);
  // Posted time wins over the stored solve (legacy/import precedence), never twice.
- await db.query('insert into public.xw_times(puzzle_id,player_key,seconds) select $2,player_key,10 from public.xw_accounts where global_user_id=$1',[users[0],puzzle]);
- const hidden=(await db.query<{id:string}>("insert into public.xw_puzzles(publish_date) values(current_date+100) returning id")).rows[0].id;
- await db.query("insert into public.xw_solves select id,$2,1,false,now() from public.xw_accounts where global_user_id=$1",[users[3],hidden]);
+ await db.query('insert into public.xw_times(puzzle_id,player_key,seconds,name) select $2,player_key,10,$3 from public.xw_accounts where global_user_id=$1',[users[0],puzzle,'Alice']);
+ const hidden=(await db.query<{id:string}>("insert into public.xw_puzzles(publish_date,size,title,width,height,data) values(current_date+100,'mini','Fixture',2,2,'{}') returning id")).rows[0].id;
+ await db.query("insert into public.xw_solves(account_id,puzzle_id,seconds,used_help,solved_at) select id,$2,1,false,now() from public.xw_accounts where global_user_id=$1",[users[3],hidden]);
 },20000);afterAll(()=>db.close());
 it('ranks current members using all prior history, competition ties and no duplicate sources',async()=>{
  const answer=await call('crosspuns_standings',[users[0],group,0]);expect(answer.ok).toBe(true);
@@ -32,13 +29,13 @@ it.each([[7,'2024-02-24'],[30,'2024-02-01'],[365,'2023-03-03']])('filters %i day
  await db.exec('begin');
  try {
   for(const date of [start,'2024-03-01']){
-   const puzzle=(await db.query<{id:string}>('insert into public.xw_puzzles(publish_date) values($1) returning id',[date])).rows[0].id;
+   const puzzle=(await db.query<{id:string}>("insert into public.xw_puzzles(publish_date,size,title,width,height,data) values($1,'mini','Fixture',2,2,'{}') returning id",[date])).rows[0].id;
    // A late solve is attributed to the puzzle's date, not today's timestamp.
-   await db.query("insert into public.xw_solves select id,$2,20,false,now() from public.xw_accounts where global_user_id=$1",[users[0],puzzle]);
+   await db.query("insert into public.xw_solves(account_id,puzzle_id,seconds,used_help,solved_at) select id,$2,20,false,now() from public.xw_accounts where global_user_id=$1",[users[0],puzzle]);
   }
   for(const expression of ["$1::date-1","'2024-03-02'::date"]){
-   const puzzle=(await db.query<{id:string}>(`insert into public.xw_puzzles(publish_date) values(${expression}) returning id`,expression.includes('$1')?[start]:[])).rows[0].id;
-   await db.query("insert into public.xw_solves select id,$2,1,false,'2024-03-01' from public.xw_accounts where global_user_id=$1",[users[1],puzzle]);
+   const puzzle=(await db.query<{id:string}>(`insert into public.xw_puzzles(publish_date,size,title,width,height,data) values(${expression},'mini','Fixture',2,2,'{}') returning id`,expression.includes('$1')?[start]:[])).rows[0].id;
+   await db.query("insert into public.xw_solves(account_id,puzzle_id,seconds,used_help,solved_at) select id,$2,1,false,'2024-03-01' from public.xw_accounts where global_user_id=$1",[users[1],puzzle]);
   }
   const answer=await call('crosspuns_standings_period',[users[0],group,0,days,'2024-03-01']);
   expect(answer.ok).toBe(true);expect(answer.data.rows.find((r:any)=>r.name==='Alice').points).toBe(6);
@@ -79,8 +76,8 @@ it('refuses unknown/nonmember reads and invalid paging; grants no direct client 
  for(const role of ['anon','authenticated','service_role','social_gateway'])expect((await db.query<{ok:boolean}>("select has_function_privilege($1,'social.crosspuns_standings(text,text,int)','execute') ok",[role])).rows[0].ok).toBe(role==='social_gateway');
 });
 it('excludes Reveal-only solves and paginates a large group without leaking private ids',async()=>{
- const puzzle=(await db.query<{id:string}>("insert into public.xw_puzzles(publish_date) values('2020-01-02') returning id")).rows[0].id;
- await db.query("insert into public.xw_solves select id,$2,1,true,'2020-01-02' from public.xw_accounts where global_user_id=$1",[users[3],puzzle]);
+ const puzzle=(await db.query<{id:string}>("insert into public.xw_puzzles(publish_date,size,title,width,height,data) values('2020-01-02','mini','Fixture',2,2,'{}') returning id")).rows[0].id;
+ await db.query("insert into public.xw_solves(account_id,puzzle_id,seconds,used_help,solved_at) select id,$2,1,true,'2020-01-02' from public.xw_accounts where global_user_id=$1",[users[3],puzzle]);
  expect((await call('crosspuns_standings',[users[3],group,0])).data.rows.find((r:any)=>r.name==='Dave').points).toBe(0);
  await call('ensure_person',['user_outsider0001','rainbow']);
  expect(await call('crosspuns_standings',['user_outsider0001',group,0])).toMatchObject({ok:false,outcome:'not_a_member'});
@@ -99,4 +96,16 @@ it('returns unavailable rather than an empty ranking when the source is missing'
  await db.exec('alter table public.xw_times rename to xw_times_unavailable');
  expect(await call('crosspuns_standings',[users[0],group,0])).toMatchObject({ok:false,outcome:'unavailable'});
  await db.exec('alter table public.xw_times_unavailable rename to xw_times');
+});
+
+it('applies and reapplies the complete additive patch chain without changing memberships, history or legacy group responses',async()=>{
+ const beforeGroups=await call('list_my_groups',[users[0]]);
+ const beforeBoard=await call('crosspuns_standings_period',[users[0],group,0,null,null]);
+ const history=await db.query('select * from public.xw_solves order by account_id,puzzle_id');
+ const members=await db.query('select id,group_id,person_id,name,joined_at,notice_version from social.memberships order by id');
+ for(let pass=0;pass<2;pass++)for(const file of readdirSync('shared-service/patches').filter(file=>file.endsWith('.sql')).sort())await db.exec(readFileSync(`shared-service/patches/${file}`,'utf8'));
+ expect(await call('list_my_groups',[users[0]])).toEqual(beforeGroups);
+ expect(await call('crosspuns_standings_period',[users[0],group,0,null,null])).toEqual(beforeBoard);
+ expect((await db.query('select * from public.xw_solves order by account_id,puzzle_id')).rows).toEqual(history.rows);
+ expect((await db.query('select id,group_id,person_id,name,joined_at,notice_version from social.memberships order by id')).rows).toEqual(members.rows);
 });
