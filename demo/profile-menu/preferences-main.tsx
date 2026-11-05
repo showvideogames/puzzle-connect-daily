@@ -18,7 +18,13 @@ for (const name of ['Coffee Club','Puzzle Pals','Book Club']) {
   const made=await alice.call('createGroup',{name,myName:'River',noticeVersion:1});
   if(made.ok)await bob.call('joinGroup',{code:made.data.inviteCode,myName:'Jordan',noticeVersion:1});
 }
-const api: SocialApi = { client:alice, puzzleId:()=>null, today:()=>new Date(2026,10,5), linkUrl:()=>'', share:async()=>'done' };
+await bob.call('setProfile',{displayName:'Jordan',animalId:'otter',backgroundColor:'#CCE6CA'});
+await carol.call('setProfile',{displayName:'Sky',animalId:'owl',backgroundColor:'#CCE1F1'});
+world.advance(1000);
+for (const person of new URLSearchParams(location.search).has('completed') ? ['Jordan','River'] : ['Jordan']) {
+  await world.hub.serverFor('rainbow').recordCompletion({gameId:'rainbow',puzzleId:'fixture-day',globalUserId:world.globalIdOf(person),completedAt:new Date(world.now()).toISOString(),summary:{solved:true,mistakes:0},detail:'🟨🟨🟨🟨\n🟩🟩🟩🟩'});
+}
+const api: SocialApi = { client:alice, puzzleId:()=>'fixture-day', today:()=>new Date(2026,10,5), linkUrl:()=>'', share:async()=>'done' };
 function Preview() {
   const [tab,setTab]=useState<FriendsTab>('friends');
   const [account,setAccount]=useState('River');

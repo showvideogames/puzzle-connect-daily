@@ -1,3 +1,4 @@
+import { FriendProfile } from "@/components/account/FriendProfile";
 import { FriendPreferences } from "@/components/account/FriendPreferences";
 import { socialPreferencesEnabled } from "@/lib/socialPreferences";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -85,6 +86,7 @@ export function SocialScreens({
   const [editingProfile, setEditingProfile] = useState(startEditingProfile);
   useEffect(() => { if (startEditingProfile) setEditingProfile(true); }, [startEditingProfile]);
   const [blockVersion, setBlockVersion] = useState(0);
+  const [profileFriendId, setProfileFriendId] = useState<string | null>(null);
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
 
   /** Only the newest read paints, and only while this person is still here. */
@@ -212,6 +214,7 @@ export function SocialScreens({
       </div>
     );
 
+  const profileFriend = loaded.results?.find(result => !result.isYou && result.id === profileFriendId);
   const openGroup = loaded.groups?.find((group) => group.groupId === openGroupId);
 
   return (
@@ -229,6 +232,8 @@ export function SocialScreens({
             void load();
           }}
         />
+      ) : profileFriend ? (
+        <FriendProfile friend={profileFriend} viewer={loaded.results?.find(result => result.isYou)} today={api.today()} resultsAvailable={!loaded.noResults} actions={friendActions(profileFriend)} onBack={() => setProfileFriendId(null)} />
       ) : openGroup ? (
         <GroupFlow
           key={openGroup.groupId}
@@ -252,6 +257,7 @@ export function SocialScreens({
           onAddFriend={() => setAddingFriend(true)}
           groups={<MyGroups api={api} groups={loaded.groups ?? []} displayName={displayName} onNote={onNote} onLink={onLink} onReload={load} onOpen={setOpenGroupId} />}
           today={api.today()}
+          onFriendProfile={friend => setProfileFriendId(friend.id)}
           rowActions={friendActions}
           onEditProfile={() => setEditingProfile(true)}
           friendsFooter={<BlockedPeople api={api} version={blockVersion} />}
