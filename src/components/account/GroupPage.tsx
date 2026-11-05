@@ -24,6 +24,7 @@ interface GroupPageProps {
   today: Date;
   onBack: () => void;
   onEditPicture?: () => void;
+  onMembers?: () => void;
   onShare: () => Promise<LinkAnswer> | LinkAnswer;
   onCopy: () => Promise<LinkAnswer> | LinkAnswer;
   /** Answers with a sentence when leaving was refused. */
@@ -31,7 +32,7 @@ interface GroupPageProps {
 }
 
 /** One group: who is in it, how they did today, and for its owner, the link. */
-export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave, onEditPicture }: GroupPageProps) {
+export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave, onEditPicture, onMembers }: GroupPageProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const id = useId();
 
@@ -45,6 +46,8 @@ export function GroupPage({ group, results, problem, today, onBack, onShare, onC
       </div>
 
       {group.isOwner && onEditPicture && <button type="button" className={`${outlineAction} mt-4 h-11 w-full`} onClick={onEditPicture}>Edit group picture</button>}
+
+      {onMembers && <button type="button" className={`${outlineAction} mt-3 h-11 w-full`} onClick={onMembers}>View members</button>}
 
       <TodayHeading today={today} />
       {problem && <p role="alert" className="mt-2 text-base font-medium text-destructive">{problem}</p>}

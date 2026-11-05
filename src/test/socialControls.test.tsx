@@ -288,6 +288,46 @@ describe("a group's page", () => {
     return made;
   }
 
+  it("shows a separate member roster and removes only after confirmation", async () => {
+    const { call } = await openGroup({ removeMember: () => yes() });
+    await screen.findByText("Jordan");
+    click("View members");
+    expect(screen.getByRole("heading", { name: "Members" })).toBeInTheDocument();
+    expect(screen.queryByText("Not played yet")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove Alex" })).toBeNull();
+    click("Remove Jordan");
+    expect(opsCalled(call)).not.toContain("removeMember");
+    click("Cancel");
+    expect(opsCalled(call)).not.toContain("removeMember");
+    click("Remove Jordan");
+    click("Remove member");
+    expect(await screen.findByRole("status")).toHaveTextContent("Jordan was removed");
+    expect(call).toHaveBeenCalledWith("removeMember", { groupId: "g1", memberRef: "m2" });
+    expect(within(screen.getByRole("list", { name: "Group members" })).queryByText("Jordan")).toBeNull();
+    click("Back");
+    expect(screen.queryByText("Jordan")).toBeNull();
+    expect(opsCalled(call)).not.toContain("deleteMySocialData");
+  });
+
+  it("keeps a refused removal visible without claiming success", async () => {
+    await openGroup({ removeMember: () => refused("not_the_creator") });
+    await screen.findByText("Jordan");
+    click("View members");
+    click("Remove Jordan");
+    click("Remove member");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Only the group owner");
+    expect(screen.getByText("Jordan")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("lets ordinary members view the roster but offers no removal controls", async () => {
+    await openGroup({}, group({ isOwner: false, inviteCode: null }));
+    await screen.findByText("Jordan");
+    click("View members");
+    expect(screen.getByText("Jordan")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Remove/ })).toBeNull();
+  });
+
   it("lets an owner edit a picture through the existing appearance operation", async () => {
     const { call } = await openGroup({ setGroupAppearance: () => yes({ photoVersion: 2 }) });
     click("Edit group picture");

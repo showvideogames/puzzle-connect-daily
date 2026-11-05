@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { GroupMembers } from "@/components/account/GroupMembers";
+import { groupMemberView, type GroupMemberView } from "@/lib/socialView";
 import { GroupAppearanceForm, type GroupAppearance } from "@/components/account/GroupAppearanceForm";
 import { accountPanel } from "@/components/account/accountStyles";
 import { GroupPage, type GroupView } from "@/components/account/GroupPage";
@@ -21,6 +23,9 @@ interface GroupFlowProps {
 export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowProps) {
   const { groupId, inviteCode, name } = group;
   const live = useLive();
+  const [showMembers, setShowMembers] = useState(false);
+  const [members, setMembers] = useState<GroupMemberView[] | null>(null);
+  const [memberNote, setMemberNote] = useState<string | null>(null);
   const [editingPicture, setEditingPicture] = useState(false);
   const [results, setResults] = useState<FriendResult[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -39,6 +44,7 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
       }
       setProblem(answer.noResults ? NO_RESULTS_NOTE : null);
       setResults(answer.results);
+      setMembers(answer.members.map(groupMemberView));
     };
 
     void read();
@@ -68,6 +74,25 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     return linkAnswer(await copyLink(url), url);
   };
 
+  if (showMembers) return <GroupMembers group={group} members={members} problem={problem} note={memberNote} onBack={() => setShowMembers(false)} onRemove={async member => {
+    try {
+      const answer = await api.client.call("removeMember", { groupId, memberRef: member.memberRef });
+      if (!live.current) return;
+      if (answer.ok === false) {
+        if (answer.outcome === "not_the_creator") return "Only the group owner can remove members.";
+        if (answer.outcome === "not_found") return "That person is no longer in this group. Go back and reopen the group to refresh.";
+        if (answer.outcome === "cannot_remove_self") return "Use Leave group to leave this group yourself.";
+        return "We couldn't remove that member. Please try again.";
+      }
+      setMembers(current => current?.filter(row => row.memberRef !== member.memberRef) ?? null);
+      setResults(current => current?.filter(row => row.id !== member.memberRef) ?? null);
+      setMemberNote(`${member.name} was removed from the group.`);
+      await onReload();
+    } catch {
+      if (live.current) return "We couldn't confirm the change. Go back and reopen the group before trying again.";
+    }
+  }} />;
+
   if (editingPicture && group.isOwner) return <main className={`${accountPanel} mx-auto w-full max-w-[32rem] p-5 sm:p-8`}>
     <h1 className="mb-5 font-tile text-2xl font-bold">Edit group picture</h1>
     <GroupAppearanceForm initial={group} pictureOnly onCancel={() => setEditingPicture(false)} onSave={async (appearance: GroupAppearance) => {
@@ -79,5 +104,5 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     }} />
   </main>;
 
-  return <GroupPage group={group} results={results} problem={problem} today={api.today()} onBack={onBack} onShare={share} onCopy={copy} onLeave={leave} onEditPicture={() => setEditingPicture(true)} />;
+  return <GroupPage group={group} results={results} problem={problem} today={api.today()} onBack={onBack} onShare={share} onCopy={copy} onLeave={leave} onEditPicture={() => setEditingPicture(true)} onMembers={() => setShowMembers(true)} />;
 }

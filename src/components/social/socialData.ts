@@ -73,7 +73,7 @@ export async function readPerson(api: SocialApi): Promise<PersonData | { outcome
 }
 
 /** Every member, page by page, then today's results joined to them. */
-export async function readGroup(api: SocialApi, groupId: string): Promise<{ results: FriendResult[]; noResults: boolean } | { outcome: Outcome }> {
+export async function readGroup(api: SocialApi, groupId: string): Promise<{ members: MemberRow[]; results: FriendResult[]; noResults: boolean } | { outcome: Outcome }> {
   const members: MemberRow[] = [];
   for (;;) {
     const last = members[members.length - 1];
@@ -85,5 +85,5 @@ export async function readGroup(api: SocialApi, groupId: string): Promise<{ resu
   }
   const rows = await readRows(api, groupId);
   if (rows !== null && !Array.isArray(rows)) return { outcome: rows.outcome };
-  return { results: groupResults({ members, rows: Array.isArray(rows) ? rows : [] }), noResults: rows === null };
+  return { members, results: groupResults({ members, rows: Array.isArray(rows) ? rows : [] }), noResults: rows === null };
 }

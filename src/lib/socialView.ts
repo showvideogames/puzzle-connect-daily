@@ -114,6 +114,17 @@ export function groupResults({ members, rows }: { members: readonly MemberRow[];
   return [...shown.filter((result) => result.isYou), ...shown.filter((result) => !result.isYou)];
 }
 
+export interface GroupMemberView extends ScreenFace {
+  memberRef: string;
+  name: string;
+  isOwner: boolean;
+  isMe: boolean;
+}
+
+export function groupMemberView(member: MemberRow): GroupMemberView {
+  return { memberRef: member.memberRef, name: member.name, isOwner: member.isOwner, isMe: member.isMe, ...faceOf(member) };
+}
+
 // ── Groups ──
 
 export function groupSummary({ groupId, name, emblemId, photo, accentColor, memberCount }: GroupRow): GroupSummary {
