@@ -1,12 +1,18 @@
-import { useState, useRef, useEffect } from "react";
+import { lazy, Suspense, useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import type { User as AuthUser } from "@supabase/supabase-js";
 import { ACCOUNTS_ENABLED, deleteMyAccount, signInWithPlatform } from "@/lib/platformSignIn";
 import { useCurrentAccount } from "@/hooks/useCurrentAccount";
 
+import { socialBetaOn } from "@/components/social/socialFlag";
+
+const SocialHeaderMenu = lazy(() => import("./social/SocialHeaderMenu"));
+
 interface PlayerAuthProps {
   user: AuthUser | null;
+  /** Header only: use the shared profile and pending requests when social is enabled. */
+  profileMenu?: boolean;
   onSignOut: () => void;
   forceOpen?: boolean;
   onForceClose?: () => void;
@@ -52,7 +58,7 @@ function PersonIcon({ filled, className }: { filled: boolean; className?: string
  * (see lib/platformSignIn.ts) this component renders nothing for a guest, so
  * the whole game is guest-only without any other change.
  */
-export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, hideTrigger = false, dropdownAlign = "right", onEditProfile }: PlayerAuthProps) {
+export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, hideTrigger = false, dropdownAlign = "right", onEditProfile, profileMenu = false }: PlayerAuthProps) {
   const [showAuth, setShowAuth] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -63,6 +69,7 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
   // email is the CURRENT one; user.email is what GoTrue stored at creation
   // and is only a fallback while the account is not known yet.
   const account = useCurrentAccount();
+  const useProfileMenu = profileMenu && socialBetaOn();
 
   // forceOpen opens whichever UI actually applies right now: the sign-in
   // dialog when signed out, the account dropdown when signed in, so an
@@ -87,8 +94,21 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
         setConfirmDelete(false);
       }
     }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setShowDropdown(false);
+        setConfirmDelete(false);
+        dropdownRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+      }
+    }
+    const frame = requestAnimationFrame(() => dropdownRef.current?.querySelector<HTMLButtonElement>('[data-testid="account-menu"] button')?.focus());
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, [showDropdown]);
 
   async function handleSignIn() {
@@ -118,13 +138,17 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
   if (user) {
     return (
       <div className="relative shrink-0" ref={dropdownRef}>
-        <button
+        {useProfileMenu ? (
+          <Suspense fallback={<span className="inline-flex h-11 w-11 items-center justify-center" aria-label="Loading profile"><PersonIcon filled /></span>}>
+            <SocialHeaderMenu key={user.id} onAccount={() => { setShowDropdown(true); setConfirmDelete(false); }} />
+          </Suspense>
+        ) : !hideTrigger && <button
           onClick={() => { setShowDropdown((v) => !v); setConfirmDelete(false); }}
           className="p-1 sm:p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95"
           aria-label="Account"
         >
           <PersonIcon filled className="w-4 h-4 sm:w-5 sm:h-5" />
-        </button>
+        </button>}
 
         {showDropdown && (
           <div
@@ -135,6 +159,8 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
               minWidth: "220px",
               zIndex: 9999,
             }}
+            role="region"
+            aria-label="Account options"
             data-testid="account-menu"
           >
             <div className="px-4 py-3" style={{ borderBottom: "1px solid hsl(var(--border))" }}>

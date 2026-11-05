@@ -18,6 +18,8 @@ import { RETRY_MS, readLink, readPerson, type LinkView, type PersonData } from "
 import { useLive } from "./useLive";
 import { WaitingRequests } from "./WaitingRequests";
 
+import { HEADER_REFRESH } from "./socialHeaderEvents";
+
 const GAME_NAME = "Rainbow Categories";
 
 interface Loaded extends Partial<PersonData> {
@@ -79,6 +81,7 @@ export function SocialScreens({
   const [addingFriend, setAddingFriend] = useState(false);
   const [choosingName, setChoosingName] = useState(false);
   const [editingProfile, setEditingProfile] = useState(startEditingProfile);
+  useEffect(() => { if (startEditingProfile) setEditingProfile(true); }, [startEditingProfile]);
   const [blockVersion, setBlockVersion] = useState(0);
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
 
@@ -118,6 +121,7 @@ export function SocialScreens({
         return;
       }
       setLoaded({ ...person, link: read.link });
+      dispatchEvent(new Event(HEADER_REFRESH));
       if (read.problem) onNote(read.problem);
       else if (person.noResults) onNote(NO_RESULTS_NOTE);
     },

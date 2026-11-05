@@ -1,5 +1,6 @@
 import { BarChart3, Lightbulb, BookOpen, Archive, Calendar, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
+import { socialBetaOn } from "@/components/social/socialFlag";
 import { PlayerAuth } from "./PlayerAuth";
 import { todaysLogo, isJuly4 } from "@/lib/themes";
 import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
@@ -195,7 +196,7 @@ export function GameHeader({
             <Settings className={iconGlyphClass} strokeWidth={iconStrokeWidth} />
           </button>
         )}
-        {!hideExtraIcons && <PlayerAuth user={user} onSignOut={onSignOut} />}
+        {(!hideExtraIcons || (user && socialBetaOn())) && <PlayerAuth user={user} onSignOut={onSignOut} profileMenu />}
       </div>
     </header>
   );

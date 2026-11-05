@@ -1,0 +1,50 @@
+import { chromium } from '@playwright/test';
+import assert from 'node:assert/strict';
+const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+const page = await browser.newPage();
+const errors = [];
+page.on('pageerror', e => errors.push(String(e)));
+await page.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
+for (const kind of ['daily', 'minimal']) for (const width of [320,390,768,1440]) {
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto('http://127.0.0.1:5215/header.html');
+  await page.getByLabel('Header type').selectOption(kind);
+  const trigger = page.getByRole('button', { name: 'Profile menu, 2 pending notifications' });
+  await trigger.waitFor();
+  for (const theme of ['light','dark']) {
+    await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), theme === 'dark');
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${kind} ${width} overflow`);
+    assert.equal(await page.getByRole('button', { name: /^Profile menu/ }).count(), 1);
+    await trigger.click();
+    await page.getByRole('menuitem', { name: 'My profile' }).waitFor();
+    await page.waitForTimeout(300);
+    const bounds = await page.getByRole('menu').boundingBox();
+    assert(bounds.x >= 0 && bounds.x + bounds.width <= width);
+    await page.screenshot({ path: `evidence/header-${kind}-${width}-${theme}.png` });
+    await page.keyboard.press('Escape');
+    await page.getByRole('menu').waitFor({ state: 'detached' });
+  }
+}
+await page.goto('http://127.0.0.1:5215/header.html');
+await page.getByRole('button', { name: 'Profile menu, 2 pending notifications' }).click();
+await page.getByRole('menuitem', { name: 'Account options' }).click();
+await page.getByTestId('account-menu').waitFor();
+await page.getByRole('button', { name: 'Sign Out' }).waitFor();
+await page.getByRole('button', { name: 'Delete account…' }).click();
+assert(await page.getByText('Delete your Rainbow Categories account and its history? This cannot be undone.').isVisible());
+await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+await page.keyboard.press('Escape');
+await page.getByRole('button', { name: 'Clear notifications' }).click();
+await page.getByRole('button', { name: 'Profile menu', exact: true }).click();
+await page.getByRole('menuitem', { name: 'My profile' }).click();
+await page.getByLabel('Display Name', { exact: true }).waitFor();
+await page.getByLabel('Display Name', { exact: true }).fill('River Updated');
+await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+await page.getByRole('button', { name: 'Profile menu', exact: true }).click();
+await page.getByText('River Updated', { exact: true }).waitFor();
+await page.getByRole('menuitem', { name: 'My profile' }).click();
+await page.getByLabel('Display Name', { exact: true }).waitFor();
+assert.equal(await page.getByLabel('Display Name', { exact: true }).inputValue(), 'River Updated');
+assert.deepEqual(errors, []);
+console.log('PASS: actual Daily/secondary headers at 4 widths in both themes; account options and cancel; notification clear; profile navigation/save/reopen with refreshed avatar identity; no page errors.');
+await browser.close();

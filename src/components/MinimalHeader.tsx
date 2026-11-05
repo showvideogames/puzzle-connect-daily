@@ -41,7 +41,7 @@ export function MinimalHeader() {
 
   return (
     <>
-      <header className="flex items-center w-full max-w-lg mx-auto py-3 px-2 gap-2">
+      <header className="flex items-center w-full max-w-lg mx-auto py-3 px-2 gap-1">
         {/* Logo sizing, same rule GameHeader already follows: the one-line
             wordmark is ~8:1, so at any legible height it is wider than a
             phone header can spare once the five utility controls to its right
@@ -64,7 +64,7 @@ export function MinimalHeader() {
           />
         </Link>
 
-        <div className="ml-auto flex items-center gap-1 shrink-0">
+        <div className="ml-auto flex items-center gap-0.5 shrink-0">
           <button
             onClick={() => setActiveModal("stats")}
             className="p-2 rounded-lg hover:bg-secondary transition-colors active:scale-95"
@@ -93,7 +93,7 @@ export function MinimalHeader() {
           >
             <Settings className="w-5 h-5 text-muted-foreground" />
           </button>
-          <PlayerAuth user={user} onSignOut={() => signOutOfRainbow()} />
+          <PlayerAuth user={user} onSignOut={() => signOutOfRainbow()} profileMenu />
         </div>
       </header>
 
