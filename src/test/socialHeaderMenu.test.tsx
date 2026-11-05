@@ -57,6 +57,16 @@ describe('header identity and notifications', () => {
     await waitFor(() => expect(fake.readRequests).toHaveBeenCalledTimes(3));
     expect(screen.queryByTestId('profile-notification')).not.toBeInTheDocument();
   });
+  it('retries a routine background account check without dropping the confirmed badge', async () => {
+    const fake = fixture(); open(fake);
+    await screen.findByTestId('profile-notification');
+    fake.readRequests.mockResolvedValueOnce({ ok: false, outcome: 'still_checking' } as never);
+    act(() => dispatchEvent(new Event(HEADER_REFRESH)));
+    await waitFor(() => expect(fake.readRequests).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId('profile-notification')).toBeInTheDocument();
+    await waitFor(() => expect(fake.readRequests).toHaveBeenCalledTimes(3), { timeout: 2000 });
+    expect(screen.getByTestId('profile-notification')).toBeInTheDocument();
+  });
   it('clears immediately on account change and ignores the previous response', async () => {
     const fake = fixture(); let finish!: (value: unknown) => void;
     fake.readMe.mockImplementationOnce(() => new Promise(resolve => { finish = resolve as never; }));

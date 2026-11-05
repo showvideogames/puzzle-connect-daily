@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ProfileMenu } from "@/components/account/ProfileMenu";
 import type { SharedProfile } from "@/lib/sharedProfile";
-import { profileFromMe } from "@/lib/socialView";
+import { isBackgroundCheck, profileFromMe } from "@/lib/socialView";
 import { appSocial, type AppSocial } from "./appSocial";
 import { sessionKey, useSocialSession } from "./useSocialSession";
 
@@ -15,8 +15,11 @@ function SignedInMenu({ social, onAccount }: { social: AppSocial; onAccount: () 
   const [pendingCount, setPendingCount] = useState<number | null>(null);
   const newest = useRef(0);
   const mounted = useRef(false);
+  const retry = useRef<ReturnType<typeof setTimeout>>();
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async function reload() {
+    if (!mounted.current) return;
+    clearTimeout(retry.current);
     const request = ++newest.current;
     // Only identity and incoming requests. Never fetch gameplay or results for a header.
     const [me, requests] = await Promise.all([
@@ -24,6 +27,12 @@ function SignedInMenu({ social, onAccount }: { social: AppSocial; onAccount: () 
       social.api.client.call("listFriendRequests", {}),
     ]);
     if (!mounted.current || request !== newest.current) return;
+    if ((me.ok === false && isBackgroundCheck(me.outcome)) || (requests.ok === false && isBackgroundCheck(requests.outcome))) {
+      // Focus commonly starts an account re-check. Keep this same-session view
+      // while it runs; the outer session guard clears it if confirmation fails.
+      retry.current = setTimeout(() => { if (request === newest.current) void reload(); }, 1000);
+      return;
+    }
     setProfile(me.ok ? profileFromMe(me.data) : null);
     setPendingCount(requests.ok ? requests.data.incoming.length : null);
   }, [social]);
@@ -36,7 +45,7 @@ function SignedInMenu({ social, onAccount }: { social: AppSocial; onAccount: () 
     addEventListener("focus", refreshVisible);
     addEventListener("online", refreshVisible);
     addEventListener(HEADER_REFRESH, refreshVisible);
-    const invalidate = () => { ++newest.current; };
+    const invalidate = () => { ++newest.current; clearTimeout(retry.current); };
     return () => {
       mounted.current = false;
       invalidate();

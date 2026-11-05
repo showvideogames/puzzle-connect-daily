@@ -17,9 +17,9 @@ interface GameHeaderProps {
   showHint?: boolean;
   user: AuthUser | null;
   onSignOut: () => void;
-  // "minimal" is the redesigned daily-homepage header: exactly 3 icons (hint,
-  // stats, gear) at the wider board-matching width. How to Play, Archive, and
-  // Account move into the Settings modal's new Menu section on that variant.
+  // "minimal" uses hint, stats and settings at the board-matching width.
+  // Signed-in players also get their profile menu when social is enabled.
+  // How to Play, Archive and guest sign-in remain reachable in Settings.
   variant?: "default" | "minimal";
   // Hides the same How to Play / Archive / Account icons as "minimal" (down
   // to hint/stats/settings), but keeps the "default" variant's width —
