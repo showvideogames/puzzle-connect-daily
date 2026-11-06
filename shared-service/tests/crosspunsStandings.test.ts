@@ -109,3 +109,12 @@ it('applies and reapplies the complete additive patch chain without changing mem
  expect((await db.query('select * from public.xw_solves order by account_id,puzzle_id')).rows).toEqual(history.rows);
  expect((await db.query('select id,group_id,person_id,name,joined_at,notice_version from social.memberships order by id')).rows).toEqual(members.rows);
 });
+
+it('returns current saved profile pictures only for visible standings rows',async()=>{
+ await call('set_profile',[users[0],'Alice','otter','#CCE6CA']);
+ for(const answer of [await call('crosspuns_standings',[users[0],group,0]),await call('crosspuns_standings_period',[users[0],group,0,7,'2020-01-01'])]){
+  expect(answer.ok).toBe(true);const visible=answer.data.rows.find((r:any)=>r.name==='Alice');
+  expect(visible).toMatchObject({animalId:'otter',backgroundColor:'#CCE6CA'});
+  for(const row of answer.data.rows.filter((r:any)=>r.blocked))expect(Object.keys(row).sort()).toEqual(['blocked','label','rank']);
+ }
+});

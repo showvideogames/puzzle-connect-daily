@@ -30,7 +30,16 @@ if (new URLSearchParams(location.search).has('weekly')) {
   }
 }
 if(new URLSearchParams(location.search).has('standings')) {
-  for(const [person,seconds] of [['River',10],['Jordan',10]] as const){
+  // Fictional larger group demonstrates medals, ties and View all standings.
+  const extras=[carol,world.signIn('rainbow','Alex'),world.signIn('rainbow','Robin')];
+  const groups=await alice.call('listMyGroups',{});
+  if(groups.ok)for(const group of groups.data) {
+    const invitation=await alice.call('getGroupInvitation',{groupId:group.groupId});
+    if(invitation.ok&&invitation.data.inviteCode)for(const [index,friend] of extras.entries())await friend.call('joinGroup',{code:invitation.data.inviteCode,myName:['Sky','Alex','Robin'][index],noticeVersion:1});
+  }
+  await extras[1].call('setProfile',{displayName:'Alex',animalId:'panda',backgroundColor:'#F1CDDA'});
+  await extras[2].call('setProfile',{displayName:'Robin',animalId:'fox',backgroundColor:'#F8E4A0'});
+  for(const [person,seconds] of [['River',10],['Jordan',10],['Sky',20],['Alex',30],['Robin',40]] as const){
     world.signIn('crosspuns',person);
     world.hub.seedCrossPunsPublication('old-crosspuns','2026-11-01');
     await world.hub.serverFor('crosspuns').recordCompletion({gameId:'crosspuns',puzzleId:'old-crosspuns',globalUserId:world.globalIdOf(person),completedAt:new Date(world.now()).toISOString(),summary:{seconds},detail:null});

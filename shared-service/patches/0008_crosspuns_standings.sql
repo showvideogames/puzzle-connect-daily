@@ -13,7 +13,7 @@ begin
   -- All current memberships, including either-direction blocks, determine rank.
   -- Source precedence matches xw_group_board. No join-date cutoff or history write.
   with members as (
-    select m.id, m.person_id, m.name, a.id as account_id, a.player_key
+    select m.id, m.person_id, m.name, p.animal_id, p.background_color, a.id as account_id, a.player_key
     from social.memberships m join social.persons p on p.id=m.person_id
     left join public.xw_accounts a on a.global_user_id=p.global_user_id
     where m.group_id=v_group
@@ -31,8 +31,8 @@ begin
   ), placements as (
     select id, greatest(0,4-rank() over(partition by puzzle_id order by seconds)) as points from eligible
   ), totals as (
-    select m.id,m.person_id,m.name,coalesce(sum(p.points),0)::bigint as points
-      from members m left join placements p on p.id=m.id group by m.id,m.person_id,m.name
+    select m.id,m.person_id,m.name,m.animal_id,m.background_color,coalesce(sum(p.points),0)::bigint as points
+      from members m left join placements p on p.id=m.id group by m.id,m.person_id,m.name,m.animal_id,m.background_color
   ), ranked as (
     select *,rank() over(order by points desc) as rank from totals
   ), page as (
@@ -41,7 +41,7 @@ begin
   select (select count(*)::int from members), coalesce(jsonb_agg(
     case when social.blocked_either_way(v_me,person_id) then
       jsonb_build_object('blocked',true,'rank',rank,'label','This player is blocked')
-    else jsonb_build_object('blocked',false,'rank',rank,'memberRef',id,'name',name,'points',points) end
+    else jsonb_build_object('blocked',false,'rank',rank,'memberRef',id,'name',name,'points',points,'animalId',animal_id,'backgroundColor',background_color) end
     order by rank,id),'[]'::jsonb) into v_total,v_rows from page;
   return social.ok(jsonb_build_object('rows',v_rows,'total',v_total));
 exception when undefined_table or undefined_function then

@@ -54,7 +54,7 @@ function emblemOf(id: string): GroupEmblemId {
   return GROUP_EMBLEMS.some((emblem) => emblem.id === id) ? (id as GroupEmblemId) : FALLBACK_EMBLEM;
 }
 
-function faceOf({ animalId, backgroundColor }: Face): ScreenFace {
+export function faceOf({ animalId, backgroundColor }: Face): ScreenFace {
   return { animalId: animalOf(animalId), backgroundColor: colorOf(backgroundColor) };
 }
 

@@ -961,7 +961,7 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
         return game==='crosspuns'&&memberRef&&'seconds' in card.summary ? [{memberRef,puzzleId,seconds:card.summary.seconds}] : [];
       });
       const ranked=crossPunsStandings(members,history);
-      const people=new Map(members.map(m=>[m.memberRef,{name:m.name,blockedEitherWay:blockedEitherWay(me.id,m.person)}]));
+      const people=new Map(members.map(m=>[m.memberRef,{name:m.name,...faceOf(m.person),blockedEitherWay:blockedEitherWay(me.id,m.person)}]));
       return done({rows:crossPunsStandingsView(ranked.rows.slice(offset,offset+50),people),total:members.length});
     },
 

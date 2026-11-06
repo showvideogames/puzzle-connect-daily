@@ -81,7 +81,6 @@ export function GroupPage({ group, results, problem, today, onBack, onShare, onC
       {(canInvite ?? group.isOwner) && group.inviteCode && (
         <section className={`${accountCard} mt-3`} aria-labelledby={`${id}-link`}>
           <h2 id={`${id}-link`} className={accountCardTitle}>Send an invitation</h2>
-          <p className={`mt-0.5 text-base ${quietText}`}>Share a link with someone you know.</p>
           <InviteLinkButtons onShare={onShare} onCopy={onCopy} />
         </section>
       )}

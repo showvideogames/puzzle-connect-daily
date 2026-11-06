@@ -46,3 +46,8 @@ Command-line management credentials remain absent; that is no longer a blocker t
 5. Verify the intended hosted flows under separately authorized test-account work. Local fixture success does not substitute for this.
 
 Rollback strategy: disable new frontend flags/revert the frontend while retaining additive service compatibility and stored history. Do not drop preference/history tables, flatten PNGs or revert PNG MIME support after transparent pictures exist. Do not run the fixture uninstall against a hosted database. No destructive rollback is proposed.
+
+## Approved preview refinements — 2026-11-06
+The candidate now removes the long leaderboard/invitation helper copy, uses saved profile avatars in visible standings rows, adds rank-based gold/silver/bronze badges, and offers View all standings / Show top three with existing bounded paging. The two unapplied standings patches now return animalId/backgroundColor only for unblocked rows; their manifest hashes were refreshed. Blocked rows remain exactly blocked/rank/label. Hosted changes remain unauthorized and unapplied.
+
+Latest validation: 1909 app tests, 35 extension tests and 76 hub regressions passed. App/social typechecks, changed-source lint and build passed. Refined mobile/desktop light/dark preview and expanded/collapsed flows verified; existing bundle-size notice remains.

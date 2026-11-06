@@ -27,11 +27,11 @@
     },
     {
       "path": "shared-service/patches/0008_crosspuns_standings.sql",
-      "sha256": "032668b57e8cb12118c82da4bce8a1bb29e4ce813d7ba90bab09c82b53630717"
+      "sha256": "d3b32f3f3ce08ba2b3ce14b037583a9de362c9de24d01a7fd25af6d26bdf7cd0"
     },
     {
       "path": "shared-service/patches/0009_crosspuns_rolling.sql",
-      "sha256": "01bd5579a069f6d0995277fa6bbddb6e02c1f188ac0de33e0af84440512281f6"
+      "sha256": "f5fb99e21bc9789e7648b69995d8ed1a27de5af386b8f28d8d787a36e4856e13"
     }
   ]
 }
