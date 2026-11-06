@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpName, Operations } from "@/social/contract";
 import {
   COMPLETIONS_SQL,
+  HAMBURGLE_COMPLETIONS_SQL,
   OPERATIONS,
   authCouldNotAnswer,
   corsHeaders,
@@ -15,6 +16,7 @@ import {
   handleSocialGateway,
   readAccess,
   readApiKeys,
+  readHamburgle,
   serverSecretKey,
   transactionPoolerUrl,
   type GatewayDb,
@@ -30,6 +32,8 @@ const TOKEN = "user-session-token-accepted-by-auth";
 const USER_ID = "7f1c6a52-0000-4000-8000-000000000001";
 const GLOBAL_ID = "user_01CALLERCALLERCALLER";
 const FRIEND_ID = "user_01FRIENDFRIENDFRIEND";
+/** A different id from Rainbow's on purpose, so a test can tell which boundary answered. */
+const HAMBURGLE_ID = "user_01HAMBURGLEONLYCALLER";
 
 const UNAVAILABLE = { ok: false, outcome: "unavailable" };
 const HUB_ANSWER = { ok: true, data: { from: "the mapped function", list: [1, 2] } };
@@ -47,6 +51,10 @@ interface Statement {
 
 interface World {
   account: boolean;
+  /** Whether hamburgle.progress_accounts has a row for this auth user. */
+  hamburgleAccount: boolean;
+  /** What the reader of Hamburgle's counted Dailies returns. */
+  dailies: Record<string, unknown>[];
   tester: unknown;
   ensured: unknown;
   hubAnswer: unknown;
@@ -68,6 +76,8 @@ const databaseError = () => Object.assign(new Error(ERROR_TEXT), { code: "42501"
 function setup(overrides: Partial<World> = {}, deps: Partial<GatewayDeps> = {}) {
   const world: World = {
     account: true,
+    hamburgleAccount: false,
+    dailies: [],
     tester: true,
     ensured: ENSURED,
     hubAnswer: HUB_ANSWER,
@@ -88,6 +98,8 @@ function setup(overrides: Partial<World> = {}, deps: Partial<GatewayDeps> = {}) 
       throw databaseError();
     }
     if (text === "set transaction read only") return [];
+    if (text.includes("hamburgle.progress_daily")) return world.dailies;
+    if (text.includes("from hamburgle.progress_accounts a where")) return world.hamburgleAccount ? [{ global_user_id: HAMBURGLE_ID }] : [];
     if (text.includes("from public.accounts where user_id")) return world.account ? [{ global_user_id: GLOBAL_ID }] : [];
     if (text.includes("social.is_beta_tester")) return [{ allowed: world.tester }];
     if (text.includes("social.ensure_person")) return [{ result: world.ensured }];
@@ -127,6 +139,7 @@ function setup(overrides: Partial<World> = {}, deps: Partial<GatewayDeps> = {}) 
     verifyUserToken,
     allowPreview: () => true,
     access: "allow-list",
+    hamburgle: false,
     db,
     ...deps,
   };
@@ -151,7 +164,11 @@ const send = (deps: GatewayDeps, op: string, args: unknown, headers?: Record<str
 
 /** The first object a statement names. The finished-games read has its own name, for reading sequences. */
 const named = ({ text }: Statement) =>
-  text === COMPLETIONS_SQL ? "read finished games" : (/(?:social|public)\.\w+/.exec(text)?.[0] ?? text);
+  text === COMPLETIONS_SQL
+    ? "read finished games"
+    : text === HAMBURGLE_COMPLETIONS_SQL
+      ? "read finished dailies"
+      : (/(?:social|public|hamburgle)\.\w+/.exec(text)?.[0] ?? text);
 
 const last = (statements: Statement[]) => statements[statements.length - 1];
 
@@ -324,8 +341,7 @@ describe("social-gateway: the order of the checks", () => {
     const [ensure, mapped] = statements.slice(2);
     expect([ensure.role, mapped.role]).toEqual(["social_gateway", "social_gateway"]);
     expect(ensure.transaction).toBe(mapped.transaction);
-    expect(ensure.text).toContain("'rainbow'");
-    expect(ensure.params).toEqual([GLOBAL_ID]);
+    expect(ensure.params).toEqual([GLOBAL_ID, "rainbow"]);
     expect(mapped.params).toEqual([GLOBAL_ID, "Ada"]);
   });
 
@@ -1200,6 +1216,273 @@ describe("social-gateway: access for every Rainbow account", () => {
     await send(deps, "previewInvite", { code: "abc" });
 
     expect(last(statements).params).toEqual([GLOBAL_ID, "abc"]);
+  });
+});
+
+describe("social-gateway: Hamburgle accounts (SOCIAL_HAMBURGLE)", () => {
+  const writesAnything = (statements: Statement[]) => statements.some(({ text }) => /\b(insert|update|delete|upsert)\b/i.test(text));
+
+  it("reads only exactly `on` as on", () => {
+    expect(readHamburgle("on")).toBe(true);
+    for (const value of [undefined, "", "On", "ON", "true", "1", " on", "yes"]) expect(readHamburgle(value)).toBe(false);
+  });
+
+  it.each([false, true])("a Rainbow account is found first and unchanged, with the setting %s", async (hamburgle) => {
+    const { deps, statements } = setup({ hamburgleAccount: true }, { hamburgle });
+
+    expect((await send(deps, "setDisplayName", { name: "Ada" })).body).toEqual(HUB_ANSWER);
+
+    expect(statements.map(named)).toEqual(["public.accounts", "social.is_beta_tester", "social.ensure_person", "social.set_display_name"]);
+    expect(statements[2].params).toEqual([GLOBAL_ID, "rainbow"]);
+    expect(statements[3].params).toEqual([GLOBAL_ID, "Ada"]);
+    expect(JSON.stringify(statements)).not.toContain(HAMBURGLE_ID);
+  });
+
+  it("a Hamburgle-only account is not linked while the setting is off, and Hamburgle is never asked", async () => {
+    const { deps, statements } = setup({ account: false, hamburgleAccount: true });
+
+    expect((await send(deps, "setDisplayName", { name: "Ada" })).body).toEqual({ ok: false, outcome: "not_linked" });
+
+    expect(statements.map(named)).toEqual(["public.accounts"]);
+  });
+
+  it("with the setting on, a Hamburgle-only account gets in and is linked to Hamburgle, not Rainbow", async () => {
+    const { deps, statements } = setup({ account: false, hamburgleAccount: true }, { hamburgle: true });
+
+    expect((await send(deps, "setDisplayName", { name: "Ada" })).body).toEqual(HUB_ANSWER);
+
+    expect(statements.map(named)).toEqual([
+      "public.accounts",
+      "hamburgle.progress_accounts",
+      "social.is_beta_tester",
+      "social.ensure_person",
+      "social.set_display_name",
+    ]);
+    const [rainbowRead, hamburgleRead, tester, ensure, mapped] = statements;
+    expect([rainbowRead.role, hamburgleRead.role]).toEqual(["own", "own"]);
+    expect(hamburgleRead.params).toEqual([USER_ID]);
+    expect(hamburgleRead.text).toContain("from auth.identities i where i.user_id = $1::uuid and i.provider = 'custom:platform' order by i.created_at limit 1");
+    expect(hamburgleRead.text).not.toContain("progress_platform_user");
+    expect(tester.params).toEqual([HAMBURGLE_ID]);
+    expect(ensure.params).toEqual([HAMBURGLE_ID, "hamburgle"]);
+    expect(ensure.text).not.toMatch(/'rainbow'|'hamburgle'/);
+    expect(mapped.params).toEqual([HAMBURGLE_ID, "Ada"]);
+  });
+
+  it("with the setting on, no account in either game is still not linked", async () => {
+    const { deps, statements } = setup({ account: false }, { hamburgle: true });
+
+    expect((await send(deps, "listFriends", {})).body).toEqual({ ok: false, outcome: "not_linked" });
+
+    expect(statements.map(named)).toEqual(["public.accounts", "hamburgle.progress_accounts"]);
+  });
+
+  it("keeps the allow-list for a Hamburgle account", async () => {
+    const { deps, statements } = setup({ account: false, hamburgleAccount: true, tester: false }, { hamburgle: true });
+
+    expect((await send(deps, "listFriends", {})).body).toEqual({ ok: false, outcome: "game_disabled" });
+
+    expect(statements.map(named)).not.toContain("social.ensure_person");
+  });
+
+  it("never creates or changes an account in either game", async () => {
+    for (const world of [{ account: false, hamburgleAccount: true }, { account: false }, { hamburgleAccount: true }]) {
+      const { deps, statements } = setup(world, { hamburgle: true });
+      for (const op of ["getMe", "listFriends"]) await send(deps, op, {});
+      await send(deps, "previewInvite", { code: "abc" });
+      expect(writesAnything(statements)).toBe(false);
+      expect(statements.filter(({ text }) => text.includes("public.accounts")).every(({ text }) => /^select /.test(text))).toBe(true);
+    }
+  });
+
+  it.each(["globalUserId", "global_user_id", "userId"])("still refuses an identity in the arguments for a Hamburgle caller: %s", async (field) => {
+    const { deps, statements } = setup({ account: false, hamburgleAccount: true }, { hamburgle: true });
+
+    expect((await send(deps, "setDisplayName", { name: "Ada", [field]: FRIEND_ID })).body).toEqual(UNAVAILABLE);
+    expect((await send(deps, "listResults", { gameId: "hamburgle", puzzleId: "daily:12", [field]: FRIEND_ID })).body).toEqual(UNAVAILABLE);
+
+    expect(statements.map(named)).not.toContain("social.ensure_person");
+    expect(JSON.stringify(statements)).not.toContain(FRIEND_ID);
+  });
+
+  it("a failing Hamburgle read answers unavailable and logs only a code", async () => {
+    const { deps } = setup({ account: false, failOn: /hamburgle\.progress_accounts/ }, { hamburgle: true });
+
+    const { text, body } = await send(deps, "listFriends", {});
+
+    expect(body).toEqual(UNAVAILABLE);
+    expect(text).not.toContain("database detail");
+    expect(consoleError).toHaveBeenCalledWith("social-gateway: a request failed", "42501");
+  });
+
+  describe("previewInvite", () => {
+    const PREVIEW = { ok: true, data: { name: "Book club", isMember: false, isRemoved: false } };
+
+    it.each<[string, Partial<World>, boolean, string | null]>([
+      ["a Hamburgle-only account, setting on", { account: false, hamburgleAccount: true }, true, HAMBURGLE_ID],
+      ["a Hamburgle-only account, setting off", { account: false, hamburgleAccount: true }, false, null],
+      ["an account in both games, setting on", { hamburgleAccount: true }, true, GLOBAL_ID],
+      ["no account in either game, setting on", { account: false }, true, null],
+      ["the Hamburgle read failing", { account: false, failOn: /hamburgle\.progress_accounts/ }, true, null],
+    ])("resolves the caller for %s", async (_label, world, hamburgle, caller) => {
+      const { deps, statements } = setup({ hubAnswer: PREVIEW, ...world }, { hamburgle });
+
+      expect((await send(deps, "previewInvite", { code: "abc" })).body).toEqual(PREVIEW);
+
+      expect(last(statements).params).toEqual([caller, "abc"]);
+      expect(statements.map(named)).not.toContain("social.ensure_person");
+    });
+  });
+
+  describe("listResults for Hamburgle", () => {
+    const LIST = { ok: true, data: [{ friendRef: "f-1", isMe: false, name: "Ben", summary: { solved: true, guesses: 3 } }] };
+    const ARGS = { gameId: "hamburgle", puzzleId: "daily:12" };
+    const daily = (globalId: string, overrides: Record<string, unknown> = {}) => ({
+      global_user_id: globalId,
+      status: "won",
+      guesses: 3,
+      completed_at: "2026-11-05T18:00:00.123Z",
+      ...overrides,
+    });
+    const hamburgleWorld = (overrides: Partial<World> = {}, hamburgle = true) =>
+      setup({ account: false, hamburgleAccount: true, hubAnswer: LIST, audience: { ok: true, data: [HAMBURGLE_ID, FRIEND_ID] }, dailies: [daily(HAMBURGLE_ID), daily(FRIEND_ID)], ...overrides }, { hamburgle });
+    const records = (statements: Statement[]) => statements.filter((statement) => named(statement) === "social.record_completion");
+
+    it("copies first, in the right roles, then answers with listResults", async () => {
+      const { deps, statements } = hamburgleWorld();
+
+      expect((await send(deps, "listResults", ARGS)).body).toEqual(LIST);
+
+      expect(statements.slice(3).map((statement) => [statement.role, named(statement)])).toEqual([
+        ["social_gateway", "social.ensure_person"],
+        ["social_game_server", "social.audience_global_ids"],
+        ["own", "set transaction read only"],
+        ["own", "read finished dailies"],
+        ["social_game_server", "social.record_completion"],
+        ["social_game_server", "social.record_completion"],
+        ["social_gateway", "social.ensure_person"],
+        ["social_gateway", "social.list_results"],
+      ]);
+      expect(statements[3].params).toEqual([HAMBURGLE_ID, "hamburgle"]);
+      expect(last(statements).params).toEqual([HAMBURGLE_ID, "hamburgle", "daily:12", null]);
+    });
+
+    it("reads the audience's ids and the Daily number, in a read-only transaction of its own", async () => {
+      const { deps, statements } = hamburgleWorld();
+
+      await send(deps, "listResults", { ...ARGS, groupId: "g-1" });
+
+      expect(statements.find((statement) => named(statement) === "social.audience_global_ids")?.params).toEqual([HAMBURGLE_ID, "g-1"]);
+      const read = statements.find((statement) => statement.text === HAMBURGLE_COMPLETIONS_SQL);
+      expect(read?.params).toEqual([JSON.stringify([HAMBURGLE_ID, FRIEND_ID]), 12]);
+      expect(statements.filter((statement) => statement.transaction === read?.transaction).map(named)).toEqual(["set transaction read only", "read finished dailies"]);
+    });
+
+    it("reads only the counted attempt, and nothing from extras, archive or Unlimited, writing nothing", () => {
+      const flat = HAMBURGLE_COMPLETIONS_SQL.replace(/\s+/g, " ");
+      expect(flat).toContain("from hamburgle.progress_accounts a join hamburgle.progress_daily d on d.account_id = a.id");
+      expect(flat).toContain("d.entry -> 'counted' ->> 'status' in ('won', 'lost')");
+      expect(flat).toContain("d.entry -> 'counted' ->> 'mode' = 'daily'");
+      expect(flat).toContain("d.entry -> 'counted' -> 'dated' ->> 'number' = ($2::int)::text");
+      expect(flat).not.toMatch(/extras|progress_archive|progress_unlimited|progress_docs/);
+      expect(flat).not.toMatch(/\b(insert|update|delete|truncate|alter|drop|create|grant)\b/i);
+    });
+
+    it("sends exactly { guesses, solved }, no detail, and the wire time", async () => {
+      const { deps, statements } = hamburgleWorld({
+        dailies: [daily(HAMBURGLE_ID), daily(FRIEND_ID, { status: "lost", guesses: 6, completed_at: "2026-11-05T19:30:00+01:00" })],
+      });
+
+      await send(deps, "listResults", ARGS);
+
+      expect(records(statements).map((statement) => statement.params)).toEqual([
+        [HAMBURGLE_ID, "hamburgle", "daily:12", "2026-11-05T18:00:00.123Z", '{"guesses":3,"solved":true}', null],
+        [FRIEND_ID, "hamburgle", "daily:12", "2026-11-05T18:30:00.000Z", '{"guesses":6,"solved":false}', null],
+      ]);
+    });
+
+    it.each<[string, Record<string, unknown>]>([
+      ["an attempt in progress", { status: "in_progress" }],
+      ["a skipped round", { status: "skipped" }],
+      ["no guesses", { guesses: 0 }],
+      ["guesses that weren't a list", { guesses: null }],
+      ["guesses as text", { guesses: "3" }],
+      ["no completion time", { completed_at: null }],
+      ["a completion time that isn't one", { completed_at: "yesterday" }],
+      ["a completion time without a zone", { completed_at: "2026-11-05T18:00:00.000" }],
+      ["no global id", { global_user_id: null }],
+    ])("skips a row with %s, and the others still go", async (_label, bad) => {
+      const { deps, statements } = hamburgleWorld({ dailies: [daily("user_01BADROWBADROW", bad), daily(FRIEND_ID)] });
+
+      expect((await send(deps, "listResults", ARGS)).body).toEqual(LIST);
+
+      expect(records(statements).map((statement) => statement.params[0])).toEqual([FRIEND_ID]);
+    });
+
+    it.each(["12", "daily:0", "daily:012", "daily:100001", "daily:1234567", "archive:12", "daily:12:extra", "unlimited"])(
+      "shares nothing for the puzzle id %s, and the list still answers",
+      async (puzzleId) => {
+        const { deps, statements } = hamburgleWorld();
+
+        expect((await send(deps, "listResults", { gameId: "hamburgle", puzzleId })).body).toEqual(LIST);
+
+        expect(statements.map(named).slice(3)).toEqual(["social.ensure_person", "social.list_results"]);
+      },
+    );
+
+    it.each<[string, RegExp]>([
+      ["making sure the caller exists", /social\.ensure_person/],
+      ["the audience", /audience_global_ids/],
+      ["the read", /hamburgle\.progress_daily/],
+      ["recording", /record_completion/],
+    ])("a failure at %s shows nothing, logs a code only, and listResults still answers", async (_label, failOnceOn) => {
+      const { deps, statements } = hamburgleWorld({ failOnceOn });
+
+      const { text, body } = await send(deps, "listResults", ARGS);
+
+      expect(body).toEqual(LIST);
+      expect(text).not.toContain("database detail");
+      expect(named(last(statements))).toBe("social.list_results");
+      const logged = JSON.stringify(consoleError.mock.calls);
+      for (const secret of [HAMBURGLE_ID, FRIEND_ID, TOKEN, "database detail"]) expect(logged).not.toContain(secret);
+    });
+
+    it("gives each row its own transaction", async () => {
+      const { deps, statements } = hamburgleWorld({ recordFailsFor: HAMBURGLE_ID });
+
+      expect((await send(deps, "listResults", ARGS)).body).toEqual(LIST);
+
+      expect(records(statements).map((statement) => statement.params[0])).toEqual([HAMBURGLE_ID, FRIEND_ID]);
+      expect(new Set(records(statements).map((statement) => statement.transaction)).size).toBe(2);
+    });
+
+    it("copies nothing while the setting is off, even for a Rainbow account", async () => {
+      const { deps, statements } = hamburgleWorld({ account: true }, false);
+
+      expect((await send(deps, "listResults", ARGS)).body).toEqual(LIST);
+
+      expect(statements.map(named).slice(2)).toEqual(["social.ensure_person", "social.list_results"]);
+    });
+
+    it("a Rainbow account listing Hamburgle copies too, linked as Rainbow", async () => {
+      const { deps, statements } = hamburgleWorld({ account: true, audience: { ok: true, data: [GLOBAL_ID, FRIEND_ID] } });
+
+      await send(deps, "listResults", ARGS);
+
+      expect(statements.find((statement) => named(statement) === "social.ensure_person")?.params).toEqual([GLOBAL_ID, "rainbow"]);
+      expect(records(statements).length).toBe(2);
+    });
+
+    it("leaves Rainbow's results untouched: a Hamburgle caller listing Rainbow reads only Rainbow's games", async () => {
+      const { deps, statements } = hamburgleWorld({ sessions: [] });
+
+      await send(deps, "listResults", { gameId: "rainbow", puzzleId: "p-1" });
+
+      const names = statements.map(named);
+      expect(names).toContain("read finished games");
+      expect(names).not.toContain("read finished dailies");
+      expect(statements.find((statement) => named(statement) === "social.ensure_person")?.params).toEqual([HAMBURGLE_ID, "hamburgle"]);
+    });
   });
 });
 

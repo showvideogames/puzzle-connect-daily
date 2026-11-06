@@ -1,6 +1,6 @@
 import {crossPunsStandings} from './crosspunsStandings';
 import {crossPunsStandingsView} from './crosspunsStandingsView';
-import { AVATAR_IDS, CURRENT_NOTICE_VERSION, DEFAULT_AVATAR, DEFAULT_COLOR, DEFAULT_EMBLEM, GAME_STATUS, GROUP_EMBLEM_IDS, LIMITS, PROFILE_COLORS, RESULT_SHAPES } from './contract';
+import { AVATAR_IDS, CURRENT_NOTICE_VERSION, DEFAULT_AVATAR, DEFAULT_COLOR, DEFAULT_EMBLEM, GAME_STATUS, GROUP_EMBLEM_IDS, GROUP_HISTORY_GAMES, LIMITS, PROFILE_COLORS, RESULT_SHAPES } from './contract';
 import type {
   CompletionInput,
   Face,
@@ -1074,19 +1074,20 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       const mine = cardOf(me.id);
       const finished = mine !== undefined;
 
-      /** Someone else's card, only if it was completed at or after the two connected, and never across a block. */
-      const sharedCard = (person: string, connectedAt: number) => {
+      /** Someone else's card, only if it was completed at or after the two connected (any time, with history), and never across a block. */
+      const sharedCard = (person: string, connectedAt: number, history = false) => {
         const card = cardOf(person);
-        return card && card.completedAt >= connectedAt && !blockedEitherWay(me.id, person) ? card : undefined;
+        return card && (history || card.completedAt >= connectedAt) && !blockedEitherWay(me.id, person) ? card : undefined;
       };
 
       if (groupId !== undefined) {
         const found = membership(me, groupId);
         if (!found) return fail('not_a_member');
         const rows: ResultRow[] = [];
+        const history = GROUP_HISTORY_GAMES.has(gameId);
         for (const member of found.group.members.values()) {
           const isMe = member.person === me.id;
-          const card = isMe ? mine : sharedCard(member.person, Math.max(member.joinedAt, found.mine.joinedAt));
+          const card = isMe ? mine : sharedCard(member.person, Math.max(member.joinedAt, found.mine.joinedAt), history);
           if (card) rows.push(resultRow({ memberRef: member.memberRef }, card, member.name, isMe, finished));
         }
         return done(rows);

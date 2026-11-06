@@ -15,18 +15,23 @@
  *   4. Everything else needs a token Supabase Auth accepts right now, never
  *      trusted on its own claims, and not an anonymous user: `not_signed_in`.
  *   5. The global id comes from Rainbow's own `accounts` row, found by the auth
- *      user id. No row: `not_linked`. Never from args.
+ *      user id. Only with no such row and SOCIAL_HAMBURGLE on, a Hamburgle
+ *      account (hamburgle.progress_accounts) counts too. Neither: `not_linked`.
+ *      Never from args, and no account is ever created here.
  *   6. The beta allow-list, unless access is `everyone`. Anyone else gets
  *      `game_disabled`, so the feature behaves as if it doesn't exist.
  *   7. A strict check of the arguments, per operation: `unavailable`.
- *   8. One transaction as social_gateway: ensure_person, then the one mapped
- *      function. Its JSON goes back exactly.
+ *   8. One transaction as social_gateway: ensure_person, for the game whose
+ *      account let the caller in, then the one mapped function. Its JSON goes
+ *      back exactly.
  *
  * Tokens, global ids and args are never logged, and a database error's text is
  * never returned or logged: an SQLSTATE code at most.
  *
  * Results are shared automatically, so listResults for Rainbow first copies the
  * audience's finished official daily games into the hub. See shareCompletions.
+ * With SOCIAL_HAMBURGLE on, listResults for Hamburgle does the same with the
+ * counted Daily attempts. See shareHamburgleCompletions.
  */
 
 export const corsHeaders = {
@@ -66,6 +71,11 @@ export interface GatewayDeps {
    * Rainbow account. Every other check is the same either way.
    */
   access: GatewayAccess;
+  /**
+   * Whether a Hamburgle account with no Rainbow row may use the hub, and
+   * Hamburgle's finished Dailies are shared (see readHamburgle).
+   */
+  hamburgle: boolean;
   db: GatewayDb;
 }
 
@@ -74,6 +84,11 @@ export type GatewayAccess = "allow-list" | "everyone";
 /** The SOCIAL_ACCESS setting. Anything but exactly `everyone` keeps the allow-list. */
 export function readAccess(value: string | undefined): GatewayAccess {
   return value === "everyone" ? "everyone" : "allow-list";
+}
+
+/** The SOCIAL_HAMBURGLE setting. Anything but exactly `on` keeps Hamburgle accounts out, as today. */
+export function readHamburgle(value: string | undefined): boolean {
+  return value === "on";
 }
 
 /**
@@ -414,8 +429,20 @@ const AS_GAME_SERVER = "set local role social_game_server";
 const READ_ONLY = "set transaction read only";
 
 const ACCOUNT_SQL = "select global_user_id from public.accounts where user_id = $1::uuid";
+/**
+ * Hamburgle's account boundary: its own row, keyed by the shared sign-in id.
+ * That id is read from GoTrue's identity table exactly as Rainbow's
+ * ensure_account reads it (the first custom:platform identity), so it needs no
+ * helper function in the hamburgle schema.
+ */
+export const HAMBURGLE_ACCOUNT_SQL =
+  "select a.global_user_id from hamburgle.progress_accounts a" +
+  " where a.global_user_id = (select i.provider_id from auth.identities i" +
+  " where i.user_id = $1::uuid and i.provider = 'custom:platform' order by i.created_at limit 1)" +
+  " and a.global_user_id ~ '^user_[0-9A-Za-z]{10,64}$'";
 const BETA_TESTER_SQL = "select social.is_beta_tester($1::text) as allowed";
-const ENSURE_PERSON_SQL = "select social.ensure_person($1::text, 'rainbow') as result";
+/** $2 is the game whose account let the caller in: 'rainbow' or 'hamburgle'. */
+const ENSURE_PERSON_SQL = "select social.ensure_person($1::text, $2::text) as result";
 const AUDIENCE_SQL = "select social.audience_global_ids($1::text, $2::text) as result";
 const RECORD_COMPLETION_SQL =
   "select social.record_completion($1::text, $2::text, $3::text, $4::text, $5::text::jsonb, $6::text::jsonb) as result";
@@ -530,10 +557,31 @@ function bearerToken(req: Request, keys: ApiKeys): string | null {
 }
 
 /** Rainbow's account boundary: an auth user is a Rainbow account only with a row here. */
-async function readGlobalId(userId: string, db: GatewayDb): Promise<string | null> {
-  const rows = await db.transaction((tx) => tx.query(ACCOUNT_SQL, [userId]));
+async function readGlobalId(userId: string, db: GatewayDb, sql = ACCOUNT_SQL): Promise<string | null> {
+  const rows = await db.transaction((tx) => tx.query(sql, [userId]));
   const globalId = rows[0]?.global_user_id;
   return isText(globalId) ? globalId : null;
+}
+
+type CallerGame = "rainbow" | "hamburgle";
+
+interface Caller {
+  globalId: string;
+  /** The game whose own account let them in. ensure_person links them to it. */
+  game: CallerGame;
+}
+
+/**
+ * Rainbow's row first, read exactly as before. Only when there is none and
+ * SOCIAL_HAMBURGLE is on, a Hamburgle account, read as the connection's own
+ * role. Nothing is created in either game.
+ */
+async function readCaller(userId: string, deps: GatewayDeps): Promise<Caller | null> {
+  const rainbow = await readGlobalId(userId, deps.db);
+  if (rainbow) return { globalId: rainbow, game: "rainbow" };
+  if (!deps.hamburgle) return null;
+  const hamburgle = await readGlobalId(userId, deps.db, HAMBURGLE_ACCOUNT_SQL);
+  return hamburgle ? { globalId: hamburgle, game: "hamburgle" } : null;
 }
 
 async function isBetaTester(globalId: string, db: GatewayDb): Promise<boolean> {
@@ -552,8 +600,8 @@ async function previewCaller(token: string | null, deps: GatewayDeps): Promise<s
   try {
     const user = await deps.verifyUserToken(token);
     if (!user || user.isAnonymous) return null;
-    const globalId = await readGlobalId(user.id, deps.db);
-    return globalId && (await mayUse(globalId, deps)) ? globalId : null;
+    const caller = await readCaller(user.id, deps);
+    return caller && (await mayUse(caller.globalId, deps)) ? caller.globalId : null;
   } catch (error) {
     logFailure("the preview's caller check", error);
     return null;
@@ -601,10 +649,10 @@ function completionParams(row: Record<string, unknown>, puzzleId: string): unkno
  * person's lock is held across the whole audience. record_completion keeps the
  * first result, so repeating this on every list changes nothing.
  */
-async function shareCompletions(globalId: string, puzzleId: string, groupId: string | null, db: GatewayDb): Promise<void> {
+async function shareCompletions(globalId: string, puzzleId: string, groupId: string | null, db: GatewayDb, game: CallerGame): Promise<void> {
   try {
     // A result never creates a person, so someone new has to exist first.
-    await asGateway(db, (tx) => hubAnswer(tx, ENSURE_PERSON_SQL, [globalId]));
+    await asGateway(db, (tx) => hubAnswer(tx, ENSURE_PERSON_SQL, [globalId, game]));
     const audience = await asGameServer(db, (tx) => hubAnswer(tx, AUDIENCE_SQL, [globalId, groupId]));
     if (audience.ok !== true || !Array.isArray(audience.data)) return;
     const ids = audience.data.filter(isText);
@@ -626,6 +674,95 @@ async function shareCompletions(globalId: string, puzzleId: string, groupId: str
     }
   } catch (error) {
     logFailure("sharing results", error);
+  }
+}
+
+// ── Hamburgle's automatic results (SOCIAL_HAMBURGLE on) ──
+
+/**
+ * The counted attempt of one Daily, finished, and nothing else: no extras, no
+ * archive replay, no Unlimited, no attempt in progress. The round itself must
+ * also say it is this Daily (mode and dated number). $1 is a JSON list of
+ * global ids, $2 the Daily number. The guesses count is only taken from a real
+ * list, so a malformed entry can't fail the read for everyone else. Like
+ * Rainbow's, this is client-reported progress: a player affects only their row.
+ */
+export const HAMBURGLE_COMPLETIONS_SQL = `
+  select a.global_user_id,
+         d.entry -> 'counted' ->> 'status' as status,
+         case when jsonb_typeof(d.entry -> 'counted' -> 'guesses') = 'array'
+              then jsonb_array_length(d.entry -> 'counted' -> 'guesses') end as guesses,
+         d.entry -> 'counted' ->> 'completedAt' as completed_at
+    from hamburgle.progress_accounts a
+    join hamburgle.progress_daily d on d.account_id = a.id
+   where a.global_user_id in (select jsonb_array_elements_text($1::text::jsonb))
+     and d.daily_number = $2::int
+     and d.entry -> 'counted' ->> 'mode' = 'daily'
+     and d.entry -> 'counted' -> 'dated' ->> 'number' = ($2::int)::text
+     and d.entry -> 'counted' ->> 'status' in ('won', 'lost')
+`;
+
+/** Daily #n is `daily:<n>`, n from 1 to 100000 as Hamburgle's table allows. Null for any other id. */
+export function hamburgleDailyNumber(puzzleId: string): number | null {
+  const match = /^daily:([1-9][0-9]{0,5})$/.exec(puzzleId);
+  const n = match ? Number(match[1]) : NaN;
+  return n <= 100000 ? n : null;
+}
+
+const ISO_TIME = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/;
+
+/** An ISO 8601 time as the wire's UTC milliseconds, or null. */
+function wireTime(value: unknown): string | null {
+  const match = isText(value) ? ISO_TIME.exec(value) : null;
+  if (!match) return null;
+  const ms = Date.parse(`${match[1]}.${(match[2] ?? "").padEnd(3, "0").slice(0, 3)}${match[3]}`);
+  if (Number.isNaN(ms)) return null;
+  const wire = new Date(ms).toISOString();
+  return WIRE_TIME.test(wire) ? wire : null;
+}
+
+/** The arguments for record_completion: summary { guesses, solved }, no detail. Null for a row that can't be a result. */
+function hamburgleCompletionParams(row: Record<string, unknown>, puzzleId: string): unknown[] | null {
+  const { global_user_id: globalId, status, guesses } = row;
+  const completedAt = wireTime(row.completed_at);
+  if (!isText(globalId) || !completedAt) return null;
+  if (status !== "won" && status !== "lost") return null;
+  if (!Number.isSafeInteger(guesses) || (guesses as number) < 1) return null;
+  return [globalId, "hamburgle", puzzleId, completedAt, JSON.stringify({ guesses, solved: status === "won" }), null];
+}
+
+/**
+ * shareCompletions for Hamburgle: the audience's finished counted Daily
+ * attempts go into the hub before the list is read. Same roles, same order,
+ * one transaction per row, and a failure costs results, never the answer. Any
+ * puzzle id but `daily:<n>` shares nothing.
+ */
+async function shareHamburgleCompletions(caller: Caller, puzzleId: string, groupId: string | null, db: GatewayDb): Promise<void> {
+  const daily = hamburgleDailyNumber(puzzleId);
+  if (daily === null) return;
+  try {
+    await asGateway(db, (tx) => hubAnswer(tx, ENSURE_PERSON_SQL, [caller.globalId, caller.game]));
+    const audience = await asGameServer(db, (tx) => hubAnswer(tx, AUDIENCE_SQL, [caller.globalId, groupId]));
+    if (audience.ok !== true || !Array.isArray(audience.data)) return;
+    const ids = audience.data.filter(isText);
+    if (ids.length === 0) return;
+
+    const rows = await db.transaction(async (tx) => {
+      await tx.query(READ_ONLY, []);
+      return tx.query(HAMBURGLE_COMPLETIONS_SQL, [JSON.stringify(ids), daily]);
+    });
+
+    for (const row of rows) {
+      const params = hamburgleCompletionParams(row, puzzleId);
+      if (!params) continue;
+      try {
+        await asGameServer(db, (tx) => hubAnswer(tx, RECORD_COMPLETION_SQL, params));
+      } catch (error) {
+        logFailure("recording a Hamburgle result", error);
+      }
+    }
+  } catch (error) {
+    logFailure("sharing Hamburgle results", error);
   }
 }
 
@@ -671,19 +808,23 @@ async function answerRequest(req: Request, deps: GatewayDeps): Promise<Answer> {
   const user = await deps.verifyUserToken(token);
   if (!user || user.isAnonymous) return refuse("not_signed_in");
 
-  const globalId = await readGlobalId(user.id, deps.db);
-  if (!globalId) return refuse("not_linked");
+  const caller = await readCaller(user.id, deps);
+  if (!caller) return refuse("not_linked");
+  const { globalId } = caller;
 
   if (!(await mayUse(globalId, deps))) return refuse("game_disabled");
 
   if (!argsFit(operation, args)) return UNAVAILABLE;
 
   if (op === "listResults" && args.gameId === "rainbow") {
-    await shareCompletions(globalId, args.puzzleId as string, (args.groupId as string | undefined) ?? null, deps.db);
+    await shareCompletions(globalId, args.puzzleId as string, (args.groupId as string | undefined) ?? null, deps.db, caller.game);
+  }
+  if (op === "listResults" && args.gameId === "hamburgle" && deps.hamburgle) {
+    await shareHamburgleCompletions(caller, args.puzzleId as string, (args.groupId as string | undefined) ?? null, deps.db);
   }
 
   return asGateway(deps.db, async (tx) => {
-    const ensured = await hubAnswer(tx, ENSURE_PERSON_SQL, [globalId]);
+    const ensured = await hubAnswer(tx, ENSURE_PERSON_SQL, [globalId, caller.game]);
     if (!ensured.ok || operation.sql === null) return ensured;
     return hubAnswer(tx, operation.sql, [globalId, ...operation.params(args)]);
   });
