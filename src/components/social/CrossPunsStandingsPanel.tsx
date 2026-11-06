@@ -38,12 +38,12 @@ export function CrossPunsStandingsPanel({api,groupId}:{api:SocialApi;groupId:str
     {row.blocked===true?<span className={`${quietText} italic`}>This player is blocked</span>:<><ProfileAvatar {...faceOf({animalId:row.animalId??'',backgroundColor:row.backgroundColor??''})} size={40} /><span className="min-w-0 flex-1 break-words">{row.name}</span><span className="shrink-0">{row.points} pts</span></>}
    </li>)}</ol>
    {!current.data!.rows.length&&<p>No standings on this page.</p>}
-   {current.data!.total>3&&<button className="mt-3 min-h-11 underline" aria-expanded={showAll} onClick={()=>{setShowAll(value=>!value);setOffset(0);}}>{showAll?'Show top three':'View all standings'}</button>}
+   {current.data!.total>3&&<button className="mt-3 min-h-11 underline" aria-expanded={showAll} onClick={()=>{setShowAll(value=>!value);setOffset(0);}}>{showAll?'Show less':`See all (${current.data!.total})`}</button>}
    {showAll&&<div className="mt-3 flex flex-wrap gap-4">
     {offset>0&&<button className="min-h-11 underline" onClick={()=>setOffset(Math.max(0,offset-50))}>Previous</button>}
     {offset+50<current.data!.total&&<button className="min-h-11 underline" onClick={()=>setOffset(offset+50)}>Next</button>}
    </div>}
   </>}
-  <button className="mt-2 min-h-11 underline" disabled={!current} onClick={()=>{setOffset(0);setRevision(r=>r+1);}}>{current?.failed?'Try again':'Refresh standings'}</button>
+  {current?.failed&&<button className="mt-2 min-h-11 underline" onClick={()=>{setOffset(0);setRevision(r=>r+1);}}>Try again</button>}
  </section>;
 }

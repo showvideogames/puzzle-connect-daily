@@ -12,7 +12,7 @@ it('renders canonical ranks without a blocked profile link, name or points',asyn
 it('refusals are errors, retry does not invent empty results; paging is bounded',async()=>{
  const call=vi.fn().mockResolvedValueOnce({ok:false,outcome:'unavailable'}).mockResolvedValue({ok:true,data:{...data,total:51}});
  render(<CrossPunsStandingsPanel api={apiFor(call)} groupId="g"/>);await screen.findByText(/couldn't be loaded/);fireEvent.click(screen.getByRole('button',{name:'Try again'}));await screen.findByText('Viewer');
- fireEvent.click(screen.getByRole('button',{name:'View all standings'}));fireEvent.click(screen.getByRole('button',{name:'Next'}));await screen.findByRole('button',{name:'Previous'});expect(call).toHaveBeenLastCalledWith('crossPunsStandings',{groupId:'g',offset:50});
+ fireEvent.click(screen.getByRole('button',{name:/See all/}));fireEvent.click(screen.getByRole('button',{name:'Next'}));await screen.findByRole('button',{name:'Previous'});expect(call).toHaveBeenLastCalledWith('crossPunsStandings',{groupId:'g',offset:50});
 });
 it('discards an interrupted response after switching groups',async()=>{
  let resolve!:(value:unknown)=>void;const call=vi.fn().mockImplementationOnce(()=>new Promise(r=>{resolve=r;})).mockResolvedValue({ok:true,data:{rows:[],total:0}});const api=apiFor(call);
@@ -22,7 +22,7 @@ it('discards an interrupted response after switching groups',async()=>{
 
 it('switches rolling periods using the local date and resets paging',async()=>{
  const call=vi.fn().mockResolvedValue({ok:true,data:{...data,total:51}});render(<CrossPunsStandingsPanel api={apiFor(call)} groupId="g"/>);await screen.findByText('Viewer');
- fireEvent.click(screen.getByRole('button',{name:'View all standings'}));fireEvent.click(screen.getByRole('button',{name:'Next'}));await screen.findByRole('button',{name:'Previous'});
+ fireEvent.click(screen.getByRole('button',{name:/See all/}));fireEvent.click(screen.getByRole('button',{name:'Next'}));await screen.findByRole('button',{name:'Previous'});
  fireEvent.change(screen.getByLabelText('Period'),{target:{value:'7'}});await screen.findByText('Viewer');
  expect(call).toHaveBeenLastCalledWith('crossPunsStandings',{groupId:'g',offset:0,days:7,through:'2026-11-05'});
  expect(screen.queryByRole('button',{name:'Previous'})).toBeNull();
@@ -41,10 +41,10 @@ it('shows saved avatars with safe fallback, medals by rank, and expands the rest
  {blocked:false,rank:3,memberRef:'b',name:'B',points:1,animalId:'invalid'},
  {blocked:false,rank:4,memberRef:'c',name:'C',points:0,animalId:'panda'}];
  render(<CrossPunsStandingsPanel api={apiFor(vi.fn().mockResolvedValue({ok:true,data:{rows,total:4}}))} groupId="g"/>);
- await screen.findByText('A');let items=screen.getAllByTestId('standing-row');expect(items).toHaveLength(3);
+ await screen.findByText('A');expect(screen.queryByRole('button',{name:/Refresh standings|Try again/})).toBeNull();let items=screen.getAllByTestId('standing-row');expect(items).toHaveLength(3);
  expect(items[0].querySelector('img')).toBeNull();expect(items[1].querySelector('img')?.src).toContain('otter');expect(items[2].querySelector('img')?.src).toContain('fox');
  expect(within(items[0]).getByLabelText('Rank 1').className).toContain('bg-amber');expect(within(items[1]).getByLabelText('Rank 1').className).toContain('bg-amber');expect(within(items[2]).getByLabelText('Rank 3').className).toContain('bg-orange');
  expect(screen.queryByText(/points for first|publication date|earlier results/)).toBeNull();
- fireEvent.click(screen.getByRole('button',{name:'View all standings'}));expect(screen.getAllByTestId('standing-row')).toHaveLength(4);
- fireEvent.click(screen.getByRole('button',{name:'Show top three'}));expect(screen.queryByText('C')).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:/See all/}));expect(screen.getAllByTestId('standing-row')).toHaveLength(4);
+ fireEvent.click(screen.getByRole('button',{name:'Show less'}));expect(screen.queryByText('C')).toBeNull();
 });

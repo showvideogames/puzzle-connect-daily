@@ -11,8 +11,8 @@ try{
   const masked=board.getByTestId('standing-row').filter({hasText:'This player is blocked'});assert.equal((await masked.textContent()).trim(),'1This player is blocked');assert.equal(await masked.getByRole('link').count(),0);assert.equal(await masked.locator('img').count(),0);
   assert.equal(await board.locator('img').count(),2);assert.equal(await board.getByTestId('standing-row').count(),3);
   assert.equal(await board.getByText(/points for first|publication date|earlier results/).count(),0);
-  await board.getByRole('button',{name:'View all standings'}).click();assert.equal(await board.getByTestId('standing-row').count(),5);
-  await board.getByRole('button',{name:'Show top three'}).click();assert.equal(await board.getByTestId('standing-row').count(),3);
+  await board.getByRole('button',{name:/See all/}).click();assert.equal(await board.getByTestId('standing-row').count(),5);
+  await board.getByRole('button',{name:'Show less'}).click();assert.equal(await board.getByTestId('standing-row').count(),3);
   assert.equal(await board.getByLabel('Rank 1',{exact:true}).count(),2);
   for(const theme of ['light','dark']){await page.evaluate(d=>document.documentElement.classList.toggle('dark',d),theme==='dark');await page.waitForTimeout(150);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:`evidence/standings-${width}-${theme}.png`,fullPage:true});}
   for(const days of [7,30,365]){
