@@ -1,4 +1,6 @@
 /**
+ * LOCAL PROPOSAL (Hamburgle preview): differs from Rainbow's released copy (570fb495) only in Hamburgle's status, summary and result shape, and GROUP_HISTORY_GAMES; pending the shared contract owner.
+ *
  * The shared Friends / Groups contract, version 0: draft, mock only.
  * docs/shared-social/CONTRACT.md is the authority; this file is its code form.
  *
