@@ -695,3 +695,24 @@ describe("Blocked", () => {
     expect(await unblockOf("Sam")).toBeInTheDocument();
   });
 });
+
+it('shows the groups tab during slow result loading and keeps failure explicit',async()=>{
+ let finish!:(value:unknown)=>void;
+ const refresh=vi.fn();addEventListener('rainbow:social-header-refresh',refresh);
+ try {
+ open({listResults:()=>new Promise(resolve=>{finish=resolve;})},'groups');
+ await screen.findByTestId('friends-home');
+ expect(screen.queryByText('waiting')).toBeNull();
+ fireEvent.mouseDown(screen.getByRole('tab',{name:'Friends'}));
+ await screen.findByText('Loading results…');
+ finish(refused('unavailable'));
+ await screen.findByText(/Results are unavailable/);expect(screen.queryByText('Not played yet')).toBeNull();
+ expect(refresh).not.toHaveBeenCalled();
+ }finally{removeEventListener('rainbow:social-header-refresh',refresh);}
+});
+
+it('does not trigger duplicate header reads after a successful initial page load',async()=>{
+ const refresh=vi.fn();addEventListener('rainbow:social-header-refresh',refresh);
+ try {open({});await screen.findByText('AAA-222');await waitFor(()=>expect(screen.queryByText('Loading results…')).toBeNull());expect(refresh).not.toHaveBeenCalled();}
+ finally{removeEventListener('rainbow:social-header-refresh',refresh);}
+});

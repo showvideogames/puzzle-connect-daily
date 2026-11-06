@@ -11,6 +11,7 @@ interface FriendsHomeProps {
   /** The game these results are from. */
   gameName: string;
   results: readonly FriendResult[];
+  resultsNotice?: ReactNode;
   friendCode: string;
   tab: FriendsTab;
   onTabChange: (tab: FriendsTab) => void;
@@ -38,7 +39,7 @@ const tabButton =
  * played can be opened, and so can anyone with actions. A friend code is there
  * to read out or copy.
  */
-export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, onAddFriend, groups, today = new Date(), rowActions, onEditProfile, friendsFooter, onFriendProfile }: FriendsHomeProps) {
+export function FriendsHome({ gameName, results, resultsNotice, friendCode, tab, onTabChange, onAddFriend, groups, today = new Date(), rowActions, onEditProfile, friendsFooter, onFriendProfile }: FriendsHomeProps) {
   const favorites = results.filter(result => !result.isYou && result.favorite);
   const [openId, setOpenId] = useState<string | null>(null);
   const [copied, setCopied] = useState<"yes" | "no" | null>(null);
@@ -71,7 +72,7 @@ export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, o
         </Tabs.List>
 
         <Tabs.Content value="friends" className="focus-visible:outline-none">
-          {favorites.length > 0 && <section className={`${accountCard} mt-4`} aria-label="Favorite friends">
+          {!resultsNotice && favorites.length > 0 && <section className={`${accountCard} mt-4`} aria-label="Favorite friends">
             <h2 className="font-tile text-lg font-bold">Favorite friends</h2>
             <ul className="mt-3 flex gap-3 overflow-x-auto pb-1">
               {favorites.map(friend => <li key={friend.id} className="shrink-0">
@@ -83,8 +84,9 @@ export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, o
             </ul>
           </section>}
           <TodayHeading today={today} />
+          {resultsNotice}
           <ul className="mt-1">
-            {results.map((result) => (
+            {!resultsNotice && results.map((result) => (
               <ResultRow
                 key={result.id}
                 result={result}

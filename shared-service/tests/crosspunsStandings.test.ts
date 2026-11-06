@@ -127,7 +127,11 @@ it('applies and reapplies the complete additive patch chain without changing mem
  const members=await db.query('select id,group_id,person_id,name,joined_at,notice_version from social.memberships order by id');
  for(let pass=0;pass<2;pass++)for(const file of readdirSync('shared-service/patches').filter(file=>file.endsWith('.sql')).sort())await db.exec(readFileSync(`shared-service/patches/${file}`,'utf8'));
  expect(await call('list_my_groups',[users[0]])).toEqual(beforeGroups);
- expect(await call('crosspuns_standings_period',[users[0],group,0,null,null])).toEqual(beforeBoard);
+ const afterBoard=await call('crosspuns_standings_period',[users[0],group,0,null,null]);
+ const withoutNames=(answer:any)=>({...answer,data:{...answer.data,rows:answer.data.rows.map(({name,...row}:any)=>row)}});
+ expect(withoutNames(afterBoard)).toEqual(withoutNames(beforeBoard));
+ const currentNames=(await db.query<{id:string;name:string}>("select m.id,coalesce(p.display_name,m.name) name from social.memberships m join social.persons p on p.id=m.person_id")).rows;
+ for(const row of afterBoard.data.rows.filter((r:any)=>!r.blocked))expect(row.name).toBe(currentNames.find(m=>m.id===row.memberRef)!.name);
  expect((await db.query('select * from public.xw_solves order by account_id,puzzle_id')).rows).toEqual(history.rows);
  expect((await db.query('select id,group_id,person_id,name,joined_at,notice_version from social.memberships order by id')).rows).toEqual(members.rows);
 });

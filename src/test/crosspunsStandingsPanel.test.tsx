@@ -41,7 +41,7 @@ it('shows saved avatars with safe fallback, medals by rank, and expands the rest
  {blocked:false,rank:3,memberRef:'b',name:'B',points:1,animalId:'invalid'},
  {blocked:false,rank:4,memberRef:'c',name:'C',points:0,animalId:'panda'}];
  render(<CrossPunsStandingsPanel api={apiFor(vi.fn().mockResolvedValue({ok:true,data:{rows,total:4}}))} groupId="g"/>);
- await screen.findByText('A');expect(screen.queryByRole('button',{name:/Refresh standings|Try again/})).toBeNull();let items=screen.getAllByTestId('standing-row');expect(items).toHaveLength(3);
+ await screen.findByText('A');expect(screen.queryByRole('button',{name:/Refresh standings|Try again/})).toBeNull();const items=screen.getAllByTestId('standing-row');expect(items).toHaveLength(3);
  expect(items[0].querySelector('img')).toBeNull();expect(items[1].querySelector('img')?.src).toContain('otter');expect(items[2].querySelector('img')?.src).toContain('fox');
  expect(within(items[0]).getByLabelText('Rank 1').className).toContain('bg-amber');expect(within(items[1]).getByLabelText('Rank 1').className).toContain('bg-amber');expect(within(items[2]).getByLabelText('Rank 3').className).toContain('bg-orange');
  expect(screen.queryByText(/points for first|publication date|earlier results/)).toBeNull();
@@ -60,4 +60,22 @@ it('loads only the requested 25-row page for 1000 members and resets on period c
  fireEvent.change(screen.getByLabelText('Period'),{target:{value:'7'}});await screen.findByText('Player 0');
  expect(call).toHaveBeenLastCalledWith('crossPunsStandings',{groupId:'g',offset:0,days:7,through:'2026-11-05'});
  expect(screen.queryByRole('button',{name:'Previous'})).toBeNull();
+});
+
+it.each(['still_checking','stale_session'])('quietly retries %s and cancels account-scoped reads',async(outcome)=>{
+ vi.useFakeTimers();
+ try {
+ const call=vi.fn().mockResolvedValueOnce({ok:false,outcome}).mockResolvedValue({ok:true,data});
+ const view=render(<CrossPunsStandingsPanel api={apiFor(call)} groupId="g"/>);
+ await act(async()=>{});expect(screen.getByText('Loading standings…')).toBeTruthy();expect(screen.queryByText(/couldn't be loaded/)).toBeNull();
+ await act(async()=>{await vi.advanceTimersByTimeAsync(1000);});expect(screen.getByText('Viewer')).toBeTruthy();
+ let resolve!:(value:unknown)=>void;
+ const next=vi.fn().mockImplementation(()=>new Promise(r=>{resolve=r;}));
+ view.rerender(<CrossPunsStandingsPanel api={apiFor(next)} groupId="g"/>);
+ expect(screen.queryByText('Viewer')).toBeNull();
+ view.unmount();await act(async()=>{resolve({ok:true,data});await vi.advanceTimersByTimeAsync(1000);});expect(next).toHaveBeenCalledTimes(1);
+ const waiting=vi.fn().mockResolvedValue({ok:false,outcome});
+ const pending=render(<CrossPunsStandingsPanel api={apiFor(waiting)} groupId="g"/>);await act(async()=>{});pending.unmount();
+ await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});expect(waiting).toHaveBeenCalledTimes(1);
+ }finally{vi.useRealTimers();}
 });

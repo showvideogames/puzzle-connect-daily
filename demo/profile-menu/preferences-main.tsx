@@ -5,6 +5,8 @@ import { SocialScreens } from '@/components/social/SocialScreens';
 import type { FriendsTab } from '@/components/account/FriendsHome';
 import type { SocialApi } from '@/components/social/socialApi';
 import '@/index.css';
+const previewParams = new URLSearchParams(location.search);
+document.documentElement.classList.toggle('dark', previewParams.get('theme') === 'dark');
 const world = createMockWorld();
 const alice = world.signIn('rainbow','River');
 const bob = world.signIn('rainbow','Jordan');
@@ -57,7 +59,15 @@ if(new URLSearchParams(location.search).has('large')) {
     }
   }
 }
-const api: SocialApi = { client:alice, puzzleId:()=>'fixture-day', today:()=>new Date(2026,10,5), linkUrl:()=>'', share:async()=>'done' };
+const previewClient: SocialApi['client'] = {
+  forget: () => alice.forget(),
+  async call(op, args) {
+    if (op === 'listResults' && previewParams.has('slow')) await new Promise(resolve => setTimeout(resolve, 8000));
+    if (op === 'listResults' && previewParams.has('failResults')) return { ok: false, outcome: 'unavailable' };
+    return alice.call(op, args);
+  },
+};
+const api: SocialApi = { client:previewClient, puzzleId:()=>'fixture-day', today:()=>new Date(2026,10,5), linkUrl:()=>'', share:async()=>'done' };
 if (new URLSearchParams(location.search).has('weekly')) api.weekPuzzles=async()=>[{id:'week-mon',date:'2026-11-02'},{id:'week-wed',date:'2026-11-04'},{id:'fixture-day',date:'2026-11-05'}];
 function Preview() {
   const [tab,setTab]=useState<FriendsTab>('friends');

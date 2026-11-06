@@ -466,6 +466,8 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
   const otherSide = (f: Friendship, id: string) => (f.a === id ? f.b : f.a);
   const friendshipBetween = (a: string, b: string) => friendshipsOf(a).find((f) => otherSide(f, a) === b);
 
+  const groupName = (viewer: string, subject: string, legacy: string) => (viewer !== subject ? friendshipBetween(viewer, subject)?.preferences?.get(viewer)?.nickname : null) || displayNameOf(subject) || legacy || 'Player';
+
   const requestsBetween = (a: string, b: string) => [...requests.values()].filter((r) => (r.from === a && r.to === b) || (r.from === b && r.to === a));
 
   function dropRequestsBetween(a: string, b: string): void {
@@ -912,7 +914,7 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       const { group } = found;
       const rows: MemberRow[] = [...group.members.values()].map((m) => ({
         memberRef: m.memberRef,
-        name: m.name,
+        name: groupName(me.id,m.person,m.name),
         ...faceOf(m.person),
         isOwner: m.person === group.owner,
         isMe: m.person === me.id,
@@ -961,7 +963,7 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
         return game==='crosspuns'&&memberRef&&'seconds' in card.summary ? [{memberRef,puzzleId,seconds:card.summary.seconds}] : [];
       });
       const ranked=crossPunsStandings(members,history);
-      const people=new Map(members.map(m=>[m.memberRef,{name:m.name,...faceOf(m.person),blockedEitherWay:blockedEitherWay(me.id,m.person)}]));
+      const people=new Map(members.map(m=>[m.memberRef,{name:groupName(me.id,m.person,m.name),...faceOf(m.person),blockedEitherWay:blockedEitherWay(me.id,m.person)}]));
       return done({rows:crossPunsStandingsView(ranked.rows.slice(offset,offset+25),people),total:members.length});
     },
 

@@ -1,9 +1,10 @@
 import {ProfileAvatar} from '@/components/account/ProfileAvatar';
-import {faceOf} from '@/lib/socialView';
+import {faceOf,isBackgroundCheck} from '@/lib/socialView';
 import {localPuzzleDate} from '@/lib/socialWeek';
 import {useEffect,useState,useRef} from 'react';
 import type {Operations} from '@/social/contract';
 import {accountCard,quietText} from '@/components/account/accountStyles';
+import {RETRY_MS} from './socialData';
 import type {SocialApi} from './socialApi';
 
 export function CrossPunsStandingsPanel({api,groupId}:{api:SocialApi;groupId:string}) {
@@ -12,7 +13,7 @@ export function CrossPunsStandingsPanel({api,groupId}:{api:SocialApi;groupId:str
  const [days,setDays]=useState<0|7|30|365>(0);
  const [through,setThrough]=useState(()=>localPuzzleDate(api.today()));
  const [offset,setOffset]=useState(0),[revision,setRevision]=useState(0);
- const [read,setRead]=useState<{key:string;data?:Operations['crossPunsStandings']['data'];failed?:boolean}|null>(null);
+ const [read,setRead]=useState<{api:SocialApi;key:string;data?:Operations['crossPunsStandings']['data'];failed?:boolean}|null>(null);
  const key=`${groupId}/${offset}/${revision}/${days}/${through}`;
  useEffect(()=>{
   const refresh=()=>{setThrough(localPuzzleDate(api.today()));setOffset(0);setRevision(r=>r+1);};
@@ -20,14 +21,15 @@ export function CrossPunsStandingsPanel({api,groupId}:{api:SocialApi;groupId:str
   window.addEventListener('focus',refresh);return()=>{clearInterval(timer);window.removeEventListener('focus',refresh);};
  },[api]);
  useEffect(()=>{
-  let active=true;
-  void api.client.call('crossPunsStandings',{groupId,offset,...(days?{days,through}:{})}).then(answer=>{
+  let active=true;let retry:ReturnType<typeof setTimeout>|undefined;
+  const load=()=>{void api.client.call('crossPunsStandings',{groupId,offset,...(days?{days,through}:{})}).then(answer=>{
    if(!active)return;
-   if(answer.ok===false)setRead({key,failed:true});else setRead({key,data:answer.data});
-  });return()=>{active=false;};
+   if(answer.ok===false&&isBackgroundCheck(answer.outcome)){retry=setTimeout(load,RETRY_MS);return;}
+   if(answer.ok===false)setRead({api,key,failed:true});else setRead({api,key,data:answer.data});
+  });};load();return()=>{active=false;clearTimeout(retry);};
  },[api,groupId,offset,key,days,through]);
- useEffect(()=>{setShowAll(false);setOffset(0);},[groupId]);
- const current=read?.key===key?read:null;
+ useEffect(()=>{setShowAll(false);setOffset(0);},[api,groupId]);
+ const current=read?.api===api&&read.key===key?read:null;
  useEffect(()=>{if(current&&pageChanged.current){heading.current?.focus();pageChanged.current=false;}},[current]);
  const goToPage=(next:number)=>{pageChanged.current=true;setOffset(next);};
  return <section aria-label="CrossPuns standings" className={`${accountCard} mt-4`}>

@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const DRAFT = readFileSync(new URL('../fixtures/hub-eb238dd.sql', import.meta.url), 'utf8');
-const PATCH = ['0002_png_group_photos.sql', '0003_private_friend_preferences.sql', '0004_private_group_order.sql', '0005_group_descriptions.sql', '0006_group_owner_actions.sql', '0007_group_invite_permissions.sql', '0008_crosspuns_standings.sql','0009_crosspuns_rolling.sql'].map(file => readFileSync(new URL(`../patches/${file}`, import.meta.url), 'utf8')).join('\n');
+const PATCH = ['0002_png_group_photos.sql', '0003_private_friend_preferences.sql', '0004_private_group_order.sql', '0005_group_descriptions.sql', '0006_group_owner_actions.sql', '0007_group_invite_permissions.sql', '0008_crosspuns_standings.sql','0009_crosspuns_rolling.sql','0010_current_group_names.sql'].map(file => readFileSync(new URL(`../patches/${file}`, import.meta.url), 'utf8')).join('\n');
 const UNINSTALL = readFileSync(new URL('../fixtures/uninstall.sql', import.meta.url), 'utf8');
 
 // Read from the contract's own file, so the lists in the SQL can't drift from it.
@@ -340,7 +340,11 @@ test('the draft hub', { skip }, async (t) => {
   };
 
   const otherMember = async (viewer, groupId) => (await ok('list_members', viewer, groupId)).find((m) => !m.isMe);
-  const memberNamed = async (viewer, groupId, name) => (await ok('list_members', viewer, groupId)).find((m) => m.name === name);
+  // Locate fixture identities by their saved join name; returned labels now resolve per viewer.
+  const memberNamed = async (viewer, groupId, name) => {
+    const saved=(await db.query('select id from social.memberships where group_id=$1 and name=$2',[groupId,name])).rows[0];
+    return (await ok('list_members', viewer, groupId)).find(m=>m.memberRef===saved?.id);
+  };
   const removedRef = async (groupId) => (await db.query(`select id::text as id from social.removals where group_id = $1`, [groupId])).rows[0].id;
   const friendCodeOf = async (who) => (await ok('ensure_person', who, 'crosspuns')).friendCode;
   const befriend = async (a, b) => ok('accept_friend_invite', b, (await ok('create_friend_invite', a)).code);
@@ -538,7 +542,7 @@ test('the draft hub', { skip }, async (t) => {
       const expected = ['Al', 'Third', 'First', 'Second'];
 
       const whole = await ok('list_members', alice, groupId);
-      assert.deepEqual(whole.map((m) => m.name), expected);
+      assert.deepEqual(whole.map((m) => m.name), Array(4).fill('Someone'));
       assert.deepEqual(whole.map((m) => m.joinedAt), expected.map((name) => times[name]));
 
       const paged = [];
@@ -547,10 +551,10 @@ test('the draft hub', { skip }, async (t) => {
         const rows = await ok('list_members', alice, groupId, cursor[0], cursor[1], 1);
         if (rows.length === 0) break;
         assert.equal(rows.length, 1);
-        paged.push(rows[0].name);
+        paged.push(rows[0].memberRef);
         cursor = [rows[0].joinedAt, rows[0].memberRef];
       }
-      assert.deepEqual(paged, expected);
+      assert.deepEqual(paged, whole.map(m=>m.memberRef));
 
       assert.equal((await ok('list_members', alice, groupId, null, null, 500)).length, 4);
     });
@@ -1800,7 +1804,8 @@ test('the draft hub', { skip }, async (t) => {
       const second = await ok('create_group', owner, 'Two', 'Owner');
       await ok('join_group', member, first.inviteCode, 'Bee');
       await ok('join_group', member, second.inviteCode, 'Bee');
-      const names = async (groupId) => (await ok('list_members', owner, groupId)).map((m) => m.name).sort();
+      const names = async (groupId) => (await db.query('select name from social.memberships where group_id=$1 order by name',[groupId])).rows.map(m=>m.name);
+      assert.deepEqual((await ok('list_members', owner, first.groupId)).map(m=>m.name),['Someone','Someone']);
 
       await ok('rename_me_in_group', member, first.groupId, '  Bumble  ');
       assert.deepEqual(await names(first.groupId), ['Bumble', 'Owner']);
@@ -2083,7 +2088,7 @@ test('what the hub saved is still there, and still guarded, after the database c
     assert.ok(after.adasFriends.some((f) => f.friendRef === friendRef && f.name === 'Ben'));
     assert.deepEqual(after.bensFriends.map((f) => [f.friendRef, f.name]), [[friendRef, 'Ada']]);
     // By name: two people joining in the same millisecond would swap places.
-    assert.deepEqual(after.members.map((m) => [m.name, m.isOwner]).sort(), [['Al', true], ['Bee', false]]);
+    assert.deepEqual(after.members.map((m) => [m.name, m.isOwner]).sort(), [['Ada', true], ['Pal', false]]);
     assert.deepEqual(after.adasGroups.map((g) => [g.groupId, g.isOwner, g.inviteCode]), [[groupId, true, inviteCode]]);
     assert.deepEqual(after.bensGroups.map((g) => [g.groupId, g.isOwner, g.inviteCode]), [[groupId, false, null]]);
     assert.deepEqual(after.friendNotices, [{ notice_a: NOTICE, notice_b: NOTICE }]);
@@ -2118,7 +2123,7 @@ test('what the hub saved is still there, and still guarded, after the database c
     }
 
     await ok('join_group', cleo, inviteCode, 'Cee', NOTICE);
-    assert.deepEqual((await ok('list_members', ada, groupId)).map((m) => m.name).sort(), ['Al', 'Bee', 'Cee']);
+    assert.deepEqual((await ok('list_members', ada, groupId)).map((m) => m.name).sort(), ['Ada', 'Cleo', 'Pal']);
   } finally {
     await db?.close();
     rmSync(dataDir, { recursive: true, force: true });

@@ -835,7 +835,7 @@ async function fullFlow(world: MockWorld): Promise<void> {
   await resultsOf(bob, 'crosspuns', PUZZLE, groupId);
   await resultsOf(bob, 'wtf', PUZZLE, groupId);
 
-  const carolRow = (await membersOf(alice, groupId)).find((m) => m.name === 'Cee');
+  const carolRow = (await membersOf(alice, groupId)).find((m) => m.name === 'carol');
   check(carolRow, 'carol should be listed');
   const { blockRef } = must(await alice.call('block', { ref: carolRow.memberRef }), 'block');
   await blocksOf(alice);
@@ -1359,14 +1359,14 @@ export function socialConformanceScenarios(makeWorld: MakeWorld): SocialScenario
       for (const player of [...alice, ...bob]) {
         const rows = await membersOf(player, groupId);
         check(JSON.stringify(rows.map((r) => r.memberRef)) === JSON.stringify(seen.map((r) => r.memberRef)), `${player.game} should show the same memberRefs`);
-        const myName = alice.includes(player) ? 'Al' : 'Bee';
+        const myName = alice.includes(player) ? 'alice' : 'bob';
         for (const row of rows) {
           check(row.isMe === (row.name === myName), `${player.game}: isMe should be right for ${row.name}`);
-          check(row.isOwner === (row.name === 'Al'), `${player.game}: isOwner should be right for ${row.name}`);
+          check(row.isOwner === (row.name === 'alice'), `${player.game}: isOwner should be right for ${row.name}`);
         }
       }
 
-      const target = seen.find((r) => r.name === 'Cee');
+      const target = seen.find((r) => r.name === 'carol');
       check(target, 'carol should be listed');
       must(await alice[3].call('removeMember', { groupId, memberRef: target.memberRef }), 'removeMember');
       for (const player of carol) refused(await player.call('joinGroup', { code: fresh, myName: 'Cee', noticeVersion: NOTICE }), 'removed', `${player.game}: the removed person`);
@@ -1401,7 +1401,7 @@ export function socialConformanceScenarios(makeWorld: MakeWorld): SocialScenario
       must(await here.call('renameMeInGroup', { groupId, name: '  Beatrice  ' }), 'renameMeInGroup');
 
       check((await groupsOf(there))[0].myName === 'Beatrice', 'listMyGroups in another game should show the new name');
-      check((await otherMember(owner, groupId)).name === 'Beatrice', 'listMembers should show the new name to the rest of the group');
+      check((await otherMember(owner, groupId)).name === 'bob', 'the current profile name takes precedence over the legacy group name');
     }),
 
     scenario('cross-game: a display name follows the person', async (world) => {
@@ -2793,7 +2793,7 @@ export function socialConformanceScenarios(makeWorld: MakeWorld): SocialScenario
       const { groupId, inviteCode } = await makeGroup(owner);
       await join(member, inviteCode, 'Bee');
       await join(removed, inviteCode, 'Cee');
-      const row = (await membersOf(owner, groupId)).find((m) => m.name === 'Cee');
+      const row = (await membersOf(owner, groupId)).find((m) => m.name === 'carol');
       check(row, 'carol should be listed');
       must(await owner.call('removeMember', { groupId, memberRef: row.memberRef }), 'removeMember');
 
@@ -3157,7 +3157,7 @@ export function socialConformanceScenarios(makeWorld: MakeWorld): SocialScenario
       const { groupId, inviteCode } = await makeGroup(alice, 'Club', 'Al');
       await join(bob, inviteCode, 'Bee');
       await join(carol, inviteCode, 'Cee');
-      const carolRow = (await membersOf(alice, groupId)).find((m) => m.name === 'Cee');
+      const carolRow = (await membersOf(alice, groupId)).find((m) => m.name === 'carol');
       check(carolRow, 'carol should be listed');
       world.advance(1000);
       await finish(world, 'rainbow', 'alice');
@@ -3186,7 +3186,7 @@ export function socialConformanceScenarios(makeWorld: MakeWorld): SocialScenario
       const { groupId, inviteCode } = await makeGroup(alice, 'Club', 'Al');
       await join(bob, inviteCode, 'Bee');
       await join(carol, inviteCode, 'Cee');
-      const row = (await membersOf(alice, groupId)).find((m) => m.name === 'Bee');
+      const row = (await membersOf(alice, groupId)).find((m) => m.name === 'bob');
       check(row, 'bob should be listed');
       world.advance(1000);
       await finish(world, 'rainbow', 'alice');
