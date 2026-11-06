@@ -2290,6 +2290,14 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
           spotTheme={spotPromptAvailable ? theme : null}
           onSpotRainbow={handleSpotFromResults}
           returnFocusRef={viewResultsRef}
+          // Up next and Friends' results. Friends' results belong to the
+          // official Daily only (never Archive, Beta or custom), and the
+          // player's own row starts from this board's outcome.
+          gameFormat={format.id}
+          officialDaily={isDailyStreakGame}
+          puzzleId={puzzle.id}
+          solved={state.isWon}
+          mistakes={state.mistakes}
         />
 
       {rainbowHerring && (

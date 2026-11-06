@@ -3,6 +3,7 @@
 What a player sees when a Rainbow Categories game ends: every message, button and rule, taken from the code as it runs today. **This describes; it doesn't change anything.** Use it to plan new wording, then change the code separately.
 
 - **Code version described:** branch `fix/restore-finished-games` (PR #93) — the results popup released in PR #91 (live since 2026-10-27), with PR #92's simplified one-word result messages and finished games restored across devices. **Until that branch is released, the live site still shows the older messages and the locked board** (see [What changed](#what-changed-in-the-result-message) and [section 6](#6-special-cases)).
+- **Results popup layout, Friends' results and Up next** ([section 2](#2-the-results-popup)) describe branch `feat/results-screen-friends`, which isn't released yet.
 - **One pending change** is called out where it matters: the streak fix in **PR #90**, which isn't merged or applied yet.
 - **Source references** look like `GameBoard.tsx:151`. Line numbers are for that commit; they drift as the code changes, so search for the quoted text if a number no longer matches. Paths are under `src/` unless shown otherwise.
 - **Words used here:**
@@ -73,17 +74,67 @@ It **does not** open by itself when:
 
 | Part | Exact text | Notes |
 | --- | --- | --- |
-| Close button (✕) | screen-reader label `Close results` | top right; stays visible while the inside scrolls |
-| Share squares | — | One row per guess, in order: yellow/green/blue/red squares by category; a rainbow row when the Rainbow was found; a lightbulb or flashlight picture where a hint was used. Same history as the Share text. (`ResultGrid.tsx`) |
-| Result message | one word from [section 1](#1-the-result-message) | also the popup's title for screen readers; nothing appears under it |
-| Solve time | `⏳ 7s` or `⏳ 1m 05s` | **Mini only** (Full never shows a time); hidden if no time was recorded |
-| Stats row | `Played`, `Win %`, `Max Streak` | **Daily and Archive only.** Shows `–` while loading. Same numbers as My Stats (`lib/gameStats.ts`, `winRateOf`). Full and Mini each have their own numbers. |
+| Close button (✕) | screen-reader label `Close results` | top right; outside the scrolling part, so it stays visible while the inside scrolls; 44 px tap area |
+| Share squares | — | One row per guess, in order: yellow/green/blue/red squares by category; a rainbow row when the Rainbow was found; a lightbulb or flashlight picture where a hint was used. Same history as the Share text. (`ResultGrid.tsx`) Beside the result message when both fit, above it when they don't. |
+| Result message | one word from [section 1](#1-the-result-message) | also the popup's title for screen readers, and the popup's only heading |
+| Solve time | `⏳ 7s` or `⏳ 1m 05s` | **Mini only** (Full never shows a time); under the result message; hidden if no time was recorded |
+| Stats row | `Played`, `Win %`, `Max Streak` | **Daily and Archive only.** One compact row. Shows `–` while loading. Same numbers as My Stats (`lib/gameStats.ts`, `winRateOf`). Full and Mini each have their own numbers. Never needs an account. |
 | Flame streak pill | `🔥 5 day streak!` | **Daily wins only** — see [section 5](#5-the-streak-flame) |
-| Share button | `Share Score` → `Copied!` for 2 seconds | see [section 3](#3-share-text) |
-| Rainbow invitation | `Spot the Rainbow? 🌈` / `Find one word from each group` | only while it's still on offer — see [section 4](#4-where-the-rainbow-appears-on-the-board). Shown in capitals on screen. |
+| Share button | `Share Score` → `Copied!` for 2 seconds | see [section 3](#3-share-text); has keyboard focus when the popup opens |
+| Rainbow invitation | `Spot the Rainbow? 🌈` / `Find one word from each group` | directly under Share, only while it's still on offer — see [section 4](#4-where-the-rainbow-appears-on-the-board). Shown in capitals on screen. |
+| Friends' results | see [Friends' results](#friends-results) | **Friends and Groups beta only, official Daily only** |
+| Up next | `Up next`, then two cards, each with the game's icon, its name and `Play` | see [Up next](#up-next); every finished game |
 | Back to board | `Back to board` | closes the popup |
 
 The 🔥 in the pill is a drawn icon, not an emoji character.
+
+The personal part (squares, message, time, stats, flame, Share, invitation) shows at once. Friends' results load on their own afterwards, inside their own section, so they never hold up the popup or the celebration. The popup is capped to the screen's height and scrolls inside.
+
+### Friends' results
+
+Source: `components/results/FriendsResults.tsx` (loaded only when the section is shown, so the Friends and Groups code is never in the main download) and `components/results/FriendsSection.tsx`.
+
+**When it shows.** Only while the Friends and Groups beta is switched on (`VITE_SHARED_SOCIAL=beta`), and only on the **official Daily**. Never on Archive, Beta or custom puzzles. Both formats ask for results about the board's own puzzle (Full and Mini puzzles have different ids, so each only ever sees its own). On the Mini Daily, available results and group pills remain accessible while the player's own result arrives. This local candidate requires the separately coordinated Mini service release.
+
+Titled `Friends' results` (not a heading). What's inside:
+
+| Situation | What it shows |
+| --- | --- |
+| Still checking who is signed in, or loading | Three grey placeholder rows of a fixed height, inside the section only. Screen-reader text `Loading friends' results`. |
+| Signed out | The bear-and-frog heart picture, `Keep your progress. Play with pals.`, `Create an account to save your stats across devices and compare results with friends.`, a large `Create an account` button and a smaller `Sign in`. Both start the same sign-in (the account is made the first time someone signs in). While it opens: `Opening sign-in…`. If it can't start, its reason shows under the buttons. |
+| Signed in, no friends | The same picture, `Puzzles are better with pals.`, `Add friends to see how everyone did on today's puzzle.` and a large `Add friends` button, which closes the popup and opens Add a friend on `/friends`. |
+| Signed in, friends, none finished | The player's own row, then `No friends have finished this puzzle yet`, then `View all friends`. |
+| Signed in, friends have finished | One row per person who finished, ranked (see below), with the player's row highlighted where it ranks (soft lilac; a matching tint in dark mode): avatar, name, result. The player's row reads `<Display Name> (you)` (`You` with no Display Name yet). No rank numbers. Then `View all friends` (opens `/friends`). |
+| Mini, signed in with friends, server has no Mini result for the player | `Your Mini result hasn't arrived yet. Available results are shown below.` and `Refresh results`. Available finished rows and group pills remain visible. There are up to four automatic retries after the initial successful read; manual refresh starts another bounded attempt. No own row or time is invented. |
+| Something couldn't load | `Couldn't load friends' results right now.` and a `Try again` button. Never shown as an empty list. A read held up only because the account is being re-checked (which Rainbow does on focus and reconnect) is not an error: the placeholder stays and it asks again after a second. |
+
+**Who is listed.** Only people who finished this puzzle: solved, or a completed loss (`Not solved`). People who haven't played or are still playing are left out. The player's row uses the server's result when it has one. On Full only, when the server has none yet, it comes from the game just played; on Mini it never does, because Mini ranks by a time only the server records. Another person's missing name shows as `A Rainbow player`; the player's own row is always `<Display Name> (you)`, or `You` before they choose a name, on the Friends pill and on every group pill.
+
+**Order and wording** (`components/results/rankResults.ts`, the same for every pill):
+
+| | Full | Mini |
+| --- | --- | --- |
+| First | Solved, fewest mistakes first. Equal mistakes are a tie; time never counts, even if a row carries one. | Solved with a time, fastest first. Equal times are a tie. |
+| Then | — | Solved with no usable time (missing, zero, or not a whole number of seconds), fewest mistakes first. Never treated as 0 and never first. |
+| Last | Completed losses | Completed losses |
+| Ties | By name, then a fixed id, so the order never jumps around | Same |
+| Solved row says | `No mistakes`, `1 mistake`, `3 mistakes` | `0:42 · 1 mistake`, `1:05 · No mistakes`, `1:00:00 · 2 mistakes` from an hour on; without a usable time `Solved · 2 mistakes` |
+| Loss says | `Not solved` | `Not solved` |
+
+The time is the server-recorded one carried in the result's summary; none is invented, including for the player's own row. Nothing else about anyone's puzzle (no squares, no answers) is ever shown here, even when the server would allow it on the Friends page.
+
+**Groups.** When the player is in any group, pills sit above the list: `Friends`, then one per group (scrolling sideways if they don't fit). Choosing a group loads that group's results, with its own placeholder and its own `Try again`. Groups stay there even with no friends (the Friends pill then shows the Add friends prompt). A group where only the player has finished says `No one else in this group has finished this puzzle yet`.
+
+### Up next
+
+Source: `components/results/UpNext.tsx`. Two square cards side by side; the whole card is the link. No arrows.
+
+| After | First card | Second card |
+| --- | --- | --- |
+| Full (any mode) | `Mini Categories` — opens `/mini` | `CrossPuns` — opens crosspuns.com in a new tab |
+| Mini (any mode) | `Rainbow Categories` — opens `/` | `CrossPuns` — opens crosspuns.com in a new tab |
+
+Each card shows the game's own icon, its name and `Play`. A Rainbow card closes the popup as it goes.
 
 ### Closing, reopening, refreshing
 

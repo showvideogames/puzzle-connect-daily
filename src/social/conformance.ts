@@ -2966,6 +2966,20 @@ export function socialConformanceScenarios(makeWorld: MakeWorld): SocialScenario
       must(await route.recordCompletion({ ...rainbow, puzzleId: 'longest', detail: 'x'.repeat(LIMITS.resultDetailMax) }), 'the longest grid');
     }),
 
+    scenario('results: Rainbow accepts optional positive whole seconds without changing existing cards', async (world) => {
+      const player = world.signIn('rainbow', 'alice');
+      const input = completion(world, 'rainbow', 'alice');
+      const route = world.hub.serverFor('rainbow');
+      for (const seconds of [0, -1, 1.5, '42', null, true, Number.MAX_SAFE_INTEGER + 1]) {
+        refused(await route.recordCompletion({ ...input, summary: { solved: true, mistakes: 1, seconds } } as unknown as CompletionInput), 'bad_result', 'invalid Mini time');
+      }
+      must(await route.recordCompletion({ ...input, summary: { solved: true, mistakes: 1, seconds: 42 } }), 'Mini time');
+      const before = JSON.stringify(await resultsOf(player, 'rainbow'));
+      check(before.includes('"seconds":42'), 'the stored Mini time must be returned');
+      must(await route.recordCompletion({ ...input, summary: { solved: true, mistakes: 1, seconds: 1 } }), 'replay');
+      check(JSON.stringify(await resultsOf(player, 'rainbow')) === before, 'a replay must not overwrite a time');
+    }),
+
     scenario('results: a disabled game answers game_disabled, and a result needs a known person with an account in that game', async (world) => {
       const alice = world.signIn('rainbow', 'alice');
       for (const game of DISABLED_GAMES) {

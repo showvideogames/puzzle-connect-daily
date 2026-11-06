@@ -53,6 +53,8 @@ interface SocialScreensProps {
   editorClassName?: string;
   /** Opens straight into the profile editor, as Edit profile in Settings does. */
   startEditingProfile?: boolean;
+  /** Opens straight into Add a friend, as Add friends in the results popup does. */
+  startAddingFriend?: boolean;
 }
 
 /**
@@ -77,12 +79,14 @@ export function SocialScreens({
   waiting,
   editorClassName = "mx-auto w-full max-w-[32rem] px-5 py-5 sm:px-8 sm:py-7",
   startEditingProfile = false,
+  startAddingFriend = false,
 }: SocialScreensProps) {
   const live = useLive();
   const loadNo = useRef(0);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [failed, setFailed] = useState(false);
-  const [addingFriend, setAddingFriend] = useState(false);
+  const [addingFriend, setAddingFriend] = useState(startAddingFriend);
+  useEffect(() => { if (startAddingFriend) setAddingFriend(true); }, [startAddingFriend]);
   const [choosingName, setChoosingName] = useState(false);
   const [editingProfile, setEditingProfile] = useState(startEditingProfile);
   useEffect(() => { if (startEditingProfile) setEditingProfile(true); }, [startEditingProfile]);
