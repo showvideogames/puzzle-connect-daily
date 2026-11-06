@@ -22,6 +22,7 @@ export interface PersonData {
   groups: GroupView[];
   /** Nobody's results could be asked for, so "Not played yet" would be a guess. */
   noResults: boolean;
+  resultsPending?: boolean;
 }
 
 export interface LinkRead {
@@ -50,39 +51,34 @@ async function readRows(api: SocialApi, groupId?: string): Promise<ResultRow[] |
   return rows.ok === false ? { outcome: rows.outcome } : rows.data;
 }
 
-/** One after another, so the first refusal ends it. Today's results are joined to the friends list here. */
-export async function readPerson(api: SocialApi): Promise<PersonData | { outcome: Outcome }> {
+/** Independent reads overlap. The hub can show groups while results remain explicitly pending. */
+export async function readPerson(api: SocialApi, onReady?: (person: PersonData) => void): Promise<PersonData | { outcome: Outcome }> {
   const { client } = api;
-  const me = await client.call("getMe", {});
+  const rowsPending = readRows(api).catch(() => ({ outcome: "unavailable" as const }));
+  const [me, requests, friends, groups, preferences, order] = await Promise.all([
+    client.call("getMe", {}),
+    client.call("listFriendRequests", {}),
+    client.call("listFriends", {}),
+    client.call("listMyGroups", {}),
+    socialPreferencesEnabled() ? client.call("listFriendPreferences", {}) : null,
+    groupOrderEnabled() ? client.call("listGroupOrder", {}) : null,
+  ]);
   if (me.ok === false) return { outcome: me.outcome };
-  const requests = await client.call("listFriendRequests", {});
   if (requests.ok === false) return { outcome: requests.outcome };
-  const friends = await client.call("listFriends", {});
   if (friends.ok === false) return { outcome: friends.outcome };
-  const rows = await readRows(api);
-  if (rows !== null && !Array.isArray(rows)) return { outcome: rows.outcome };
-  const groups = await client.call("listMyGroups", {});
   if (groups.ok === false) return { outcome: groups.outcome };
-  let results = friendResults({ me: me.data, friends: friends.data, rows: Array.isArray(rows) ? rows : [] });
-  if (socialPreferencesEnabled()) {
-    const preferences = await client.call("listFriendPreferences", {});
-    if (preferences.ok === false) return { outcome: preferences.outcome };
-    results = applyFriendPreferences(results, preferences.data);
-  }
-  let orderedGroups = groups.data.map(groupView);
-  if (groupOrderEnabled()) {
-    const order = await client.call("listGroupOrder", {});
-    if (order.ok === false) return { outcome: order.outcome };
-    orderedGroups = applyGroupOrder(orderedGroups, order.data.groupIds);
-  }
-  return {
-    me: me.data,
-    incoming: requests.data.incoming,
-    outgoing: requests.data.outgoing,
-    results,
-    groups: orderedGroups,
-    noResults: rows === null,
+  if (preferences?.ok === false) return { outcome: preferences.outcome };
+  if (order?.ok === false) return { outcome: order.outcome };
+  const base = {
+    me: me.data, incoming: requests.data.incoming, outgoing: requests.data.outgoing,
+    groups: order ? applyGroupOrder(groups.data.map(groupView), order.data.groupIds) : groups.data.map(groupView),
   };
+  onReady?.({ ...base, results: [], noResults: false, resultsPending: true });
+  const rows = await rowsPending;
+  if (rows !== null && !Array.isArray(rows)) return { outcome: rows.outcome };
+  let results = friendResults({ me: me.data, friends: friends.data, rows: Array.isArray(rows) ? rows : [] });
+  if (preferences) results = applyFriendPreferences(results, preferences.data);
+  return { ...base, results, noResults: rows === null, resultsPending: false };
 }
 
 /** Every member, page by page, then today's results joined to them. */

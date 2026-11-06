@@ -333,3 +333,13 @@ describe("signing in", () => {
     expect(pendingInviteCode()).toBeNull();
   });
 });
+
+it('discards slow results after a partially loaded hub signs out or switches accounts',async()=>{
+ let finish!:(value:unknown)=>void;
+ const fake=fakeSocial(confirmed('s1'),person('Alex','AAA-222',{listResults:()=>new Promise(resolve=>{finish=resolve;}) as never}));
+ open(fake.social);await screen.findByText('AAA-222');await screen.findByText('Loading results…');
+ fake.become(guest);expect(screen.queryByText('AAA-222')).toBeNull();
+ fake.setAnswers(person('Ben','BBB-333'));fake.become(confirmed('s2',BEN,2));await screen.findByText('BBB-333');
+ await act(async()=>{finish({ok:true,data:[]});});
+ expect(screen.queryByText('AAA-222')).toBeNull();expect(screen.getByText('BBB-333')).toBeInTheDocument();
+});

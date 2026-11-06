@@ -92,13 +92,13 @@ export function SocialScreens({
 
   /** Only the newest read paints, and only while this person is still here. */
   const load = useCallback(
-    async function again(): Promise<void> {
+    async function again(refreshHeader = true): Promise<void> {
       loadNo.current += 1;
       const thisLoad = loadNo.current;
       const wanted = () => live.current && thisLoad === loadNo.current;
       const later = () => {
         setTimeout(() => {
-          if (wanted()) void again();
+          if (wanted()) void again(refreshHeader);
         }, RETRY_MS);
       };
 
@@ -114,19 +114,22 @@ export function SocialScreens({
         return;
       }
 
-      const person = await readPerson(api);
+      const person = await readPerson(api, partial => {
+        if (wanted()) setLoaded(previous => previous ?? { ...partial, link: read.link });
+      });
       if (!wanted()) return;
       if ("outcome" in person) {
         if (isBackgroundCheck(person.outcome)) {
           later();
           return;
         }
+        setLoaded(previous => previous ? { ...previous, results: [], resultsPending: false, noResults: true } : null);
         setFailed(true);
         onNote(socialProblem(person.outcome));
         return;
       }
       setLoaded({ ...person, link: read.link });
-      dispatchEvent(new Event(HEADER_REFRESH));
+      if (refreshHeader) dispatchEvent(new Event(HEADER_REFRESH));
       if (read.problem) onNote(read.problem);
       else if (person.noResults) onNote(NO_RESULTS_NOTE);
     },
@@ -134,7 +137,7 @@ export function SocialScreens({
   );
 
   useEffect(() => {
-    void load();
+    void load(false);
   }, [load, refresh]);
 
   if (loaded === null) return <>{failed ? null : waiting}</>;
@@ -252,6 +255,7 @@ export function SocialScreens({
         <FriendsHome
           gameName={GAME_NAME}
           results={loaded.results ?? []}
+          resultsNotice={loaded.resultsPending ? <p role="status">Loading results…</p> : loaded.noResults ? <p role="status">Results are unavailable. <button className="underline" onClick={() => void load(false)}>Try again</button></p> : undefined}
           friendCode={loaded.me?.friendCode ?? ""}
           tab={tab}
           onTabChange={onTab}
