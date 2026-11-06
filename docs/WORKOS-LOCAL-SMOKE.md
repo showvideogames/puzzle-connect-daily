@@ -148,6 +148,16 @@ no `accounts` row, the app stays a guest.
 
 Record the outcomes (pass/fail and the query results) in the Phase 1 report.
 
+## On a hosted deployment
+
+The same cases run against the hosted beta through `npm run workos:hosted-beta` (Staging application
+for the hosted callback, provider install, redirect allow-list) and `npm run preview:check` (the
+automated guest half against a preview or the live site). Two things only a hosted run shows: every
+origin that starts a sign-in must have its exact `/auth/callback` on the allow-list (the live site is the
+`www` host), and with Confirm email ON a first-ever sign-in whose WorkOS email is unverified is refused
+by GoTrue until its confirmation email is clicked. Evidence of the 2026-10-04 runs:
+`supabase/ops/beta-reset/hosted-evidence/preview/` and `.../live/`.
+
 ## Tear down
 
 ```bash
