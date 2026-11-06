@@ -82,16 +82,38 @@ it('excludes Reveal-only solves and paginates a large group without leaking priv
  await call('ensure_person',['user_outsider0001','rainbow']);
  expect(await call('crosspuns_standings',['user_outsider0001',group,0])).toMatchObject({ok:false,outcome:'not_a_member'});
  // Disposable fixture population avoids daily join limits; no production data.
- for(let i=0;i<51;i++){
+ for(let i=0;i<996;i++){
   const who=`user_extra${String(i).padStart(10,'0')}`;await call('ensure_person',[who,'rainbow']);
   await db.query("insert into social.memberships(group_id,person_id,name,notice_version) select $1,id,$2,1 from social.persons where global_user_id=$3",[group,`Member ${i}`,who]);
  }
- const first=(await call('crosspuns_standings',[users[3],group,0])).data;
- const last=(await call('crosspuns_standings',[users[3],group,50])).data;
- expect(first.total).toBe(55);expect(first.rows).toHaveLength(50);expect(last.rows).toHaveLength(5);
- expect(new Set([...first.rows,...last.rows].map((r:any)=>r.memberRef)).size).toBe(55);
- expect(JSON.stringify(first)).not.toContain('user_');
-});
+ const collected:any[]=[];
+ for(let offset=0;offset<1000;offset+=25){
+  const page=(await call('crosspuns_standings',[users[3],group,offset])).data;
+  expect(page.total).toBe(1000);expect(page.rows).toHaveLength(25);collected.push(...page.rows);
+ }
+ expect(new Set(collected.map(r=>r.memberRef)).size).toBe(1000);
+ expect(collected.slice(3).every(r=>r.rank===4)).toBe(true); // tied ranks cross all page boundaries
+ const again=(await call('crosspuns_standings',[users[3],group,25])).data;
+ expect(again.rows).toEqual(collected.slice(25,50));
+ expect((await call('crosspuns_standings',[users[3],group,1000])).data.rows).toEqual([]);
+ expect((await call('crosspuns_standings',[users[3],group,999])).data.rows).toHaveLength(1);
+ const masked=(await call('crosspuns_standings',[users[0],group,0])).data;
+ for(const row of masked.rows.filter((r:any)=>r.blocked))expect(Object.keys(row).sort()).toEqual(['blocked','label','rank']);
+ const rolling=(await call('crosspuns_standings_period',[users[3],group,975,7,'2020-01-02'])).data;
+ expect(rolling.rows).toHaveLength(25);expect(rolling.total).toBe(1000);
+ await db.exec('begin');
+ try {
+  await call('block',[users[3],collected[24].memberRef]);
+  await call('block',[users[3],collected[25].memberRef]);
+  const left=(await call('crosspuns_standings',[users[3],group,0])).data.rows;
+  const right=(await call('crosspuns_standings',[users[3],group,25])).data.rows;
+  expect(left[24]).toEqual({blocked:true,rank:4,label:'This player is blocked'});
+  expect(right[0]).toEqual({blocked:true,rank:4,label:'This player is blocked'});
+  expect(right.slice(1)).toEqual(collected.slice(26,50));
+ } finally {await db.exec('rollback');}
+ expect(JSON.stringify(collected)).not.toContain('user_');
+
+},20000);
 it('returns unavailable rather than an empty ranking when the source is missing',async()=>{
  await db.exec('alter table public.xw_times rename to xw_times_unavailable');
  expect(await call('crosspuns_standings',[users[0],group,0])).toMatchObject({ok:false,outcome:'unavailable'});

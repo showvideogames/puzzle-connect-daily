@@ -300,7 +300,7 @@ function checkResultRow(row: unknown): void {
 
 function checkData(op: OpName, data: unknown): void {
   if(op==='crossPunsStandings') {
-    check(isRecord(data)&&hasExactly(data,['rows','total'])&&Array.isArray(data.rows)&&data.rows.length<=50&&Number.isInteger(data.total), 'Invalid standings page');
+    check(isRecord(data)&&hasExactly(data,['rows','total'])&&Array.isArray(data.rows)&&data.rows.length<=25&&Number.isInteger(data.total), 'Invalid standings page');
     for(const row of data.rows) {
       check(isRecord(row)&&(row.blocked===true?hasExactly(row,['blocked','rank','label']):hasExactly(row,['blocked','rank','memberRef','name','points','animalId','backgroundColor'])), 'Standings leaked fields');
       check(Number.isInteger(row.rank)&&Number(row.rank)>0, 'Invalid rank');

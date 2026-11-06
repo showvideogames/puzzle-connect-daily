@@ -43,7 +43,7 @@ begin
   ), ranked as (
     select *,rank() over(order by points desc) as rank from totals
   ), page as (
-    select * from ranked order by rank,id offset p_offset limit 50
+    select * from ranked order by rank,id offset p_offset limit 25
   )
   select (select count(*)::int from members), coalesce(jsonb_agg(
     case when social.blocked_either_way(v_me,person_id) then

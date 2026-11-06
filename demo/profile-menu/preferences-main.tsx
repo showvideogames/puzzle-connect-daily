@@ -47,6 +47,16 @@ if(new URLSearchParams(location.search).has('standings')) {
   const friends=await alice.call('listFriends',{});
   if(friends.ok)await alice.call('block',{ref:friends.data.find(f=>f.name==='Jordan')!.friendRef});
 }
+if(new URLSearchParams(location.search).has('large')) {
+  const groups=await alice.call('listMyGroups',{});
+  const group=groups.ok?groups.data.find(group=>group.name==='Coffee Club'):null;
+  if(group){const invite=await alice.call('getGroupInvitation',{groupId:group.groupId});
+    if(invite.ok&&invite.data.inviteCode)for(let i=0;i<995;i++){
+      const name=`Guest ${String(i+1).padStart(4,'0')}`;
+      await world.signIn('rainbow',name).call('joinGroup',{code:invite.data.inviteCode,myName:name,noticeVersion:1});
+    }
+  }
+}
 const api: SocialApi = { client:alice, puzzleId:()=>'fixture-day', today:()=>new Date(2026,10,5), linkUrl:()=>'', share:async()=>'done' };
 if (new URLSearchParams(location.search).has('weekly')) api.weekPuzzles=async()=>[{id:'week-mon',date:'2026-11-02'},{id:'week-wed',date:'2026-11-04'},{id:'fixture-day',date:'2026-11-05'}];
 function Preview() {

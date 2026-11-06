@@ -12,7 +12,7 @@ it('renders canonical ranks without a blocked profile link, name or points',asyn
 it('refusals are errors, retry does not invent empty results; paging is bounded',async()=>{
  const call=vi.fn().mockResolvedValueOnce({ok:false,outcome:'unavailable'}).mockResolvedValue({ok:true,data:{...data,total:51}});
  render(<CrossPunsStandingsPanel api={apiFor(call)} groupId="g"/>);await screen.findByText(/couldn't be loaded/);fireEvent.click(screen.getByRole('button',{name:'Try again'}));await screen.findByText('Viewer');
- fireEvent.click(screen.getByRole('button',{name:/See all/}));fireEvent.click(screen.getByRole('button',{name:'Next'}));await screen.findByRole('button',{name:'Previous'});expect(call).toHaveBeenLastCalledWith('crossPunsStandings',{groupId:'g',offset:50});
+ fireEvent.click(screen.getByRole('button',{name:/See all/}));fireEvent.click(screen.getByRole('button',{name:'Next'}));await screen.findByRole('button',{name:'Previous'});expect(call).toHaveBeenLastCalledWith('crossPunsStandings',{groupId:'g',offset:25});
 });
 it('discards an interrupted response after switching groups',async()=>{
  let resolve!:(value:unknown)=>void;const call=vi.fn().mockImplementationOnce(()=>new Promise(r=>{resolve=r;})).mockResolvedValue({ok:true,data:{rows:[],total:0}});const api=apiFor(call);
@@ -47,4 +47,17 @@ it('shows saved avatars with safe fallback, medals by rank, and expands the rest
  expect(screen.queryByText(/points for first|publication date|earlier results/)).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:/See all/}));expect(screen.getAllByTestId('standing-row')).toHaveLength(4);
  fireEvent.click(screen.getByRole('button',{name:'Show less'}));expect(screen.queryByText('C')).toBeNull();
+});
+
+it('loads only the requested 25-row page for 1000 members and resets on period changes',async()=>{
+ const call=vi.fn().mockImplementation((_op,args)=>Promise.resolve({ok:true,data:{total:1000,rows:Array.from({length:25},(_,i)=>({blocked:false,rank:4,memberRef:String(args.offset+i),name:`Player ${args.offset+i}`,points:0}))}}));
+ render(<CrossPunsStandingsPanel api={apiFor(call)} groupId="g"/>);await screen.findByText('Player 0');
+ fireEvent.click(screen.getByRole('button',{name:'See all (1000)'}));expect(screen.getAllByTestId('standing-row')).toHaveLength(25);
+ expect(screen.getByText('Page 1 of 40 · 1–25 of 1000')).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'Next'}));await screen.findByText('Player 25');
+ expect(call).toHaveBeenLastCalledWith('crossPunsStandings',{groupId:'g',offset:25});expect(screen.getAllByTestId('standing-row')).toHaveLength(25);
+ expect(document.activeElement).toBe(screen.getByRole('heading',{name:'CrossPuns · All time'}));
+ fireEvent.change(screen.getByLabelText('Period'),{target:{value:'7'}});await screen.findByText('Player 0');
+ expect(call).toHaveBeenLastCalledWith('crossPunsStandings',{groupId:'g',offset:0,days:7,through:'2026-11-05'});
+ expect(screen.queryByRole('button',{name:'Previous'})).toBeNull();
 });

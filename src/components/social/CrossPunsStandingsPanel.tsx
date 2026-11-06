@@ -1,12 +1,13 @@
 import {ProfileAvatar} from '@/components/account/ProfileAvatar';
 import {faceOf} from '@/lib/socialView';
 import {localPuzzleDate} from '@/lib/socialWeek';
-import {useEffect,useState} from 'react';
+import {useEffect,useState,useRef} from 'react';
 import type {Operations} from '@/social/contract';
 import {accountCard,quietText} from '@/components/account/accountStyles';
 import type {SocialApi} from './socialApi';
 
 export function CrossPunsStandingsPanel({api,groupId}:{api:SocialApi;groupId:string}) {
+ const heading=useRef<HTMLHeadingElement>(null),pageChanged=useRef(false);
  const [showAll,setShowAll]=useState(false);
  const [days,setDays]=useState<0|7|30|365>(0);
  const [through,setThrough]=useState(()=>localPuzzleDate(api.today()));
@@ -27,8 +28,10 @@ export function CrossPunsStandingsPanel({api,groupId}:{api:SocialApi;groupId:str
  },[api,groupId,offset,key,days,through]);
  useEffect(()=>{setShowAll(false);setOffset(0);},[groupId]);
  const current=read?.key===key?read:null;
+ useEffect(()=>{if(current&&pageChanged.current){heading.current?.focus();pageChanged.current=false;}},[current]);
+ const goToPage=(next:number)=>{pageChanged.current=true;setOffset(next);};
  return <section aria-label="CrossPuns standings" className={`${accountCard} mt-4`}>
-  <h2 className="text-xl font-bold">CrossPuns · {days?`Last ${days} days`:'All time'}</h2>
+  <h2 ref={heading} tabIndex={-1} className="text-xl font-bold">CrossPuns · {days?`Last ${days} days`:'All time'}</h2>
   <label className="mt-3 block">Period<select aria-label="Period" className="ml-2 min-h-11 max-w-full rounded border bg-background px-2" value={days} onChange={event=>{setDays(Number(event.target.value) as 0|7|30|365);setOffset(0);}}>
    <option value={0}>All time</option><option value={7}>Last 7 days</option><option value={30}>Last 30 days</option><option value={365}>Last 365 days</option>
   </select></label>
@@ -39,10 +42,11 @@ export function CrossPunsStandingsPanel({api,groupId}:{api:SocialApi;groupId:str
    </li>)}</ol>
    {!current.data!.rows.length&&<p>No standings on this page.</p>}
    {current.data!.total>3&&<button className="mt-3 min-h-11 underline" aria-expanded={showAll} onClick={()=>{setShowAll(value=>!value);setOffset(0);}}>{showAll?'Show less':`See all (${current.data!.total})`}</button>}
-   {showAll&&<div className="mt-3 flex flex-wrap gap-4">
-    {offset>0&&<button className="min-h-11 underline" onClick={()=>setOffset(Math.max(0,offset-50))}>Previous</button>}
-    {offset+50<current.data!.total&&<button className="min-h-11 underline" onClick={()=>setOffset(offset+50)}>Next</button>}
-   </div>}
+   {showAll&&<nav aria-label="Standings pages" className="mt-3 flex flex-wrap items-center gap-4">
+    <p role="status" className="w-full text-sm">Page {Math.floor(offset/25)+1} of {Math.max(1,Math.ceil(current.data!.total/25))} · {Math.min(offset+1,current.data!.total)}–{Math.min(offset+25,current.data!.total)} of {current.data!.total}</p>
+    {offset>0&&<button className="min-h-11 underline" onClick={()=>goToPage(Math.max(0,offset-25))}>Previous</button>}
+    {offset+25<current.data!.total&&<button className="min-h-11 underline" onClick={()=>goToPage(offset+25)}>Next</button>}
+   </nav>}
   </>}
   {current?.failed&&<button className="mt-2 min-h-11 underline" onClick={()=>{setOffset(0);setRevision(r=>r+1);}}>Try again</button>}
  </section>;

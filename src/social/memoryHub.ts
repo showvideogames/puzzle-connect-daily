@@ -962,7 +962,7 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       });
       const ranked=crossPunsStandings(members,history);
       const people=new Map(members.map(m=>[m.memberRef,{name:m.name,...faceOf(m.person),blockedEitherWay:blockedEitherWay(me.id,m.person)}]));
-      return done({rows:crossPunsStandingsView(ranked.rows.slice(offset,offset+50),people),total:members.length});
+      return done({rows:crossPunsStandingsView(ranked.rows.slice(offset,offset+25),people),total:members.length});
     },
 
     getGroupDescription(me, { groupId }) {
