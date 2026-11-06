@@ -43,11 +43,12 @@ function SocialVisit({ social, code, signedIn }: VisitProps) {
   const { state } = useLocation();
   const live = useLive();
   const [tab, setTab] = useState<FriendsTab>((state as { tab?: FriendsTab } | null)?.tab === "groups" ? "groups" : "friends");
-  // Settings' Edit profile asks once. The ask leaves the history entry, so a reload or Back doesn't reopen the editor.
+  // Consume navigation intents while keeping subsequent visits responsive.
   const editProfile = (state as { editProfile?: boolean } | null)?.editProfile === true;
+  const addFriend = (state as { addFriend?: boolean } | null)?.addFriend === true;
   useEffect(() => {
-    if (editProfile) navigate(".", { replace: true, state: null });
-  }, [editProfile, navigate]);
+    if (editProfile || addFriend) navigate(".", { replace: true, state: null });
+  }, [editProfile, addFriend, navigate]);
   const [note, setNote] = useState("");
   const [signingIn, setSigningIn] = useState(false);
 
@@ -91,6 +92,7 @@ function SocialVisit({ social, code, signedIn }: VisitProps) {
         guest={<GuestPanel busy={signingIn} onSignIn={() => void signIn()} />}
         waiting={<WaitingPanel label={LOADING_NOTE} />}
         startEditingProfile={editProfile}
+        startAddingFriend={addFriend}
       />
     </>
   );

@@ -238,7 +238,7 @@ export interface GroupInvitePreview {
 
 /** One summary per game, of numbers and yes-or-no only. Cluevoyance has no shape yet. */
 export interface GameSummaries {
-  rainbow: { solved: boolean; mistakes: number };
+  rainbow: { solved: boolean; mistakes: number; seconds?: number };
   crosspuns: { seconds: number };
   wtf: { score: number };
   yodel: { score: number };
@@ -254,13 +254,15 @@ export type ResultDetail = string | boolean[];
 export interface ResultShape {
   /** The exact keys of a summary. A count is a whole number of at least 0. Nothing here can hold free text. */
   summary: Readonly<Record<string, 'boolean' | 'count'>>;
+  /** Optional numeric keys; absent is unknown, never zero. */
+  optionalSummary?: Readonly<Record<string, 'positiveCount'>>;
   /** 'none' means detail is null, 'grid' a text grid, 'answers' a list of true or false. */
   detail: 'none' | 'grid' | 'answers';
 }
 
 /** What a game server's result must look like. Null: no shape yet, so results are refused. */
 export const RESULT_SHAPES: Readonly<Record<GameId, ResultShape | null>> = {
-  rainbow: { summary: { solved: 'boolean', mistakes: 'count' }, detail: 'grid' },
+  rainbow: { summary: { solved: 'boolean', mistakes: 'count' }, optionalSummary: { seconds: 'positiveCount' }, detail: 'grid' },
   crosspuns: { summary: { seconds: 'count' }, detail: 'none' },
   wtf: { summary: { score: 'count' }, detail: 'answers' },
   yodel: { summary: { score: 'count' }, detail: 'none' },

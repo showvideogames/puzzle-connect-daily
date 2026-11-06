@@ -1,0 +1,11 @@
+{
+  "status": "local-unapplied",
+  "baseline": "ed3cc9e4c4889651b50c537f82e621d4e3e1b04c",
+  "requires": "Verify target and preserve current Friends patches through 0010; do not replay prior patches.",
+  "order": [
+    {
+      "path": "shared-service/patches/0011_rainbow_mini_seconds.sql",
+      "sha256": "b8699210daabc9ed4de0c94403afbb099915754bc99f218f2e4951bdea64d612"
+    }
+  ]
+}

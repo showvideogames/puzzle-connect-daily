@@ -421,26 +421,40 @@ const RECORD_COMPLETION_SQL =
   "select social.record_completion($1::text, $2::text, $3::text, $4::text, $5::text::jsonb, $6::text::jsonb) as result";
 
 /**
- * Finished official games of the full daily, and nothing else: no game in
- * progress, no mini, no custom or archive play. $1 is a JSON list of global ids.
+ * Finished official games of a daily, Full or Mini, and nothing else: no game in
+ * progress, no custom or archive play. $1 is a JSON list of global ids.
+ *
+ * Full and Mini are sibling dailies with their own puzzle rows, so a puzzle id
+ * belongs to one format only, and the hub keys result cards and detail unlocks
+ * by game and puzzle id. Asking for a Full puzzle therefore never returns a Mini
+ * result or the other way round. Every format rule follows the puzzle's own row:
+ * the session must be the same format as its puzzle (a Mini session claiming to
+ * be the Full game, or the reverse, is refused), and only the two known formats
+ * pass.
  *
  * entry_context comes from the browser, and the custom and beta pages send
  * daily_home too, so it can't stand alone. The puzzle's own row has the say: it
- * must be published, not beta, not free, and the full format, and the game must
- * finish before the puzzle's date plus 2 days in UTC, which allows for local
- * midnight and refuses a later archive play. The one exception is the puzzle the
- * home page serves now, the newest published full puzzle dated today or
- * earlier: while no new daily is published it stays the daily, whatever its
+ * must be published, not beta and not free, and the game must finish before the
+ * puzzle's date plus 2 days in UTC, which allows for local midnight and refuses
+ * a later archive play. The one exception is the puzzle the home page serves now
+ * for that format, the newest published puzzle of the same format dated today
+ * or earlier: while no new daily is published it stays the daily, whatever its
  * date. Archive and Unlimited plays of it still send their own entry_context.
  *
- * Rainbow's server doesn't replay games, so mistakes and the grid are only as
- * trustworthy as Rainbow's own stats: a player can affect only their own row.
+ * active_time_seconds is the Mini's solve time. It is read for every row, and
+ * completionParams sends it for Mini only, and only when it is a real time.
+ *
+ * Rainbow's server doesn't replay games, so mistakes, the time and the grid are
+ * only as trustworthy as Rainbow's own stats: a player can affect only their own
+ * row.
  */
 export const COMPLETIONS_SQL = `
   select a.global_user_id,
          gs.status,
          gs.mistakes,
          gs.share_grid,
+         p.format,
+         gs.active_time_seconds,
          to_char(gs.completed_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as completed_at
     from public.accounts a
     join public.game_sessions gs on gs.user_id = a.user_id
@@ -449,17 +463,17 @@ export const COMPLETIONS_SQL = `
      and gs.puzzle_id = $2::text
      and gs.is_official is true
      and gs.status in ('won', 'lost')
-     and gs.format = 'full'
+     and gs.format = p.format
      and gs.entry_context = 'daily_home'
      and p.is_published is true
      and p.is_beta is false
      and p.is_free_puzzle is not true
-     and p.format = 'full'
+     and p.format in ('full', 'mini')
      and (gs.completed_at < (p.date + 2)::timestamp at time zone 'UTC'
           or p.id = (select h.id
                        from public.puzzles h
                       where h.is_published is true
-                        and h.format = 'full'
+                        and h.format = p.format
                         and h.date <= (now() at time zone 'UTC')::date
                       order by h.date desc
                       limit 1))
@@ -548,14 +562,32 @@ async function previewCaller(token: string | null, deps: GatewayDeps): Promise<s
 
 // ── Automatic results ──
 
-/** The arguments for record_completion, or null for a row that can't be a result. */
+/**
+ * The arguments for record_completion, or null for a row that can't be a result.
+ *
+ * The summary is { solved, mistakes } for Full, always. A Mini adds seconds, in
+ * that key order, only for a whole number of seconds above zero: a session that
+ * never reported its time stores null or 0, and a missing time is left out, never
+ * sent as 0 or made up.
+ */
 function completionParams(row: Record<string, unknown>, puzzleId: string): unknown[] | null {
-  const { global_user_id: globalId, status, mistakes, share_grid: grid, completed_at: completedAt } = row;
+  const {
+    global_user_id: globalId,
+    status,
+    mistakes,
+    share_grid: grid,
+    format,
+    active_time_seconds: seconds,
+    completed_at: completedAt,
+  } = row;
   if (!isText(globalId) || !isText(completedAt) || !WIRE_TIME.test(completedAt)) return null;
+  if (format !== "full" && format !== "mini") return null;
   if (status !== "won" && status !== "lost") return null;
   if (!Number.isSafeInteger(mistakes) || (mistakes as number) < 0) return null;
   if (!isText(grid) || grid.trim() === "") return null;
-  return [globalId, "rainbow", puzzleId, completedAt, JSON.stringify({ solved: status === "won", mistakes }), JSON.stringify(grid)];
+  const summary: { solved: boolean; mistakes: unknown; seconds?: number } = { solved: status === "won", mistakes };
+  if (format === "mini" && Number.isSafeInteger(seconds) && (seconds as number) > 0) summary.seconds = seconds as number;
+  return [globalId, "rainbow", puzzleId, completedAt, JSON.stringify(summary), JSON.stringify(grid)];
 }
 
 /**

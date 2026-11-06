@@ -197,6 +197,23 @@ describe("the main chunk", () => {
     }
   });
 
+  /** Every static `from "…"` in a file, multi-line imports included. A lazy import() has no `from`. */
+  const staticSources = (file: string) => [...read(file).matchAll(/\bfrom\s+["']([^"']+)["']/g)].map((match) => match[1]);
+  const socialOnly = (sources: string[]) => sources.filter((source) => /social|account\/|FriendsResults/i.test(source));
+
+  it("the results popup and the board statically import the flag and nothing else that is social", () => {
+    expect(socialOnly(staticSources("src/components/ResultsDialog.tsx"))).toEqual(["@/components/social/socialFlag"]);
+    expect(socialOnly(staticSources("src/components/GameBoard.tsx"))).toEqual([]);
+    // What the popup does import from its own folder brings nothing social with it.
+    for (const file of ["src/components/results/FriendsSection.tsx", "src/components/results/UpNext.tsx"]) {
+      expect(socialOnly(staticSources(file))).toEqual([]);
+    }
+  });
+
+  it("Friends' results in the popup are loaded lazily", () => {
+    expect(read("src/components/ResultsDialog.tsx")).toContain('lazy(() => import("./results/FriendsResults"))');
+  });
+
   it("the flag imports nothing, so it brings nothing with it", () => {
     expect(read("src/components/social/socialFlag.ts")).not.toMatch(/^import /m);
   });

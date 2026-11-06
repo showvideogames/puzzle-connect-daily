@@ -732,13 +732,18 @@ describe("social-gateway: limits on what a request can cost", () => {
 describe("social-gateway: automatic results", () => {
   const LIST = { ok: true, data: [{ friendRef: "f-1", isMe: false, name: "Ben", summary: { solved: true, mistakes: 1 } }] };
   const PUZZLE = "11111111-2222-4333-8444-555555555555";
+  const MINI_PUZZLE = "66666666-7777-4888-8999-aaaaaaaaaaaa";
   const ARGS = { gameId: "rainbow", puzzleId: PUZZLE };
+  const MINI_ARGS = { gameId: "rainbow", puzzleId: MINI_PUZZLE };
 
+  /** A row as the read returns it. `format` is the puzzle's own format, the column the statement selects. */
   const finished = (globalId: string, overrides: Record<string, unknown> = {}) => ({
     global_user_id: globalId,
     status: "won",
     mistakes: 1,
     share_grid: "🟦🟦\n🟥🟥",
+    format: "full",
+    active_time_seconds: null,
     completed_at: "2026-10-30T18:00:00.123Z",
     ...overrides,
   });
@@ -797,23 +802,30 @@ describe("social-gateway: automatic results", () => {
     expect(inThatTransaction.map(named)).toEqual(["set transaction read only", "read finished games"]);
   });
 
-  it("reads only official full daily games that finished", async () => {
+  it.each<[string, string, string]>([
+    ["full", "mini", PUZZLE],
+    ["mini", "full", MINI_PUZZLE],
+  ])("reads only official %s daily games that finished", async (format, otherFormat, puzzleId) => {
     // A stand-in for the database that applies only the conditions the statement
     // really carries, so taking one out lets its row through and this test fails.
+    // In each row `format` is the puzzle's and `session_format` the game session's.
+    // `home_daily` stands for "this puzzle is the newest published puzzle of its
+    // own format dated today or earlier"; the stand-in can't run the subquery, so
+    // its same-format rule is held by the condition's text.
     const DAY = 24 * 60 * 60 * 1000;
     const CONDITIONS: [string, (row: Record<string, unknown>) => boolean][] = [
       ["gs.is_official is true", (row) => row.is_official === true],
       ["gs.status in ('won', 'lost')", (row) => row.status === "won" || row.status === "lost"],
-      ["gs.format = 'full'", (row) => row.format === "full"],
+      ["gs.format = p.format", (row) => row.session_format === row.format],
       ["gs.entry_context = 'daily_home'", (row) => row.entry_context === "daily_home"],
-      ["gs.puzzle_id = $2::text", (row) => row.puzzle_id === PUZZLE],
+      ["gs.puzzle_id = $2::text", (row) => row.puzzle_id === puzzleId],
       ["join public.puzzles p on p.id::text = gs.puzzle_id", (row) => row.puzzle_exists === true],
       ["p.is_published is true", (row) => row.is_published === true],
       ["p.is_beta is false", (row) => row.is_beta === false],
       ["p.is_free_puzzle is not true", (row) => row.is_free_puzzle !== true],
-      ["p.format = 'full'", (row) => row.puzzle_format === "full"],
+      ["p.format in ('full', 'mini')", (row) => row.format === "full" || row.format === "mini"],
       [
-        "(gs.completed_at < (p.date + 2)::timestamp at time zone 'UTC' or p.id = (select h.id from public.puzzles h where h.is_published is true and h.format = 'full' and h.date <= (now() at time zone 'UTC')::date order by h.date desc limit 1))",
+        "(gs.completed_at < (p.date + 2)::timestamp at time zone 'UTC' or p.id = (select h.id from public.puzzles h where h.is_published is true and h.format = p.format and h.date <= (now() at time zone 'UTC')::date order by h.date desc limit 1))",
         (row) =>
           Date.parse(row.completed_at as string) < Date.parse(`${row.puzzle_date}T00:00:00.000Z`) + 2 * DAY ||
           row.home_daily === true,
@@ -823,35 +835,37 @@ describe("social-gateway: automatic results", () => {
     // does, and only the puzzle's own row can tell them apart.
     const daily = {
       is_official: true,
-      format: "full",
+      session_format: format,
       entry_context: "daily_home",
-      puzzle_id: PUZZLE,
+      puzzle_id: puzzleId,
       puzzle_exists: true,
       is_published: true,
       is_beta: false,
       is_free_puzzle: false,
-      puzzle_format: "full",
+      format,
       puzzle_date: "2026-10-30",
     };
+    const WEEKS_LATER = "2026-11-20T09:00:00.000Z";
     const table = [
       finished("user_01OFFICIALDAILYGAME", daily),
       finished("user_01FREEFLAGNEVERSET0", { ...daily, is_free_puzzle: null }),
       finished("user_01LATEINLOCALEVENING", { ...daily, completed_at: "2026-10-31T23:59:59.999Z" }),
       finished("user_01NOTOFFICIALGAME00", { ...daily, is_official: false }),
       finished("user_01STILLINPROGRESS00", { ...daily, status: "in_progress" }),
-      finished("user_01MINIFORMATGAME000", { ...daily, format: "mini" }),
+      // A session that claims the other game than its puzzle's, either way round.
+      finished("user_01SESSIONOTHERFORMAT", { ...daily, session_format: otherFormat }),
       finished("user_01PLAYEDFROMARCHIVE", { ...daily, entry_context: "archive" }),
       finished("user_01ANOTHERPUZZLE0000", { ...daily, puzzle_id: "another-puzzle" }),
       finished("user_01CUSTOMNOPUZZLEROW", { ...daily, puzzle_exists: false }),
       finished("user_01UNPUBLISHEDPUZZLE", { ...daily, is_published: false }),
       finished("user_01BETAPAGEPLAYTEST0", { ...daily, is_beta: true }),
       finished("user_01FREEPUZZLEPLAYED0", { ...daily, is_free_puzzle: true }),
-      finished("user_01MINIPUZZLEROW0000", { ...daily, puzzle_format: "mini" }),
       finished("user_01ARCHIVEATTHELIMIT", { ...daily, completed_at: "2026-11-01T00:00:00.000Z" }),
-      finished("user_01ARCHIVEWEEKSLATER", { ...daily, completed_at: "2026-11-20T09:00:00.000Z" }),
-      finished("user_01HOMEDAILYWEEKSLATER", { ...daily, completed_at: "2026-11-20T09:00:00.000Z", home_daily: true }),
-      finished("user_01HOMEDAILYINARCHIVE0", { ...daily, completed_at: "2026-11-20T09:00:00.000Z", home_daily: true, entry_context: "archive_calendar" }),
-      finished("user_01HOMEDAILYUNLIMITED0", { ...daily, completed_at: "2026-11-20T09:00:00.000Z", home_daily: true, entry_context: "free_collection" }),
+      finished("user_01ARCHIVEWEEKSLATER", { ...daily, completed_at: WEEKS_LATER }),
+      finished("user_01HOMEDAILYWEEKSLATER", { ...daily, completed_at: WEEKS_LATER, home_daily: true }),
+      finished("user_01HOMEDAILYINARCHIVE0", { ...daily, completed_at: WEEKS_LATER, home_daily: true, entry_context: "archive_calendar" }),
+      finished("user_01HOMEDAILYUNLIMITED0", { ...daily, completed_at: WEEKS_LATER, home_daily: true, entry_context: "free_collection" }),
+      finished("user_01HOMEDAILYOTHERGAME0", { ...daily, completed_at: WEEKS_LATER, home_daily: true, session_format: otherFormat }),
     ];
     const reader = (text: string) => {
       const flat = text.replace(/\s+/g, " ");
@@ -859,7 +873,7 @@ describe("social-gateway: automatic results", () => {
     };
     const { deps, statements } = world({ sessions: reader });
 
-    await send(deps, "listResults", ARGS);
+    await send(deps, "listResults", { gameId: "rainbow", puzzleId });
 
     expect(recordedFor(statements)).toEqual([
       "user_01OFFICIALDAILYGAME",
@@ -867,6 +881,30 @@ describe("social-gateway: automatic results", () => {
       "user_01LATEINLOCALEVENING",
       "user_01HOMEDAILYWEEKSLATER",
     ]);
+  });
+
+  it("keeps the daily rules and ties every format rule to the puzzle's own format", () => {
+    const flat = COMPLETIONS_SQL.replace(/\s+/g, " ");
+    for (const rule of [
+      "gs.is_official is true",
+      "gs.status in ('won', 'lost')",
+      "gs.entry_context = 'daily_home'",
+      "p.is_published is true",
+      "p.is_beta is false",
+      "p.is_free_puzzle is not true",
+      "gs.completed_at < (p.date + 2)::timestamp at time zone 'UTC'",
+      // The session is the puzzle's own game, and only the two known games pass.
+      "gs.format = p.format",
+      "p.format in ('full', 'mini')",
+      // The home page's daily is the newest published puzzle of the same format.
+      "where h.is_published is true and h.format = p.format and h.date <= (now() at time zone 'UTC')::date order by h.date desc limit 1",
+    ]) {
+      expect(flat).toContain(rule);
+    }
+    // No rule names one format, which would drop the other or mix them.
+    expect(flat).not.toMatch(/format\s*=\s*'/);
+    // The row says which game it is, and carries the time.
+    expect(flat).toContain("gs.share_grid, p.format, gs.active_time_seconds, to_char(");
   });
 
   it("joins accounts to sessions by the local id and sessions to their puzzle, and writes nothing to them", () => {
@@ -890,6 +928,48 @@ describe("social-gateway: automatic results", () => {
     ]);
   });
 
+  it("sends a Mini's solve time after the summary, for a win or a loss", async () => {
+    const { deps, statements } = world({
+      sessions: [
+        finished(GLOBAL_ID, { format: "mini", active_time_seconds: 42 }),
+        finished(FRIEND_ID, { format: "mini", status: "lost", mistakes: 4, share_grid: "🟥", active_time_seconds: 75 }),
+      ],
+    });
+
+    await send(deps, "listResults", MINI_ARGS);
+
+    expect(records(statements).map((statement) => statement.params)).toEqual([
+      [GLOBAL_ID, "rainbow", MINI_PUZZLE, "2026-10-30T18:00:00.123Z", '{"solved":true,"mistakes":1,"seconds":42}', JSON.stringify("🟦🟦\n🟥🟥")],
+      [FRIEND_ID, "rainbow", MINI_PUZZLE, "2026-10-30T18:00:00.123Z", '{"solved":false,"mistakes":4,"seconds":75}', '"🟥"'],
+    ]);
+  });
+
+  it.each<[string, unknown]>([
+    ["no time recorded", null],
+    ["no time column", undefined],
+    ["a time of zero", 0],
+    ["a time below zero", -5],
+    ["a time that isn't whole", 41.5],
+    ["a time that isn't a number", "42"],
+    ["a time past a safe integer", Number.MAX_SAFE_INTEGER + 1],
+  ])("records a Mini with %s, without a time and never as zero", async (_label, seconds) => {
+    const row = finished(GLOBAL_ID, { format: "mini", active_time_seconds: seconds });
+    if (seconds === undefined) delete (row as Record<string, unknown>).active_time_seconds;
+    const { deps, statements } = world({ sessions: [row] });
+
+    await send(deps, "listResults", MINI_ARGS);
+
+    expect(records(statements).map((statement) => statement.params[4])).toEqual(['{"solved":true,"mistakes":1}']);
+  });
+
+  it.each([42, 1, 0, null])("never sends a time for a Full game, even with active_time_seconds %s", async (seconds) => {
+    const { deps, statements } = world({ sessions: [finished(GLOBAL_ID, { active_time_seconds: seconds })] });
+
+    await send(deps, "listResults", ARGS);
+
+    expect(records(statements).map((statement) => statement.params[4])).toEqual(['{"solved":true,"mistakes":1}']);
+  });
+
   it("asks the database for milliseconds in UTC", () => {
     expect(COMPLETIONS_SQL).toContain(`to_char(gs.completed_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`);
   });
@@ -904,6 +984,9 @@ describe("social-gateway: automatic results", () => {
     ["a game still running", { status: "in_progress" }],
     ["no completion time", { completed_at: null }],
     ["a time without milliseconds", { completed_at: "2026-10-30T18:00:00Z" }],
+    ["no format", { format: null }],
+    ["a format that isn't full or mini", { format: "maxi" }],
+    ["a format in other letters", { format: "Mini" }],
   ])("skips a row with %s, and the others still go", async (_label, bad) => {
     const { deps, statements } = world({ sessions: [finished("user_01BADROWBADROW", bad), finished(FRIEND_ID)] });
 

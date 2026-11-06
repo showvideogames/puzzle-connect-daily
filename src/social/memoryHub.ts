@@ -368,7 +368,13 @@ const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const PUZZLE_ID = /^[A-Za-z0-9:_-]+$/;
 
 function summaryFits(shape: ResultShape, summary: unknown): boolean {
-  if (!isRecord(summary) || !hasExactKeys(summary, Object.keys(shape.summary))) return false;
+  if (!isRecord(summary)) return false;
+  const required = Object.keys(shape.summary);
+  const optional = Object.keys(shape.optionalSummary ?? {});
+  if (!required.every(key => Object.prototype.hasOwnProperty.call(summary, key))
+      || Object.keys(summary).some(key => !required.includes(key) && !optional.includes(key))) return false;
+  if (!optional.every(key => !Object.prototype.hasOwnProperty.call(summary, key)
+      || (Number.isSafeInteger(summary[key]) && (summary[key] as number) > 0))) return false;
   return Object.entries(shape.summary).every(([key, kind]) => {
     const value = summary[key];
     return kind === 'boolean' ? typeof value === 'boolean' : Number.isSafeInteger(value) && (value as number) >= 0;
@@ -960,7 +966,7 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
         const [game,puzzleId]=key.split('\n');
         const memberRef=byPerson.get(card.person);
         if(from && (!crossPunsDates.has(puzzleId)||crossPunsDates.get(puzzleId)!<from||crossPunsDates.get(puzzleId)!>through!))return [];
-        return game==='crosspuns'&&memberRef&&'seconds' in card.summary ? [{memberRef,puzzleId,seconds:card.summary.seconds}] : [];
+        return game==='crosspuns'&&memberRef&&'seconds' in card.summary&&typeof card.summary.seconds==='number' ? [{memberRef,puzzleId,seconds:card.summary.seconds}] : [];
       });
       const ranked=crossPunsStandings(members,history);
       const people=new Map(members.map(m=>[m.memberRef,{name:groupName(me.id,m.person,m.name),...faceOf(m.person),blockedEitherWay:blockedEitherWay(me.id,m.person)}]));

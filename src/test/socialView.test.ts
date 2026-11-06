@@ -111,6 +111,19 @@ describe("friendResults", () => {
     }
   });
 
+  it("passes a summary's solve time through only as a positive whole number of seconds", () => {
+    const [you, jordan] = resultOf([row(null, { summary: { solved: true, mistakes: 1, seconds: 42 } }), row("f1", { summary: { solved: true, mistakes: 0, seconds: 65 } })]);
+    expect(you.seconds).toBe(42);
+    expect(jordan.seconds).toBe(65);
+    for (const seconds of [0, -3, 1.5, "42", null, Number.NaN]) {
+      const [, shown] = resultOf([row("f1", { summary: { solved: true, mistakes: 1, seconds } })]);
+      expect(shown).toMatchObject({ status: "solved", mistakes: 1 });
+      expect(shown).not.toHaveProperty("seconds");
+    }
+    // No time key at all: none is invented.
+    expect(resultOf([row("f1")])[1]).not.toHaveProperty("seconds");
+  });
+
   it("gives a friend without a name Rainbow's own wording", () => {
     expect(resultOf([], [friend("f1", null)])[1].name).toBe("A Rainbow player");
   });
@@ -174,6 +187,13 @@ describe("groupResults", () => {
 
   it("does not take a friend's row for a member's", () => {
     expect(groupResults({ members, rows: [row("m1")] }).every((result) => result.status === "not-played")).toBe(true);
+  });
+
+  it("passes a member's solve time through the same way", () => {
+    const shown = groupResults({ members, rows: [memberRow("m3", { summary: { solved: true, mistakes: 0, seconds: 90 } }), memberRow("m1", { summary: { solved: true, mistakes: 0, seconds: 0 } })] });
+    expect(shown.find((result) => result.id === "m3")?.seconds).toBe(90);
+    expect(shown.find((result) => result.id === "m1")).toMatchObject({ status: "solved" });
+    expect(shown.find((result) => result.id === "m1")).not.toHaveProperty("seconds");
   });
 });
 
