@@ -15,6 +15,8 @@ export interface SocialApi {
   /** Today's full daily, or null when there isn't one to ask about. */
   puzzleId(): Promise<string | null> | string | null;
   today(): Date;
+  /** Exact published Full Daily dates, metadata only; never a latest-puzzle fallback. */
+  weekPuzzles?(from: string, through: string): Promise<{ id: string; date: string }[]>;
   /** The address an invitation code opens at. */
   linkUrl(code: string): string;
   /** Hands a link over, however this place does that. */

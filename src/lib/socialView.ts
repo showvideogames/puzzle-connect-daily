@@ -54,7 +54,7 @@ function emblemOf(id: string): GroupEmblemId {
   return GROUP_EMBLEMS.some((emblem) => emblem.id === id) ? (id as GroupEmblemId) : FALLBACK_EMBLEM;
 }
 
-function faceOf({ animalId, backgroundColor }: Face): ScreenFace {
+export function faceOf({ animalId, backgroundColor }: Face): ScreenFace {
   return { animalId: animalOf(animalId), backgroundColor: colorOf(backgroundColor) };
 }
 
@@ -82,7 +82,7 @@ function detailOf(row: ResultRow): FriendResult["detail"] {
 
 type Person = Pick<FriendResult, "id" | "name" | "isYou" | "animalId" | "backgroundColor">;
 
-function resultFor(person: Person, row: ResultRow | undefined): FriendResult {
+export function resultFor(person: Person, row: ResultRow | undefined): FriendResult {
   const base = { ...person, gameId: GAME_ID };
   if (!row || !isRainbowSummary(row.summary)) return { ...base, status: "not-played", mistakes: 0, detail: null };
   return { ...base, status: row.summary.solved ? "solved" : "not-solved", mistakes: row.summary.mistakes, detail: detailOf(row) };
@@ -112,6 +112,17 @@ export function groupResults({ members, rows }: { members: readonly MemberRow[];
     return resultFor(person, rows.find((row) => "memberRef" in row && row.memberRef === member.memberRef));
   });
   return [...shown.filter((result) => result.isYou), ...shown.filter((result) => !result.isYou)];
+}
+
+export interface GroupMemberView extends ScreenFace {
+  memberRef: string;
+  name: string;
+  isOwner: boolean;
+  isMe: boolean;
+}
+
+export function groupMemberView(member: MemberRow): GroupMemberView {
+  return { memberRef: member.memberRef, name: member.name, isOwner: member.isOwner, isMe: member.isMe, ...faceOf(member) };
 }
 
 // ── Groups ──

@@ -63,18 +63,29 @@ const DECLARED_ARGS: { [O in OpName]: readonly FieldsOf<Operations[O]['args']>[]
   declineFriendRequest: ['requestRef'],
   cancelFriendRequest: ['requestRef'],
   listFriends: [],
+  listFriendPreferences: [],
+  setFriendPreference: ['friendRef', 'favorite', 'nickname'],
   removeFriend: ['friendRef'],
   block: ['ref'],
   unblock: ['blockRef'],
   listBlocks: [],
   createGroup: ['name', 'myName', 'noticeVersion'],
   joinGroup: ['code', 'myName', 'noticeVersion'],
+  listGroupOrder: [],
+  setGroupOrder: ['groupIds'],
   listMyGroups: [],
   listMembers: ['groupId', 'after', 'limit'],
   leaveGroup: ['groupId'],
   renameMeInGroup: ['groupId', 'name'],
+  crossPunsStandings: ['groupId','offset','days','through'],
+  getGroupDescription: ['groupId'],
+  setGroupDescription: ['groupId', 'description'],
   renameGroup: ['groupId', 'name'],
   setGroupAppearance: ['groupId', 'emblemId', 'photo', 'accentColor'],
+  getGroupInvitation: ['groupId'],
+  setMemberInvitePermission: ['groupId','memberRef','allowed'],
+  transferGroupOwnership: ['groupId','memberRef'],
+  deleteGroup: ['groupId'],
   removeMember: ['groupId', 'memberRef'],
   listRemoved: ['groupId'],
   letBackIn: ['groupId', 'removedRef'],
@@ -99,18 +110,29 @@ const DECLARED_FIELDS: { [O in Exclude<OpName, 'previewInvite' | 'listResults'>]
   declineFriendRequest: [],
   cancelFriendRequest: [],
   listFriends: ['friendRef', 'name', 'animalId', 'backgroundColor', 'since'],
+  listFriendPreferences: ['friendRef', 'favorite', 'nickname'],
+  setFriendPreference: ['friendRef', 'favorite', 'nickname'],
   removeFriend: [],
   block: ['blockRef'],
   unblock: [],
   listBlocks: ['blockRef', 'name'],
   createGroup: ['groupId', 'inviteCode'],
   joinGroup: ['groupId'],
+  listGroupOrder: ['groupIds'],
+  setGroupOrder: [],
   listMyGroups: ['groupId', 'name', 'emblemId', 'accentColor', 'photo', 'photoVersion', 'memberCount', 'isOwner', 'myName', 'inviteCode'],
   listMembers: ['memberRef', 'name', 'animalId', 'backgroundColor', 'isOwner', 'isMe', 'joinedAt'],
   leaveGroup: ['closed'],
   renameMeInGroup: [],
+  crossPunsStandings: ['rows','total'],
+  getGroupDescription: ['description'],
+  setGroupDescription: ['description'],
   renameGroup: [],
   setGroupAppearance: ['photoVersion'],
+  getGroupInvitation: ['canInvite','inviteCode','grantedMemberRefs'],
+  setMemberInvitePermission: [],
+  transferGroupOwnership: [],
+  deleteGroup: [],
   removeMember: [],
   listRemoved: ['removedRef', 'name'],
   letBackIn: [],
@@ -126,7 +148,7 @@ const REQUEST_ROW_FIELDS: readonly unknown[] = ['requestRef', 'name', 'animalId'
 /** Every result row, before its one ref and, when it isn't locked, its detail. */
 const RESULT_ROW_FIELDS: readonly unknown[] = ['isMe', 'name', 'animalId', 'backgroundColor', 'summary', 'detailLocked'];
 
-const LIST_OPS: readonly OpName[] = ['listFriends', 'listBlocks', 'listMyGroups', 'listMembers', 'listRemoved', 'listResults'];
+const LIST_OPS: readonly OpName[] = ['listFriendPreferences', 'listFriends', 'listBlocks', 'listMyGroups', 'listMembers', 'listRemoved', 'listResults'];
 
 const TIMESTAMP_FIELDS: readonly string[] = ['expiresAt', 'since', 'joinedAt', 'sentAt'];
 const CODE_FIELDS: readonly string[] = ['code', 'inviteCode'];
@@ -150,18 +172,29 @@ const SAMPLE_ARGS: { [O in OpName]: Operations[O]['args'] } = {
   declineFriendRequest: { requestRef: 'no-such-ref' },
   cancelFriendRequest: { requestRef: 'no-such-ref' },
   listFriends: {},
+  listFriendPreferences: {},
+  setFriendPreference: { friendRef: "no-such-ref", favorite: true, nickname: null },
   removeFriend: { friendRef: 'no-such-ref' },
   block: { ref: 'no-such-ref' },
   unblock: { blockRef: 'no-such-ref' },
   listBlocks: {},
   createGroup: { name: 'Group', myName: 'Sam', noticeVersion: NOTICE },
   joinGroup: { code: 'no-such-code', myName: 'Sam', noticeVersion: NOTICE },
+  listGroupOrder: {},
+  setGroupOrder: { groupIds: [] },
   listMyGroups: {},
   listMembers: { groupId: 'no-such-group' },
   leaveGroup: { groupId: 'no-such-group' },
   renameMeInGroup: { groupId: 'no-such-group', name: 'Sam' },
+  crossPunsStandings: { groupId: 'no-such-group', offset:0 },
+  getGroupDescription: { groupId: 'no-such-group' },
+  setGroupDescription: { groupId: 'no-such-group', description: null },
   renameGroup: { groupId: 'no-such-group', name: 'Group' },
   setGroupAppearance: { groupId: 'no-such-group', emblemId: 'campfire', photo: null, accentColor: '#DED1F2' },
+  getGroupInvitation: { groupId: 'no-such-group' },
+  setMemberInvitePermission: { groupId: 'no-such-group', memberRef: 'no-such-ref', allowed: true },
+  transferGroupOwnership: { groupId: 'no-such-group', memberRef: 'no-such-ref' },
+  deleteGroup: { groupId: 'no-such-group' },
   removeMember: { groupId: 'no-such-group', memberRef: 'no-such-ref' },
   listRemoved: { groupId: 'no-such-group' },
   letBackIn: { groupId: 'no-such-group', removedRef: 'no-such-ref' },
@@ -188,12 +221,12 @@ function check(condition: unknown, message: string): asserts condition {
 }
 
 function must<T>(result: Result<T>, label: string): T {
-  if (!result.ok) throw new Error(`${label}: expected success, got ${result.outcome}`);
+  if (result.ok === false) throw new Error(`${label}: expected success, got ${result.outcome}`);
   return result.data;
 }
 
 function refused(result: Result<unknown>, outcome: Outcome, label: string): void {
-  check(!result.ok && result.outcome === outcome, `${label}: expected ${outcome}, got ${JSON.stringify(result)}`);
+  check(result.ok === false && result.outcome === outcome, `${label}: expected ${outcome}, got ${JSON.stringify(result)}`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -266,6 +299,29 @@ function checkResultRow(row: unknown): void {
 }
 
 function checkData(op: OpName, data: unknown): void {
+  if(op==='crossPunsStandings') {
+    check(isRecord(data)&&hasExactly(data,['rows','total'])&&Array.isArray(data.rows)&&data.rows.length<=25&&Number.isInteger(data.total), 'Invalid standings page');
+    for(const row of data.rows) {
+      check(isRecord(row)&&(row.blocked===true?hasExactly(row,['blocked','rank','label']):hasExactly(row,['blocked','rank','memberRef','name','points','animalId','backgroundColor'])), 'Standings leaked fields');
+      check(Number.isInteger(row.rank)&&Number(row.rank)>0, 'Invalid rank');
+      if(row.blocked===true)check(row.label==='This player is blocked','Invalid anonymous label');
+      else check(row.blocked===false&&typeof row.memberRef==='string'&&typeof row.name==='string'&&Number.isInteger(row.points)&&typeof row.animalId==='string'&&typeof row.backgroundColor==='string','Invalid visible standing');
+    }
+    return;
+  }
+  if (op === 'getGroupInvitation') {
+    check(isRecord(data) && hasExactly(data, DECLARED_FIELDS.getGroupInvitation), 'getGroupInvitation returned the wrong fields');
+    check(typeof data.canInvite === 'boolean' && (data.inviteCode === null || typeof data.inviteCode === 'string'), 'invalid invitation access');
+    check(Array.isArray(data.grantedMemberRefs) && data.grantedMemberRefs.every(ref => typeof ref === 'string'), 'invalid member references');
+    check(data.canInvite || data.inviteCode === null, 'an unauthorized member received an invitation code');
+    return;
+  }
+  if (op === 'listGroupOrder') {
+    check(isRecord(data) && hasExactly(data, ['groupIds']), 'listGroupOrder returned the wrong fields');
+    check(Array.isArray(data.groupIds) && data.groupIds.length <= LIMITS.groupsJoinedTotal && data.groupIds.every(id => typeof id === 'string'), 'listGroupOrder returned invalid group ids');
+    check(new Set(data.groupIds).size === data.groupIds.length, 'listGroupOrder returned duplicate group ids');
+    return;
+  }
   if (op === 'previewInvite') {
     check(isRecord(data) && (hasExactly(data, FRIEND_PREVIEW_FIELDS) || hasExactly(data, GROUP_PREVIEW_FIELDS)), `previewInvite returned the wrong fields: ${JSON.stringify(data)}`);
     if ('isMember' in data) checkGroupPreview(data);
@@ -738,7 +794,17 @@ async function fullFlow(world: MockWorld): Promise<void> {
   const { code } = await makeFriendInvite(alice);
   must(await guest.call('previewInvite', { code }), 'previewInvite');
   const { friendRef } = must(await bob.call('acceptFriendInvite', { code, noticeVersion: NOTICE }), 'acceptFriendInvite');
+  const extra = await makeGroup(alice, "Transfer club", "Alice");
+  await join(bob, extra.inviteCode, "Bob");
+  must(await alice.call("crossPunsStandings", {groupId:extra.groupId,offset:0}), "crossPunsStandings");
+  const target = (await membersOf(alice, extra.groupId)).find(m => !m.isMe)!;
+  must(await alice.call("setMemberInvitePermission", { groupId: extra.groupId, memberRef: target.memberRef, allowed: true }), "setMemberInvitePermission");
+  must(await bob.call("getGroupInvitation", { groupId: extra.groupId }), "getGroupInvitation");
+  must(await alice.call("transferGroupOwnership", { groupId: extra.groupId, memberRef: target.memberRef }), "transferGroupOwnership");
+  must(await bob.call("deleteGroup", { groupId: extra.groupId }), "deleteGroup");
   await friendsOf(alice);
+  must(await alice.call("setFriendPreference", { friendRef, favorite: true, nickname: "Pal" }), "setFriendPreference");
+  must(await alice.call("listFriendPreferences", {}), "listFriendPreferences");
 
   const dave = world.signIn('crosspuns', 'dave');
   check((await sendRequest(dave, alice)).name === 'Alice', 'the lookup should show who it found');
@@ -755,7 +821,11 @@ async function fullFlow(world: MockWorld): Promise<void> {
   await join(bob, inviteCode, 'Bee');
   await join(carol, inviteCode, 'Cee');
   await groupsOf(alice);
+  must(await alice.call("setGroupOrder", { groupIds: [groupId] }), "setGroupOrder");
+  must(await alice.call("listGroupOrder", {}), "listGroupOrder");
   await groupsOf(bob);
+  must(await alice.call("setGroupDescription", { groupId, description: "Weekly puzzles" }), "setGroupDescription");
+  must(await bob.call("getGroupDescription", { groupId }), "getGroupDescription");
   must(await bob.call('renameMeInGroup', { groupId, name: 'Beatrice' }), 'renameMeInGroup');
   must(await alice.call('renameGroup', { groupId, name: 'Puzzle club' }), 'renameGroup');
 
@@ -1189,6 +1259,7 @@ export function socialConformanceScenarios(makeWorld: MakeWorld): SocialScenario
     scenario('contract: the version, the limits and the game statuses are the published ones', async () => {
       const published: Limits = {
         groupNameMax: 40,
+        groupDescriptionMax: 500,
         nameMax: 24,
         groupsCreatedTotal: 20,
         groupsCreatedPerDay: 5,
@@ -2526,7 +2597,7 @@ export function socialConformanceScenarios(makeWorld: MakeWorld): SocialScenario
       const { requestRef } = must(await alice[0].call('findFriendByCode', { friendCode }), 'the first lookup');
       for (let i = 1; i < LIMITS.friendLookupsPerDay; i++) {
         const answer = await alice[i % alice.length].call('findFriendByCode', { friendCode: i % 2 === 0 ? friendCode : NO_SUCH_FRIEND_CODE });
-        check(answer.ok || answer.outcome === 'not_found', `lookup ${i} should still be allowed`);
+        check(answer.ok === true || answer.outcome === 'not_found', `lookup ${i} should still be allowed`);
       }
 
       for (const player of alice) {

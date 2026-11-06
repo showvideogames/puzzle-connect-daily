@@ -1,3 +1,4 @@
+import { applyGroupOrder, groupOrderEnabled, applyFriendPreferences, socialPreferencesEnabled } from "@/lib/socialPreferences";
 import type { GroupInvitePreview } from "@/components/account/GroupInviteCard";
 import type { GroupView } from "@/components/account/GroupPage";
 import type { FriendResult } from "@/lib/friendResults";
@@ -62,18 +63,30 @@ export async function readPerson(api: SocialApi): Promise<PersonData | { outcome
   if (rows !== null && !Array.isArray(rows)) return { outcome: rows.outcome };
   const groups = await client.call("listMyGroups", {});
   if (groups.ok === false) return { outcome: groups.outcome };
+  let results = friendResults({ me: me.data, friends: friends.data, rows: Array.isArray(rows) ? rows : [] });
+  if (socialPreferencesEnabled()) {
+    const preferences = await client.call("listFriendPreferences", {});
+    if (preferences.ok === false) return { outcome: preferences.outcome };
+    results = applyFriendPreferences(results, preferences.data);
+  }
+  let orderedGroups = groups.data.map(groupView);
+  if (groupOrderEnabled()) {
+    const order = await client.call("listGroupOrder", {});
+    if (order.ok === false) return { outcome: order.outcome };
+    orderedGroups = applyGroupOrder(orderedGroups, order.data.groupIds);
+  }
   return {
     me: me.data,
     incoming: requests.data.incoming,
     outgoing: requests.data.outgoing,
-    results: friendResults({ me: me.data, friends: friends.data, rows: Array.isArray(rows) ? rows : [] }),
-    groups: groups.data.map(groupView),
+    results,
+    groups: orderedGroups,
     noResults: rows === null,
   };
 }
 
 /** Every member, page by page, then today's results joined to them. */
-export async function readGroup(api: SocialApi, groupId: string): Promise<{ results: FriendResult[]; noResults: boolean } | { outcome: Outcome }> {
+export async function readGroup(api: SocialApi, groupId: string): Promise<{ members: MemberRow[]; results: FriendResult[]; noResults: boolean } | { outcome: Outcome }> {
   const members: MemberRow[] = [];
   for (;;) {
     const last = members[members.length - 1];
@@ -85,5 +98,5 @@ export async function readGroup(api: SocialApi, groupId: string): Promise<{ resu
   }
   const rows = await readRows(api, groupId);
   if (rows !== null && !Array.isArray(rows)) return { outcome: rows.outcome };
-  return { results: groupResults({ members, rows: Array.isArray(rows) ? rows : [] }), noResults: rows === null };
+  return { members, results: groupResults({ members, rows: Array.isArray(rows) ? rows : [] }), noResults: rows === null };
 }

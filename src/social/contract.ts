@@ -73,6 +73,7 @@ export const DEFAULT_EMBLEM = 'campfire';
 export const LIMITS = {
   /** Characters in a group's name. */
   groupNameMax: 40,
+  groupDescriptionMax: 500,
   /** Characters in a display name, or a name in a group. */
   nameMax: 24,
   groupsCreatedTotal: 20,
@@ -114,6 +115,7 @@ export const OUTCOMES = [
   'invite_used',
   'own_invite',
   'bad_name',
+  'bad_description',
   'bad_my_name',
   'too_many_created',
   'too_many_groups',
@@ -163,6 +165,13 @@ export interface FriendRow extends Face {
   since: string;
 }
 
+export interface FriendPreference {
+  friendRef: string;
+  favorite: boolean;
+  /** Private to the viewer; never a public profile edit. Null clears it. */
+  nickname: string | null;
+}
+
 export interface FriendRequestRow extends Face {
   requestRef: string;
   name: string | null;
@@ -180,7 +189,7 @@ export interface GroupRow {
   name: string;
   emblemId: string;
   accentColor: string;
-  /** A data:image/jpeg;base64, URL or null. When set, it shows instead of the emblem. */
+  /** A data:image/jpeg;base64, or data:image/png;base64, URL or null. When set, it shows instead of the emblem. */
   photo: string | null;
   photoVersion: number;
   memberCount: number;
@@ -278,6 +287,7 @@ export type ResultRow = FriendResultRow | MemberResultRow;
 
 /** One entry per operation in section 5 of the contract, except recordCompletion. List operations answer with an array of rows. */
 export interface Operations {
+  crossPunsStandings: { args: { groupId: string; offset: number; days?: 7 | 30 | 365; through?: string }; data: {rows: import('./crosspunsStandingsView').CrossPunsStandingView[]; total: number} };
   getMe: { args: NoArgs; data: Face & { displayName: string | null; friendCode: string; friendCount: number; groupCount: number } };
   setDisplayName: { args: { name: string }; data: { displayName: string } };
   setProfile: { args: Profile; data: Profile };
@@ -292,19 +302,29 @@ export interface Operations {
   declineFriendRequest: { args: { requestRef: string }; data: NoData };
   cancelFriendRequest: { args: { requestRef: string }; data: NoData };
   listFriends: { args: NoArgs; data: FriendRow[] };
+  listFriendPreferences: { args: NoArgs; data: FriendPreference[] };
+  setFriendPreference: { args: FriendPreference; data: FriendPreference };
   removeFriend: { args: { friendRef: string }; data: NoData };
   block: { args: { ref: string }; data: { blockRef: string } };
   unblock: { args: { blockRef: string }; data: NoData };
   listBlocks: { args: NoArgs; data: BlockRow[] };
   createGroup: { args: { name: string; myName: string; noticeVersion: number }; data: { groupId: string; inviteCode: string } };
   joinGroup: { args: { code: string; myName: string; noticeVersion: number }; data: { groupId: string } };
+  listGroupOrder: { args: NoArgs; data: { groupIds: string[] } };
+  setGroupOrder: { args: { groupIds: string[] }; data: NoData };
   listMyGroups: { args: NoArgs; data: GroupRow[] };
   /** `after` is the last row of the previous page; rows come in joining order. */
   listMembers: { args: { groupId: string; after?: Pick<MemberRow, 'joinedAt' | 'memberRef'>; limit?: number }; data: MemberRow[] };
   leaveGroup: { args: { groupId: string }; data: { closed: boolean } };
   renameMeInGroup: { args: { groupId: string; name: string }; data: NoData };
+  getGroupDescription: { args: { groupId: string }; data: { description: string | null } };
+  setGroupDescription: { args: { groupId: string; description: string | null }; data: { description: string | null } };
   renameGroup: { args: { groupId: string; name: string }; data: NoData };
   setGroupAppearance: { args: { groupId: string; emblemId: string; photo: string | null; accentColor: string }; data: { photoVersion: number } };
+  getGroupInvitation: { args: { groupId: string }; data: { canInvite: boolean; inviteCode: string | null; grantedMemberRefs: string[] } };
+  setMemberInvitePermission: { args: { groupId: string; memberRef: string; allowed: boolean }; data: NoData };
+  transferGroupOwnership: { args: { groupId: string; memberRef: string }; data: NoData };
+  deleteGroup: { args: { groupId: string }; data: NoData };
   removeMember: { args: { groupId: string; memberRef: string }; data: NoData };
   listRemoved: { args: { groupId: string }; data: RemovedRow[] };
   letBackIn: { args: { groupId: string; removedRef: string }; data: NoData };

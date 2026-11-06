@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
 import { canOpenResult, resultSummary, type FriendResult } from "@/lib/friendResults";
 import { quietText } from "./accountStyles";
 import { ProfileAvatar } from "./ProfileAvatar";
@@ -11,41 +11,44 @@ interface ResultRowProps {
   onToggle: () => void;
   /** Shown when the row is open, and makes a row with no result openable too. */
   actions?: ReactNode;
+  navigation?: boolean;
 }
 
 /** One person's result today, for Friends and for a group alike. */
-export function ResultRow({ result, open, onToggle, actions }: ResultRowProps) {
+export function ResultRow({ result, open, onToggle, actions, navigation = false }: ResultRowProps) {
   const panel = useId();
   const person = (
     <>
       <ProfileAvatar animalId={result.animalId} backgroundColor={result.backgroundColor} size={56} />
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-lg font-bold leading-tight text-foreground">{result.isYou ? "You" : result.name}</span>
+        <span className="block truncate text-lg font-bold leading-tight text-foreground">{result.isYou ? "You" : result.nickname || result.name}</span>
+        {!result.isYou && result.favorite && <span className="block text-sm text-slate">★ Favorite</span>}
+        {!result.isYou && result.nickname && <span className="block truncate text-sm text-slate">{result.name}</span>}
         <span className={`block text-base leading-snug ${quietText}`}>{resultSummary(result)}</span>
       </span>
     </>
   );
   return (
     <li className="border-t border-border first:border-t-0" data-testid="result-row" data-person={result.id}>
-      {canOpenResult(result) || actions ? (
+      {canOpenResult(result) || actions || navigation ? (
         <>
           <button
             type="button"
-            aria-expanded={open}
-            aria-controls={panel}
+            aria-expanded={navigation ? undefined : open}
+            aria-controls={navigation ? undefined : panel}
             onClick={onToggle}
             className="flex min-h-[4.5rem] w-full items-center gap-3 rounded-lg py-2 hover:bg-secondary/60
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_46%_52%)]"
           >
             {person}
             <span className="flex shrink-0 items-center gap-0.5 text-base font-semibold text-[hsl(258_46%_42%)] dark:text-[hsl(258_80%_82%)]">
-              {open ? "Hide" : "Details"}
-              {open
+              {navigation ? "Profile" : open ? "Hide" : "Details"}
+              {navigation ? <ChevronRight aria-hidden="true" className="h-5 w-5" /> : open
                 ? <ChevronUp aria-hidden="true" className="h-5 w-5" />
                 : <ChevronDown aria-hidden="true" className="h-5 w-5" />}
             </span>
           </button>
-          {open && (
+          {open && !navigation && (
             <div id={panel} className="px-1 pb-3 pt-1">
               {canOpenResult(result) && <ResultDetail result={result} />}
               {actions}

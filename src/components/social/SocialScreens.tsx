@@ -1,3 +1,7 @@
+import { FriendWeek } from "./FriendWeek";
+import { FriendProfile } from "@/components/account/FriendProfile";
+import { FriendPreferences } from "@/components/account/FriendPreferences";
+import { socialPreferencesEnabled } from "@/lib/socialPreferences";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { DisplayNameGate } from "@/components/account/DisplayNameGate";
 import { FriendActions } from "@/components/account/FriendActions";
@@ -17,6 +21,8 @@ import type { MadeLink, SocialApi } from "./socialApi";
 import { RETRY_MS, readLink, readPerson, type LinkView, type PersonData } from "./socialData";
 import { useLive } from "./useLive";
 import { WaitingRequests } from "./WaitingRequests";
+
+import { HEADER_REFRESH } from "./socialHeaderEvents";
 
 const GAME_NAME = "Rainbow Categories";
 
@@ -79,7 +85,9 @@ export function SocialScreens({
   const [addingFriend, setAddingFriend] = useState(false);
   const [choosingName, setChoosingName] = useState(false);
   const [editingProfile, setEditingProfile] = useState(startEditingProfile);
+  useEffect(() => { if (startEditingProfile) setEditingProfile(true); }, [startEditingProfile]);
   const [blockVersion, setBlockVersion] = useState(0);
+  const [profileFriendId, setProfileFriendId] = useState<string | null>(null);
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
 
   /** Only the newest read paints, and only while this person is still here. */
@@ -118,6 +126,7 @@ export function SocialScreens({
         return;
       }
       setLoaded({ ...person, link: read.link });
+      dispatchEvent(new Event(HEADER_REFRESH));
       if (read.problem) onNote(read.problem);
       else if (person.noResults) onNote(NO_RESULTS_NOTE);
     },
@@ -186,6 +195,13 @@ export function SocialScreens({
   /** A friend's id is their friendRef. Nothing can be done to your own row. */
   const friendActions = (result: FriendResult) =>
     result.isYou ? null : (
+      <div>
+      {socialPreferencesEnabled() && <FriendPreferences friend={result} onSave={async preference => {
+        const answer = await api.client.call("setFriendPreference", { friendRef: result.id, ...preference });
+        if (!live.current) return;
+        if (answer.ok === false) return answer.outcome === "bad_name" ? "Please use a nickname of 24 characters or fewer." : "We couldn't save those preferences. Please try again.";
+        await load();
+      }} />}
       <FriendActions
         name={result.name}
         onRemove={async () => afterChange(await api.client.call("removeFriend", { friendRef: result.id }))}
@@ -196,8 +212,10 @@ export function SocialScreens({
           return problem;
         }}
       />
+      </div>
     );
 
+  const profileFriend = loaded.results?.find(result => !result.isYou && result.id === profileFriendId);
   const openGroup = loaded.groups?.find((group) => group.groupId === openGroupId);
 
   return (
@@ -215,11 +233,14 @@ export function SocialScreens({
             void load();
           }}
         />
+      ) : profileFriend ? (
+        <FriendProfile friend={profileFriend} viewer={loaded.results?.find(result => result.isYou)} today={api.today()} resultsAvailable={!loaded.noResults} actions={friendActions(profileFriend)} activity={api.weekPuzzles ? <FriendWeek key={profileFriend.id} api={api} friend={profileFriend} /> : undefined} onBack={() => setProfileFriendId(null)} />
       ) : openGroup ? (
         <GroupFlow
           key={openGroup.groupId}
           api={api}
           group={openGroup}
+          onReload={load}
           onBack={() => setOpenGroupId(null)}
           onLeft={(note) => {
             setOpenGroupId(null);
@@ -237,6 +258,7 @@ export function SocialScreens({
           onAddFriend={() => setAddingFriend(true)}
           groups={<MyGroups api={api} groups={loaded.groups ?? []} displayName={displayName} onNote={onNote} onLink={onLink} onReload={load} onOpen={setOpenGroupId} />}
           today={api.today()}
+          onFriendProfile={friend => setProfileFriendId(friend.id)}
           rowActions={friendActions}
           onEditProfile={() => setEditingProfile(true)}
           friendsFooter={<BlockedPeople api={api} version={blockVersion} />}

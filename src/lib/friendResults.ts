@@ -9,6 +9,8 @@ import type { AvatarId, ProfileColor } from "./sharedProfile";
 export interface FriendResult {
   id: string;
   name: string;
+  favorite?: boolean;
+  nickname?: string | null;
   isYou: boolean;
   animalId: AvatarId;
   backgroundColor: ProfileColor;

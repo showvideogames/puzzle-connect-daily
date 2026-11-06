@@ -44,7 +44,7 @@ function SocialVisit({ social, code, signedIn }: VisitProps) {
   const live = useLive();
   const [tab, setTab] = useState<FriendsTab>((state as { tab?: FriendsTab } | null)?.tab === "groups" ? "groups" : "friends");
   // Settings' Edit profile asks once. The ask leaves the history entry, so a reload or Back doesn't reopen the editor.
-  const [editProfile] = useState((state as { editProfile?: boolean } | null)?.editProfile === true);
+  const editProfile = (state as { editProfile?: boolean } | null)?.editProfile === true;
   useEffect(() => {
     if (editProfile) navigate(".", { replace: true, state: null });
   }, [editProfile, navigate]);

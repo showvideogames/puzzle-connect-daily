@@ -187,7 +187,7 @@ function isCurrentApiKey(value: string, keys: ApiKeys): boolean {
 type Args = Record<string, unknown>;
 
 /** What one argument may be. The hub still judges the value: this is only its type. */
-type Kind = "text" | "textOrNull" | "code" | "whole" | "cursor" | "game" | "puzzle";
+type Kind = "groupIds" | "boolean" | "text" | "textOrNull" | "code" | "whole" | "cursor" | "game" | "puzzle";
 
 const GAME_IDS = ["rainbow", "crosspuns", "cluevoyance", "wtf", "yodel", "hamburgle", "priceiswhat"];
 const INT4_MAX = 2147483647;
@@ -204,6 +204,8 @@ const isPlainObject = (value: unknown): value is Args =>
 const has = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
 
 const FITS: Record<Kind, (value: unknown) => boolean> = {
+  groupIds: (value) => Array.isArray(value) && value.length <= 50 && value.every(id => typeof id === "string" && id.length > 0 && id.length <= 64),
+  boolean: (value) => typeof value === "boolean",
   text: isText,
   textOrNull: (value) => value === null || isText(value),
   code: (value) => isText(value) && value.length <= CODE_MAX,
@@ -294,6 +296,12 @@ export const OPERATIONS: Readonly<Record<string, Operation>> = {
     params: (a) => [a.requestRef],
   },
   listFriends: { required: {}, sql: "select social.list_friends($1::text) as result", params: noParams },
+  listFriendPreferences: { required: {}, sql: "select social.list_friend_preferences($1::text) as result", params: noParams },
+  setFriendPreference: {
+    required: { friendRef: "text", favorite: "boolean", nickname: "textOrNull" },
+    sql: "select social.set_friend_preference($1::text, $2::text, $3::boolean, $4::text) as result",
+    params: (a) => [a.friendRef, a.favorite, a.nickname],
+  },
   removeFriend: {
     required: { friendRef: "text" },
     sql: "select social.remove_friend($1::text, $2::text) as result",
@@ -320,6 +328,8 @@ export const OPERATIONS: Readonly<Record<string, Operation>> = {
     sql: "select social.join_group($1::text, $2::text, $3::text, $4::int) as result",
     params: (a) => [a.code, a.myName, a.noticeVersion],
   },
+  listGroupOrder: { required: {}, sql: "select social.list_group_order($1::text) as result", params: noParams },
+  setGroupOrder: { required: { groupIds: "groupIds" }, sql: "select social.set_group_order($1::text, $2::text[]) as result", params: a => [a.groupIds] },
   listMyGroups: { required: {}, sql: "select social.list_my_groups($1::text) as result", params: noParams },
   listMembers: {
     required: { groupId: "text" },
@@ -340,6 +350,9 @@ export const OPERATIONS: Readonly<Record<string, Operation>> = {
     sql: "select social.rename_me_in_group($1::text, $2::text, $3::text) as result",
     params: (a) => [a.groupId, a.name],
   },
+  crossPunsStandings: { required: { groupId: "text", offset: "whole" }, optional: { days: "whole", through: "text" }, sql: "select social.crosspuns_standings_period($1::text, $2::text, $3::int, $4::int, $5::text) as result", params: a => [a.groupId,a.offset,a.days ?? null,a.through ?? null] },
+  getGroupDescription: { required: { groupId: "text" }, sql: "select social.get_group_description($1::text, $2::text) as result", params: a => [a.groupId] },
+  setGroupDescription: { required: { groupId: "text", description: "textOrNull" }, sql: "select social.set_group_description($1::text, $2::text, $3::text) as result", params: a => [a.groupId, a.description] },
   renameGroup: {
     required: { groupId: "text", name: "text" },
     sql: "select social.rename_group($1::text, $2::text, $3::text) as result",
@@ -350,6 +363,10 @@ export const OPERATIONS: Readonly<Record<string, Operation>> = {
     sql: "select social.set_group_appearance($1::text, $2::text, $3::text, $4::text, $5::text) as result",
     params: (a) => [a.groupId, a.emblemId, a.photo, a.accentColor],
   },
+  getGroupInvitation: { required: { groupId: "text" }, sql: "select social.get_group_invitation($1::text, $2::text) as result", params: a => [a.groupId] },
+  setMemberInvitePermission: { required: { groupId: "text", memberRef: "text", allowed: "boolean" }, sql: "select social.set_member_invite_permission($1::text, $2::text, $3::text, $4::boolean) as result", params: a => [a.groupId,a.memberRef,a.allowed] },
+  transferGroupOwnership: { required: { groupId: "text", memberRef: "text" }, sql: "select social.transfer_group_ownership($1::text, $2::text, $3::text) as result", params: a => [a.groupId,a.memberRef] },
+  deleteGroup: { required: { groupId: "text" }, sql: "select social.delete_group($1::text, $2::text) as result", params: a => [a.groupId] },
   removeMember: {
     required: { groupId: "text", memberRef: "text" },
     sql: "select social.remove_member($1::text, $2::text, $3::text) as result",

@@ -209,3 +209,13 @@ function mapPuzzle(data: any): Puzzle {
     versionId: data.current_version_id ?? null,
   };
 }
+
+/** Metadata only for social activity. A failed read is not an empty calendar. */
+export async function getSocialWeekPuzzles(from: string, through: string): Promise<{id: string; date: string}[]> {
+  const {data, error} = await supabase.from("puzzles").select("id,date")
+    .eq("is_published", true).eq("is_beta", false).eq("format", "full")
+    .or("is_free_puzzle.is.null,is_free_puzzle.eq.false")
+    .gte("date", from).lte("date", through).order("date", {ascending: true});
+  if (error) throw new Error("Weekly puzzle lookup unavailable");
+  return data ?? [];
+}

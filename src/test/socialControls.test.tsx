@@ -102,6 +102,7 @@ function find(code = "K7M-4PX") {
 }
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   Reflect.deleteProperty(navigator, "share");
   Reflect.deleteProperty(navigator, "clipboard");
@@ -288,6 +289,143 @@ describe("a group's page", () => {
     return made;
   }
 
+  it("requires an explicit owner confirmation to grant invitation permission", async () => {
+    vi.stubEnv("VITE_GROUP_INVITE_PERMISSIONS", "true");
+    const { call } = await openGroup({ getGroupInvitation: () => yes({ canInvite: true, inviteCode: CODE, grantedMemberRefs: [] }), setMemberInvitePermission: () => yes() });
+    await screen.findByText("Jordan");click("View members");click("Allow invitations for Jordan");click("Cancel");expect(opsCalled(call)).not.toContain("setMemberInvitePermission");
+    click("Allow invitations for Jordan");click("Allow invitations");
+    expect(await screen.findByRole("button", { name: "Stop invitations for Jordan" })).toBeInTheDocument();
+    expect(call).toHaveBeenCalledWith("setMemberInvitePermission", { groupId: "g1", memberRef: "m2", allowed: true });
+  });
+
+  it("allows a delegated member to share but rechecks permission before every share", async () => {
+    vi.stubEnv("VITE_GROUP_INVITE_PERMISSIONS", "true");let allowed=true;
+    const { share } = await openGroup({ getGroupInvitation: () => yes({ canInvite: allowed, inviteCode: allowed ? CODE : null, grantedMemberRefs: [] }) }, group({ isOwner: false, inviteCode: null }));
+    await screen.findByRole("button", { name: "Share invite link" });allowed=false;click("Share invite link");
+    expect(await screen.findByText("You no longer have invitation permission.")).toBeInTheDocument();expect(share).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Share invite link" })).toBeNull();
+  });
+
+  it("transfers ownership only after confirmation and exits with the member-preserving outcome", async () => {
+    vi.stubEnv("VITE_GROUP_OWNER_ACTIONS", "true");
+    const { call, onNote } = await openGroup({ transferGroupOwnership: () => yes() });
+    await screen.findByText("Jordan"); click("View members");
+    expect(screen.queryByRole("button", { name: "Make Alex owner" })).toBeNull();
+    click("Make Jordan owner"); click("Cancel"); expect(opsCalled(call)).not.toContain("transferGroupOwnership");
+    click("Make Jordan owner"); click("Transfer ownership");
+    await waitFor(() => expect(onNote).toHaveBeenCalledWith("Jordan is now the owner of Book Nerds. You remain a member."));
+    expect(call).toHaveBeenCalledWith("transferGroupOwnership", { groupId: "g1", memberRef: "m2" });
+    expect(opsCalled(call)).not.toContain("leaveGroup");
+  });
+
+  it("confirms group deletion, keeps refused deletion visible and does not delete personal data", async () => {
+    vi.stubEnv("VITE_GROUP_OWNER_ACTIONS", "true");
+    const { call } = await openGroup({ deleteGroup: () => refused("not_the_creator") });
+    click("Delete group"); click("Cancel"); expect(opsCalled(call)).not.toContain("deleteGroup");
+    click("Delete group"); click("Delete group permanently");
+    expect(await screen.findByRole("alert")).toHaveTextContent("couldn't delete");
+    expect(screen.getByTestId("group-page")).toBeInTheDocument();
+    expect(call).toHaveBeenCalledWith("deleteGroup", { groupId: "g1" });
+    expect(opsCalled(call)).not.toContain("deleteMySocialData");
+  });
+
+  it("offers neither ownership transfer nor deletion to a regular member", async () => {
+    vi.stubEnv("VITE_GROUP_OWNER_ACTIONS", "true");
+    await openGroup({}, group({ isOwner: false, inviteCode: null }));
+    await screen.findByText("Jordan");expect(screen.queryByRole("button", { name: "Delete group" })).toBeNull();click("View members");
+    expect(screen.queryByRole("button", { name: /Make .* owner/ })).toBeNull();
+  });
+
+  it("edits the description only after it loads, keeps Cancel local, and saves plain text", async () => {
+    vi.stubEnv("VITE_GROUP_DESCRIPTIONS", "true");
+    const { call } = await openGroup({ getGroupDescription: () => yes({ description: "Weekly puzzles" }), setGroupDescription: () => yes({ description: "New description" }) });
+    await screen.findByText("Weekly puzzles"); click("Edit description");
+    fireEvent.change(screen.getByLabelText("Group description"), { target: { value: "Unsaved" } }); click("Cancel");
+    expect(opsCalled(call)).not.toContain("setGroupDescription"); click("Edit description");
+    expect(screen.getByLabelText("Group description")).toHaveValue("Weekly puzzles");
+    fireEvent.change(screen.getByLabelText("Group description"), { target: { value: "New description" } }); click("Save description");
+    expect(await screen.findByTestId("group-description")).toHaveTextContent("New description");
+    expect(call).toHaveBeenCalledWith("setGroupDescription", { groupId: "g1", description: "New description" });
+  });
+
+  it("keeps a refused description draft", async () => {
+    vi.stubEnv("VITE_GROUP_DESCRIPTIONS", "true");
+    await openGroup({ getGroupDescription: () => yes({ description: "Weekly puzzles" }), setGroupDescription: () => refused("not_the_creator") });
+    await screen.findByText("Weekly puzzles"); click("Edit description"); click("Save description");
+    expect(await screen.findByRole("alert")).toHaveTextContent("couldn't save"); expect(screen.getByLabelText("Group description")).toHaveValue("Weekly puzzles");
+  });
+
+  it("shows descriptions as text to members without an owner editor", async () => {
+    vi.stubEnv("VITE_GROUP_DESCRIPTIONS", "true");
+    await openGroup({ getGroupDescription: () => yes({ description: "<script>plain text</script>" }) }, group({ isOwner: false, inviteCode: null }));
+    expect(await screen.findByTestId("group-description")).toHaveTextContent("<script>plain text</script>"); expect(screen.queryByRole("button", { name: "Edit description" })).toBeNull();
+  });
+
+  it("shows a separate member roster and removes only after confirmation", async () => {
+    const { call } = await openGroup({ removeMember: () => yes() });
+    await screen.findByText("Jordan");
+    click("View members");
+    expect(screen.getByRole("heading", { name: "Members" })).toBeInTheDocument();
+    expect(screen.queryByText("Not played yet")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove Alex" })).toBeNull();
+    click("Remove Jordan");
+    expect(opsCalled(call)).not.toContain("removeMember");
+    click("Cancel");
+    expect(opsCalled(call)).not.toContain("removeMember");
+    click("Remove Jordan");
+    click("Remove member");
+    expect(await screen.findByRole("status")).toHaveTextContent("Jordan was removed");
+    expect(call).toHaveBeenCalledWith("removeMember", { groupId: "g1", memberRef: "m2" });
+    expect(within(screen.getByRole("list", { name: "Group members" })).queryByText("Jordan")).toBeNull();
+    click("Back");
+    expect(screen.queryByText("Jordan")).toBeNull();
+    expect(opsCalled(call)).not.toContain("deleteMySocialData");
+  });
+
+  it("keeps a refused removal visible without claiming success", async () => {
+    await openGroup({ removeMember: () => refused("not_the_creator") });
+    await screen.findByText("Jordan");
+    click("View members");
+    click("Remove Jordan");
+    click("Remove member");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Only the group owner");
+    expect(screen.getByText("Jordan")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("lets ordinary members view the roster but offers no removal controls", async () => {
+    await openGroup({}, group({ isOwner: false, inviteCode: null }));
+    await screen.findByText("Jordan");
+    click("View members");
+    expect(screen.getByText("Jordan")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Remove/ })).toBeNull();
+  });
+
+  it("lets an owner edit a picture through the existing appearance operation", async () => {
+    const { call } = await openGroup({ setGroupAppearance: () => yes({ photoVersion: 2 }) });
+    click("Edit group picture");
+    expect(screen.queryByLabelText("Group name")).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "Game night" }));
+    click("Save group");
+    await screen.findByTestId("group-page");
+    expect(call).toHaveBeenCalledWith("setGroupAppearance", expect.objectContaining({ groupId: "g1", emblemId: "cards-dice" }));
+    expect(opsCalled(call)).not.toContain("renameGroup");
+    expect(opsCalled(call)).not.toContain("createGroup");
+  });
+
+  it("keeps the picture draft after a refused save, and offers no editor to members", async () => {
+    await openGroup({ setGroupAppearance: () => refused("not_owner") });
+    click("Edit group picture");
+    click("Save group");
+    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't save that");
+    expect(screen.getByTestId("group-form")).toBeInTheDocument();
+  });
+
+  it("doesn't offer picture editing to a non-owner", async () => {
+    await openGroup({}, group({ isOwner: false, inviteCode: null }));
+    expect(screen.queryByRole("button", { name: "Edit group picture" })).toBeNull();
+  });
+
   it("shows the group, its members, and asks for today's results for this group", async () => {
     const { call } = await openGroup({});
     await screen.findByText("Jordan");
@@ -383,6 +521,20 @@ describe("a group's page", () => {
     click("Back");
     expect(await screen.findByTestId("groups-tab")).toBeInTheDocument();
   });
+});
+
+it("does not recreate a group when saving its optional description is refused", async () => {
+  vi.stubEnv("VITE_GROUP_DESCRIPTIONS", "true");
+  const { call, onNote } = open({ createGroup: () => yes({ groupId: "g1", inviteCode: CODE }), setGroupAppearance: () => yes({ photoVersion: 1 }), setGroupDescription: () => refused("unavailable") }, "groups");
+  await screen.findByTestId("groups-tab"); click("Make a group");
+  fireEvent.change(screen.getByLabelText("Group name"), { target: { value: "Club" } });
+  fireEvent.change(screen.getByLabelText("Group description (optional)"), { target: { value: "Weekly puzzles" } });
+  click("Save group");
+  await waitFor(() => expect(onNote).toHaveBeenCalledWith("Your group was created, but we couldn't save its description. Open the group to try again."));
+  await screen.findByTestId("groups-tab");
+  expect(opsCalled(call).filter(op => op === "createGroup")).toHaveLength(1);
+  expect(call).toHaveBeenCalledWith("setGroupDescription", { groupId: "g1", description: "Weekly puzzles" });
+  expect(screen.queryByTestId("group-form")).toBeNull();
 });
 
 describe("handing over a link", () => {

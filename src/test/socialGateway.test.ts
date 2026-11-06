@@ -479,12 +479,16 @@ const CASES: { [O in OpName]: Case<O> } = {
   declineFriendRequest: { args: { requestRef: "r" }, fn: "social.decline_friend_request", params: ["r"] },
   cancelFriendRequest: { args: { requestRef: "r" }, fn: "social.cancel_friend_request", params: ["r"] },
   listFriends: { args: {}, fn: "social.list_friends", params: [] },
+  listFriendPreferences: { args: {}, fn: "social.list_friend_preferences", params: [] },
+  setFriendPreference: { args: { friendRef: "ref", favorite: true, nickname: "Pal" }, fn: "social.set_friend_preference", params: ["ref", true, "Pal"] },
   removeFriend: { args: { friendRef: "f" }, fn: "social.remove_friend", params: ["f"] },
   block: { args: { ref: "f" }, fn: "social.block", params: ["f"] },
   unblock: { args: { blockRef: "b" }, fn: "social.unblock", params: ["b"] },
   listBlocks: { args: {}, fn: "social.list_blocks", params: [] },
   createGroup: { args: { name: "G", myName: "A", noticeVersion: NOTICE }, fn: "social.create_group", params: ["G", "A", NOTICE] },
   joinGroup: { args: { code: "c", myName: "A", noticeVersion: NOTICE }, fn: "social.join_group", params: ["c", "A", NOTICE] },
+  listGroupOrder: { args: {}, fn: "social.list_group_order", params: [] },
+  setGroupOrder: { args: { groupIds: ["g1", "g2"] }, fn: "social.set_group_order", params: [["g1", "g2"]] },
   listMyGroups: { args: {}, fn: "social.list_my_groups", params: [] },
   listMembers: {
     args: { groupId: "g", after: AFTER_ROW, limit: 5 },
@@ -493,12 +497,19 @@ const CASES: { [O in OpName]: Case<O> } = {
   },
   leaveGroup: { args: { groupId: "g" }, fn: "social.leave_group", params: ["g"] },
   renameMeInGroup: { args: { groupId: "g", name: "A" }, fn: "social.rename_me_in_group", params: ["g", "A"] },
+  crossPunsStandings: { args: {groupId:"club",offset:0}, fn:"social.crosspuns_standings_period", params:["club",0,null,null] },
+  getGroupDescription: { args: { groupId: "g1" }, fn: "social.get_group_description", params: ["g1"] },
+  setGroupDescription: { args: { groupId: "g1", description: "Weekly puzzles" }, fn: "social.set_group_description", params: ["g1", "Weekly puzzles"] },
   renameGroup: { args: { groupId: "g", name: "G" }, fn: "social.rename_group", params: ["g", "G"] },
   setGroupAppearance: {
     args: { groupId: "g", emblemId: "book", photo: null, accentColor: "#DED1F2" },
     fn: "social.set_group_appearance",
     params: ["g", "book", null, "#DED1F2"],
   },
+  getGroupInvitation: { args: { groupId: "g1" }, fn: "social.get_group_invitation", params: ["g1"] },
+  setMemberInvitePermission: { args: { groupId: "g1", memberRef: "m1", allowed: true }, fn: "social.set_member_invite_permission", params: ["g1","m1",true] },
+  transferGroupOwnership: { args: { groupId: "g1", memberRef: "m1" }, fn: "social.transfer_group_ownership", params: ["g1","m1"] },
+  deleteGroup: { args: { groupId: "g1" }, fn: "social.delete_group", params: ["g1"] },
   removeMember: { args: { groupId: "g", memberRef: "m" }, fn: "social.remove_member", params: ["g", "m"] },
   listRemoved: { args: { groupId: "g" }, fn: "social.list_removed", params: ["g"] },
   letBackIn: { args: { groupId: "g", removedRef: "x" }, fn: "social.let_back_in", params: ["g", "x"] },
@@ -531,6 +542,18 @@ describe("social-gateway: the operation table", () => {
     expect(hub[1].role).toBe("social_gateway");
     expect(hub[1].params).toEqual([GLOBAL_ID, ...params]);
     expect(new Set(hub[1].text.match(/\$\d+/g)).size).toBe(1 + params.length);
+  });
+
+  it("passes rolling publication-date parameters only as bound values",async()=>{
+    const {deps,statements}=setup();
+    expect((await send(deps,"crossPunsStandings",{groupId:"club",offset:50,days:30,through:"2024-03-01"})).body).toEqual(HUB_ANSWER);
+    expect(statements.at(-1)!.params).toEqual([GLOBAL_ID,"club",50,30,"2024-03-01"]);
+  });
+
+  it.each(["true", 1, null, undefined])("refuses invalid favorite values before a database write: %s", async favorite => {
+    const { deps, statements } = setup();
+    expect((await send(deps, "setFriendPreference", { friendRef: "ref", favorite, nickname: null })).body).toEqual(UNAVAILABLE);
+    expect(statements.map(named)).toEqual(["public.accounts", "social.is_beta_tester"]);
   });
 
   it("getMe is answered by ensure_person alone", async () => {

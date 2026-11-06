@@ -15,14 +15,14 @@ interface GroupEmblemProps {
  * kinds carry the color the group chose. Decorative: the name is always beside it.
  */
 export function GroupEmblem({ emblemId, photo, color, size = 112, className = "" }: GroupEmblemProps) {
-  const radius = size * 0.22;
+  const radius = size / 2;
   return (
     <span
       className={`inline-grid shrink-0 place-items-center overflow-hidden ${className}`}
       style={{ width: size, height: size, background: color, borderRadius: radius }}
     >
       {photo ? (
-        <img src={photo} alt="" className="h-[86%] w-[86%] object-cover" style={{ borderRadius: radius * 0.72 }} />
+        <img src={photo} alt="" className="h-[86%] w-[86%] object-cover" style={{ borderRadius: "50%" }} />
       ) : (
         <img src={groupEmblemSrc(emblemId)} alt="" decoding="async" className="h-[88%] w-[88%] object-contain" />
       )}

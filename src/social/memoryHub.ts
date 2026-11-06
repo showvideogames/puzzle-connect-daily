@@ -1,3 +1,5 @@
+import {crossPunsStandings} from './crosspunsStandings';
+import {crossPunsStandingsView} from './crosspunsStandingsView';
 import { AVATAR_IDS, CURRENT_NOTICE_VERSION, DEFAULT_AVATAR, DEFAULT_COLOR, DEFAULT_EMBLEM, GAME_STATUS, GROUP_EMBLEM_IDS, LIMITS, PROFILE_COLORS, RESULT_SHAPES } from './contract';
 import type {
   CompletionInput,
@@ -140,6 +142,8 @@ export interface MemoryHub {
   transportFor(game: GameId): SocialTransport;
   /** The game-server route. No token reaches it, and nothing on a transport reaches it either. */
   serverFor(game: GameId): SocialServerRoute;
+  /** Test-only publication metadata; never infer it from completion time. */
+  seedCrossPunsPublication(puzzleId: string, date: string): void;
   /** One game deleted its account: only that game's link goes (D5). */
   unlinkGame(game: GameId, globalUserId: string): void;
   /** For conformance checks. No operation shows which games someone is in. */
@@ -167,6 +171,7 @@ interface Friendship {
   since: number;
   /** Which notice each person saw. */
   notices: Map<string, number>;
+  preferences?: Map<string, { favorite: boolean; nickname: string | null }>;
 }
 
 interface FriendRequest {
@@ -210,6 +215,8 @@ interface Membership {
   name: string;
   joinedAt: number;
   noticeVersion: number;
+  privatePosition?: number;
+  mayInvite?: boolean;
 }
 
 interface Removal {
@@ -230,6 +237,7 @@ interface Group {
   photoVersion: number;
   members: Map<string, Membership>;
   removed: Map<string, Removal>;
+  description?: string | null;
 }
 
 interface ResultCard {
@@ -331,6 +339,28 @@ function jpegSize(bytes: readonly number[]): { width: number; height: number } |
   return null;
 }
 
+/** Structural PNG validation matching the proposed hub patch; not a pixel decoder. */
+function pngSize(bytes: readonly number[]): { width: number; height: number } | null {
+  if (bytes.length < 57 || [137,80,78,71,13,10,26,10].some((v,i) => bytes[i] !== v)) return null;
+  const u32 = (at: number) => bytes[at] * 16777216 + bytes[at+1] * 65536 + bytes[at+2] * 256 + bytes[at+3];
+  let width = 0, height = 0, data = false;
+  for (let at = 8; at + 12 <= bytes.length;) {
+    const length = u32(at);
+    if (length > bytes.length - at - 12) return null;
+    const tag = String.fromCharCode(...bytes.slice(at+4, at+8));
+    if (at === 8) {
+      if (tag !== 'IHDR' || length !== 13) return null;
+      width = u32(16); height = u32(20);
+      if (!width || !height || width > 2147483647 || height > 2147483647 || bytes[24] !== 8 || ![2,6].includes(bytes[25]) || bytes[26] !== 0 || bytes[27] !== 0 || bytes[28] !== 0) return null;
+    } else if (tag === 'IDAT') { if (length > 0) data = true; }
+    else if (tag === 'IEND') return length === 0 && at + 12 === bytes.length && data ? { width, height } : null;
+    else if (['IHDR','acTL','fcTL','fdAT'].includes(tag)) return null;
+    else if (tag !== 'PLTE' && (bytes[at+4] & 32) === 0) return null;
+    at += length + 12;
+  }
+  return null;
+}
+
 // -- Results ----------------------------------------------------------------
 
 const COMPLETION_KEYS: readonly string[] = ['gameId', 'puzzleId', 'globalUserId', 'completedAt', 'summary', 'detail'];
@@ -368,6 +398,7 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
   const blocks = new Map<string, Block>();
   const friendInvites = new Map<string, FriendInvite>();
   const groups = new Map<string, Group>();
+  const crossPunsDates = new Map<string,string>();
   const results = new Map<string, ResultCard>();
 
   /** Exactly 12 characters of 0-9a-z, whatever the id source gives. The tries only stop a source that gives nothing usable. */
@@ -513,13 +544,16 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
 
   /** What a good picture earns is null. The base64 length test comes first, so an absurd upload is never decoded. */
   function photoRefusal(photo: unknown): Outcome | null {
-    if (typeof photo !== 'string' || !photo.startsWith(PHOTO_PREFIX)) return 'not_a_picture';
-    const encoded = photo.slice(PHOTO_PREFIX.length);
+    if (typeof photo !== 'string') return 'not_a_picture';
+    const png = photo.startsWith('data:image/png;base64,');
+    const prefix = png ? 'data:image/png;base64,' : PHOTO_PREFIX;
+    if (!photo.startsWith(prefix)) return 'not_a_picture';
+    const encoded = photo.slice(prefix.length);
     if (encoded.length > Math.ceil(limits.photoBytes / 3) * 4) return 'too_big';
     const bytes = decodeBase64(encoded);
     if (!bytes) return 'not_a_picture';
     if (bytes.length > limits.photoBytes) return 'too_big';
-    const size = jpegSize(bytes);
+    const size = png ? pngSize(bytes) : jpegSize(bytes);
     if (!size) return 'not_a_picture';
     return size.width === limits.photoEdge && size.height === limits.photoEdge ? null : 'wrong_size';
   }
@@ -741,6 +775,24 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       );
     },
 
+    listFriendPreferences(me) {
+      return done(friendshipsOf(me.id).flatMap(f => {
+        const preference = f.preferences?.get(me.id);
+        return preference ? [{ friendRef: f.ref, ...preference }] : [];
+      }));
+    },
+
+    setFriendPreference(me, { friendRef, favorite, nickname }) {
+      const friendship = friendships.get(friendRef);
+      if (!friendship || (friendship.a !== me.id && friendship.b !== me.id)) return fail('not_found');
+      if (typeof favorite !== 'boolean') return fail('unavailable');
+      const name = nickname === null ? null : cleanName(nickname, limits.nameMax);
+      if (nickname !== null && name === null) return fail('bad_name');
+      friendship.preferences ??= new Map();
+      friendship.preferences.set(me.id, { favorite, nickname: name });
+      return done({ friendRef, favorite, nickname: name });
+    },
+
     removeFriend(me, { friendRef }) {
       const friendship = friendships.get(friendRef);
       if (!friendship || (friendship.a !== me.id && friendship.b !== me.id)) return fail('not_found');
@@ -819,6 +871,19 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       return done({ groupId: group.id });
     },
 
+    listGroupOrder(me) {
+      const membership = (g: Group) => g.members.get(me.id) as Membership;
+      const ordered = groupsOf(me.id).sort((a,b) => (membership(a).privatePosition ?? Infinity) - (membership(b).privatePosition ?? Infinity) || membership(a).joinedAt - membership(b).joinedAt || membership(a).memberRef.localeCompare(membership(b).memberRef));
+      return done({ groupIds: ordered.map(g => g.id) });
+    },
+
+    setGroupOrder(me, { groupIds }) {
+      const current = groupsOf(me.id);
+      if (!Array.isArray(groupIds) || groupIds.length > limits.groupsJoinedTotal || groupIds.length !== current.length || new Set(groupIds).size !== groupIds.length || groupIds.some(id => !current.some(g => g.id === id))) return fail('not_found');
+      groupIds.forEach((id, position) => { (groups.get(id)?.members.get(me.id) as Membership).privatePosition = position; });
+      return done(NOTHING);
+    },
+
     listMyGroups(me) {
       const mine = (group: Group) => group.members.get(me.id) as Membership;
       const inJoiningOrder = groupsOf(me.id).sort((x, y) => mine(x).joinedAt - mine(y).joinedAt);
@@ -876,6 +941,42 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       return done(NOTHING);
     },
 
+    crossPunsStandings(me, {groupId,offset,days,through}) {
+      const found=membership(me,groupId);
+      if(!found)return fail('not_a_member');
+      if(!Number.isSafeInteger(offset)||offset<0||offset>10000)return fail('not_found');
+      let from: string | undefined;
+      if(days!==undefined || through!==undefined){
+        if(![7,30,365].includes(days as number)||!through||!/^\d{4}-\d{2}-\d{2}$/.test(through))return fail('not_found');
+        const end=new Date(`${through}T12:00:00Z`);
+        if(!Number.isFinite(end.getTime())||end.toISOString().slice(0,10)!==through)return fail('not_found');
+        end.setUTCDate(end.getUTCDate()-days!+1);from=end.toISOString().slice(0,10);
+      }
+      const members=[...found.group.members.values()];
+      const byPerson=new Map(members.map(m=>[m.person,m.memberRef]));
+      const history=[...results].flatMap(([key,card])=>{
+        const [game,puzzleId]=key.split('\n');
+        const memberRef=byPerson.get(card.person);
+        if(from && (!crossPunsDates.has(puzzleId)||crossPunsDates.get(puzzleId)!<from||crossPunsDates.get(puzzleId)!>through!))return [];
+        return game==='crosspuns'&&memberRef&&'seconds' in card.summary ? [{memberRef,puzzleId,seconds:card.summary.seconds}] : [];
+      });
+      const ranked=crossPunsStandings(members,history);
+      const people=new Map(members.map(m=>[m.memberRef,{name:m.name,...faceOf(m.person),blockedEitherWay:blockedEitherWay(me.id,m.person)}]));
+      return done({rows:crossPunsStandingsView(ranked.rows.slice(offset,offset+25),people),total:members.length});
+    },
+
+    getGroupDescription(me, { groupId }) {
+      const found = membership(me,groupId);
+      return found ? done({ description: found.group.description ?? null }) : fail('not_a_member');
+    },
+    setGroupDescription(me, { groupId, description }) {
+      return asOwner(me,groupId,group => {
+        if (description !== null && (typeof description !== 'string' || [...description].length > limits.groupDescriptionMax)) return fail('bad_description');
+        group.description = description === null ? null : cleanName(description,limits.groupDescriptionMax);
+        return done({description:group.description});
+      });
+    },
+
     renameGroup(me, { groupId, name }) {
       return asOwner(me, groupId, (group) => {
         const clean = cleanName(name, limits.groupNameMax);
@@ -897,6 +998,34 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
         group.photo = photo;
         return done({ photoVersion: group.photoVersion });
       });
+    },
+
+    getGroupInvitation(me, { groupId }) {
+      const found = membership(me,groupId);
+      if (!found) return fail("not_a_member");
+      const owner = found.group.owner === me.id;
+      const canInvite = owner || found.mine.mayInvite === true;
+      return done({ canInvite, inviteCode: canInvite ? found.group.code : null, grantedMemberRefs: owner ? [...found.group.members.values()].filter(m => m.mayInvite).map(m => m.memberRef).sort() : [] });
+    },
+    setMemberInvitePermission(me, { groupId, memberRef, allowed }) {
+      return asOwner(me,groupId,group => {
+        const target = [...group.members.values()].find(m => m.memberRef === memberRef);
+        if (!target || target.person === me.id || typeof allowed !== "boolean") return fail("not_found");
+        target.mayInvite = allowed;
+        return done(NOTHING);
+      });
+    },
+
+    transferGroupOwnership(me, { groupId, memberRef }) {
+      return asOwner(me,groupId,group => {
+        const target = [...group.members.values()].find(m => m.memberRef === memberRef);
+        if (!target) return fail("not_found");
+        group.owner = target.person;
+        return done(NOTHING);
+      });
+    },
+    deleteGroup(me, { groupId }) {
+      return asOwner(me,groupId,group => { groups.delete(group.id); return done(NOTHING); });
     },
 
     removeMember(me, { groupId, memberRef }) {
@@ -1043,6 +1172,7 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       const person = known === undefined ? undefined : people.get(known);
       return person ? [...person.games] : [];
     },
+    seedCrossPunsPublication(puzzleId,date) { crossPunsDates.set(puzzleId,date); },
     seedDisplayName(globalUserId, name) {
       personFor(globalUserId).displayName = name;
     },

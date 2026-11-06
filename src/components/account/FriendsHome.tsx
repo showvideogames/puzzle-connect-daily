@@ -1,7 +1,8 @@
+import { ProfileAvatar } from "./ProfileAvatar";
 import { useState, type ReactNode } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import type { FriendResult } from "@/lib/friendResults";
-import { accountPanel, outlineAction, primaryAction, quietText } from "./accountStyles";
+import { accountCard, accountPanel, outlineAction, primaryAction, quietText } from "./accountStyles";
 import { ResultRow, TodayHeading } from "./ResultRow";
 
 export type FriendsTab = "friends" | "groups";
@@ -19,6 +20,7 @@ interface FriendsHomeProps {
   /** Used by tests. In the app this is simply today on this device. */
   today?: Date;
   /** What an opened row offers. Null for a row with nothing to offer. */
+  onFriendProfile?: (friend: FriendResult) => void;
   rowActions?: (result: FriendResult) => ReactNode;
   /** Opens the profile editor, from the top of both tabs. */
   onEditProfile?: () => void;
@@ -36,7 +38,8 @@ const tabButton =
  * played can be opened, and so can anyone with actions. A friend code is there
  * to read out or copy.
  */
-export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, onAddFriend, groups, today = new Date(), rowActions, onEditProfile, friendsFooter }: FriendsHomeProps) {
+export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, onAddFriend, groups, today = new Date(), rowActions, onEditProfile, friendsFooter, onFriendProfile }: FriendsHomeProps) {
+  const favorites = results.filter(result => !result.isYou && result.favorite);
   const [openId, setOpenId] = useState<string | null>(null);
   const [copied, setCopied] = useState<"yes" | "no" | null>(null);
 
@@ -68,6 +71,17 @@ export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, o
         </Tabs.List>
 
         <Tabs.Content value="friends" className="focus-visible:outline-none">
+          {favorites.length > 0 && <section className={`${accountCard} mt-4`} aria-label="Favorite friends">
+            <h2 className="font-tile text-lg font-bold">Favorite friends</h2>
+            <ul className="mt-3 flex gap-3 overflow-x-auto pb-1">
+              {favorites.map(friend => <li key={friend.id} className="shrink-0">
+                <button type="button" aria-label={`Open ${friend.nickname || friend.name}'s profile`} onClick={() => onFriendProfile ? onFriendProfile(friend) : setOpenId(friend.id)} className="flex w-16 flex-col items-center gap-1 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <ProfileAvatar animalId={friend.animalId} backgroundColor={friend.backgroundColor} size={52}/>
+                  <span className="w-full truncate text-sm font-semibold">{friend.nickname || friend.name}</span>
+                </button>
+              </li>)}
+            </ul>
+          </section>}
           <TodayHeading today={today} />
           <ul className="mt-1">
             {results.map((result) => (
@@ -75,7 +89,8 @@ export function FriendsHome({ gameName, results, friendCode, tab, onTabChange, o
                 key={result.id}
                 result={result}
                 open={openId === result.id}
-                onToggle={() => setOpenId(openId === result.id ? null : result.id)}
+                onToggle={() => onFriendProfile && !result.isYou ? onFriendProfile(result) : setOpenId(openId === result.id ? null : result.id)}
+                navigation={!!onFriendProfile && !result.isYou}
                 actions={rowActions?.(result)}
               />
             ))}
