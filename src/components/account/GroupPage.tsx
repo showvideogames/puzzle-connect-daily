@@ -1,12 +1,14 @@
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { FriendResult } from "@/lib/friendResults";
-import { leaveGroupQuestion, memberWords } from "@/lib/socialView";
-import { accountCard, accountCardTitle, accountPanel, outlineAction, quietText } from "./accountStyles";
+import { memberWords } from "@/lib/socialView";
+import { accountCard, quietText } from "./accountStyles";
 import { BackLink } from "./BackLink";
 import { GroupEmblem } from "./GroupEmblem";
+import { GroupInviteDialog } from "./GroupInviteDialog";
+import { GroupSettingsDialog } from "./GroupSettingsDialog";
+import { groupPanel } from "./groupStyles";
 import type { GroupSummary } from "./GroupsTab";
-import { InlineConfirm } from "./InlineConfirm";
-import { InviteLinkButtons, type LinkAnswer } from "./InviteLinkButtons";
+import type { LinkAnswer } from "./InviteLinkButtons";
 import { ResultRow, TodayHeading } from "./ResultRow";
 
 export interface GroupView extends GroupSummary {
@@ -36,62 +38,80 @@ interface GroupPageProps {
   onCopy: () => Promise<LinkAnswer> | LinkAnswer;
   /** Answers with a sentence when leaving was refused. */
   onLeave: () => Promise<string | void>;
+  /** True when the page is coming back from members or an editor the settings opened, so focus returns to the gear. */
+  returnToSettings?: boolean;
 }
 
-/** One group: who is in it, how they did today, and for its owner, the link. */
-export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave, onEditPicture, onMembers, description, descriptionProblem, onEditDescription, onDelete, canInvite, invitationProblem, standings }: GroupPageProps) {
+/** One group: who is in it, how they did today, and for whoever may invite, the link. */
+export function GroupPage({ group, results, problem, today, onBack, onShare, onCopy, onLeave, onEditPicture, onMembers, description, descriptionProblem, onEditDescription, onDelete, canInvite, invitationProblem, standings, returnToSettings }: GroupPageProps) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const id = useId();
+  const [inviting, setInviting] = useState(false);
+  const mayInvite = Boolean((canInvite ?? group.isOwner) && group.inviteCode);
+  // The Invite button goes away the moment permission does, and must not reopen by itself if it comes back.
+  useEffect(() => {
+    if (!mayInvite) setInviting(false);
+  }, [mayInvite]);
+  const inviteOpen = mayInvite && inviting;
 
   return (
-    <main className={`${accountPanel} mx-auto w-full max-w-[32rem] px-5 pb-5 pt-2 sm:px-8 sm:pb-8 sm:pt-4`} data-testid="group-page">
-      <BackLink onClick={onBack} />
-      <div className="text-center">
-        <GroupEmblem emblemId={group.emblemId} photo={group.photo} color={group.accentColor} size={112} className="max-sm:!h-20 max-sm:!w-20" />
-        <h1 className="mt-2 font-tile text-[1.75rem] font-extrabold leading-[1.15] tracking-tight text-foreground [overflow-wrap:anywhere] [text-wrap:balance] sm:text-4xl">{group.name}</h1>
-        <p className={`text-base ${quietText}`}>{memberWords(group.memberCount)}</p>
+    <main className={`${groupPanel} pb-5 pt-2 sm:px-8 sm:pb-8 sm:pt-4`} data-testid="group-page">
+      <div className="flex min-h-12 items-center justify-between gap-2">
+        <BackLink onClick={onBack} />
+        <div className="flex shrink-0 items-center gap-2">
+          {mayInvite && (
+            <GroupInviteDialog groupName={group.name} open={inviteOpen} onOpenChange={setInviting} problem={invitationProblem} onShare={onShare} onCopy={onCopy} />
+          )}
+          <GroupSettingsDialog
+            groupName={group.name}
+            isOwner={group.isOwner}
+            onEditDescription={onEditDescription}
+            onEditPicture={onEditPicture}
+            onMembers={onMembers}
+            onDelete={onDelete}
+            onLeave={onLeave}
+            focusOnMount={returnToSettings}
+          />
+        </div>
       </div>
 
-      {description && <p className="mt-4 whitespace-pre-wrap break-words text-base" data-testid="group-description">{description}</p>}
-      {invitationProblem && <p role="alert" className="mt-3 text-destructive">{invitationProblem}</p>}
+      <div className="mt-4 flex items-center gap-4 sm:gap-5 max-[359px]:flex-col max-[359px]:items-start">
+        <GroupEmblem
+          emblemId={group.emblemId}
+          photo={group.photo}
+          color={group.accentColor}
+          size={112}
+          className="!rounded-[1.75rem] shadow-sm max-sm:!h-[88px] max-sm:!w-[88px] max-sm:!rounded-3xl"
+        />
+        <div className="min-w-0 flex-1">
+          <h1 className="text-3xl font-black leading-[1.08] tracking-tight text-foreground break-words [text-wrap:balance] sm:text-4xl">{group.name}</h1>
+          <p className={`mt-1 text-lg ${quietText}`}>{memberWords(group.memberCount)}</p>
+        </div>
+      </div>
+
+      {description && <p className="mt-4 whitespace-pre-wrap break-words text-base text-foreground" data-testid="group-description">{description}</p>}
+      {invitationProblem && !inviteOpen && <p role="alert" className="mt-3 text-destructive">{invitationProblem}</p>}
       {descriptionProblem && <p role="alert" className="mt-3 text-destructive">{descriptionProblem}</p>}
-      {group.isOwner && onEditDescription && <button type="button" className={`${outlineAction} mt-3 min-h-11 w-full`} onClick={onEditDescription}>Edit description</button>}
 
-      {group.isOwner && onEditPicture && <button type="button" className={`${outlineAction} mt-4 h-11 w-full`} onClick={onEditPicture}>Edit group picture</button>}
+      <section className={`${accountCard} mt-5`}>
+        <TodayHeading today={today} />
+        {problem && <p role="alert" className="mt-2 text-base font-medium text-destructive">{problem}</p>}
+        {results && (
+          <ul className="mt-1">
+            {results.filter(result=>result.status!=='not-played').map((result) => (
+              <ResultRow
+                key={result.id}
+                result={result}
+                open={openId === result.id}
+                onToggle={() => setOpenId(openId === result.id ? null : result.id)}
+                avatarSize={56}
+              />
+            ))}
+          </ul>
+        )}
 
-      {onMembers && <button type="button" className={`${outlineAction} mt-3 h-11 w-full`} onClick={onMembers}>View members</button>}
-
-      <TodayHeading today={today} />
-      {problem && <p role="alert" className="mt-2 text-base font-medium text-destructive">{problem}</p>}
-      {results && (
-        <ul className="mt-1">
-          {results.map((result) => (
-            <ResultRow
-              key={result.id}
-              result={result}
-              open={openId === result.id}
-              onToggle={() => setOpenId(openId === result.id ? null : result.id)}
-            />
-          ))}
-        </ul>
-      )}
-
+        {results && !problem && !results.some(result=>result.status!=='not-played') && <p className="mt-3 text-slate">No recent activity</p>}
+      </section>
       {standings}
-
-      {(canInvite ?? group.isOwner) && group.inviteCode && (
-        <section className={`${accountCard} mt-3`} aria-labelledby={`${id}-link`}>
-          <h2 id={`${id}-link`} className={accountCardTitle}>Send an invitation</h2>
-          <InviteLinkButtons onShare={onShare} onCopy={onCopy} />
-        </section>
-      )}
-
-      {group.isOwner && onDelete && <div className="mt-4 [&_button]:min-h-11 [&_button]:h-auto">
-        <InlineConfirm label="Delete group" question={`Permanently delete ${group.name} for everyone? Members keep their personal game history.`} confirmLabel="Delete group permanently" onConfirm={onDelete} />
-      </div>}
-
-      <div className="mt-3 flex justify-center">
-        <InlineConfirm label="Leave group" question={leaveGroupQuestion(group.name)} confirmLabel="Leave" onConfirm={onLeave} />
-      </div>
     </main>
   );
 }

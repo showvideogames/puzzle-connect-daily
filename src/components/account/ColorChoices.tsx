@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { PROFILE_COLORS, type ProfileColor } from "@/lib/sharedProfile";
 
-export const selectedRing = "peer-checked:border-[hsl(258_46%_52%)] peer-focus-visible:ring-2 peer-focus-visible:ring-[hsl(258_46%_52%)] peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-card";
+export const selectedRing = "peer-checked:border-[hsl(258_90%_52%)] peer-focus-visible:ring-2 peer-focus-visible:ring-[hsl(258_90%_52%)] peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-card";
 
 /** The six approved colors, for a profile or a group. Real radio inputs. */
 export function ColorChoices({ legend, value, onChange }: { legend: string; value: string; onChange: (color: ProfileColor) => void }) {

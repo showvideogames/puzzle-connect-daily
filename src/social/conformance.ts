@@ -90,6 +90,7 @@ const DECLARED_ARGS: { [O in OpName]: readonly FieldsOf<Operations[O]['args']>[]
   listRemoved: ['groupId'],
   letBackIn: ['groupId', 'removedRef'],
   replaceInvite: ['groupId'],
+  recentCompletions: ['from','until','friendRef'],
   listResults: ['gameId', 'puzzleId', 'groupId'],
   deleteMySocialData: [],
 };
@@ -98,6 +99,7 @@ const ALL_OPS = Object.keys(DECLARED_ARGS) as OpName[];
 
 /** The exact keys of an operation's data, or of each row of a list. Anything else, an activity field say, fails. */
 const DECLARED_FIELDS: { [O in Exclude<OpName, 'previewInvite' | 'listResults'>]: readonly FieldsOf<Row<Operations[O]['data']>>[] } = {
+  recentCompletions: ['rows','hasMore'],
   getMe: ['displayName', 'animalId', 'backgroundColor', 'friendCode', 'friendCount', 'groupCount'],
   setDisplayName: ['displayName'],
   setProfile: ['displayName', 'animalId', 'backgroundColor'],
@@ -199,6 +201,7 @@ const SAMPLE_ARGS: { [O in OpName]: Operations[O]['args'] } = {
   listRemoved: { groupId: 'no-such-group' },
   letBackIn: { groupId: 'no-such-group', removedRef: 'no-such-ref' },
   replaceInvite: { groupId: 'no-such-group' },
+  recentCompletions: {from:'2026-11-01T00:00:00.000Z',until:'2026-11-08T00:00:00.000Z'},
   listResults: { gameId: 'crosspuns', puzzleId: 'no-such-puzzle' },
   deleteMySocialData: {},
 };
@@ -326,6 +329,14 @@ function checkData(op: OpName, data: unknown): void {
     check(isRecord(data) && (hasExactly(data, FRIEND_PREVIEW_FIELDS) || hasExactly(data, GROUP_PREVIEW_FIELDS)), `previewInvite returned the wrong fields: ${JSON.stringify(data)}`);
     if ('isMember' in data) checkGroupPreview(data);
     checkRow(op, data, ['memberPreview']);
+    return;
+  }
+  if (op === 'recentCompletions') {
+    check(isRecord(data) && hasExactly(data,['rows','hasMore']) && Array.isArray(data.rows) && data.rows.length<=25 && typeof data.hasMore==='boolean','bounded recent completion response');
+    for(const row of data.rows as unknown[]){
+      check(isRecord(row)&&hasExactly(row,['puzzleId','completedAt','puzzleDate','puzzleTitle','result']),'recent completion fields');
+      checkResultRow(row.result);
+    }
     return;
   }
   if (op === 'listResults') {
@@ -831,6 +842,9 @@ async function fullFlow(world: MockWorld): Promise<void> {
 
   await finish(world, 'crosspuns', 'alice');
   await finish(world, 'wtf', 'carol');
+  await finish(world, 'rainbow', 'bob');
+  const recent = must(await alice.call('recentCompletions', {from:new Date(world.now()-86400000).toISOString(),until:new Date(world.now()+86400000).toISOString()}), 'recentCompletions');
+  check(recent.rows.length===1 && recent.rows[0].result.friendRef===friendRef, 'recent completions should contain the authorized friend');
   await resultsOf(bob, 'crosspuns');
   await resultsOf(bob, 'crosspuns', PUZZLE, groupId);
   await resultsOf(bob, 'wtf', PUZZLE, groupId);

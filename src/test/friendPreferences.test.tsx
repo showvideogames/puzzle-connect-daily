@@ -15,16 +15,16 @@ it('puts favorites first without changing public names, result details or favori
 });
 it('cancel sends nothing and reopening resets the unsaved draft', () => {
   const save = vi.fn(); render(<FriendPreferences friend={friend} onSave={save} />);
-  click('Favorite & nickname'); fireEvent.change(screen.getByLabelText('Private nickname'),{target:{value:'Unsaved'}}); click('Cancel');
-  expect(save).not.toHaveBeenCalled(); click('Favorite & nickname'); expect(screen.getByLabelText('Private nickname')).toHaveValue('');
+  click('Private nickname'); fireEvent.change(screen.getByLabelText('Private nickname'),{target:{value:'Unsaved'}}); click('Cancel');
+  expect(save).not.toHaveBeenCalled(); click('Private nickname'); expect(screen.getByLabelText('Private nickname')).toHaveValue('');
 });
 it('retains a refused draft, trims nicknames and prevents repeated saves in flight', async () => {
   let resolve!: (error: string) => void;
   const save = vi.fn(() => new Promise<string>(done => { resolve=done; }));
-  render(<FriendPreferences friend={friend} onSave={save} />); click('Favorite & nickname');
-  fireEvent.change(screen.getByLabelText('Private nickname'),{target:{value:' Pal '}}); fireEvent.click(screen.getByLabelText('Favorite')); click('Save preferences');
+  render(<FriendPreferences friend={friend} onSave={save} />); click('Private nickname');
+  fireEvent.change(screen.getByLabelText('Private nickname'),{target:{value:' Pal '}}); click('Save preferences');
   fireEvent.submit(screen.getByLabelText('Private nickname').closest('form')!);
-  expect(save).toHaveBeenCalledTimes(1); expect(save).toHaveBeenCalledWith({favorite:true,nickname:'Pal'});
+  expect(save).toHaveBeenCalledTimes(1); expect(save).toHaveBeenCalledWith({nickname:'Pal'});
   await act(async()=>resolve('Please try again.'));
   expect(screen.getByRole('alert')).toHaveTextContent('Please try again.'); expect(screen.getByLabelText('Private nickname')).toHaveValue(' Pal ');
 });

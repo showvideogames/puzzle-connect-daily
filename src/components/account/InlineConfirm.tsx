@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { primaryAction, quietAction, secondaryAction } from "./accountStyles";
+import { cn } from "@/lib/utils";
+import { dangerFill, primaryAction, quietAction, secondaryAction } from "./accountStyles";
 
 interface InlineConfirmProps {
   /** The quiet button. */
@@ -11,8 +12,6 @@ interface InlineConfirmProps {
   onConfirm: () => Promise<string | void>;
 }
 
-/** The red the account menu's own Delete uses. */
-const confirmColors = { background: "hsl(0 84% 60%)", borderColor: "transparent", color: "white" };
 
 /**
  * A second step without a popup, in the same shape as Delete account in the
@@ -33,7 +32,7 @@ export function InlineConfirm({ label, question, confirmLabel, onConfirm, tone =
   };
 
   if (!asking) {
-    return <button type="button" onClick={() => setAsking(true)} className={quietAction}>{label}</button>;
+    return <button type="button" onClick={() => setAsking(true)} className={`${quietAction} inline-flex min-h-11 items-center`}>{label}</button>;
   }
 
   return (
@@ -41,7 +40,7 @@ export function InlineConfirm({ label, question, confirmLabel, onConfirm, tone =
       <p className="text-base text-foreground">{question}</p>
       {problem && <p role="alert" className="mt-1 text-base font-medium text-destructive">{problem}</p>}
       <div className="mt-2 flex gap-2.5">
-        <button type="button" onClick={() => void confirm()} disabled={busy} className={`${tone === "danger" ? secondaryAction : primaryAction} h-11 flex-1 text-base`} style={tone === "danger" ? confirmColors : undefined}>
+        <button type="button" onClick={() => void confirm()} disabled={busy} className={cn(tone === "danger" ? cn(secondaryAction, "border-transparent", dangerFill) : primaryAction, "h-11 flex-1 text-base")}>
           {confirmLabel}
         </button>
         <button

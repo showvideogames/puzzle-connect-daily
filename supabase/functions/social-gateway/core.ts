@@ -387,6 +387,11 @@ export const OPERATIONS: Readonly<Record<string, Operation>> = {
     sql: "select social.replace_invite($1::text, $2::text) as result",
     params: (a) => [a.groupId],
   },
+  recentCompletions: {
+    required: { from: "text", until: "text" }, optional: { friendRef: "text" },
+    sql: "select social.recent_completions($1::text, $2::text, $3::text, $4::text) as result",
+    params: a => [a.from, a.until, a.friendRef ?? null],
+  },
   listResults: {
     required: { gameId: "game", puzzleId: "puzzle" },
     optional: { groupId: "text" },

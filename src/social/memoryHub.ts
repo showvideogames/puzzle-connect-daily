@@ -16,6 +16,8 @@ import type {
   Result,
   ResultDetail,
   ResultRow,
+  RecentCompletion,
+  FriendResultRow,
   ResultShape,
   ResultSummary,
   ServerOperations,
@@ -143,6 +145,7 @@ export interface MemoryHub {
   /** The game-server route. No token reaches it, and nothing on a transport reaches it either. */
   serverFor(game: GameId): SocialServerRoute;
   /** Test-only publication metadata; never infer it from completion time. */
+  seedRainbowPublication(puzzleId: string, date: string, title: string): void;
   seedCrossPunsPublication(puzzleId: string, date: string): void;
   /** One game deleted its account: only that game's link goes (D5). */
   unlinkGame(game: GameId, globalUserId: string): void;
@@ -644,6 +647,7 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
     });
   }
 
+  const rainbowMetadata = new Map<string,{date:string;title:string}>();
   const handlers: Handlers = {
     getMe(me) {
       return done({
@@ -1069,6 +1073,25 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
 
     // The audience comes from the token alone. Whoever isn't connected to the
     // caller right now simply has no row, so an ended connection needs no cleaning up.
+    recentCompletions(me,{from,until,friendRef}) {
+      const start=Date.parse(from),end=Date.parse(until);
+      const valid=(s:string,n:number)=>Number.isFinite(n)&&new Date(n).toISOString()===s;
+      if(!valid(from,start)||!valid(until,end)||end<=start||end-start>8*86400000)return fail('unavailable');
+      const rows:RecentCompletion[]=[];
+      for(const f of friendshipsOf(me.id)){
+        if(friendRef!==undefined && friendRef!==f.ref)continue;
+        const friend=otherSide(f,me.id);
+        if(blockedEitherWay(me.id,friend))continue;
+        for(const [key,card] of results){
+          const [game,puzzleId,person]=key.split('\n');
+          if(game!=='rainbow'||person!==friend||card.completedAt<f.since||card.completedAt<start||card.completedAt>=end||card.completedAt>now())continue;
+          const meta=rainbowMetadata.get(puzzleId);
+          rows.push({puzzleId,completedAt:iso(card.completedAt),puzzleDate:meta?.date??null,puzzleTitle:meta?.title??null,result:resultRow({friendRef:f.ref},card,displayNameOf(friend),false,results.has(resultKey('rainbow',puzzleId,me.id))) as FriendResultRow});
+        }
+      }
+      rows.sort((a,b)=>b.completedAt.localeCompare(a.completedAt)||a.puzzleId.localeCompare(b.puzzleId)||(a.result.friendRef??'').localeCompare(b.result.friendRef??''));
+      return done({rows:rows.slice(0,25),hasMore:rows.length>25});
+    },
     listResults(me, { gameId, puzzleId, groupId }) {
       const cardOf = (person: string) => results.get(resultKey(gameId, puzzleId, person));
       const mine = cardOf(me.id);
@@ -1180,6 +1203,7 @@ export function createMemoryHub({ identity, now = Date.now, gameStatus = GAME_ST
       const person = known === undefined ? undefined : people.get(known);
       return person ? [...person.games] : [];
     },
+    seedRainbowPublication(puzzleId,date,title) { rainbowMetadata.set(puzzleId,{date,title}); },
     seedCrossPunsPublication(puzzleId,date) { crossPunsDates.set(puzzleId,date); },
     seedDisplayName(globalUserId, name) {
       personFor(globalUserId).displayName = name;

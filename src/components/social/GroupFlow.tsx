@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { GroupMembers } from "@/components/account/GroupMembers";
 import { groupMemberView, type GroupMemberView } from "@/lib/socialView";
 import { GroupAppearanceForm, type GroupAppearance } from "@/components/account/GroupAppearanceForm";
-import { accountPanel } from "@/components/account/accountStyles";
+import { groupPanel } from "@/components/account/groupStyles";
 import { GroupPage, type GroupView } from "@/components/account/GroupPage";
 import type { FriendResult } from "@/lib/friendResults";
 import { NO_RESULTS_NOTE, groupProblem, isBackgroundCheck, leaveProblem, leftGroupNote } from "@/lib/socialView";
@@ -37,6 +37,9 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
   const [members, setMembers] = useState<GroupMemberView[] | null>(null);
   const [memberNote, setMemberNote] = useState<string | null>(null);
   const [editingPicture, setEditingPicture] = useState(false);
+  // Members and both editors open from the settings dialog; coming back, focus returns to its gear.
+  const [returnToSettings, setReturnToSettings] = useState(false);
+  const fromSettings = (open: (value: boolean) => void) => () => { setReturnToSettings(true); open(true); };
   const [results, setResults] = useState<FriendResult[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -128,7 +131,7 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     return linkAnswer(await copyLink(url), url);
   };
 
-  if (editingDescription && group.isOwner && description !== undefined) return <main className={`${accountPanel} mx-auto w-full max-w-[32rem] p-5 sm:p-8`}>
+  if (editingDescription && group.isOwner && description !== undefined) return <main className={`${groupPanel} py-5 sm:p-8`}>
     <h1 className="mb-5 font-tile text-2xl font-bold">Edit description</h1>
     <GroupDescriptionEditor initial={description} onCancel={() => setEditingDescription(false)} onSave={async value => {
       const answer = await api.client.call("setGroupDescription", { groupId, description: value });
@@ -167,7 +170,7 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     }
   }} />;
 
-  if (editingPicture && group.isOwner) return <main className={`${accountPanel} mx-auto w-full max-w-[32rem] p-5 sm:p-8`}>
+  if (editingPicture && group.isOwner) return <main className={`${groupPanel} py-5 sm:p-8`}>
     <h1 className="mb-5 font-tile text-2xl font-bold">Edit group picture</h1>
     <GroupAppearanceForm initial={group} pictureOnly onCancel={() => setEditingPicture(false)} onSave={async (appearance: GroupAppearance) => {
       const answer = await api.client.call("setGroupAppearance", { groupId, emblemId: appearance.emblemId, photo: appearance.photo, accentColor: appearance.accentColor });
@@ -178,10 +181,12 @@ export function GroupFlow({ api, group, onBack, onLeft, onReload }: GroupFlowPro
     }} />
   </main>;
 
-  return <GroupPage standings={crossPunsStandingsEnabled() ? <CrossPunsStandingsPanel api={api} groupId={groupId}/> : undefined} group={{ ...group, inviteCode }} canInvite={groupInvitePermissionsEnabled() ? invitation?.canInvite === true : group.isOwner} invitationProblem={invitationProblem} results={results} problem={problem} today={api.today()} onBack={onBack} onShare={share} onCopy={copy} onLeave={leave} onEditPicture={() => setEditingPicture(true)} onMembers={() => setShowMembers(true)} onDelete={groupOwnerActionsEnabled() ? async () => {
+  // listMembers and the standings both name a member by their membership, so the roster's own row marks the viewer's standing.
+  const viewerRef = members?.find(member => member.isMe)?.memberRef;
+  return <GroupPage standings={crossPunsStandingsEnabled() ? <CrossPunsStandingsPanel api={api} groupId={groupId} viewerRef={viewerRef}/> : undefined} group={{ ...group, inviteCode }} canInvite={groupInvitePermissionsEnabled() ? invitation?.canInvite === true : group.isOwner} invitationProblem={invitationProblem} results={results} problem={problem} today={api.today()} onBack={onBack} onShare={share} onCopy={copy} onLeave={leave} onEditPicture={fromSettings(setEditingPicture)} onMembers={fromSettings(setShowMembers)} returnToSettings={returnToSettings} onDelete={groupOwnerActionsEnabled() ? async () => {
     const answer = await api.client.call("deleteGroup", { groupId });
     if (!live.current) return;
     if (answer.ok === false) return "We couldn't delete the group. Refresh it before trying again.";
     onLeft(`${name} was deleted. Personal game history was kept.`);
-  } : undefined} description={description} descriptionProblem={descriptionProblem} onEditDescription={groupDescriptionsEnabled() && description !== undefined ? () => setEditingDescription(true) : undefined} />;
+  } : undefined} description={description} descriptionProblem={descriptionProblem} onEditDescription={groupDescriptionsEnabled() && description !== undefined ? fromSettings(setEditingDescription) : undefined} />;
 }

@@ -12,6 +12,8 @@ export type Delivery = "done" | "cancelled" | "failed";
 
 export interface SocialApi {
   client: SocialClient;
+  /** Enable only after the recent-completions service exists. */
+  recentActivity?: boolean;
   /** Today's full daily, or null when there isn't one to ask about. */
   puzzleId(): Promise<string | null> | string | null;
   today(): Date;

@@ -80,6 +80,12 @@ The panel exposes All time / Last 7 / Last 30 / Last 365 days, resets paging whe
 
 SQL tests cover both inclusive edges, outside-edge exclusion, leap-year 365-day boundaries, late solves counted by publication date, invalid arguments, all-time compatibility and masked rolling rows. Combined regressions include 0009. Browser checks cover every period, shared ties, either-direction masks and account switching at 320/1440 light/dark.
 
+## Recent completions reader (0012), not released
+
+`0012_recent_completions.sql` adds social.recent_completions: one bounded read (at most 25 rows, an eight-day window) of friends' accepted official Rainbow cards by completion time, keeping current friendships, connection dates, blocks in both directions and exact-puzzle detail gates. It is in no release manifest and has not been applied anywhere.
+
+The gateway source on main already maps a recentCompletions operation to it. **Do not deploy social-gateway from main as a way to ship this reader**: until 0012 is applied the operation can only answer unavailable. The Rainbow client calls it only when VITE_RECENT_COMPLETIONS is "true", which production does not set; with the flag off, Friends reads today's results and the profile's week through listResults exactly as before. Release order, after separate approval: apply 0012, deploy the gateway, then set the client flag.
+
 ## Release review
 
 See `docs/social/FRIENDS-GROUPS-RELEASE-REVIEW.md` for current-main evidence, review findings, rollout/rollback boundaries and the hosted-access blocker. `release-patch-manifest.json` records the exact ordered patch hashes. `review-target.mjs` performs catalog-only Management API queries with read_only=true after authorized credentials are configured; it makes no request without a token and never reads player rows.

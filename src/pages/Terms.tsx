@@ -11,7 +11,6 @@ export default function Terms() {
         path="/terms"
       />
       <MinimalHeader />
-      <div className="w-full max-w-lg border-b border-border mb-6" />
 
       <main className="w-full max-w-[700px] px-4 space-y-6 text-sm leading-relaxed">
         <header>

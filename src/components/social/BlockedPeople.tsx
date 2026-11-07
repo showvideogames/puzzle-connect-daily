@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { BlockRow } from "@/social/contract";
 import { InlineConfirm } from "@/components/account/InlineConfirm";
-import { quietText } from "@/components/account/accountStyles";
+import { accountCard, quietText } from "@/components/account/accountStyles";
 import { friendChangeProblem } from "@/lib/socialView";
 import type { SocialApi } from "./socialApi";
 import { useLive } from "./useLive";
@@ -34,12 +34,12 @@ export function BlockedPeople({ api, version = 0 }: { api: SocialApi; version?: 
   if (blocked.length === 0) return null;
 
   return (
-    <section className="mt-6 border-t border-border pt-4" aria-label="Blocked">
-      <h2 className="text-base font-semibold text-foreground">Blocked</h2>
-      <ul className="mt-2 space-y-3">
+    <section className={`${accountCard} mt-2`} aria-label="Blocked">
+      <h2 className="text-lg font-extrabold text-foreground">Blocked</h2>
+      <ul className="mt-1 divide-y divide-border">
         {blocked.map((row) => (
-          <li key={row.blockRef} className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1" data-testid="blocked-person">
-            <span className="pt-2 text-base text-foreground [overflow-wrap:anywhere]">{row.name ?? "Someone"}</span>
+          <li key={row.blockRef} className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 py-1.5" data-testid="blocked-person">
+            <span className="min-w-0 pt-2.5 break-words text-base font-bold text-foreground">{row.name ?? "Someone"}</span>
             <InlineConfirm
               label="Unblock"
               question={`Unblock ${row.name ?? "this person"}? They can find you by your friend code and send requests again.`}

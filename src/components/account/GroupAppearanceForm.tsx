@@ -116,7 +116,7 @@ export function GroupAppearanceForm({ initial, onSave, onCancel, pictureOnly = f
             setProblem(null);
           }}
           className="h-12 w-full rounded-xl border border-input bg-background px-3.5 text-base text-foreground
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_46%_52%)]"
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_90%_52%)]"
         />
       </div>}
 
