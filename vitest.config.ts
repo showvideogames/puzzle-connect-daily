@@ -15,6 +15,11 @@ export default defineConfig({
       VITE_PLATFORM_DISCOVERY_URL: "https://identity.example.test/.well-known/openid-configuration",
       VITE_ACCOUNTS_ENABLED: "true",
     },
+    // Many UI tests settle through dozens of setTimeout(0) turns. On Windows a
+    // timer turn takes ~16 ms (the system clock tick) instead of ~1 ms, so some
+    // ran 5 to 8 s and overran the 5 s default; a timed-out test keeps running
+    // and breaks the tests after it. Only the time limit changes, no assertion.
+    testTimeout: 30_000,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
   },
