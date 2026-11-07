@@ -1,7 +1,7 @@
 import { useId, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
 import { canOpenResult, resultSummary, type FriendResult } from "@/lib/friendResults";
-import { quietText } from "./accountStyles";
+import { purpleText, rowMeta, rowName, sectionTitle } from "./accountStyles";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ResultDetail } from "./ResultDetail";
 
@@ -12,19 +12,21 @@ interface ResultRowProps {
   /** Shown when the row is open, and makes a row with no result openable too. */
   actions?: ReactNode;
   navigation?: boolean;
+  /** The animal picture's size; the group page uses a larger one. */
+  avatarSize?: number;
 }
 
-/** One person's result today, for Friends and for a group alike. */
-export function ResultRow({ result, open, onToggle, actions, navigation = false }: ResultRowProps) {
+/** One person's result today, for Friends and for a group alike. Name big and bold, the rest small. */
+export function ResultRow({ result, open, onToggle, actions, navigation = false, avatarSize = 48 }: ResultRowProps) {
   const panel = useId();
   const person = (
     <>
-      <ProfileAvatar animalId={result.animalId} backgroundColor={result.backgroundColor} size={56} />
+      <ProfileAvatar animalId={result.animalId} backgroundColor={result.backgroundColor} size={avatarSize} />
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-lg font-bold leading-tight text-foreground">{result.isYou ? "You" : result.nickname || result.name}</span>
-        {!result.isYou && result.favorite && <span className="block text-sm text-slate">★ Favorite</span>}
-        {!result.isYou && result.nickname && <span className="block truncate text-sm text-slate">{result.name}</span>}
-        <span className={`block text-base leading-snug ${quietText}`}>{resultSummary(result)}</span>
+        <span className={`line-clamp-2 break-words ${rowName}`}>{result.isYou ? "You" : result.nickname || result.name}</span>
+        {!result.isYou && result.favorite && <span className="block text-xs font-semibold text-slate">★ Favorite</span>}
+        {!result.isYou && result.nickname && <span className="block truncate text-xs font-medium text-slate">{result.name}</span>}
+        <span className={`block leading-snug ${rowMeta}`}>{resultSummary(result)}</span>
       </span>
     </>
   );
@@ -37,12 +39,12 @@ export function ResultRow({ result, open, onToggle, actions, navigation = false 
             aria-expanded={navigation ? undefined : open}
             aria-controls={navigation ? undefined : panel}
             onClick={onToggle}
-            className="flex min-h-[4.5rem] w-full items-center gap-3 rounded-lg py-2 hover:bg-secondary/60
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_46%_52%)]"
+            className="flex min-h-[4.5rem] w-full items-center gap-3 rounded-xl py-2 hover:bg-secondary/60
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_90%_52%)]"
           >
             {person}
-            <span className="flex shrink-0 items-center gap-0.5 text-base font-semibold text-[hsl(258_46%_42%)] dark:text-[hsl(258_80%_82%)]">
-              {navigation ? "Profile" : open ? "Hide" : "Details"}
+            <span className={`flex shrink-0 items-center gap-0.5 text-sm font-bold ${purpleText}`}>
+              {navigation ? <span className="sr-only">Profile</span> : open ? "Hide" : "Details"}
               {navigation ? <ChevronRight aria-hidden="true" className="h-5 w-5" /> : open
                 ? <ChevronUp aria-hidden="true" className="h-5 w-5" />
                 : <ChevronDown aria-hidden="true" className="h-5 w-5" />}
@@ -62,13 +64,13 @@ export function ResultRow({ result, open, onToggle, actions, navigation = false 
   );
 }
 
-/** The heading over a list of today's results. */
+/** The heading over a list of today's results, with the date small at the top right. */
 export function TodayHeading({ today }: { today: Date }) {
   const date = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(today);
   return (
-    <div className="mt-3 flex items-baseline justify-between gap-3">
-      <h2 className="font-tile text-xl font-bold text-foreground">Today</h2>
-      <p className={`text-base ${quietText}`}>{date}</p>
+    <div className="flex items-start justify-between gap-3">
+      <h2 className={sectionTitle}>Today</h2>
+      <p className="shrink-0 pt-1 text-sm leading-5 text-slate">{date}</p>
     </div>
   );
 }

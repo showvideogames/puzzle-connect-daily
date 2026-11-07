@@ -147,7 +147,7 @@ export function AddFriendScreen({ pictureSrc, onBack, onShareLink, onCopyLink, o
                 setProblem(null);
               }}
               className="mt-2 h-12 w-full rounded-xl border border-input bg-background px-3.5 text-lg tracking-wide text-foreground placeholder:text-slate
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_46%_52%)]"
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_90%_52%)]"
             />
             {problem && <p id={`${id}-problem`} role="alert" className="mt-2 text-base font-medium text-destructive">{problem}</p>}
             <button type="submit" disabled={busy} className={`${primaryAction} mt-2 h-12 w-full text-base`}>{busy ? "Looking…" : "Find friend"}</button>

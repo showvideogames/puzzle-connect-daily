@@ -252,7 +252,7 @@ describe("GroupInviteCard", () => {
   it("keeps You'll show as, and keeps Join as the primary action", () => {
     render(<GroupInviteCard invite={invite} signedIn displayName="Alex" {...handlers()} />);
     expect(screen.getByText("Alex").parentElement).toHaveTextContent("You'll show as Alex.");
-    expect(screen.getByRole("button", { name: "Join group" }).className).toContain("bg-[hsl(258_46%_52%)]");
+    expect(screen.getByRole("button", { name: "Join group" }).className).toContain("bg-[hsl(258_90%_52%)]");
   });
 
   it("asks for a Display Name instead of offering Join without one", () => {
@@ -379,19 +379,19 @@ describe("FriendsHome", () => {
     />
   );
 
-  it("puts today's results first, in plain words, with the date from the device", () => {
+  it("shows played friend activity without self or placeholder results", () => {
     render(home([friendResult({ mistakes: 0 }), friendResult({ id: "you", isYou: true, name: "Alex" })]));
-    expect(screen.getByRole("heading", { name: "Today" })).toBeInTheDocument();
-    expect(screen.getByText(new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(2026, 9, 31)))).toBeInTheDocument();
+    // With recent completions off, this card is today's results, dated.
+    expect(screen.getByRole("heading", {name:"Today"})).toBeInTheDocument();
+    expect(within(screen.getByRole("region", {name:"Today"})).getByText(new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(2026, 9, 31)))).toBeInTheDocument();
     expect(screen.getByText("Solved · 0 mistakes")).toBeInTheDocument();
-    expect(screen.getByText("Solved · 1 mistake")).toBeInTheDocument();
-    expect(screen.getByText("You")).toBeInTheDocument();
+    expect(screen.queryByText("You")).toBeNull();
   });
 
   it("does not open a row for someone who has not played", () => {
     render(home([friendResult({ id: "taylor", name: "Taylor", status: "not-played", mistakes: 0 })]));
-    expect(screen.getByText("Not played yet")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Taylor/ })).toBeNull();
+    expect(screen.getByText("No one has played today's puzzle yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Taylor/ })).toBeInTheDocument();
   });
 
   it("opens someone who has not played when there are actions, with no result panel to show", () => {
@@ -406,14 +406,14 @@ describe("FriendsHome", () => {
 
   it("keeps a locked row locked when there are actions", () => {
     render(home([friendResult({ detail: null })], { rowActions: () => <button type="button">Do something</button> }));
-    fireEvent.click(screen.getByRole("button", { name: /Sam/ }));
+    fireEvent.click(within(screen.getByRole("region", {name:"Today"})).getByRole("button", { name: /Sam/ }));
     expect(screen.getByTestId("result-locked")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Do something" })).toBeInTheDocument();
   });
 
   it("opens to a plain locked message when the details were not sent", () => {
     render(home([friendResult({ detail: null })]));
-    const row = screen.getByRole("button", { name: /Sam/ });
+    const row = within(screen.getByRole("region", {name:"Today"})).getByRole("button", { name: /Sam/ });
     expect(row).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(row);
     expect(row).toHaveAttribute("aria-expanded", "true");
@@ -423,7 +423,7 @@ describe("FriendsHome", () => {
 
   it("opens to the game's own details once they are sent", () => {
     render(home([friendResult({ detail: "🟨🟨🟨🟨\n🟩🟩🟦🟩\n💡\n🌈🌈🌈🌈" })]));
-    fireEvent.click(screen.getByRole("button", { name: /Sam/ }));
+    fireEvent.click(within(screen.getByRole("region", {name:"Today"})).getByRole("button", { name: /Sam/ }));
     expect(screen.getByLabelText("Guess 1: All yellow")).toBeInTheDocument();
     expect(screen.getByLabelText("Guess 2: green, green, blue, green")).toBeInTheDocument();
     expect(screen.getByText("Used a hint")).toBeInTheDocument();
@@ -435,31 +435,31 @@ describe("FriendsHome", () => {
     expect(screen.getByTestId("result-detail")).toHaveTextContent("Solved · 2 mistakes");
   });
 
-  it("offers Add a friend and copies the friend code", async () => {
+  it("offers Add friend and copies the friend code", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     const onAddFriend = vi.fn();
     render(home([], { onAddFriend }));
-    fireEvent.click(screen.getByRole("button", { name: "Add a friend" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add friend" }));
     expect(onAddFriend).toHaveBeenCalledTimes(1);
     expect(screen.getByText("R8T-6NZ")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy friend code" }));
     expect(writeText).toHaveBeenCalledWith("R8T-6NZ");
-    expect(await screen.findByText("Copied.")).toBeInTheDocument();
+    expect(await screen.findByText("Copied to clipboard")).toBeInTheDocument();
   });
 
   it("says so plainly when copying fails", async () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText: vi.fn().mockRejectedValue(new Error("no")) }, configurable: true });
     render(home([]));
-    fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
-    expect(await screen.findByText(/couldn't copy/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copy friend code" }));
+    expect(await screen.findByText(/Could not copy/)).toBeInTheDocument();
   });
 
   it("has Friends and Groups tabs", () => {
     const onTabChange = vi.fn();
     const { rerender } = render(home([], { onTabChange }));
-    expect(screen.getByRole("tab", { name: "Friends" })).toHaveAttribute("aria-selected", "true");
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Groups" }), { button: 0 });
+    expect(screen.getByRole("button", { name: "Home" })).toHaveAttribute("aria-current", "page");
+    fireEvent.click(screen.getByRole("button", { name: "Groups" }));
     expect(onTabChange).toHaveBeenCalledWith("groups");
     rerender(home([], { tab: "groups" }));
     expect(screen.getByText("Groups go here")).toBeInTheDocument();

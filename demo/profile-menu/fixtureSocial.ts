@@ -23,4 +23,7 @@ const social = {
   },
   signIn: async () => 'Mock preview only',
 } as unknown as AppSocial;
-export function appSocial() { return social; }
+/** The Friends preview swaps in its mock world, so the real page and header read the same fictional account. */
+let override: AppSocial | null = null;
+export function setFixtureSocial(next: AppSocial) { override = next; }
+export function appSocial() { return override ?? social; }

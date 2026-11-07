@@ -1,3 +1,5 @@
+import { FavoriteStar } from "@/components/account/FavoriteStar";
+import { RecentFriendsActivity } from "./RecentFriendsActivity";
 import { FriendWeek } from "./FriendWeek";
 import { FriendProfile } from "@/components/account/FriendProfile";
 import { FriendPreferences } from "@/components/account/FriendPreferences";
@@ -83,6 +85,9 @@ export function SocialScreens({
 }: SocialScreensProps) {
   const live = useLive();
   const loadNo = useRef(0);
+  /** setFriendPreference writes, one at a time, and the last value each friend's row was saved with. */
+  const preferenceQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const savedPreference = useRef(new Map<string, { favorite: boolean; nickname: string | null }>());
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [failed, setFailed] = useState(false);
   const [addingFriend, setAddingFriend] = useState(startAddingFriend);
@@ -93,6 +98,9 @@ export function SocialScreens({
   const [blockVersion, setBlockVersion] = useState(0);
   const [profileFriendId, setProfileFriendId] = useState<string | null>(null);
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+  /** After a Remove or Block from a profile, focus lands on the Friends heading instead of the page. */
+  const [focusHomeTitle, setFocusHomeTitle] = useState(false);
+  const homeTitleFocused = useCallback(() => setFocusHomeTitle(false), []);
 
   /** Only the newest read paints, and only while this person is still here. */
   const load = useCallback(
@@ -199,28 +207,56 @@ export function SocialScreens({
     return undefined;
   };
 
-  /** A friend's id is their friendRef. Nothing can be done to your own row. */
+  /** A friend's id is their friendRef. Each answers with a sentence when it was refused. */
+  const removeFriend = (result: FriendResult) => async () => afterChange(await api.client.call("removeFriend", { friendRef: result.id }));
+  const blockFriend = (result: FriendResult) => async () => {
+    const answer = await api.client.call("block", { ref: result.id });
+    const problem = await afterChange(answer);
+    if (answer.ok) setBlockVersion((version) => version + 1);
+    return problem;
+  };
+
+  /** Nothing can be done to your own row. */
   const friendActions = (result: FriendResult) =>
     result.isYou ? null : (
       <div>
-      {socialPreferencesEnabled() && <FriendPreferences friend={result} onSave={async preference => {
-        const answer = await api.client.call("setFriendPreference", { friendRef: result.id, ...preference });
+      <FriendActions name={result.name} onRemove={removeFriend(result)} onBlock={blockFriend(result)} />
+      </div>
+    );
+
+  /**
+   * The operation replaces the whole row, so each write waits for the one before
+   * and lays its change over the newest row known: the last one saved here, or
+   * else what was loaded. A star and a nickname saved close together can't undo
+   * each other.
+   */
+  const savePreference = (friend: FriendResult, patch: { favorite: boolean } | { nickname: string | null }) => {
+    const write = async () => {
+      const row = { ...(savedPreference.current.get(friend.id) ?? { favorite: !!friend.favorite, nickname: friend.nickname ?? null }), ...patch };
+      const answer = await api.client.call("setFriendPreference", { friendRef: friend.id, ...row });
+      if (answer.ok) savedPreference.current.set(friend.id, row);
+      return answer;
+    };
+    const written = preferenceQueue.current.then(write, write);
+    preferenceQueue.current = written.catch(() => undefined);
+    return written;
+  };
+
+  const preferences = (result:FriendResult) => socialPreferencesEnabled() && <FriendPreferences friend={result} onSave={async patch => {
+        const answer = await savePreference(result, patch);
         if (!live.current) return;
         if (answer.ok === false) return answer.outcome === "bad_name" ? "Please use a nickname of 24 characters or fewer." : "We couldn't save those preferences. Please try again.";
         await load();
-      }} />}
-      <FriendActions
-        name={result.name}
-        onRemove={async () => afterChange(await api.client.call("removeFriend", { friendRef: result.id }))}
-        onBlock={async () => {
-          const answer = await api.client.call("block", { ref: result.id });
-          const problem = await afterChange(answer);
-          if (answer.ok) setBlockVersion((version) => version + 1);
-          return problem;
-        }}
-      />
-      </div>
-    );
+      }} />;
+
+  const favoriteStar = (friend: FriendResult, size?: "title") => <FavoriteStar size={size} name={friend.nickname || friend.name} favorite={!!friend.favorite} onSave={async () => {
+    const answer = await savePreference(friend, { favorite: !friend.favorite });
+    if (!live.current) return;
+    if (!answer.ok) return "Couldn't save favorite. Try again.";
+    await load();
+  }}/>;
+  /** Left out entirely while preferences are off, so nothing offers a star that isn't there. */
+  const favoriteAction = socialPreferencesEnabled() ? (friend: FriendResult) => favoriteStar(friend) : undefined;
 
   const profileFriend = loaded.results?.find(result => !result.isYou && result.id === profileFriendId);
   const openGroup = loaded.groups?.find((group) => group.groupId === openGroupId);
@@ -241,7 +277,7 @@ export function SocialScreens({
           }}
         />
       ) : profileFriend ? (
-        <FriendProfile friend={profileFriend} viewer={loaded.results?.find(result => result.isYou)} today={api.today()} resultsAvailable={!loaded.noResults} actions={friendActions(profileFriend)} activity={api.weekPuzzles ? <FriendWeek key={profileFriend.id} api={api} friend={profileFriend} /> : undefined} onBack={() => setProfileFriendId(null)} />
+        <FriendProfile preferences={preferences(profileFriend)} favoriteAction={socialPreferencesEnabled() ? favoriteStar(profileFriend, "title") : null} friend={profileFriend} viewer={loaded.results?.find(result => result.isYou)} today={api.today()} resultsAvailable={!loaded.noResults} onRemove={removeFriend(profileFriend)} onBlock={blockFriend(profileFriend)} activity={api.recentActivity || api.weekPuzzles ? <FriendWeek key={profileFriend.id} api={api} friend={profileFriend} /> : undefined} onBack={() => setProfileFriendId(null)} onManaged={() => setFocusHomeTitle(true)} />
       ) : openGroup ? (
         <GroupFlow
           key={openGroup.groupId}
@@ -257,19 +293,26 @@ export function SocialScreens({
         />
       ) : (
         <FriendsHome
+          favoriteAction={favoriteAction}
+          displayName={displayName}
+          // With recent completions off (as in production), nothing is passed and the card shows today's results.
+          activity={!api.recentActivity ? undefined : loaded.resultsPending || loaded.noResults ? null : <RecentFriendsActivity api={api} friends={loaded.results ?? []} onOpen={friend=>setProfileFriendId(friend.id)} />}
           gameName={GAME_NAME}
           results={loaded.results ?? []}
-          resultsNotice={loaded.resultsPending ? <p role="status">Loading results…</p> : loaded.noResults ? <p role="status">Results are unavailable. <button className="underline" onClick={() => void load(false)}>Try again</button></p> : undefined}
+          resultsNotice={loaded.resultsPending ? <p role="status" className="py-2 text-sm font-medium text-slate">Loading results…</p> : loaded.noResults ? <p role="status">Results are unavailable. <button className="min-h-11 rounded-lg px-1 font-bold underline underline-offset-4" onClick={() => void load(false)}>Try again</button></p> : undefined}
           friendCode={loaded.me?.friendCode ?? ""}
           tab={tab}
           onTabChange={onTab}
           onAddFriend={() => setAddingFriend(true)}
+          groupsPreview={<MyGroups compact api={api} groups={loaded.groups ?? []} displayName={displayName} onNote={onNote} onLink={onLink} onReload={load} onOpen={setOpenGroupId} />}
           groups={<MyGroups api={api} groups={loaded.groups ?? []} displayName={displayName} onNote={onNote} onLink={onLink} onReload={load} onOpen={setOpenGroupId} />}
           today={api.today()}
           onFriendProfile={friend => setProfileFriendId(friend.id)}
           rowActions={friendActions}
           onEditProfile={() => setEditingProfile(true)}
           friendsFooter={<BlockedPeople api={api} version={blockVersion} />}
+          focusTitle={focusHomeTitle}
+          onTitleFocused={homeTitleFocused}
         />
       )}
     </WaitingRequests>

@@ -92,8 +92,15 @@ const opsCalled = (call: ReturnType<typeof makeApi>["call"]) => call.mock.calls.
 
 async function addFriend(answers: Record<string, Answer>) {
   const made = open(answers);
-  fireEvent.click(await screen.findByRole("button", { name: "Add a friend" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Add friend" }));
   return made;
+}
+
+/** Picks from the ⋯ menu on a friend's profile, and answers the question it opens. */
+async function manage(name: string, item: string | RegExp) {
+  fireEvent.keyDown(screen.getByRole("button", { name: `Manage friendship with ${name}` }), { key: "Enter", code: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: item }));
+  return screen.findByRole("alertdialog");
 }
 
 function find(code = "K7M-4PX") {
@@ -226,15 +233,19 @@ describe("an opened friend", () => {
   const withJordan = { listFriends: () => yes([friend("friend-1", "Jordan")]) };
 
   it("can be opened with no result, and each action needs a second step", async () => {
-    const { call } = open({ ...withJordan, removeFriend: () => yes() });
+    const { call } = open({ ...withJordan, removeFriend: () => yes(), block: () => yes({ blockRef: "block-1" }) });
     fireEvent.click(await screen.findByRole("button", { name: /Jordan/ }));
-    click("Remove friend");
+    expect(await manage("Jordan", "Remove friend")).toHaveTextContent("Remove Jordan from your friends?");
     expect(opsCalled(call)).not.toContain("removeFriend");
-    expect(screen.getByTestId("inline-confirm")).toHaveTextContent("Remove Jordan from your friends?");
-    expect(screen.queryByRole("dialog")).toBeNull();
     click("Cancel");
-    expect(screen.queryByTestId("inline-confirm")).toBeNull();
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
     expect(opsCalled(call)).not.toContain("removeFriend");
+    expect(await manage("Jordan", "Block Jordan")).toHaveTextContent("Block Jordan?");
+    click("Cancel");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(opsCalled(call)).not.toContain("block");
+    // The old disclosure at the bottom of the page is gone.
+    expect(screen.queryByText("Manage friendship")).toBeNull();
   });
 
   it("Remove calls removeFriend with the friendRef, then reloads", async () => {
@@ -247,28 +258,34 @@ describe("an opened friend", () => {
       },
     });
     fireEvent.click(await screen.findByRole("button", { name: /Jordan/ }));
-    click("Remove friend");
-    click("Remove");
+    const question = await manage("Jordan", "Remove friend");
+    fireEvent.click(within(question).getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(screen.queryByText("Jordan")).toBeNull());
     expect(call).toHaveBeenCalledWith("removeFriend", { friendRef: "friend-1" });
+    // Focus doesn't fall to the page: it lands on the Friends heading.
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "Friends" })).toHaveFocus());
   });
 
   it("Block calls block with the friendRef", async () => {
     const { call } = open({ ...withJordan, block: () => yes({ blockRef: "block-1" }) });
     fireEvent.click(await screen.findByRole("button", { name: /Jordan/ }));
-    click(/^Block$/);
-    expect(screen.getByTestId("inline-confirm")).toHaveTextContent("Block Jordan?");
-    fireEvent.click(within(screen.getByTestId("inline-confirm")).getByRole("button", { name: "Block" }));
+    const question = await manage("Jordan", "Block Jordan");
+    expect(question).toHaveTextContent("Block Jordan?");
+    expect(opsCalled(call)).not.toContain("block");
+    fireEvent.click(within(question).getByRole("button", { name: "Block" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("block", { ref: "friend-1" }));
   });
 
   it("a refusal stays beside the action and the friend stays", async () => {
     open({ ...withJordan, removeFriend: () => refused("not_found") });
     fireEvent.click(await screen.findByRole("button", { name: /Jordan/ }));
-    click("Remove friend");
-    click("Remove");
-    expect(await screen.findByRole("alert")).toHaveTextContent("That person isn't on your friends list any more.");
-    expect(screen.getAllByText("Jordan").length).toBeGreaterThan(0);
+    const question = await manage("Jordan", "Remove friend");
+    fireEvent.click(within(question).getByRole("button", { name: "Remove" }));
+    expect(await within(question).findByRole("alert")).toHaveTextContent("That person isn't on your friends list any more.");
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    click("Cancel");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(screen.getByRole("heading", { level: 1, name: "Jordan" })).toBeInTheDocument();
   });
 
   it("offers nothing on your own row", async () => {
@@ -282,6 +299,9 @@ describe("a group's page", () => {
   const members = () => yes([member("m1", "Alex", true), member("m2", "Jordan")]);
   const resultRow = (memberRef: string, changes: object) => ({ ...face, memberRef, isMe: false, name: "Jordan", summary: { solved: true, mistakes: 2 }, ...changes });
 
+  const openSettings = async () => fireEvent.click(await screen.findByRole("button", { name: "Group settings" }));
+  const openInvite = async () => fireEvent.click(await screen.findByRole("button", { name: "Invite" }));
+
   async function openGroup(answers: Record<string, Answer>, row: GroupRow = group()) {
     const made = open({ listMyGroups: () => yes([row]), listMembers: members, ...answers }, "groups");
     fireEvent.click(await screen.findByRole("button", { name: /Book Nerds/ }));
@@ -292,7 +312,7 @@ describe("a group's page", () => {
   it("requires an explicit owner confirmation to grant invitation permission", async () => {
     vi.stubEnv("VITE_GROUP_INVITE_PERMISSIONS", "true");
     const { call } = await openGroup({ getGroupInvitation: () => yes({ canInvite: true, inviteCode: CODE, grantedMemberRefs: [] }), setMemberInvitePermission: () => yes() });
-    await screen.findByText("Jordan");click("View members");click("Allow invitations for Jordan");click("Cancel");expect(opsCalled(call)).not.toContain("setMemberInvitePermission");
+    await openSettings();click("View members");click("Allow invitations for Jordan");click("Cancel");expect(opsCalled(call)).not.toContain("setMemberInvitePermission");
     click("Allow invitations for Jordan");click("Allow invitations");
     expect(await screen.findByRole("button", { name: "Stop invitations for Jordan" })).toBeInTheDocument();
     expect(call).toHaveBeenCalledWith("setMemberInvitePermission", { groupId: "g1", memberRef: "m2", allowed: true });
@@ -301,15 +321,16 @@ describe("a group's page", () => {
   it("allows a delegated member to share but rechecks permission before every share", async () => {
     vi.stubEnv("VITE_GROUP_INVITE_PERMISSIONS", "true");let allowed=true;
     const { share } = await openGroup({ getGroupInvitation: () => yes({ canInvite: allowed, inviteCode: allowed ? CODE : null, grantedMemberRefs: [] }) }, group({ isOwner: false, inviteCode: null }));
-    await screen.findByRole("button", { name: "Share invite link" });allowed=false;click("Share invite link");
+    await openInvite();allowed=false;click("Share invite link");
     expect(await screen.findByText("You no longer have invitation permission.")).toBeInTheDocument();expect(share).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Share invite link" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
   });
 
   it("transfers ownership only after confirmation and exits with the member-preserving outcome", async () => {
     vi.stubEnv("VITE_GROUP_OWNER_ACTIONS", "true");
     const { call, onNote } = await openGroup({ transferGroupOwnership: () => yes() });
-    await screen.findByText("Jordan"); click("View members");
+    await openSettings(); click("View members");
     expect(screen.queryByRole("button", { name: "Make Alex owner" })).toBeNull();
     click("Make Jordan owner"); click("Cancel"); expect(opsCalled(call)).not.toContain("transferGroupOwnership");
     click("Make Jordan owner"); click("Transfer ownership");
@@ -321,7 +342,7 @@ describe("a group's page", () => {
   it("confirms group deletion, keeps refused deletion visible and does not delete personal data", async () => {
     vi.stubEnv("VITE_GROUP_OWNER_ACTIONS", "true");
     const { call } = await openGroup({ deleteGroup: () => refused("not_the_creator") });
-    click("Delete group"); click("Cancel"); expect(opsCalled(call)).not.toContain("deleteGroup");
+    await openSettings(); click("Delete group"); click("Cancel"); expect(opsCalled(call)).not.toContain("deleteGroup");
     click("Delete group"); click("Delete group permanently");
     expect(await screen.findByRole("alert")).toHaveTextContent("couldn't delete");
     expect(screen.getByTestId("group-page")).toBeInTheDocument();
@@ -332,16 +353,16 @@ describe("a group's page", () => {
   it("offers neither ownership transfer nor deletion to a regular member", async () => {
     vi.stubEnv("VITE_GROUP_OWNER_ACTIONS", "true");
     await openGroup({}, group({ isOwner: false, inviteCode: null }));
-    await screen.findByText("Jordan");expect(screen.queryByRole("button", { name: "Delete group" })).toBeNull();click("View members");
+    await openSettings();expect(screen.queryByRole("button", { name: "Delete group" })).toBeNull();click("View members");
     expect(screen.queryByRole("button", { name: /Make .* owner/ })).toBeNull();
   });
 
   it("edits the description only after it loads, keeps Cancel local, and saves plain text", async () => {
     vi.stubEnv("VITE_GROUP_DESCRIPTIONS", "true");
     const { call } = await openGroup({ getGroupDescription: () => yes({ description: "Weekly puzzles" }), setGroupDescription: () => yes({ description: "New description" }) });
-    await screen.findByText("Weekly puzzles"); click("Edit description");
+    await screen.findByText("Weekly puzzles"); await openSettings(); click("Edit description");
     fireEvent.change(screen.getByLabelText("Group description"), { target: { value: "Unsaved" } }); click("Cancel");
-    expect(opsCalled(call)).not.toContain("setGroupDescription"); click("Edit description");
+    expect(opsCalled(call)).not.toContain("setGroupDescription"); await openSettings(); click("Edit description");
     expect(screen.getByLabelText("Group description")).toHaveValue("Weekly puzzles");
     fireEvent.change(screen.getByLabelText("Group description"), { target: { value: "New description" } }); click("Save description");
     expect(await screen.findByTestId("group-description")).toHaveTextContent("New description");
@@ -351,19 +372,19 @@ describe("a group's page", () => {
   it("keeps a refused description draft", async () => {
     vi.stubEnv("VITE_GROUP_DESCRIPTIONS", "true");
     await openGroup({ getGroupDescription: () => yes({ description: "Weekly puzzles" }), setGroupDescription: () => refused("not_the_creator") });
-    await screen.findByText("Weekly puzzles"); click("Edit description"); click("Save description");
+    await screen.findByText("Weekly puzzles"); await openSettings(); click("Edit description"); click("Save description");
     expect(await screen.findByRole("alert")).toHaveTextContent("couldn't save"); expect(screen.getByLabelText("Group description")).toHaveValue("Weekly puzzles");
   });
 
   it("shows descriptions as text to members without an owner editor", async () => {
     vi.stubEnv("VITE_GROUP_DESCRIPTIONS", "true");
     await openGroup({ getGroupDescription: () => yes({ description: "<script>plain text</script>" }) }, group({ isOwner: false, inviteCode: null }));
-    expect(await screen.findByTestId("group-description")).toHaveTextContent("<script>plain text</script>"); expect(screen.queryByRole("button", { name: "Edit description" })).toBeNull();
+    expect(await screen.findByTestId("group-description")).toHaveTextContent("<script>plain text</script>"); await openSettings(); expect(screen.queryByRole("button", { name: "Edit description" })).toBeNull();
   });
 
   it("shows a separate member roster and removes only after confirmation", async () => {
     const { call } = await openGroup({ removeMember: () => yes() });
-    await screen.findByText("Jordan");
+    await openSettings();
     click("View members");
     expect(screen.getByRole("heading", { name: "Members" })).toBeInTheDocument();
     expect(screen.queryByText("Not played yet")).toBeNull();
@@ -384,7 +405,7 @@ describe("a group's page", () => {
 
   it("keeps a refused removal visible without claiming success", async () => {
     await openGroup({ removeMember: () => refused("not_the_creator") });
-    await screen.findByText("Jordan");
+    await openSettings();
     click("View members");
     click("Remove Jordan");
     click("Remove member");
@@ -395,7 +416,7 @@ describe("a group's page", () => {
 
   it("lets ordinary members view the roster but offers no removal controls", async () => {
     await openGroup({}, group({ isOwner: false, inviteCode: null }));
-    await screen.findByText("Jordan");
+    await openSettings();
     click("View members");
     expect(screen.getByText("Jordan")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Remove/ })).toBeNull();
@@ -403,7 +424,7 @@ describe("a group's page", () => {
 
   it("lets an owner edit a picture through the existing appearance operation", async () => {
     const { call } = await openGroup({ setGroupAppearance: () => yes({ photoVersion: 2 }) });
-    click("Edit group picture");
+    await openSettings(); click("Edit group picture");
     expect(screen.queryByLabelText("Group name")).toBeNull();
     fireEvent.click(screen.getByRole("radio", { name: "Game night" }));
     click("Save group");
@@ -415,7 +436,7 @@ describe("a group's page", () => {
 
   it("keeps the picture draft after a refused save, and offers no editor to members", async () => {
     await openGroup({ setGroupAppearance: () => refused("not_owner") });
-    click("Edit group picture");
+    await openSettings(); click("Edit group picture");
     click("Save group");
     expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't save that");
     expect(screen.getByTestId("group-form")).toBeInTheDocument();
@@ -423,12 +444,13 @@ describe("a group's page", () => {
 
   it("doesn't offer picture editing to a non-owner", async () => {
     await openGroup({}, group({ isOwner: false, inviteCode: null }));
+    await openSettings();
     expect(screen.queryByRole("button", { name: "Edit group picture" })).toBeNull();
   });
 
   it("shows the group, its members, and asks for today's results for this group", async () => {
     const { call } = await openGroup({});
-    await screen.findByText("Jordan");
+    await screen.findByRole("button", {name:"Group settings"});
     expect(screen.getByRole("heading", { level: 1, name: "Book Nerds" })).toBeInTheDocument();
     expect(screen.getByText("2 members")).toBeInTheDocument();
     expect(screen.getByTestId("group-page").querySelector("img")).toHaveAttribute("src", "/shared-assets/groups/book.webp");
@@ -459,8 +481,7 @@ describe("a group's page", () => {
 
   it("someone who hasn't played can't be opened", async () => {
     await openGroup({});
-    await screen.findByText("Jordan");
-    expect(screen.getAllByText("Not played yet")).toHaveLength(2);
+    expect(await screen.findByText("No recent activity")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Jordan/ })).toBeNull();
   });
 
@@ -471,7 +492,7 @@ describe("a group's page", () => {
 
   it("the owner's Share uses the real code", async () => {
     const { share } = await openGroup({});
-    click("Share invite link");
+    await openInvite(); click("Share invite link");
     expect(await screen.findByText("Done.")).toBeInTheDocument();
     expect(share).toHaveBeenCalledWith(LINK);
   });
@@ -480,7 +501,7 @@ describe("a group's page", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     await openGroup({});
-    click("Copy link");
+    await openInvite(); click("Copy link");
     expect(await screen.findByText("Done.")).toBeInTheDocument();
     expect(writeText).toHaveBeenCalledWith(LINK);
   });
@@ -491,15 +512,17 @@ describe("a group's page", () => {
     ["a member sent a code by mistake", group({ isOwner: false })],
   ])("has no Share or Copy for %s", async (_who, row) => {
     await openGroup({}, row);
+    expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Share invite link" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Copy link" })).toBeNull();
   });
 
   it("Leave takes a second step, calls leaveGroup, and goes back with a note", async () => {
     const { call, onNote } = await openGroup({ leaveGroup: () => yes({ closed: false }) });
-    click("Leave group");
+    await openSettings(); click("Leave group");
     expect(opsCalled(call)).not.toContain("leaveGroup");
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.getByRole("dialog", { name: "Group settings" })).toContainElement(screen.getByTestId("inline-confirm"));
     expect(screen.getByTestId("inline-confirm")).toHaveTextContent("Leave Book Nerds?");
     click("Leave");
     await waitFor(() => expect(screen.queryByTestId("group-page")).toBeNull());
@@ -509,7 +532,7 @@ describe("a group's page", () => {
 
   it("a refused leave stays on the page and says why", async () => {
     const { onNote } = await openGroup({ leaveGroup: () => refused("unavailable") });
-    click("Leave group");
+    await openSettings(); click("Leave group");
     click("Leave");
     expect(await screen.findByRole("alert")).toHaveTextContent("Friends and Groups aren't available right now.");
     expect(screen.getByTestId("group-page")).toBeInTheDocument();
@@ -689,10 +712,11 @@ describe("Blocked", () => {
     });
 
     fireEvent.click(await screen.findByRole("button", { name: /^Sam/ }));
-    click("Block");
-    fireEvent.click(within(screen.getByTestId("inline-confirm")).getByRole("button", { name: "Block" }));
+    const question = await manage("Sam", "Block Sam");
+    fireEvent.click(within(question).getByRole("button", { name: "Block" }));
 
     expect(await unblockOf("Sam")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "Friends" })).toHaveFocus());
   });
 });
 
@@ -703,7 +727,7 @@ it('shows the groups tab during slow result loading and keeps failure explicit',
  open({listResults:()=>new Promise(resolve=>{finish=resolve;})},'groups');
  await screen.findByTestId('friends-home');
  expect(screen.queryByText('waiting')).toBeNull();
- fireEvent.mouseDown(screen.getByRole('tab',{name:'Friends'}));
+ fireEvent.click(screen.getByRole('button',{name:'Home'}));
  await screen.findByText('Loading results…');
  finish(refused('unavailable'));
  await screen.findByText(/Results are unavailable/);expect(screen.queryByText('Not played yet')).toBeNull();

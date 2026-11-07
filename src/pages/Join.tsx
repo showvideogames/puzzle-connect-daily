@@ -12,8 +12,7 @@ export default function Join() {
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       <SEO title="You're invited — Rainbow Categories" description="An invitation to Rainbow Categories." path="/join" noIndex />
       <MinimalHeader />
-      <div className="w-full max-w-lg border-b border-border mb-4" />
-      <div className="w-full px-3">
+      <div className="w-full max-w-2xl px-3">
         <SocialPage social={appSocial()} code={cleanInviteCode(code) ?? code} />
       </div>
     </div>

@@ -287,6 +287,14 @@ export type MemberResultRow = ResultRowFields & { memberRef: string };
 
 export type ResultRow = FriendResultRow | MemberResultRow;
 
+export interface RecentCompletion {
+  puzzleId: string;
+  completedAt: string;
+  puzzleDate: string | null;
+  puzzleTitle: string | null;
+  result: FriendResultRow;
+}
+
 /** One entry per operation in section 5 of the contract, except recordCompletion. List operations answer with an array of rows. */
 export interface Operations {
   crossPunsStandings: { args: { groupId: string; offset: number; days?: 7 | 30 | 365; through?: string }; data: {rows: import('./crosspunsStandingsView').CrossPunsStandingView[]; total: number} };
@@ -333,6 +341,7 @@ export interface Operations {
   replaceInvite: { args: { groupId: string }; data: { inviteCode: string } };
   /** Without a groupId, the caller's friends plus their own row. Only people with a result get a row. */
   listResults: { args: { gameId: GameId; puzzleId: string; groupId?: string }; data: ResultRow[] };
+  recentCompletions: { args: { from: string; until: string; friendRef?: string }; data: { rows: RecentCompletion[]; hasMore: boolean } };
   deleteMySocialData: { args: NoArgs; data: NoData };
 }
 
