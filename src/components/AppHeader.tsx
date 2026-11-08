@@ -1,4 +1,4 @@
-import { Archive, BarChart3, Settings } from "lucide-react";
+import { BarChart3, Calendar, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { User as AuthUser } from "@supabase/supabase-js";
 import { PlayerAuth } from "./PlayerAuth";
@@ -19,17 +19,21 @@ interface AppHeaderProps {
 
 /**
  * The Rainbow app header for the secondary pages: menu and brand on the left;
- * stats, archive, profile and settings on the right, in the header concept's
- * order. How to Play lives in the menu now, so there is no book icon.
+ * stats, archive, settings and the profile picture on the right, with the
+ * profile last at the far edge (the owner's later choice over the first
+ * concept). Archive is the plain calendar the Daily header already uses. How
+ * to Play lives in the menu now, so there is no book icon.
  *
- * Fit: at 320px the card's inside is about 282px, and six 44px targets with
- * their gaps take about 274px, so nothing scrolls sideways. The one-line
+ * Fit: six 44px targets plus gaps need about 278px. A 320px phone gives the
+ * card about 282px inside, but a narrow desktop window loses ~15px to its
+ * scrollbar, so below 360px the gaps and card padding tighten (saving 14px)
+ * while every target stays 44px. The one-line
  * wordmark (8:1) only appears from md up; below that the square icon stands in.
  */
 export function AppHeader({ user, onSignOut, onStats, onSettings, onFeedback }: AppHeaderProps) {
   return (
     <header className="w-full max-w-2xl mx-auto px-3 mb-4" data-testid="app-header">
-      <div className="flex h-14 md:h-16 items-center gap-1 rounded-2xl border border-border bg-card px-1.5 sm:px-2 md:px-3 shadow-sm">
+      <div className="flex h-14 md:h-16 items-center gap-1 max-[359px]:gap-0.5 rounded-2xl border border-border bg-card px-1.5 max-[359px]:px-1 sm:px-2 md:px-3 shadow-sm">
         <AppMenuDrawer onFeedback={onFeedback} />
         <Link
           to="/"
@@ -45,19 +49,19 @@ export function AppHeader({ user, onSignOut, onStats, onSettings, onFeedback }: 
           <img src={todaysLogo()} alt="" aria-hidden="true" className="hidden md:block h-[34px] w-auto" data-testid="brand-wordmark" />
         </Link>
 
-        <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 max-[359px]:gap-0 sm:gap-1.5">
           <button type="button" onClick={onStats} className={headerIconButton} aria-label="My stats">
             <BarChart3 aria-hidden="true" className={headerGlyph} strokeWidth={HEADER_STROKE} />
           </button>
           <Link to="/archive" className={headerIconButton} aria-label="Puzzle archive">
-            <Archive aria-hidden="true" className={headerGlyph} strokeWidth={HEADER_STROKE} />
+            <Calendar aria-hidden="true" className={headerGlyph} strokeWidth={HEADER_STROKE} />
           </Link>
-          <div className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center empty:hidden" data-testid="header-profile">
-            <PlayerAuth user={user} onSignOut={onSignOut} profileMenu />
-          </div>
           <button type="button" onClick={onSettings} className={headerIconButton} aria-label="Settings">
             <Settings aria-hidden="true" className={headerGlyph} strokeWidth={HEADER_STROKE} />
           </button>
+          <div className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center empty:hidden" data-testid="header-profile">
+            <PlayerAuth user={user} onSignOut={onSignOut} profileMenu />
+          </div>
         </div>
       </div>
     </header>

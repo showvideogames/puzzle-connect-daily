@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
-import { Archive, CircleHelp, Grid2x2, Grid3x3, Menu, MessageSquareText, SquarePen, UsersRound, X } from "lucide-react";
+import { Calendar, CircleHelp, Grid2x2, Grid3x3, Menu, MessageSquareText, SquarePen, UsersRound, X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { socialBetaOn } from "@/components/social/socialFlag";
 
@@ -21,8 +21,8 @@ interface Destination {
 const DESTINATIONS: Destination[] = [
   { to: "/", label: "Today's puzzle", icon: Grid3x3 },
   { to: "/mini", label: "Rainbow Mini", icon: Grid2x2 },
-  { to: "/archive", label: "Puzzle archive", icon: Archive },
-  { to: "/mini/archive", label: "Mini archive", icon: Archive },
+  { to: "/archive", label: "Puzzle archive", icon: Calendar },
+  { to: "/mini/archive", label: "Mini archive", icon: Calendar },
   { to: "/create", label: "Create a puzzle", icon: SquarePen },
   { to: "/how-to-play", label: "How to play", icon: CircleHelp },
 ];

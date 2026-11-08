@@ -66,15 +66,19 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("app header bar", () => {
-  it("runs menu, brand, then stats, archive, profile and settings, with no book icon", async () => {
+  it("runs menu, brand, then stats, archive, settings and the profile last, with no book icon", async () => {
     renderHeader();
     // The profile menu is a lazy chunk; a loaded machine can take over a second to bring it in.
     await screen.findByRole("button", { name: "Profile menu, 1 pending notification" }, { timeout: 15000 });
     const names = Array.from(header().querySelectorAll("a, button")).map((el) => el.getAttribute("aria-label"));
-    expect(names).toEqual(["Menu", "Home", "My stats", "Puzzle archive", "Profile menu, 1 pending notification", "Settings"]);
+    expect(names).toEqual(["Menu", "Home", "My stats", "Puzzle archive", "Settings", "Profile menu, 1 pending notification"]);
     expect(within(header()).queryByRole("link", { name: /how to play/i })).toBeNull();
     expect(header().querySelector(".lucide-book-open")).toBeNull();
     expect(within(header()).getByRole("link", { name: "Puzzle archive" })).toHaveAttribute("href", "/archive");
+    // Archive is the plain calendar: no archive box, no page-turn corner.
+    const archive = within(header()).getByRole("link", { name: "Puzzle archive" });
+    expect(archive.querySelector(".lucide-calendar")).not.toBeNull();
+    expect(header().querySelector(".lucide-archive, .lucide-calendar-fold")).toBeNull();
   });
 
   it("keeps every control a 44px target with a 24px glyph", () => {
