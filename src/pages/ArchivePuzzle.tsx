@@ -184,7 +184,6 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
         user={user ?? null}
         onSignOut={() => signOutOfRainbow()}
         simplifiedIcons
-        showCreateLink={false}
         // Matches the board's own wideBoard width below (840px) instead of
         // the narrower 512px default — simplifiedIcons alone only controls
         // which icons show, not how wide the header is; wideHeader is the

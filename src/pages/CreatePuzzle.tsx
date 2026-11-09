@@ -1,8 +1,20 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Link2, Play, Copy, Check } from "lucide-react";
 import { SEO } from "@/components/SEO";
 import { SiteFooter } from "@/components/SiteFooter";
+import { MinimalHeader } from "@/components/MinimalHeader";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,6 +71,12 @@ export default function CreatePuzzle() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ shareId: string; shortCode: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // The header leads away from a puzzle that isn't saved anywhere yet: ask
+  // first while there is something to lose, and hold on while it is being created.
+  const unsaved = builder.isDirty || puzzleTitle.trim() !== "" || designerName.trim() !== "" || visibility !== "public";
+  const guard = useLeaveGuard(!result && (unsaved || creating));
+  const leaving = useRef(false);
 
   const normalizedGroups = useMemo(
     () =>
@@ -181,6 +199,38 @@ export default function CreatePuzzle() {
     }
   }
 
+  const leavePrompt = (
+    <AlertDialog open={guard.asking} onOpenChange={(open) => { if (!open) guard.stay(); }}>
+      <AlertDialogContent
+        onCloseAutoFocus={(event) => {
+          if (leaving.current) return;
+          // Back to what led away, or to the menu button when that was inside
+          // the menu drawer or a dialog that has closed since.
+          event.preventDefault();
+          const back = guard.from.current;
+          (back?.isConnected ? back : document.querySelector<HTMLElement>('[data-testid="app-header"] button[aria-label="Menu"]'))?.focus();
+        }}
+      >
+        <AlertDialogHeader>
+          <AlertDialogTitle>{creating ? "Still creating your puzzle" : "Leave without creating your puzzle?"}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {creating
+              ? "Stay here until it's created, and you'll get its link to share."
+              : "What you've entered isn't saved anywhere yet, so it will be lost."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="h-11">{creating ? "Stay" : "Keep editing"}</AlertDialogCancel>
+          {!creating && (
+            <AlertDialogAction className="h-11" onClick={() => { leaving.current = true; guard.leave(); }}>
+              Discard and leave
+            </AlertDialogAction>
+          )}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
   if (result) {
     return (
       <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
@@ -190,6 +240,7 @@ export default function CreatePuzzle() {
           path="/create"
           noIndex
         />
+        <MinimalHeader />
         <div className="w-full max-w-md px-4 mt-16 text-center space-y-4">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
             <Check className="w-7 h-7 text-primary" />
@@ -220,19 +271,22 @@ export default function CreatePuzzle() {
   }
 
   return (
-    <div className="min-h-screen pb-16">
+    <div className="min-h-screen pt-2 pb-16">
       <SEO
         title="Create a Puzzle — Rainbow Connect"
         description="Build and share your own Rainbow Connect puzzle."
         path="/create"
         noIndex
       />
-      <header className="border-b border-border px-4 py-3 flex items-center justify-between max-w-5xl mx-auto">
+      <MinimalHeader />
+      {leavePrompt}
+      {/* The page's title bar, under the site header (a div: the page has one banner, the header). */}
+      <div className="border-b border-border px-4 py-3 flex items-center justify-between max-w-5xl mx-auto">
         <div className="flex items-center gap-2">
           <Link2 className="w-5 h-5 text-primary" />
           <h1 className="text-lg font-bold">Create a Puzzle</h1>
         </div>
-      </header>
+      </div>
 
       <main className="max-w-5xl mx-auto px-4 mt-6">
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-8 lg:items-start">

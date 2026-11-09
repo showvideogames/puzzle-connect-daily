@@ -178,12 +178,12 @@ describe("shared header Create action", () => {
       </MemoryRouter>
     );
 
-  it("renders a labelled link to /create (desktop label only; hidden on phones by CSS)", () => {
+  it("reaches /create from the header's menu (the site-wide header has no Create button of its own)", async () => {
     renderShared({ onStatsClick: () => {}, onSettingsClick: () => {}, showHint: true, onHintClick: () => {} });
-    const create = screen.getByRole("link", { name: "Create a puzzle" });
+    expect(within(screen.getByTestId("app-header")).queryByRole("link", { name: "Create a puzzle" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    const create = within(await screen.findByRole("dialog", { name: "Menu" })).getByRole("link", { name: "Create a puzzle" });
     expect(create).toHaveAttribute("href", "/create");
-    expect(create).toHaveTextContent("+ Create a Puzzle");
-    expect(create.className).toMatch(/bg-primary/); // the Ink primary treatment
   });
 
   it("leaves Help/Stats/Settings/logo intact", () => {

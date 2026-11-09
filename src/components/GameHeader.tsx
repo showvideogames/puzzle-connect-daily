@@ -1,203 +1,89 @@
-import { BarChart3, Lightbulb, BookOpen, Archive, Calendar, Settings } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useRef, useState } from "react";
 import { socialBetaOn } from "@/components/social/socialFlag";
-import { PlayerAuth } from "./PlayerAuth";
-import { todaysLogo, isJuly4 } from "@/lib/themes";
+import { AppHeader } from "./AppHeader";
+import { FeedbackModal } from "./FeedbackModal";
 import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 import type { User as AuthUser } from "@supabase/supabase-js";
-
-const STACKED_LOGO = "/rainbow-categories-logo-stacked.webp";
 
 interface GameHeaderProps {
   /** Omit on pages with no stats to show, and the stats icon is not rendered. */
   onStatsClick?: () => void;
+  /**
+   * Kept for the pages that pass it. How to Play has no header icon: it is in
+   * Settings' menu (showMenuLinks) and in the header's menu drawer.
+   */
   onHowToPlayClick?: () => void;
+  /** Omit on pages with no settings to open, and the settings icon is not rendered. */
   onSettingsClick?: () => void;
   onHintClick?: () => void;
   showHint?: boolean;
   user: AuthUser | null;
   onSignOut: () => void;
-  // "minimal" uses hint, stats and settings at the board-matching width.
-  // Signed-in players also get their profile menu when social is enabled.
-  // How to Play, Archive and guest sign-in remain reachable in Settings.
+  /** "minimal" is the Daily's header: the board-matching width. */
   variant?: "default" | "minimal";
-  // Hides the same How to Play / Archive / Account icons as "minimal" (down
-  // to hint/stats/settings), but keeps the "default" variant's width —
-  // for pages like ArchivePuzzle that want Daily's simplified icon set
-  // without the wider homepage board layout. Pair with SettingsModal's
-  // showMenuLinks so those items are still reachable from Settings.
+  /** Kept for the pages that pass it; every game page now has the same icon set. */
   simplifiedIcons?: boolean;
-  // Widens the header to the same max-w-[840px] the "minimal" variant uses
-  // — WIDTH only, independent of icon set. Deliberately separate from
-  // `variant`: ArchivePuzzle wants the wider, board-matching header but
-  // NOT `variant="minimal"`'s own Calendar/Archive icon, which would
-  // duplicate the page's own "← Archive" nav button just below. Pair with
-  // simplifiedIcons there to widen without adding that icon.
+  /** The board-matching 840px width, for pages whose board is that wide. */
   wideHeader?: boolean;
   /**
    * Which game this header belongs to. Its only effect is WHERE the calendar
-   * icon and the Settings menu's archive link point — a header on a Mini page
-   * must lead to the Mini archive, not the Full one.
-   *
-   * Defaults to Full, so every existing call site is unchanged. Nothing about
-   * the layout, icon count, sizing or tap targets varies by format: this adds
-   * no control and removes none.
+   * icon points — a header on a Mini page must lead to the Mini archive, not
+   * the Full one. Defaults to Full.
    */
   format?: PuzzleFormat;
-  /** The desktop "+ Create a Puzzle" pill. Off where the page's menu carries Create instead. */
-  showCreateLink?: boolean;
 }
 
+/**
+ * The game pages' header: the same AppHeader bar as every other page, with the
+ * game's own extras. A hint button when a puzzle is in play, "Settings and
+ * menu" (the game pages' Settings also carries their menu links), and the
+ * profile picture only for a signed-in player while Friends and Groups is on,
+ * as before — a signed-out player gets no sign-in button here; Settings has it.
+ * The page keeps its own stats, settings and help dialogs.
+ */
 export function GameHeader({
   onStatsClick,
-  onHowToPlayClick,
   onSettingsClick,
   onHintClick,
   showHint = false,
   user,
   onSignOut,
   variant = "default",
-  simplifiedIcons = false,
   wideHeader = false,
   format = FULL_FORMAT,
-  showCreateLink = true,
 }: GameHeaderProps) {
-  const isMinimal = variant === "minimal";
-  const hideExtraIcons = isMinimal || simplifiedIcons;
-  const isWide = isMinimal || wideHeader;
-  // The 3/4-icon case (Daily's "minimal" header and ArchivePuzzle's/
-  // Archive's simplifiedIcons) is the only one any page actually uses today
-  // — the full (up to 5-6 icon) default variant isn't used anywhere (the
-  // former last consumer, a standalone FreePuzzle page, was consolidated
-  // into ArchivePuzzle/simplifiedIcons). A real 44x44px tap target with a
-  // visibly larger, bolder 30px glyph, per the "obviously clickable" polish
-  // request — a fixed size at every breakpoint, since the touch-target
-  // minimum matters most on the narrow phones that already fit it fine (see
-  // the responsive logo sizing this pairs with, below). The default
-  // variant's own tighter, breakpoint-scaled sizing is untouched in case a
-  // future page needs the full icon set.
-  const iconButtonClass = hideExtraIcons
-    ? "w-11 h-11 flex items-center justify-center shrink-0 rounded-full text-slate hover:bg-secondary hover:text-foreground active:scale-95 active:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-    : "p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95";
-  // Phones get a 24px glyph inside the 44px target so the logo can be the
-  // dominant element; sm+ keeps the larger 30px glyph.
-  const iconGlyphClass = hideExtraIcons ? "w-6 h-6 sm:w-[30px] sm:h-[30px]" : "w-4 h-4 sm:w-5 sm:h-5 text-slate";
-  const iconStrokeWidth = hideExtraIcons ? 2.5 : undefined;
-  return (
-    <header className={`flex items-center w-full mx-auto py-1.5 md:py-3 gap-0.5 sm:gap-2 ${isWide ? "max-w-[840px] px-2 sm:px-3 md:px-0" : "max-w-lg px-1.5 sm:px-2"}`}>
-      <Link to="/" className="active:scale-95 transition-transform shrink-0" aria-label="Home">
-        {isJuly4() ? (
-          // Holiday override applies to both sizes — there's no stacked
-          // variant of the flag logo, so it isn't part of the mobile/desktop
-          // swap below; this one <img> just keeps today's existing behavior.
-          <img src={todaysLogo()} alt="Rainbow Categories" className="h-[clamp(11px,3.7vw,40px)] min-[360px]:h-[clamp(11px,4.3vw,40px)] w-auto" />
-        ) : (
-          <>
-            {/* Logo sizing. The one-line wordmark is ~8:1, so at any
-                legible height it is far wider than a phone header can spare
-                (3-4 44px tap targets plus the Create pill leave ~100px at
-                320px). Below md the header therefore uses the compact stacked
-                wordmark (~2.5:1) at 32px tall (about 77px wide), which fits at
-                every width down to 320px while staying the dominant element.
-                md-lg uses the one-line wordmark at 36px; lg+ keeps the larger
-                stacked wordmark. Aspect ratio is always preserved (w-auto).
-                Phones use a 104px-wide stacked mark and tighter vertical
-                padding (py-1.5) so the board, feedback and controls fit above
-                the fold; the 44px icon tap targets set the header's height. */}
-            <img
-              src={STACKED_LOGO}
-              alt="Rainbow Categories"
-              className="block md:hidden lg:block w-[104px] max-w-none shrink-0 h-auto lg:w-auto lg:h-14"
-            />
-            <img
-              src={todaysLogo()}
-              alt="Rainbow Categories"
-              className="hidden md:block lg:hidden h-9 w-auto"
-            />
-          </>
-        )}
-      </Link>
+  // The menu drawer's Give feedback. Not every game page has a feedback dialog
+  // of its own, so the header brings one, and gives focus back to whatever
+  // opened it (the hamburger) when it closes.
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const opener = useRef<HTMLElement | null>(null);
+  const openFeedback = () => {
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setFeedbackOpen(true);
+  };
+  const closeFeedback = () => {
+    setFeedbackOpen(false);
+    const back = opener.current;
+    opener.current = null;
+    if (back) requestAnimationFrame(() => { if (back.isConnected) back.focus(); });
+  };
 
-      <div className={`ml-auto flex items-center shrink-0 ${hideExtraIcons ? "gap-1 sm:gap-1.5" : "gap-0 sm:gap-1"}`}>
-        {/* Every header tap target stays 44x44. Daily's 4-icon header cannot fit
-            that plus the logo below ~430px, so there the Calendar icon is
-            hidden (Archive stays one tap away in Settings > Menu). */}
-        {/* Desktop-only (sm+, 640px): phones drop the pill so the logo and the
-            three utility icons have room; Create stays reachable from the
-            page-level "Create Your Own" CTA and Settings > Menu. Prominent but
-            compact: the Ink primary-button colors, a real link. */}
-        {showCreateLink && <Link
-          to="/create"
-          aria-label="Create a puzzle"
-          className="hidden sm:inline-flex items-center justify-center shrink-0 whitespace-nowrap h-9 px-3.5 mr-1
-            rounded-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition
-            text-sm font-bold
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          + Create a Puzzle
-        </Link>}
-        {showHint && (
-          <button
-            onClick={onHintClick}
-            className={iconButtonClass}
-            aria-label="Get a hint"
-          >
-            <Lightbulb className={iconGlyphClass} strokeWidth={iconStrokeWidth} />
-          </button>
-        )}
-        {onStatsClick && (
-          <button
-            onClick={onStatsClick}
-            className={iconButtonClass}
-            aria-label="My stats"
-          >
-            <BarChart3 className={iconGlyphClass} strokeWidth={iconStrokeWidth} />
-          </button>
-        )}
-        {/* Daily-homepage-only: the "minimal" variant's own dedicated
-            Archive icon (a calendar, not the box-shaped Archive icon used
-            below on the default variant) — Archive/ArchivePuzzle already
-            have their own in-page Archive navigation, so this is scoped to
-            isMinimal specifically rather than the shared hideExtraIcons
-            flag, to avoid a redundant/self-linking icon on those pages. */}
-        {isMinimal && (
-          <Link
-            to={format.archivePath}
-            className={`${iconButtonClass} max-[429px]:hidden`}
-            aria-label={format.id === "full" ? "Puzzle archive" : `${format.name} puzzle archive`}
-          >
-            <Calendar className={iconGlyphClass} strokeWidth={iconStrokeWidth} />
-          </Link>
-        )}
-        {!hideExtraIcons && (
-          <button
-            onClick={onHowToPlayClick}
-            className="p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95"
-            aria-label="How to play"
-          >
-            <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
-          </button>
-        )}
-        {!hideExtraIcons && (
-          <Link
-            to={format.archivePath}
-            className="p-1 sm:p-2.5 rounded-full hover:bg-secondary transition-colors active:scale-95"
-            aria-label={format.id === "full" ? "Puzzle archive" : `${format.name} puzzle archive`}
-          >
-            <Archive className="w-4 h-4 sm:w-5 sm:h-5 text-slate" />
-          </Link>
-        )}
-        {onSettingsClick && (
-          <button
-            onClick={onSettingsClick}
-            className={iconButtonClass}
-            aria-label={hideExtraIcons ? "Settings and menu" : "Settings"}
-          >
-            <Settings className={iconGlyphClass} strokeWidth={iconStrokeWidth} />
-          </button>
-        )}
-        {(!hideExtraIcons || (user && socialBetaOn())) && <PlayerAuth user={user} onSignOut={onSignOut} profileMenu />}
-      </div>
-    </header>
+  return (
+    <>
+      <AppHeader
+        user={user}
+        onSignOut={onSignOut}
+        onStats={onStatsClick}
+        onSettings={onSettingsClick}
+        onFeedback={openFeedback}
+        onHint={showHint ? onHintClick ?? (() => {}) : undefined}
+        archivePath={format.archivePath}
+        archiveLabel={format.id === "full" ? "Puzzle archive" : `${format.name} puzzle archive`}
+        settingsLabel="Settings and menu"
+        showProfile={!!user && socialBetaOn()}
+        game={variant === "minimal" || wideHeader}
+      />
+      <FeedbackModal open={feedbackOpen} onClose={closeFeedback} user={user} />
+    </>
   );
 }
