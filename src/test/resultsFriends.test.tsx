@@ -926,32 +926,103 @@ describe("Friends & Groups from the profile editor", () => {
     expect(nameField()).toHaveValue("Alexa");
   });
 
-  it("lets a save that is under way finish, whether the player discards or the save lands first", async () => {
-    let finish!: () => void;
-    stubSocial(SIGNED_IN, { setProfile: () => new Promise(resolve => { finish = () => resolve(yes({})); }) });
-    render(page());
-    await screen.findByTestId("friends-home");
-    await openEditor();
-    fireEvent.change(nameField(), { target: { value: "Alexa" } });
-    await act(async () => fireEvent.click(screen.getByRole("button",{name:"Save changes"})));
-    await go("Friends & Groups");
-    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button",{name:"Discard changes"}));
-    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
-    await act(async () => finish());
-    expect(await screen.findByText("Profile saved.")).toBeInTheDocument();
-    expect(screen.getByTestId("friends-home")).toBeInTheDocument();
+  describe("while a save is under way", () => {
+    // Each save waits until the test answers it.
+    let answer!: (result: unknown) => void;
+    const pendingSaves = () => stubSocial(SIGNED_IN, { setProfile: () => new Promise(resolve => { answer = resolve; }) });
+    const stillSaving = () => screen.queryByRole("alertdialog",{name:"Still saving your profile"});
+    const saveAndAsk = async (value: string) => {
+      fireEvent.change(nameField(), { target: { value } });
+      await act(async () => fireEvent.click(screen.getByRole("button",{name:"Save changes"})));
+      expect(screen.getByRole("button",{name:"Saving…"})).toBeInTheDocument();
+      await go("Friends & Groups");
+      return screen.findByRole("alertdialog",{name:"Still saving your profile"});
+    };
 
-    // The save lands while the question is open: the editor closes and the question goes with it.
-    await openEditor();
-    fireEvent.change(nameField(), { target: { value: "Alexandra" } });
-    await act(async () => fireEvent.click(screen.getByRole("button",{name:"Save changes"})));
-    await go("Friends & Groups");
-    await screen.findByRole("alertdialog");
-    await act(async () => finish());
-    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
-    await waitFor(() => expect(prompt()).toBeNull());
-    await openEditor();
-    expect(prompt()).toBeNull();
+    it("says the save is still going and offers no discard; Stay waits in the editor until it lands", async () => {
+      const { call } = pendingSaves();
+      render(page());
+      await screen.findByTestId("friends-home");
+      await openEditor();
+      const asking = await saveAndAsk("Alexa");
+      expect(asking).toHaveTextContent("Your changes are being saved. Stay here, or go to Friends once they're saved.");
+      expect(within(asking).queryByRole("button",{name:"Discard changes"})).toBeNull();
+      expect(within(asking).getByRole("button",{name:"Go when saved"})).toBeInTheDocument();
+      expect(prompt()).toBeNull();
+
+      fireEvent.click(within(asking).getByRole("button",{name:"Stay"}));
+      await waitFor(() => expect(stillSaving()).toBeNull());
+      expect(nameField()).toHaveValue("Alexa");
+      await waitFor(() => expect(nameField()).toHaveFocus());
+      await act(async () => answer(yes({})));
+      expect(await screen.findByText("Profile saved.")).toBeInTheDocument();
+      expect(screen.getByTestId("friends-home")).toBeInTheDocument();
+
+      // The save lands while the question is open: the editor closes and the question goes with it.
+      await openEditor();
+      await saveAndAsk("Alexandra");
+      await act(async () => answer(yes({})));
+      expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+      await waitFor(() => expect(stillSaving()).toBeNull());
+      await openEditor();
+      expect(stillSaving()).toBeNull(); expect(prompt()).toBeNull();
+      expect(call.mock.calls.filter(([op]) => op === "setProfile").map(([, input]) => (input as { displayName: string }).displayName)).toEqual(["Alexa","Alexandra"]);
+    });
+
+    it("Go when saved keeps the editor until the save lands, then goes to the Friends home", async () => {
+      pendingSaves();
+      render(page());
+      await screen.findByTestId("friends-home");
+      await openEditor();
+      const asking = await saveAndAsk("Alexa");
+      fireEvent.click(within(asking).getByRole("button",{name:"Go when saved"}));
+      await waitFor(() => expect(stillSaving()).toBeNull());
+      expect(screen.getByRole("heading",{name:"Edit your profile"})).toBeInTheDocument();
+      expect(nameField()).toHaveValue("Alexa");
+      await waitFor(() => expect(nameField()).toHaveFocus());
+      await act(async () => answer(yes({})));
+      expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+      expect(screen.getByText("Profile saved.")).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole("heading",{level:1,name:"Friends"})).toHaveFocus());
+    });
+
+    it("keeps the changes when the save fails: back to the form after Stay, a plain discard question after Go when saved", async () => {
+      const { call } = pendingSaves();
+      render(page());
+      await screen.findByTestId("friends-home");
+      await openEditor();
+
+      // Fails with the question still open: it closes, and the changes and the error stay in the form.
+      await saveAndAsk("Alexa");
+      await act(async () => answer(refused("unavailable")));
+      await waitFor(() => expect(stillSaving()).toBeNull());
+      expect(prompt()).toBeNull();
+      expect(screen.getByText("We couldn't save that. Please try again.")).toBeInTheDocument();
+      expect(nameField()).toHaveValue("Alexa");
+      await waitFor(() => expect(nameField()).toHaveFocus());
+
+      // Now nothing is on its way, so Friends & Groups asks to discard.
+      await go("Friends & Groups");
+      fireEvent.click(within(await screen.findByRole("alertdialog",{name:"Discard profile changes?"})).getByRole("button",{name:"Stay"}));
+      await waitFor(() => expect(prompt()).toBeNull());
+      expect(nameField()).toHaveValue("Alexa");
+
+      // Fails after Go when saved: the player is asked whether to discard, with Stay focused, and can still go.
+      const asking = await saveAndAsk("Alexa");
+      fireEvent.click(within(asking).getByRole("button",{name:"Go when saved"}));
+      await waitFor(() => expect(stillSaving()).toBeNull());
+      await act(async () => answer(refused("unavailable")));
+      const discard = await screen.findByRole("alertdialog",{name:"Discard profile changes?"});
+      expect(discard).toHaveTextContent("Your profile changes haven't been saved.");
+      await waitFor(() => expect(within(discard).getByRole("button",{name:"Stay"})).toHaveFocus());
+      expect(nameField()).toHaveValue("Alexa");
+      fireEvent.click(within(discard).getByRole("button",{name:"Discard changes"}));
+      expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole("heading",{level:1,name:"Friends"})).toHaveFocus());
+      expect(call.mock.calls.filter(([op]) => op === "setProfile")).toHaveLength(2);
+      await openEditor();
+      expect(nameField()).toHaveValue("Alex");
+    });
   });
 
   it("wins over a profile request still loading", async () => {

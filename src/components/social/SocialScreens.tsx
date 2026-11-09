@@ -9,7 +9,7 @@ import { DisplayNameGate } from "@/components/account/DisplayNameGate";
 import { FriendActions } from "@/components/account/FriendActions";
 import { FriendsHome, type FriendsTab } from "@/components/account/FriendsHome";
 import { ProfileForm } from "@/components/account/ProfileForm";
-import { accountPanel, dangerFill, secondaryAction } from "@/components/account/accountStyles";
+import { accountPanel, dangerFill, primaryAction, secondaryAction } from "@/components/account/accountStyles";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -112,6 +112,9 @@ export function SocialScreens({
   const unsavedProfile = useRef(false);
   const markUnsaved = useCallback((dirty: boolean) => { unsavedProfile.current = dirty; }, []);
   const [askingToLeave, setAskingToLeave] = useState(false);
+  /** A sent save can't be called back, so while one is out the question offers to go once it lands. */
+  const [savingProfile, setSavingProfile] = useState(false);
+  const leaveAfterSave = useRef(false);
   const editor = useRef<HTMLElement>(null);
   const closeProfileForm = useCallback(() => {
     setAskingToLeave(false);
@@ -120,8 +123,10 @@ export function SocialScreens({
   }, []);
   useEffect(() => {
     if (!startFriendsHome) return;
-    if (unsavedProfile.current) setAskingToLeave(true);
-    else closeProfileForm();
+    if (unsavedProfile.current) {
+      leaveAfterSave.current = false;
+      setAskingToLeave(true);
+    } else closeProfileForm();
   }, [startFriendsHome, closeProfileForm]);
   const [blockVersion, setBlockVersion] = useState(0);
   const [profileFriendId, setProfileFriendId] = useState<string | null>(null);
@@ -187,46 +192,76 @@ export function SocialScreens({
   const chooseName = () => setChoosingName(true);
 
   const saveProfile = async (saved: SharedProfile) => {
-    const answer = await api.client.call("setProfile", { displayName: saved.displayName ?? "", animalId: saved.animalId, backgroundColor: saved.backgroundColor });
-    if (!live.current) return;
-    if (answer.ok === false) {
-      onNote(socialProblem(answer.outcome));
-      throw new Error(answer.outcome);
+    setSavingProfile(true);
+    try {
+      const answer = await api.client.call("setProfile", { displayName: saved.displayName ?? "", animalId: saved.animalId, backgroundColor: saved.backgroundColor });
+      if (!live.current) return;
+      if (answer.ok === false) {
+        onNote(socialProblem(answer.outcome));
+        throw new Error(answer.outcome);
+      }
+      await load();
+      if (!live.current) return;
+      if (leaveAfterSave.current && editingProfile) setFocusHomeTitle(true);
+      closeProfileForm();
+      onNote("Profile saved.");
+    } catch (error) {
+      // The changes are still unsaved and still in the form. Someone waiting to go is asked
+      // the plain discard question; an open "still saving" question closes, back to the form.
+      if (live.current) setAskingToLeave(leaveAfterSave.current);
+      throw error;
+    } finally {
+      leaveAfterSave.current = false;
+      if (live.current) setSavingProfile(false);
     }
-    await load();
-    if (!live.current) return;
-    closeProfileForm();
-    onNote("Profile saved.");
   };
 
   // Friends & Groups while the profile form has changes: stay, or discard them and go.
+  // While a save is out nothing can be discarded, so the choice is to go once it lands.
   const leavePrompt = (
     <AlertDialog open={askingToLeave} onOpenChange={(open) => { if (!open) setAskingToLeave(false); }}>
       <AlertDialogContent
         className="social-design w-[calc(100vw-2rem)] max-w-md rounded-3xl sm:rounded-3xl"
         onCloseAutoFocus={(event) => {
-          // No Radix trigger opened this. Staying goes back to the Display Name; discarding
-          // has already sent focus to the Friends heading.
+          // No Radix trigger opened this. Staying or waiting goes back to the Display Name;
+          // discarding has already sent focus to the Friends heading.
           event.preventDefault();
           editor.current?.querySelector("input")?.focus();
         }}
       >
         <AlertDialogHeader className="text-left sm:text-left">
-          <AlertDialogTitle className="text-xl font-extrabold">Discard profile changes?</AlertDialogTitle>
-          <AlertDialogDescription className="text-base text-foreground">Your profile changes haven't been saved.</AlertDialogDescription>
+          <AlertDialogTitle className="text-xl font-extrabold">{savingProfile ? "Still saving your profile" : "Discard profile changes?"}</AlertDialogTitle>
+          <AlertDialogDescription className="text-base text-foreground">
+            {savingProfile ? "Your changes are being saved. Stay here, or go to Friends once they're saved." : "Your profile changes haven't been saved."}
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="gap-2.5 sm:space-x-0">
           <AlertDialogCancel className={`${secondaryAction} mt-0 h-11 text-base`}>Stay</AlertDialogCancel>
-          <button
-            type="button"
-            onClick={() => {
-              if (editingProfile) setFocusHomeTitle(true);
-              closeProfileForm();
-            }}
-            className={cn(secondaryAction, "h-11 border-transparent text-base", dangerFill)}
-          >
-            Discard changes
-          </button>
+          {savingProfile ? (
+            <button
+              key="after-save"
+              type="button"
+              onClick={() => {
+                leaveAfterSave.current = true;
+                setAskingToLeave(false);
+              }}
+              className={`${primaryAction} h-11 text-base`}
+            >
+              Go when saved
+            </button>
+          ) : (
+            <button
+              key="discard"
+              type="button"
+              onClick={() => {
+                if (editingProfile) setFocusHomeTitle(true);
+                closeProfileForm();
+              }}
+              className={cn(secondaryAction, "h-11 border-transparent text-base", dangerFill)}
+            >
+              Discard changes
+            </button>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
