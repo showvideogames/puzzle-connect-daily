@@ -1,4 +1,4 @@
--- PROPOSED, UNNUMBERED, NEVER APPLIED. Undoes proposed/hamburgle_results.sql:
+-- 0013 rollback, NOT YET APPLIED. Undoes patches/0013_hamburgle_results.sql:
 -- the three functions go back to exactly the bodies it replaced (result_fits as
 -- Mini 0011 left it, game_enabled and list_results as released in
 -- fixtures/hub-eb238dd.sql). Turn SOCIAL_HAMBURGLE off first.
@@ -21,7 +21,7 @@ begin
   for v_fn in select jsonb_object_keys(v_expected) loop
     select md5(p.prosrc) into v_body from pg_proc p where p.oid = to_regprocedure(v_fn);
     if v_body is distinct from v_expected ->> v_fn then
-      raise exception 'hamburgle_results_rollback: % is not the body proposed/hamburgle_results.sql leaves. Nothing was changed.', v_fn;
+      raise exception 'hamburgle_results_rollback: % is not the body patches/0013_hamburgle_results.sql leaves. Nothing was changed.', v_fn;
     end if;
   end loop;
 end;

@@ -1,31 +1,28 @@
 # Hamburgle accounts in the shared Friends and Groups hub: hosted change bundle
 
-Status: LOCAL PROPOSAL. Never executed, applied, pushed or deployed. Local branch
-`local/hamburgle-gateway-mini`, rebased on released Rainbow Mini `570fb495`
-(PR 110). The pre-Mini form (`ed3cc9e`) is kept at local tag
-`checkpoint/mac-transfer`. Binding design: Hamburgle
+Status: RELEASE BUNDLE, not yet applied, pushed or deployed. Merged onto
+Rainbow main `d70b580` (Friends redesign, PR 111) from the Mini-based proposal
+(`570fb495`, PR 110). Binding design: Hamburgle
 `docs/social/FRIENDS-PREVIEW-DESIGN.md`.
 
-## Ownership and acceptance
+## Ownership and review
 
-- The canonical shared contract is the CrossPuns repository's
-  `docs/shared-social/CONTRACT.md`; the CrossPuns lead is the architecture lead.
-  The contract delta below (and the hub SQL) needs their acceptance before any
-  release. `src/social/contract.ts`, `memoryHub.ts` and `conformance.ts` here are
-  the portable copies and change only with that acceptance.
-- The history-on-join scope is PROVISIONAL: Hamburgle groups only (see below).
-  Whether it covers every game's groups is the architecture lead's call.
-- The SQL is UNNUMBERED: `shared-service/proposed/hamburgle_results.sql` and
-  `shared-service/proposed/hamburgle_results_rollback.sql`. The Rainbow redesign
-  holds an unapplied `0012_recent_completions.sql` (it only adds
-  `social.recent_completions`, none of the functions here). The coordinator picks
-  the final number and order; then the file moves into `patches/` under it.
-  Kept out of `patches/` until then so released tests that apply that whole
-  folder (miniSeconds, currentGroupNames, crosspunsStandings) are unaffected.
+- Owner-settled: in a Hamburgle group, current members' earlier eligible results
+  show (history on join), and 7/30-day views key on the Daily's publication date.
+- Engineering gate: shared implementation review of the contract delta against
+  the canonical contract, the CrossPuns repository's
+  `docs/shared-social/CONTRACT.md` (branch `feat/shared-social-foundation`,
+  last changed `eb238dd`, 2026-11-01), which still lists Hamburgle as `disabled`
+  with summary `{ guesses }`. `src/social/contract.ts`, `memoryHub.ts` and
+  `conformance.ts` here are the portable copies.
+- The SQL is numbered `0013`: `shared-service/patches/0013_hamburgle_results.sql`,
+  rollback `shared-service/rollback/0013_hamburgle_results.sql`. It touches
+  none of `0012_recent_completions.sql`'s objects; the release applies 0012 then
+  0013, and every shared-service suite applies the whole 0002-0013 chain.
 
 ## What changes
 
-1. Shared SQL `shared-service/proposed/hamburgle_results.sql`, one transaction:
+1. Shared SQL `shared-service/patches/0013_hamburgle_results.sql`, one transaction:
    - guard, by exact body (md5 of `prosrc`): each of `game_enabled`,
      `result_fits` and `list_results` must be exactly as released (result_fits as
      Mini 0011 left it) or exactly as this patch leaves it. Anything else (no
@@ -123,7 +120,7 @@ window ranks by, without points, is an open owner decision; nothing aggregates.
 
 1. Setting off first (`SOCIAL_HAMBURGLE` unset): Hamburgle-only callers are
    `not_linked` again and no more Hamburgle results are copied. No redeploy of SQL needed.
-2. If needed, `shared-service/proposed/hamburgle_results_rollback.sql` restores
+2. If needed, `shared-service/rollback/0013_hamburgle_results.sql` restores
    the three functions to exactly the bodies the patch replaced (result_fits as
    0011 left it, so Mini's seconds stay). Its guard runs it only from exactly the
    state the patch leaves; anything else is refused and nothing changes.

@@ -10,8 +10,8 @@ import {handleSocialGateway,type GatewayDb,type Queries} from '../../supabase/fu
  */
 type HubReply<T = any> = {ok: boolean; outcome?: string; data: T};
 
-const PATCH = readFileSync('shared-service/proposed/hamburgle_results.sql','utf8');
-const ROLLBACK = readFileSync('shared-service/proposed/hamburgle_results_rollback.sql','utf8');
+const PATCH = readFileSync('shared-service/patches/0013_hamburgle_results.sql','utf8');
+const ROLLBACK = readFileSync('shared-service/rollback/0013_hamburgle_results.sql','utf8');
 const MINI = readFileSync('shared-service/patches/0011_rainbow_mini_seconds.sql','utf8');
 
 // The two tables the gateway reads, copied from Hamburgle db/progress.sql at
@@ -37,8 +37,8 @@ create table hamburgle.progress_daily (
   primary key (account_id, daily_number)
 );`;
 
-/** The released hub and its patches: through 0011 by default, or only those before `upTo`. */
-async function hub(upTo = '9999'): Promise<PGlite> {
+/** The released hub and its patches: through 0012 by default (everything before this patch), or only those before `upTo`. */
+async function hub(upTo = '0013'): Promise<PGlite> {
  const db=new PGlite();
  await db.exec('create role anon nologin;create role authenticated nologin;create role service_role nologin;');
  await db.exec(readFileSync('shared-service/fixtures/hub-eb238dd.sql','utf8'));
@@ -156,7 +156,7 @@ it('refuses a hub where another patch already replaced list_results or game_enab
 it('the rollback refuses anything but exactly the state the patch leaves, and changes nothing',async()=>{
  const db=await hub();
  try {
- await refusesAndChangesNothing(db,ROLLBACK,/is not the body proposed\/hamburgle_results.sql leaves/);
+ await refusesAndChangesNothing(db,ROLLBACK,/is not the body patches\/0013_hamburgle_results.sql leaves/);
  await db.exec(PATCH);
  await db.exec(MINI); // someone re-ran 0011 over it: result_fits is no longer the patch's
  await refusesAndChangesNothing(db,ROLLBACK,/result_fits\(text,jsonb,jsonb\) is not the body/);

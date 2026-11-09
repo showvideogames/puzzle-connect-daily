@@ -1,9 +1,7 @@
--- PROPOSED, UNNUMBERED, NEVER APPLIED. Hamburgle results in the shared hub
--- (docs/social/HAMBURGLE-GATEWAY-PROPOSAL.md). It gets the next free patch
--- number only when the coordinator serializes it with the other pending shared
--- patches (the Rainbow redesign's unapplied 0012_recent_completions.sql is one;
--- it touches none of these functions). Coordinate with the shared architecture
--- owner before application.
+-- 0013, NOT YET APPLIED. Hamburgle results in the shared hub
+-- (docs/social/HAMBURGLE-GATEWAY-PROPOSAL.md). Independent of 0012 (it touches
+-- none of these functions); the release applies 0012 then 0013. Canonical
+-- contract review is an engineering gate before application.
 --
 -- Runs on the released hub through Mini (0011). No grants, tables, data or
 -- deletes: three function bodies only.
@@ -11,7 +9,7 @@
 --   result_fits    0011's body exactly, with only the hamburgle branch changed.
 --   list_results   The released body, with one change: in a Hamburgle group a
 --                  current member's earlier results show too (history on join).
--- Rollback: shared-service/proposed/hamburgle_results_rollback.sql.
+-- Rollback: shared-service/rollback/0013_hamburgle_results.sql.
 begin;
 
 -- Each function must be exactly as released (result_fits as 0011 left it), or

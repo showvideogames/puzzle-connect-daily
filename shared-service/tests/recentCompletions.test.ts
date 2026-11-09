@@ -235,6 +235,20 @@ it("installs after the released 0002-0011 chain, including Mini's 0011, and answ
     await db.exec("reset role");
     expect(answer.ok).toBe(true);
     expect(answer.data.rows).toEqual([]);
+
+    // The rollback removes exactly the function and index; every other social function is unchanged.
+    const bodies = async () =>
+      (await db.query<{ fn: string; md5: string }>(
+        "select p.oid::regprocedure::text fn, md5(p.prosrc) md5 from pg_proc p where p.pronamespace='social'::regnamespace and p.proname<>'recent_completions' order by 1",
+      )).rows;
+    const before = await bodies();
+    const rollback = readFileSync("shared-service/rollback/0012_recent_completions.sql", "utf8");
+    await db.exec(rollback);
+    expect((await db.query<{ f: string | null; i: string | null }>(
+      "select to_regprocedure('social.recent_completions(text,text,text,text)')::text f, to_regclass('social.result_cards_recent_person')::text i",
+    )).rows[0]).toEqual({ f: null, i: null });
+    expect(await bodies()).toEqual(before);
+    await db.exec(rollback); // re-run is a no-op
   } finally {
     await db.close();
   }
