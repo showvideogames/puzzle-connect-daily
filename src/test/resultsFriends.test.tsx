@@ -835,3 +835,152 @@ describe("navigation intents after the page is already mounted", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("/friends null");
   });
 });
+
+describe("Friends & Groups from the profile editor", () => {
+  // The two intents the profile menu, drawer and Settings send.
+  function Menu() {
+    const navigate = useNavigate();
+    return <><button onClick={() => navigate("/friends", {state:{editProfile:true}})}>My profile</button><button onClick={() => navigate("/friends", {state:{friendsHome:true}})}>Friends & Groups</button></>;
+  }
+  const page = (social = holder.social, entry: unknown = "/friends") =>
+    <MemoryRouter initialEntries={[entry as string]}><Routes><Route path="/friends" element={<><Menu /><SocialPage social={social as AppSocial} code={null}/><Where /></>} /></Routes></MemoryRouter>;
+  // Focus first, as a real click or Enter does, so focus can be checked after the question.
+  const go = (name: "My profile" | "Friends & Groups") => act(async () => { const button = screen.getByRole("button",{name}); button.focus(); fireEvent.click(button); });
+  const nameField = () => screen.getByLabelText("Display Name");
+  const prompt = () => screen.queryByRole("alertdialog",{name:"Discard profile changes?"});
+  const openEditor = async () => { await go("My profile"); await screen.findByRole("heading",{name:"Edit your profile"}); };
+
+  it("goes straight to the Friends home when nothing changed, every time", async () => {
+    const { call } = stubSocial(SIGNED_IN);
+    render(page());
+    await screen.findByTestId("friends-home");
+    for (let i = 0; i < 3; i++) {
+      await openEditor();
+      await go("Friends & Groups");
+      expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+      expect(prompt()).toBeNull();
+    }
+    expect(screen.getByTestId("where")).toHaveTextContent("/friends null");
+    expect(opsCalled(call)).not.toContain("setProfile");
+  });
+
+  it("does not ask when a change was undone", async () => {
+    stubSocial(SIGNED_IN);
+    render(page());
+    await screen.findByTestId("friends-home");
+    await openEditor();
+    fireEvent.change(nameField(), { target: { value: "Alexa" } });
+    fireEvent.change(nameField(), { target: { value: "Alex" } });
+    await go("Friends & Groups");
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    expect(prompt()).toBeNull();
+  });
+
+  it("asks before losing changes: Stay keeps them, asking again works, Discard goes home without saving", async () => {
+    const { call } = stubSocial(SIGNED_IN);
+    render(page());
+    await screen.findByTestId("friends-home");
+    await openEditor();
+    fireEvent.change(nameField(), { target: { value: "Alexa" } });
+    const avatars = within(screen.getByRole("group",{name:"Choose your avatar"})).getAllByRole("radio") as HTMLInputElement[];
+    fireEvent.click(avatars.find(radio => !radio.checked)!);
+
+    await go("Friends & Groups");
+    const asking = await screen.findByRole("alertdialog",{name:"Discard profile changes?"});
+    fireEvent.click(within(asking).getByRole("button",{name:"Stay"}));
+    await waitFor(() => expect(prompt()).toBeNull());
+    expect(nameField()).toHaveValue("Alexa");
+    await waitFor(() => expect(nameField()).toHaveFocus());
+
+    await go("Friends & Groups");
+    fireEvent.keyDown(await screen.findByRole("alertdialog"), { key: "Escape" });
+    await waitFor(() => expect(prompt()).toBeNull());
+    expect(nameField()).toHaveValue("Alexa");
+    await waitFor(() => expect(nameField()).toHaveFocus());
+
+    await go("Friends & Groups");
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button",{name:"Discard changes"}));
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    await waitFor(() => expect(prompt()).toBeNull());
+    await waitFor(() => expect(screen.getByRole("heading",{level:1,name:"Friends"})).toHaveFocus());
+    expect(opsCalled(call)).not.toContain("setProfile");
+
+    await openEditor();
+    expect(nameField()).toHaveValue("Alex");
+    await go("Friends & Groups");
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    expect(prompt()).toBeNull();
+  });
+
+  it("keeps changes after a failed save, and still asks", async () => {
+    stubSocial(SIGNED_IN, { setProfile: () => refused("unavailable") });
+    render(page());
+    await screen.findByTestId("friends-home");
+    await openEditor();
+    fireEvent.change(nameField(), { target: { value: "Alexa" } });
+    await act(async () => fireEvent.click(screen.getByRole("button",{name:"Save changes"})));
+    expect(await screen.findByText("We couldn't save that. Please try again.")).toBeInTheDocument();
+    await go("Friends & Groups");
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button",{name:"Stay"}));
+    await waitFor(() => expect(prompt()).toBeNull());
+    expect(nameField()).toHaveValue("Alexa");
+  });
+
+  it("lets a save that is under way finish, whether the player discards or the save lands first", async () => {
+    let finish!: () => void;
+    stubSocial(SIGNED_IN, { setProfile: () => new Promise(resolve => { finish = () => resolve(yes({})); }) });
+    render(page());
+    await screen.findByTestId("friends-home");
+    await openEditor();
+    fireEvent.change(nameField(), { target: { value: "Alexa" } });
+    await act(async () => fireEvent.click(screen.getByRole("button",{name:"Save changes"})));
+    await go("Friends & Groups");
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button",{name:"Discard changes"}));
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    await act(async () => finish());
+    expect(await screen.findByText("Profile saved.")).toBeInTheDocument();
+    expect(screen.getByTestId("friends-home")).toBeInTheDocument();
+
+    // The save lands while the question is open: the editor closes and the question goes with it.
+    await openEditor();
+    fireEvent.change(nameField(), { target: { value: "Alexandra" } });
+    await act(async () => fireEvent.click(screen.getByRole("button",{name:"Save changes"})));
+    await go("Friends & Groups");
+    await screen.findByRole("alertdialog");
+    await act(async () => finish());
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    await waitFor(() => expect(prompt()).toBeNull());
+    await openEditor();
+    expect(prompt()).toBeNull();
+  });
+
+  it("wins over a profile request still loading", async () => {
+    let answer!: () => void;
+    stubSocial(SIGNED_IN, { getMe: () => new Promise(resolve => { answer = () => resolve(yes({ displayName: "Alex", animalId: "fox", backgroundColor: "#DED1F2", friendCode: "AAA-222", friendCount: 0, groupCount: 0 })); }) });
+    render(page(holder.social, { pathname: "/friends", state: { editProfile: true } }));
+    await go("Friends & Groups");
+    await act(async () => answer());
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    expect(screen.queryByRole("heading",{name:"Edit your profile"})).toBeNull();
+  });
+
+  it("drops the editor, its changes and the question when the account changes", async () => {
+    stubSocial(SIGNED_IN);
+    const first = holder.social;
+    const view = render(page(first));
+    await screen.findByTestId("friends-home");
+    await openEditor();
+    fireEvent.change(nameField(), { target: { value: "Alexa" } });
+    await go("Friends & Groups");
+    await screen.findByRole("alertdialog");
+    stubSocial({ ...SIGNED_IN, state: { scope: "scope-2", credential: "other" }, accountId: "u2", storedOwner: "u2", generation: 2 }, {
+      getMe: () => yes({ displayName: "Sam", animalId: "owl", backgroundColor: "#F8D0BD", friendCode: "BBB-333", friendCount: 0, groupCount: 0 }),
+    });
+    view.rerender(page(holder.social));
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    await waitFor(() => expect(prompt()).toBeNull());
+    expect(screen.queryByDisplayValue("Alexa")).toBeNull();
+    await go("Friends & Groups");
+    expect(prompt()).toBeNull();
+  });
+});

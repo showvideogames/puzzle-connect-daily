@@ -9,7 +9,17 @@ import { DisplayNameGate } from "@/components/account/DisplayNameGate";
 import { FriendActions } from "@/components/account/FriendActions";
 import { FriendsHome, type FriendsTab } from "@/components/account/FriendsHome";
 import { ProfileForm } from "@/components/account/ProfileForm";
-import { accountPanel } from "@/components/account/accountStyles";
+import { accountPanel, dangerFill, secondaryAction } from "@/components/account/accountStyles";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 import type { FriendResult } from "@/lib/friendResults";
 import { hasDisplayName, newProfile, type SharedProfile } from "@/lib/sharedProfile";
 import { NO_RESULTS_NOTE, friendChangeProblem, isBackgroundCheck, profileFromMe, socialProblem } from "@/lib/socialView";
@@ -57,6 +67,8 @@ interface SocialScreensProps {
   startEditingProfile?: boolean;
   /** Opens straight into Add a friend, as Add friends in the results popup does. */
   startAddingFriend?: boolean;
+  /** Leaves the profile form for the Friends home, as Friends & Groups in the menus does. Asks first only if changes would be lost. */
+  startFriendsHome?: boolean;
 }
 
 /**
@@ -82,6 +94,7 @@ export function SocialScreens({
   editorClassName = "mx-auto w-full max-w-[32rem] px-5 py-5 sm:px-8 sm:py-7",
   startEditingProfile = false,
   startAddingFriend = false,
+  startFriendsHome = false,
 }: SocialScreensProps) {
   const live = useLive();
   const loadNo = useRef(0);
@@ -95,6 +108,21 @@ export function SocialScreens({
   const [choosingName, setChoosingName] = useState(false);
   const [editingProfile, setEditingProfile] = useState(startEditingProfile);
   useEffect(() => { if (startEditingProfile) setEditingProfile(true); }, [startEditingProfile]);
+  /** Whether the open profile form differs from the saved profile. */
+  const unsavedProfile = useRef(false);
+  const markUnsaved = useCallback((dirty: boolean) => { unsavedProfile.current = dirty; }, []);
+  const [askingToLeave, setAskingToLeave] = useState(false);
+  const editor = useRef<HTMLElement>(null);
+  const closeProfileForm = useCallback(() => {
+    setAskingToLeave(false);
+    setChoosingName(false);
+    setEditingProfile(false);
+  }, []);
+  useEffect(() => {
+    if (!startFriendsHome) return;
+    if (unsavedProfile.current) setAskingToLeave(true);
+    else closeProfileForm();
+  }, [startFriendsHome, closeProfileForm]);
   const [blockVersion, setBlockVersion] = useState(0);
   const [profileFriendId, setProfileFriendId] = useState<string | null>(null);
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
@@ -167,15 +195,48 @@ export function SocialScreens({
     }
     await load();
     if (!live.current) return;
-    setChoosingName(false);
-    setEditingProfile(false);
+    closeProfileForm();
     onNote("Profile saved.");
   };
 
+  // Friends & Groups while the profile form has changes: stay, or discard them and go.
+  const leavePrompt = (
+    <AlertDialog open={askingToLeave} onOpenChange={(open) => { if (!open) setAskingToLeave(false); }}>
+      <AlertDialogContent
+        className="social-design w-[calc(100vw-2rem)] max-w-md rounded-3xl sm:rounded-3xl"
+        onCloseAutoFocus={(event) => {
+          // No Radix trigger opened this. Staying goes back to the Display Name; discarding
+          // has already sent focus to the Friends heading.
+          event.preventDefault();
+          editor.current?.querySelector("input")?.focus();
+        }}
+      >
+        <AlertDialogHeader className="text-left sm:text-left">
+          <AlertDialogTitle className="text-xl font-extrabold">Discard profile changes?</AlertDialogTitle>
+          <AlertDialogDescription className="text-base text-foreground">Your profile changes haven't been saved.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="gap-2.5 sm:space-x-0">
+          <AlertDialogCancel className={`${secondaryAction} mt-0 h-11 text-base`}>Stay</AlertDialogCancel>
+          <button
+            type="button"
+            onClick={() => {
+              if (editingProfile) setFocusHomeTitle(true);
+              closeProfileForm();
+            }}
+            className={cn(secondaryAction, "h-11 border-transparent text-base", dangerFill)}
+          >
+            Discard changes
+          </button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
   if (choosingName) {
     return (
-      <main className={`${accountPanel} ${editorClassName}`}>
-        <ProfileForm mode="setup" initial={profile ?? newProfile()} onCancel={() => setChoosingName(false)} onSave={saveProfile} />
+      <main ref={editor} className={`${accountPanel} ${editorClassName}`}>
+        <ProfileForm mode="setup" initial={profile ?? newProfile()} onCancel={() => setChoosingName(false)} onSave={saveProfile} onDirtyChange={markUnsaved} />
+        {leavePrompt}
       </main>
     );
   }
@@ -183,8 +244,9 @@ export function SocialScreens({
   // Someone with no Display Name yet gets the setup form below instead.
   if (editingProfile && signedIn && hasDisplayName(profile)) {
     return (
-      <main className={`${accountPanel} ${editorClassName}`}>
-        <ProfileForm mode="edit" initial={profile ?? newProfile()} onCancel={() => setEditingProfile(false)} onSave={saveProfile} />
+      <main ref={editor} className={`${accountPanel} ${editorClassName}`}>
+        <ProfileForm mode="edit" initial={profile ?? newProfile()} onCancel={() => setEditingProfile(false)} onSave={saveProfile} onDirtyChange={markUnsaved} />
+        {leavePrompt}
       </main>
     );
   }

@@ -15,6 +15,8 @@ interface Destination {
   to: string;
   label: string;
   icon: LucideIcon;
+  /** Router state sent with the link, such as Friends & Groups asking for the Friends home. */
+  state?: unknown;
 }
 
 /** Existing pages only. Nothing here is new; it is what the old header and Settings > Menu already reached. */
@@ -27,7 +29,7 @@ const DESTINATIONS: Destination[] = [
   { to: "/how-to-play", label: "How to play", icon: CircleHelp },
 ];
 
-const FRIENDS: Destination = { to: "/friends", label: "Friends & Groups", icon: UsersRound };
+const FRIENDS: Destination = { to: "/friends", label: "Friends & Groups", icon: UsersRound, state: { friendsHome: true } };
 
 const rowClass =
   "flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-base font-bold text-foreground hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:bg-secondary";
@@ -69,10 +71,10 @@ export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
         <SheetDescription className="sr-only">Rainbow Categories pages</SheetDescription>
         <nav aria-label="Main menu" className="min-h-0 flex-1 overflow-y-auto p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           <ul className="space-y-1">
-            {destinations.map(({ to, label, icon: Icon }) => (
+            {destinations.map(({ to, label, icon: Icon, state }) => (
               <li key={to}>
                 <SheetClose asChild>
-                  <NavLink to={to} end className={rowClass}>
+                  <NavLink to={to} state={state} end className={rowClass}>
                     <Icon aria-hidden="true" className="h-5 w-5 shrink-0 text-slate" strokeWidth={HEADER_STROKE} />
                     {label}
                   </NavLink>

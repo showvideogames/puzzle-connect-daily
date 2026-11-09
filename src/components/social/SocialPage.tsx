@@ -46,9 +46,10 @@ function SocialVisit({ social, code, signedIn }: VisitProps) {
   // Consume navigation intents while keeping subsequent visits responsive.
   const editProfile = (state as { editProfile?: boolean } | null)?.editProfile === true;
   const addFriend = (state as { addFriend?: boolean } | null)?.addFriend === true;
+  const friendsHome = (state as { friendsHome?: boolean } | null)?.friendsHome === true;
   useEffect(() => {
-    if (editProfile || addFriend) navigate(".", { replace: true, state: null });
-  }, [editProfile, addFriend, navigate]);
+    if (editProfile || addFriend || friendsHome) navigate(".", { replace: true, state: null });
+  }, [editProfile, addFriend, friendsHome, navigate]);
   const [note, setNote] = useState("");
   const [signingIn, setSigningIn] = useState(false);
 
@@ -93,6 +94,7 @@ function SocialVisit({ social, code, signedIn }: VisitProps) {
         waiting={<WaitingPanel label={LOADING_NOTE} />}
         startEditingProfile={editProfile}
         startAddingFriend={addFriend}
+        startFriendsHome={friendsHome}
       />
     </>
   );
