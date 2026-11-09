@@ -1,4 +1,6 @@
 /**
+ * LOCAL PROPOSAL (Hamburgle preview): differs from Rainbow's released copy (570fb495) only in Hamburgle's status, summary and result shape, and GROUP_HISTORY_GAMES; pending the shared contract owner.
+ *
  * The shared Friends / Groups contract, version 0: draft, mock only.
  * docs/shared-social/CONTRACT.md is the authority; this file is its code form.
  *
@@ -12,14 +14,14 @@ export type GameId = 'rainbow' | 'crosspuns' | 'cluevoyance' | 'wtf' | 'yodel' |
 
 export type GameStatus = 'mock' | 'disabled';
 
-/** Yodel has no accounts, Hamburgle's are off and Price Is What's are unfinished. */
+/** Yodel has no accounts and Price Is What's are unfinished. */
 export const GAME_STATUS: Record<GameId, GameStatus> = {
   rainbow: 'mock',
   crosspuns: 'mock',
   cluevoyance: 'mock',
   wtf: 'mock',
   yodel: 'disabled',
-  hamburgle: 'disabled',
+  hamburgle: 'mock',
   priceiswhat: 'disabled',
 };
 
@@ -242,7 +244,7 @@ export interface GameSummaries {
   crosspuns: { seconds: number };
   wtf: { score: number };
   yodel: { score: number };
-  hamburgle: { guesses: number };
+  hamburgle: { solved: boolean; guesses: number };
   priceiswhat: { score: number };
 }
 
@@ -266,10 +268,19 @@ export const RESULT_SHAPES: Readonly<Record<GameId, ResultShape | null>> = {
   crosspuns: { summary: { seconds: 'count' }, detail: 'none' },
   wtf: { summary: { score: 'count' }, detail: 'answers' },
   yodel: { summary: { score: 'count' }, detail: 'none' },
-  hamburgle: { summary: { guesses: 'count' }, detail: 'none' },
+  hamburgle: { summary: { solved: 'boolean', guesses: 'count' }, detail: 'none' },
   priceiswhat: { summary: { score: 'count' }, detail: 'none' },
   cluevoyance: null,
 };
+
+/**
+ * Games whose group results include each current member's earlier results
+ * too ("history on join"). Everywhere else, and among friends in every game, a
+ * result shows only if it was finished at or after the two were connected.
+ * Leaving, removal and blocks hide rows exactly as before. Provisional: the
+ * architecture owner decides whether this covers every game.
+ */
+export const GROUP_HISTORY_GAMES: ReadonlySet<GameId> = new Set<GameId>(['hamburgle']);
 
 interface ResultRowFields extends Face {
   isMe: boolean;

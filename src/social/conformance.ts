@@ -211,6 +211,7 @@ const SAMPLE_RESULTS = {
   rainbow: { summary: { solved: true, mistakes: 1 }, detail: 'GGGG\nYYBB' },
   crosspuns: { summary: { seconds: 95 }, detail: null },
   wtf: { summary: { score: 7 }, detail: [true, false, true] },
+  hamburgle: { summary: { solved: true, guesses: 3 }, detail: null },
 };
 
 type ResultGame = keyof typeof SAMPLE_RESULTS;
@@ -1302,7 +1303,7 @@ export function socialConformanceScenarios(makeWorld: MakeWorld): SocialScenario
         cluevoyance: 'mock',
         wtf: 'mock',
         yodel: 'disabled',
-        hamburgle: 'disabled',
+        hamburgle: 'mock',
         priceiswhat: 'disabled',
       };
       check(GAMES.length === Object.keys(statuses).length, 'GAME_STATUS should have exactly the seven games');
@@ -3175,6 +3176,48 @@ export function socialConformanceScenarios(makeWorld: MakeWorld): SocialScenario
       check((await resultsOf(carol, 'rainbow', 'between', groupId)).length === 0, 'someone who joined later should not see the past');
       check((await resultsOf(carol, 'rainbow', 'after', groupId)).length === 2, 'someone who joined later should see what came after');
       check((await resultsOf(alice, 'rainbow', 'before-bob', groupId))[0]?.isMe === true, 'my own result is mine whatever its date');
+    }),
+
+    scenario('results: history on join (provisional, GROUP_HISTORY_GAMES): in a Hamburgle group, current members see each other\x27s earlier results', async (world) => {
+      const alice = world.signIn('hamburgle', 'alice');
+      const bob = world.signIn('rainbow', 'bob');
+      const carol = world.signIn('hamburgle', 'carol');
+      const dave = world.signIn('hamburgle', 'dave');
+      const stranger = world.signIn('hamburgle', 'stranger');
+      await finish(world, 'hamburgle', 'alice', 'daily:30');
+      await finish(world, 'rainbow', 'bob', 'rainbow-30');
+      world.advance(1000);
+      await finish(world, 'hamburgle', 'carol', 'daily:30');
+      await finish(world, 'hamburgle', 'dave', 'daily:30');
+      world.advance(1000);
+      const { groupId, inviteCode } = await makeGroup(bob, 'Club', 'Bee');
+      world.advance(1000);
+      await join(alice, inviteCode, 'Al');
+      await join(carol, inviteCode, 'Cee');
+      await join(dave, inviteCode, 'Dee');
+      const names = async (player: MockPlayer, gameId: GameId, puzzleId: string) =>
+        (await resultsOf(player, gameId, puzzleId, groupId)).filter((r) => !r.isMe).map((r) => r.name).sort().join(',');
+
+      check((await names(bob, 'hamburgle', 'daily:30')) === 'Al,Cee,Dee', 'a member should see the others\x27 results from before they joined');
+      check((await names(alice, 'hamburgle', 'daily:30')) === 'Cee,Dee', 'a new member should see the earlier results of the others');
+      const row = resultNamed(await resultsOf(bob, 'hamburgle', 'daily:30', groupId), 'Al');
+      check(JSON.stringify(row.summary) === JSON.stringify(SAMPLE_RESULTS.hamburgle.summary) && row.detailLocked === false, 'the summary should show, with no detail to lock');
+      refused(await stranger.call('listResults', { gameId: 'hamburgle', puzzleId: 'daily:30', groupId }), 'not_a_member', 'a non-member');
+
+      // Other games' groups and every friendship stay forward-only.
+      check((await names(alice, 'rainbow', 'rainbow-30')) === '', 'a Rainbow group should stay forward-only');
+      await befriend(alice, carol);
+      check((await resultsOf(alice, 'hamburgle', 'daily:30')).filter((r) => !r.isMe).length === 0, 'friends should stay forward-only');
+
+      // A block hides rows both ways; leaving and removal hide them at once.
+      const daveRow = (await membersOf(bob, groupId)).find((m) => m.name === 'dave');
+      check(daveRow, 'dave should be listed');
+      must(await carol.call('block', { ref: daveRow.memberRef }), 'block');
+      check(!(await names(carol, 'hamburgle', 'daily:30')).includes('Dee') && !(await names(dave, 'hamburgle', 'daily:30')).includes('Cee'), 'a block should hide rows both ways');
+      must(await alice.call('leaveGroup', { groupId }), 'leaveGroup');
+      must(await bob.call('removeMember', { groupId, memberRef: daveRow.memberRef }), 'removeMember');
+      check((await names(bob, 'hamburgle', 'daily:30')) === 'Cee', 'someone who left or was removed should have no row');
+      refused(await alice.call('listResults', { gameId: 'hamburgle', puzzleId: 'daily:30', groupId }), 'not_a_member', 'someone who left');
     }),
 
     scenario('results: unfriending, leaving and removal hide rows at once, each from its own audience', async (world) => {

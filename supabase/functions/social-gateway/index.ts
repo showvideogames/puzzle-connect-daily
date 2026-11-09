@@ -7,6 +7,7 @@ import {
   handleSocialGateway,
   readAccess,
   readApiKeys,
+  readHamburgle,
   serverSecretKey,
   transactionPoolerUrl,
   type GatewayDb,
@@ -66,6 +67,7 @@ Deno.serve((req) =>
     },
     allowPreview,
     access: readAccess(env("SOCIAL_ACCESS")),
+    hamburgle: readHamburgle(env("SOCIAL_HAMBURGLE")),
     db,
   }),
 );
