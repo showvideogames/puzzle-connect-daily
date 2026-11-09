@@ -1,7 +1,7 @@
 -- 0013, NOT YET APPLIED. Hamburgle results in the shared hub
--- (docs/social/HAMBURGLE-GATEWAY-PROPOSAL.md). Independent of 0012 (it touches
--- none of these functions); the release applies 0012 then 0013. Canonical
--- contract review is an engineering gate before application.
+-- (docs/social/HAMBURGLE-GATEWAY-PROPOSAL.md). Independent of 0012, which the
+-- Hamburgle release does NOT apply (deferred; it touches none of these
+-- functions). Runs on the released 0002-0011 chain.
 --
 -- Runs on the released hub through Mini (0011). No grants, tables, data or
 -- deletes: three function bodies only.

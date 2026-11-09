@@ -37,14 +37,19 @@ create table hamburgle.progress_daily (
   primary key (account_id, daily_number)
 );`;
 
-/** The released hub and its patches: through 0012 by default (everything before this patch), or only those before `upTo`. */
+/**
+ * The hub exactly as production will have it before this patch: the released
+ * 0002-0011 chain, WITHOUT 0012 (recent completions is deferred and is not part
+ * of the Hamburgle release), or only the patches before `upTo`.
+ */
 async function hub(upTo = '0013'): Promise<PGlite> {
  const db=new PGlite();
  await db.exec('create role anon nologin;create role authenticated nologin;create role service_role nologin;');
  await db.exec(readFileSync('shared-service/fixtures/hub-eb238dd.sql','utf8'));
  await db.exec('create schema auth;create table auth.users(id uuid primary key);');
  await db.exec(readFileSync('shared-service/fixtures/crosspuns-eb238dd.sql','utf8'));
- for(const file of readdirSync('shared-service/patches').filter(f=>f.endsWith('.sql')&&f<upTo).sort())await db.exec(readFileSync(`shared-service/patches/${file}`,'utf8'));
+ for(const file of readdirSync('shared-service/patches').filter(f=>f.endsWith('.sql')&&f<upTo&&!f.startsWith('0012_')).sort())await db.exec(readFileSync(`shared-service/patches/${file}`,'utf8'));
+ expect((await db.query("select to_regprocedure('social.recent_completions(text,text,text,text)') f")).rows[0]).toEqual({f:null});
  return db;
 }
 
@@ -321,6 +326,9 @@ it('a Hamburgle-only account uses the hub through the gateway, shares only finis
  // On: in, linked to Hamburgle only.
  const me=await gateway(db,true,alice.uid,'getMe',{});
  expect(me.ok).toBe(true);
+ // Without 0012 the gateway's recentCompletions operation (Rainbow's, no client calls it) fails closed, and the hub carries on.
+ expect(await gateway(db,true,alice.uid,'recentCompletions',{from:'2026-11-01T00:00:00.000Z',until:'2026-11-06T00:00:00.000Z'})).toEqual({ok:false,outcome:'unavailable'});
+ expect((await gateway(db,true,alice.uid,'getMe',{})).ok).toBe(true);
  expect((await db.query<{game:string}>('select l.game from social.game_links l join social.persons p on p.id=l.person_id where p.global_user_id=$1',[alice.gid])).rows.map(r=>r.game)).toEqual(['hamburgle']);
  for(const [who,name] of [[alice,'Alice'],[bob,'Bob']] as const)expect((await gateway(db,true,who.uid,'setProfile',{displayName:name,animalId:'fox',backgroundColor:'#DED1F2'})).ok).toBe(true);
  const invite=await gateway(db,true,alice.uid,'createFriendInvite',{noticeVersion:1});

@@ -9,16 +9,20 @@ Rainbow main `d70b580` (Friends redesign, PR 111) from the Mini-based proposal
 
 - Owner-settled: in a Hamburgle group, current members' earlier eligible results
   show (history on join), and 7/30-day views key on the Daily's publication date.
-- Engineering gate: shared implementation review of the contract delta against
-  the canonical contract, the CrossPuns repository's
-  `docs/shared-social/CONTRACT.md` (branch `feat/shared-social-foundation`,
-  last changed `eb238dd`, 2026-11-01), which still lists Hamburgle as `disabled`
-  with summary `{ guesses }`. `src/social/contract.ts`, `memoryHub.ts` and
-  `conformance.ts` here are the portable copies.
+- Compatibility review against the canonical contract, the CrossPuns
+  repository's `docs/shared-social/CONTRACT.md` (branch
+  `feat/shared-social-foundation`, last changed `eb238dd`, 2026-11-01): done
+  from source; see the release assessment. That text matches Rainbow `6ad00ba`
+  (2026-11-02) and predates every shared change Rainbow has released since, so
+  it still lists Hamburgle as `disabled` with summary `{ guesses }`.
+  `src/social/contract.ts`, `memoryHub.ts` and `conformance.ts` here are the
+  portable copies.
 - The SQL is numbered `0013`: `shared-service/patches/0013_hamburgle_results.sql`,
-  rollback `shared-service/rollback/0013_hamburgle_results.sql`. It touches
-  none of `0012_recent_completions.sql`'s objects; the release applies 0012 then
-  0013, and every shared-service suite applies the whole 0002-0013 chain.
+  rollback `shared-service/rollback/0013_hamburgle_results.sql`. The Hamburgle
+  release applies 0013 on the released 0002-0011 chain and does NOT apply
+  `0012_recent_completions.sql` (deferred: it touches none of 0013's objects,
+  and no Hamburgle behaviour uses it). `hamburgleResults.test.ts` runs exactly
+  that chain; the other shared-service suites apply the whole 0002-0013 folder.
 
 ## What changes
 
