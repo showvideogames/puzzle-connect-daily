@@ -82,16 +82,21 @@ export function FriendsHome({
     [toast, setToast] = useState<string | null>(null);
   const [toastVersion, setToastVersion] = useState(0);
   const dismiss = useCallback(() => setToast(null), []);
-  // The code the copy icon shows a check for, briefly after a copy succeeds. Only
-  // the latest click counts, a failure clears it, and another code (a different
-  // account) never shows it.
+  // The code the copy icon shows a check for, briefly after a copy succeeds. The
+  // toast and the check both answer only the latest click for the current code.
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout>>();
   const copyAttempt = useRef(0);
-  useEffect(() => () => {
-    copyAttempt.current += 1;
-    clearTimeout(copiedTimer.current);
-  }, []);
+  // A new code (another account) drops any pending copy and any confirmation for
+  // the old one, so going back to it never brings an old check back.
+  useEffect(() => {
+    setCopiedCode(null);
+    setToast(null);
+    return () => {
+      copyAttempt.current += 1;
+      clearTimeout(copiedTimer.current);
+    };
+  }, [friendCode]);
   const markCopied = (code: string | null) => {
     clearTimeout(copiedTimer.current);
     setCopiedCode(code);
@@ -151,14 +156,17 @@ export function FriendsHome({
             onClick={async () => {
               const attempt = ++copyAttempt.current, code = friendCode;
               setToastVersion((n) => n + 1);
+              let copied: boolean;
               try {
                 await navigator.clipboard.writeText(code);
-                setToast("Copied to clipboard");
-                if (attempt === copyAttempt.current) markCopied(code);
+                copied = true;
               } catch {
-                setToast("Could not copy. Select and copy your code instead.");
-                if (attempt === copyAttempt.current) markCopied(null);
+                copied = false;
               }
+              // A newer click, a new code or leaving the page has taken over: change nothing.
+              if (attempt !== copyAttempt.current) return;
+              setToast(copied ? "Copied to clipboard" : "Could not copy. Select and copy your code instead.");
+              markCopied(copied ? code : null);
             }}
           >
             <span>

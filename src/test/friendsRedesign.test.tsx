@@ -285,16 +285,74 @@ describe("the friend code copy check", () => {
     expect(icon()).toHaveClass("lucide-copy");
   });
 
-  it("ignores an older copy that finishes after a newer one failed", async () => {
+  // A clipboard write that waits until the test settles it.
+  const pending = () => {
+    const write = { resolve: () => {}, reject: () => {} };
+    clipboard(() => new Promise<void>((resolve, reject) => Object.assign(write, { resolve, reject: () => reject(new Error("denied")) })));
+    return write;
+  };
+
+  it("lets neither icon nor toast follow an older success that finishes after a newer failure", async () => {
     vi.useFakeTimers();
-    let finish!: () => void;
-    clipboard(() => new Promise<void>((done) => (finish = done)));
     render(<FriendsHome {...props} friendCode="R8T-6NZ" />);
+    const older = pending();
     await copy();
     clipboard(async () => { throw new Error("denied"); });
     await copy();
-    await act(async () => finish());
+    await act(async () => older.resolve());
     expect(icon()).toHaveClass("lucide-copy");
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("status")).toHaveTextContent("Could not copy. Select and copy your code instead.");
+  });
+
+  it("lets neither icon nor toast follow an older failure that finishes after a newer success", async () => {
+    vi.useFakeTimers();
+    render(<FriendsHome {...props} friendCode="R8T-6NZ" />);
+    const older = pending();
+    await copy();
+    clipboard(async () => undefined);
+    await copy();
+    await act(async () => older.reject());
+    expect(icon()).toHaveClass("lucide-check");
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("status")).toHaveTextContent("Copied to clipboard");
+  });
+
+  it("ignores a copy still pending when the code changes, even after changing back", async () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<FriendsHome {...props} friendCode="R8T-6NZ" />);
+    const success = pending();
+    await copy();
+    rerender(<FriendsHome {...props} friendCode="K2P-9QW" />);
+    await act(async () => success.resolve());
+    expect(icon()).toHaveClass("lucide-copy");
+    expect(screen.queryByRole("status")).toBeNull();
+    rerender(<FriendsHome {...props} friendCode="R8T-6NZ" />);
+    expect(icon()).toHaveClass("lucide-copy");
+    expect(screen.queryByRole("status")).toBeNull();
+
+    const failure = pending();
+    await copy();
+    rerender(<FriendsHome {...props} friendCode="K2P-9QW" />);
+    await act(async () => failure.reject());
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("does not bring the check or toast back when the code changes away and back within 2 seconds", async () => {
+    vi.useFakeTimers();
+    clipboard(async () => undefined);
+    const { rerender } = render(<FriendsHome {...props} friendCode="R8T-6NZ" />);
+    await copy();
+    expect(icon()).toHaveClass("lucide-check");
+    rerender(<FriendsHome {...props} friendCode="K2P-9QW" />);
+    expect(screen.queryByRole("status")).toBeNull();
+    await wait(500);
+    rerender(<FriendsHome {...props} friendCode="R8T-6NZ" />);
+    expect(icon()).toHaveClass("lucide-copy");
+    expect(screen.queryByRole("status")).toBeNull();
+    await wait(2000);
+    expect(icon()).toHaveClass("lucide-copy");
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("drops the check for a different code, and leaves no timer after unmount", async () => {
