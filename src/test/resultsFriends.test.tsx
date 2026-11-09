@@ -984,3 +984,33 @@ describe("Friends & Groups from the profile editor", () => {
     expect(prompt()).toBeNull();
   });
 });
+
+describe("group order across an account change", () => {
+  it("drops an unsaved order with the account and shows the next account its own order", async () => {
+    vi.stubEnv("VITE_GROUP_ORDER", "true");
+    const first = stubSocial(SIGNED_IN, {
+      listMyGroups: () => yes([group("g1", "Book Nerds"), group("g2", "Puzzle Pals")]),
+      listGroupOrder: () => yes({ groupIds: ["g2", "g1"] }),
+    });
+    const page = () => <MemoryRouter initialEntries={["/friends"]}><Routes><Route path="/friends" element={<SocialPage social={holder.social as AppSocial} code={null}/>} /></Routes></MemoryRouter>;
+    const view = render(page());
+    await screen.findByTestId("friends-home");
+    fireEvent.click(screen.getByRole("button",{name:"Groups"}));
+    fireEvent.click(await screen.findByRole("button",{name:"Reorder groups"}));
+    fireEvent.click(screen.getByRole("button",{name:"Move Book Nerds up"}));
+    expect(screen.getAllByRole("listitem").map(row => row.textContent)).toEqual([expect.stringContaining("Book Nerds"), expect.stringContaining("Puzzle Pals")]);
+
+    const second = stubSocial({ ...SIGNED_IN, state: { scope: "scope-2", credential: "other" }, accountId: "u2", storedOwner: "u2", generation: 2 }, {
+      getMe: () => yes({ displayName: "Sam", animalId: "owl", backgroundColor: "#F8D0BD", friendCode: "BBB-333", friendCount: 0, groupCount: 2 }),
+      listMyGroups: () => yes([group("g3", "Chess Club"), group("g4", "Word Nerds")]),
+      listGroupOrder: () => yes({ groupIds: ["g4", "g3"] }),
+    });
+    view.rerender(page());
+    await screen.findByTestId("friends-home");
+    expect(screen.queryByRole("region",{name:"Reorder groups"})).toBeNull();
+    await waitFor(() => expect(screen.getAllByTestId("group-row").map(row => row.textContent)).toEqual([expect.stringContaining("Word Nerds"), expect.stringContaining("Chess Club")]));
+    expect(screen.queryByText("Book Nerds")).toBeNull();
+    expect(opsCalled(first.call)).not.toContain("setGroupOrder");
+    expect(opsCalled(second.call)).not.toContain("setGroupOrder");
+  });
+});
