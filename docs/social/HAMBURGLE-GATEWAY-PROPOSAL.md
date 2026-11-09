@@ -100,8 +100,8 @@ window ranks by, without points, is an open owner decision; nothing aggregates.
   guard's "released" values (f74654f1… game_enabled, db3cb694… result_fits,
   7a71c305… list_results); otherwise the patch refuses, and must be rebased on
   whatever is there.
-- The coordinator has fixed this file's number and order against the redesign's
-  0012.
+- Numbered 0013 and applied without 0012 (deferred). Verified read-only on
+  2026-11-08: production holds exactly the three "released" bodies.
 
 ## Order (each step separately approved; nothing here has been run)
 
@@ -144,7 +144,7 @@ window ranks by, without points, is an open owner decision; nothing aggregates.
 | `social.result_fits` | Mini 0011 (released) | replaces it again: 0011 body + hamburgle branch |
 | `social.list_results` | none since the released hub | replaced: Hamburgle group history |
 | `social.game_enabled` | none | adds hamburgle |
-| patch number 0012 | Rainbow redesign `0012_recent_completions.sql` (unapplied, adds `social.recent_completions` only) | unnumbered until the coordinator decides |
+| patch number | Rainbow redesign `0012_recent_completions.sql` (unapplied, adds `social.recent_completions` only; deferred) | `0013`, applied without 0012 |
 | `core.ts` | Mini's COMPLETIONS_SQL / completionParams | not touched; Hamburgle code in its own section |
 | `contract.ts` | Mini's `seconds?` / `optionalSummary` | hamburgle lines and `GROUP_HISTORY_GAMES` only |
 | `memoryHub.ts` | Mini's `summaryFits` | group listResults history rule only |
