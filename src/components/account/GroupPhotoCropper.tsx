@@ -52,7 +52,7 @@ export function GroupPhotoCropper({ file, onApply, onCancel }: Props) {
       <DialogDescription>Drag to position, or use the controls below. Your picture is resized automatically.</DialogDescription>
       <div
         role="img" aria-label="Circular crop preview" data-testid="group-crop-preview"
-        className="relative mx-auto aspect-square w-full max-w-[260px] touch-none overflow-hidden rounded-full border-[3px] border-[hsl(258_46%_52%)] bg-white"
+        className="relative mx-auto aspect-square w-full max-w-[260px] touch-none overflow-hidden rounded-full border-[3px] border-[hsl(258_90%_52%)] bg-white"
         style={transparentGroupPhotos() ? { backgroundImage: "conic-gradient(#ddd 25%, #fff 0 50%, #ddd 0 75%, #fff 0)", backgroundSize: "20px 20px" } : undefined}
         onPointerDown={event => {
           if (busy || !dimensions) return;
@@ -70,12 +70,12 @@ export function GroupPhotoCropper({ file, onApply, onCancel }: Props) {
       </div>
       <div className="space-y-3">
         <label className="flex items-center gap-3 text-sm font-semibold">Zoom
-          <input aria-label="Zoom" type="range" min="1" max="3" step="0.01" value={crop.zoom} disabled={busy || !dimensions} onChange={event => setCrop({ ...crop, zoom: Number(event.target.value) })} className="min-w-0 flex-1 accent-[hsl(258_46%_52%)]" />
+          <input aria-label="Zoom" type="range" min="1" max="3" step="0.01" value={crop.zoom} disabled={busy || !dimensions} onChange={event => setCrop({ ...crop, zoom: Number(event.target.value) })} className="min-w-0 flex-1 accent-[hsl(258_90%_52%)]" />
           <span className="w-10 text-right">{Math.round(crop.zoom * 100)}%</span>
         </label>
         {([['x', 'Horizontal position'], ['y', 'Vertical position']] as const).map(([axis, label]) => <label key={axis} className="flex items-center gap-3 text-sm">
           <span className="w-32">{label}</span>
-          <input aria-label={label} type="range" min="0" max="1" step="0.01" value={crop[axis]} disabled={busy || !dimensions} onChange={event => setCrop({ ...crop, [axis]: Number(event.target.value) })} className="min-w-0 flex-1 accent-[hsl(258_46%_52%)]" />
+          <input aria-label={label} type="range" min="0" max="1" step="0.01" value={crop[axis]} disabled={busy || !dimensions} onChange={event => setCrop({ ...crop, [axis]: Number(event.target.value) })} className="min-w-0 flex-1 accent-[hsl(258_90%_52%)]" />
         </label>)}
       </div>
       <p className="text-xs text-muted-foreground">{transparentGroupPhotos() ? "Transparent background kept." : "Transparent areas currently use a white background."}</p>

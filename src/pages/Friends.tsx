@@ -8,9 +8,9 @@ export default function Friends() {
   return (
     <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
       <SEO title="Friends & Groups — Rainbow Categories" description="Your friends and groups on Rainbow Categories." path="/friends" noIndex />
+      {/* The header is its own card with its own space below; the content shares its max-w-2xl column. */}
       <MinimalHeader />
-      <div className="w-full max-w-lg border-b border-border mb-4" />
-      <div className="w-full px-3">
+      <div className="w-full max-w-2xl px-3" data-testid="friends-content">
         <SocialPage social={appSocial()} code={null} />
       </div>
     </div>

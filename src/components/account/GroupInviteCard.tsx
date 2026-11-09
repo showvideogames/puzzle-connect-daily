@@ -42,7 +42,7 @@ interface GroupInviteCardProps {
 
 function Shell({ children, onBack }: { children: ReactNode; onBack?: () => void }) {
   return (
-    <main className={`${accountPanel} mx-auto w-full max-w-[32rem] px-5 pb-5 pt-2 text-center sm:px-10 sm:pb-8 sm:pt-4`} data-testid="group-invite">
+    <main className={`${accountPanel} w-full px-5 pb-5 pt-2 text-center sm:px-10 sm:pb-8 sm:pt-4`} data-testid="group-invite">
       {onBack && (
         <div className="relative flex items-center">
           <BackLink onClick={onBack} />
@@ -67,7 +67,7 @@ export function GroupInviteCard({ invite, signedIn, displayName, joined = false,
   if (!invite) {
     return (
       <Shell onBack={onBack}>
-        <h1 className="mt-3 font-tile text-2xl font-extrabold tracking-tight text-foreground">This invitation isn't working</h1>
+        <h1 className="mt-3 text-3xl font-black leading-tight tracking-tight text-foreground">This invitation isn't working</h1>
         <p className={`mt-3 text-base ${quietText}`}>
           The link may be mistyped, or the group may have made a new one. Ask for a fresh link.
         </p>
@@ -83,11 +83,11 @@ export function GroupInviteCard({ invite, signedIn, displayName, joined = false,
       <div className="mt-1">
         <GroupEmblem emblemId={invite.emblemId} photo={invite.photo} color={invite.accentColor} size={112} className="max-sm:!h-20 max-sm:!w-20 max-[359px]:!h-14 max-[359px]:!w-14" />
       </div>
-      <h1 className="mt-2 font-tile font-extrabold leading-[1.15] tracking-tight text-foreground [overflow-wrap:anywhere] [text-wrap:balance]">
-        <span className="block text-xl sm:text-2xl">
+      <h1 className="mt-2 leading-[1.1] tracking-tight text-foreground break-words [text-wrap:balance]">
+        <span className="block text-xl font-extrabold text-[hsl(258_90%_50%)] dark:text-[hsl(258_100%_82%)] sm:text-2xl">
           {joined ? "You're in!" : invite.isMember ? "You're already a member" : "You're invited!"}
         </span>
-        <span className="block text-[1.75rem] sm:text-4xl">{invite.name}</span>
+        <span className="mt-1 block text-3xl font-black sm:text-4xl">{invite.name}</span>
       </h1>
 
       {member ? (

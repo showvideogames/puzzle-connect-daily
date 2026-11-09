@@ -8,6 +8,7 @@ import { useLive } from "./useLive";
 
 interface MyGroupsProps {
   api: SocialApi;
+  compact?: boolean;
   groups: readonly GroupSummary[];
   displayName: string | undefined;
   onNote: (note: string) => void;
@@ -17,7 +18,7 @@ interface MyGroupsProps {
 }
 
 /** The tab. A new group's link comes from what createGroup answered. */
-export function MyGroups({ api, groups, displayName, onNote, onLink, onReload, onOpen }: MyGroupsProps) {
+export function MyGroups({ api, groups, displayName, onNote, onLink, onReload, onOpen, compact }: MyGroupsProps) {
   const { client } = api;
   const live = useLive();
 
@@ -44,7 +45,7 @@ export function MyGroups({ api, groups, displayName, onNote, onLink, onReload, o
     await onReload();
   };
 
-  return <GroupsTab groups={groups} onCreate={makeGroup} onOpen={onOpen} onReorder={groupOrderEnabled() ? async groupIds => {
+  return <GroupsTab compact={compact} groups={groups} onCreate={makeGroup} onOpen={onOpen} onReorder={groupOrderEnabled() ? async groupIds => {
     const answer = await client.call("setGroupOrder", { groupIds });
     if (!live.current) return;
     if (answer.ok === false) {

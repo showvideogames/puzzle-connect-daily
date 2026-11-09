@@ -516,6 +516,7 @@ const CASES: { [O in OpName]: Case<O> } = {
   replaceInvite: { args: { groupId: "g" }, fn: "social.replace_invite", params: ["g"] },
   // Not Rainbow, so no results are read first and the statement list stays this one call.
   listResults: { args: { gameId: "yodel", puzzleId: "p-1", groupId: "g" }, fn: "social.list_results", params: ["yodel", "p-1", "g"] },
+  recentCompletions: {args:{from:'2026-11-01T00:00:00.000Z',until:'2026-11-08T00:00:00.000Z'},fn:'social.recent_completions',params:['2026-11-01T00:00:00.000Z','2026-11-08T00:00:00.000Z',null]},
   deleteMySocialData: { args: {}, fn: "social.delete_person", params: [] },
 };
 

@@ -13,7 +13,7 @@ it('rehearses optional Mini seconds over current shared patches, preserving reco
  await db.exec(readFileSync('shared-service/fixtures/hub-eb238dd.sql','utf8'));
  await db.exec('create schema auth;create table auth.users(id uuid primary key);');
  await db.exec(readFileSync('shared-service/fixtures/crosspuns-eb238dd.sql','utf8'));
- for(const f of readdirSync('shared-service/patches').sort().filter(f=>!f.startsWith('0011')))await db.exec(readFileSync(`shared-service/patches/${f}`,'utf8'));
+ for(const f of readdirSync('shared-service/patches').sort().filter(f=>f<'0011'))await db.exec(readFileSync(`shared-service/patches/${f}`,'utf8'));
  const call=async<T = Record<string,string>>(fn:string,args:unknown[],role='social_gateway')=>{
   await db.exec(`set role ${role}`);try{return (await db.query<{r:HubReply<T>}>(`select social.${fn}(${args.map((_,i)=>`$${i+1}`).join(',')}) r`,args)).rows[0].r;}finally{await db.exec('reset role');}
  };

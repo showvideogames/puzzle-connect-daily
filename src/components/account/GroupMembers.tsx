@@ -1,6 +1,8 @@
+import { useEffect, useRef } from 'react';
 import type { GroupMemberView } from '@/lib/socialView';
 import type { GroupView } from './GroupPage';
-import { accountPanel, quietText } from './accountStyles';
+import { quietText, rowMeta, rowName } from './accountStyles';
+import { groupPanel } from './groupStyles';
 import { BackLink } from './BackLink';
 import { InlineConfirm } from './InlineConfirm';
 import { ProfileAvatar } from './ProfileAvatar';
@@ -20,20 +22,23 @@ interface Props {
 
 /** The membership roster stays separate from result sorting and never shows puzzle details. */
 export function GroupMembers({ group, members, problem, note, onBack, onRemove, onTransfer, grantedInviters, onInvitePermission, invitationProblem }: Props) {
-  return <main className={`${accountPanel} mx-auto w-full max-w-[32rem] px-5 pb-5 pt-2 sm:px-8`}>
+  // Opened from the group's settings dialog, so focus lands on the heading rather than dropping to the page.
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { heading.current?.focus(); }, []);
+  return <main className={`${groupPanel} pb-5 pt-2 sm:px-8`}>
     <BackLink onClick={onBack} />
-    <h1 className="font-tile text-2xl font-bold">Members</h1>
-    <p className={`${quietText} break-words`}>{group.name}</p>
+    <h1 ref={heading} tabIndex={-1} className="mt-2 rounded-md text-3xl font-black leading-none tracking-tight text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_90%_52%)] sm:text-4xl">Members</h1>
+    <p className={`mt-2 text-base ${quietText} break-words`}>{group.name}</p>
     {invitationProblem && <p role="alert" className="mt-3 text-destructive">{invitationProblem}</p>}
     {note && <p role="status" className="mt-3 text-base">{note}</p>}
     {!members && (problem ? <p role="alert" className="mt-3 text-destructive">{problem}</p> : <p role="status" className="mt-3">Loading members…</p>)}
     {members && <ul className="mt-3 divide-y divide-border" aria-label="Group members">
       {members.map(member => <li key={member.memberRef} className="py-3">
         <div className="flex items-center gap-3">
-          <ProfileAvatar animalId={member.animalId} backgroundColor={member.backgroundColor} />
+          <ProfileAvatar animalId={member.animalId} backgroundColor={member.backgroundColor} size={44} />
           <div className="min-w-0 flex-1">
-            <p className="break-words font-semibold">{member.name}{member.isMe ? ' (you)' : ''}</p>
-            {member.isOwner && <p className={`text-sm ${quietText}`}>Owner</p>}
+            <p className={`${rowName} break-words`}>{member.name}{member.isMe ? ' (you)' : ''}</p>
+            {member.isOwner && <p className={rowMeta}>Owner</p>}
           </div>
         </div>
         {group.isOwner && !member.isMe && !member.isOwner && <div className="mt-2 [&_button]:min-h-11 [&_button]:h-auto">

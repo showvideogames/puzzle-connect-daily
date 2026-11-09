@@ -51,6 +51,7 @@ let built: AppSocial | null = null;
 export function appSocial(): AppSocial {
   built ??= {
     api: {
+      recentActivity: import.meta.env.VITE_RECENT_COMPLETIONS === "true",
       client: createRainbowSocial({
         transport: createGatewayTransport({ baseUrl: import.meta.env.VITE_SUPABASE_URL, publishableKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY }),
         credentialFor: readStoredAccessToken,

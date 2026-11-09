@@ -103,7 +103,7 @@ export function ProfileForm({ mode, initial, onSave, onCancel, onLater, onDraftC
             onDraftChange?.(draft({ displayName: event.target.value }));
           }}
           className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-base text-foreground sm:h-12
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_46%_52%)]"
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_90%_52%)]"
         />
         <p id={`${id}-name-help`} className="text-xs text-muted-foreground">
           Shown to friends and groups. Your email stays private.
@@ -146,8 +146,8 @@ export function ProfileForm({ mode, initial, onSave, onCancel, onLater, onDraftC
           <button
             type="button"
             onClick={() => setShowAll(true)}
-            className="mt-1 w-full rounded-lg py-1 text-sm font-semibold text-[hsl(258_46%_46%)] sm:mt-2 sm:py-1.5 hover:underline
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-[hsl(258_80%_78%)]"
+            className="mt-1 w-full rounded-lg py-1 text-sm font-semibold text-[hsl(258_90%_45%)] sm:mt-2 sm:py-1.5 hover:underline
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-[hsl(258_100%_82%)]"
           >
             Show all {AVATAR_IDS.length} avatars
           </button>

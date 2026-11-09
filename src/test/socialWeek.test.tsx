@@ -2,15 +2,15 @@ import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {describe,expect,it,vi} from 'vitest';
 import {socialWeek,localPuzzleDate,rollingSocialDays} from '@/lib/socialWeek';
 import {FriendWeek} from '@/components/social/FriendWeek';
-import {readFriendWeek} from '@/components/social/friendWeekData';
+import {readFriendWeek,recentBounds} from '@/components/social/friendWeekData';
 import type {SocialApi} from '@/components/social/socialApi';
 import type {FriendResult} from '@/lib/friendResults';
 const friend:FriendResult={id:'friend',name:'Jordan',isYou:false,animalId:'otter',backgroundColor:'#CCE6CA',gameId:'rainbow',status:'solved',mistakes:0,detail:null};
 function fixture(){
- const call=vi.fn().mockImplementation(async(_op,args)=>({ok:true,data:[{friendRef:'friend',isMe:false,summary:{solved:true,mistakes:1},detailLocked:args.puzzleId!=='mon',detail:'🟨🟨🟨🟨'}]}));
- const weekPuzzles=vi.fn().mockResolvedValue([{id:'mon',date:'2026-11-02'},{id:'wed',date:'2026-11-04'},{id:'future',date:'2026-11-06'}]);
- const api={client:{call},today:()=>new Date(2026,10,5,23,59),weekPuzzles} as unknown as SocialApi;
- return {api,call,weekPuzzles};
+ const rows=[{puzzleId:'mon',puzzleDate:'2026-09-22',puzzleTitle:'#102',completedAt:new Date(2026,10,2,12).toISOString(),result:{friendRef:'friend',isMe:false,summary:{solved:true,mistakes:1},detailLocked:false,detail:'🟨🟨🟨🟨'}},{puzzleId:'wed',puzzleDate:'2026-10-01',puzzleTitle:'#103',completedAt:new Date(2026,10,4,12).toISOString(),result:{friendRef:'friend',isMe:false,summary:{solved:true,mistakes:1},detailLocked:true,detail:'SECRET'}}];
+ const call=vi.fn().mockResolvedValue({ok:true,data:{rows,hasMore:false}});
+ const api={client:{call},today:()=>new Date(2026,10,5,23,59),recentActivity:true} as unknown as SocialApi;
+ return {api,call,rows};
 }
 describe('rolling local calendar',()=>{
  it('includes today and advances one day at local midnight',()=>{
@@ -23,34 +23,34 @@ describe('rolling local calendar',()=>{
   expect(localPuzzleDate(new Date(2026,10,5,0,1))).toBe('2026-11-05');
  });
 });
-it('requests exact past puzzle ids; never falls back or uses future puzzles, and strips locked detail',async()=>{
- const {api,call,weekPuzzles}=fixture();const days=await readFriendWeek(api,friend,api.today());
- expect(weekPuzzles).toHaveBeenCalledWith('2026-10-30','2026-11-05');
- expect(call.mock.calls.map(x=>x[1].puzzleId)).toEqual(['mon','wed']);
- expect(days[3].result?.detail).toBe('🟨🟨🟨🟨');expect(days[4].result).toBeNull();expect(days[5].result?.detail).toBeNull();
+it('requests completion dates, not publication dates, and strips locked detail',async()=>{
+ const {api,call}=fixture();const days=await readFriendWeek(api,friend,api.today());
+ expect(call).toHaveBeenCalledWith('recentCompletions',{...recentBounds(api.today()),friendRef:'friend'});
+ expect(days).toHaveLength(2);expect(days[0]).toMatchObject({date:'2026-11-02',puzzleDate:'2026-09-22'});
+ expect(days[0].result.detail).toBe('🟨🟨🟨🟨');expect(days[1].result.detail).toBeNull();
 });
 it('does not mislabel a refused result read as unplayed',async()=>{
  const {api,call}=fixture();call.mockResolvedValue({ok:false,outcome:'unavailable'});
  await expect(readFriendWeek(api,friend,api.today())).rejects.toThrow();
 });
 it('renders individual locks and missing days; retries failures',async()=>{
- const {api,weekPuzzles}=fixture();weekPuzzles.mockRejectedValueOnce(new Error('offline'));
+ const {api,call}=fixture();call.mockRejectedValueOnce(new Error('offline'));
  render(<FriendWeek api={api} friend={friend}/>);await screen.findByText(/couldn't be loaded/);
  fireEvent.click(screen.getByRole('button',{name:'Try again'}));await screen.findByText('Finish this same puzzle to see their details.');
- expect(screen.getAllByText('No published puzzle')).toHaveLength(5);expect(screen.queryByText('Upcoming')).toBeNull();expect(screen.getAllByText('View details')).toHaveLength(1);
+ expect(screen.queryByText('No published puzzle')).toBeNull();expect(screen.queryByText('Upcoming')).toBeNull();expect(screen.getAllByText('View details')).toHaveLength(1);
 });
 it('discards a late response after friend identity changes',async()=>{
- const {api,weekPuzzles}=fixture();let resolve!:(value:{id:string;date:string}[])=>void;
- weekPuzzles.mockImplementationOnce(()=>new Promise(r=>{resolve=r;}));
+ const {api,call,rows}=fixture();let resolve!:(value:unknown)=>void;
+ call.mockImplementationOnce(()=>new Promise(r=>{resolve=r;}));
  const view=render(<FriendWeek api={api} friend={friend}/>);
  view.rerender(<FriendWeek api={api} friend={{...friend,id:'other'}}/>);
- await screen.findAllByText('Not played yet');await act(async()=>resolve([{id:'mon',date:'2026-11-02'}]));
+ await screen.findByText('No recent activity');await act(async()=>resolve({ok:true,data:{rows,hasMore:false}}));
  expect(screen.queryByText(/Solved/)).toBeNull();
 });
 it('refreshes dates on focus across a daily rollover',async()=>{
- const {api,weekPuzzles}=fixture();render(<FriendWeek api={api} friend={friend}/>);await screen.findByText('View details');
+ const {api,call}=fixture();render(<FriendWeek api={api} friend={friend}/>);await screen.findByText('View details');
  api.today=()=>new Date(2026,10,9,0,1);fireEvent.focus(window);
- await waitFor(()=>expect(weekPuzzles).toHaveBeenLastCalledWith('2026-11-03','2026-11-09'));
+ await waitFor(()=>expect(call).toHaveBeenLastCalledWith('recentCompletions',{...recentBounds(api.today()),friendRef:'friend'}));
  expect(screen.queryByText('View details')).toBeNull();
 });
 
@@ -62,10 +62,8 @@ it('uses fixed 30 and 365 day windows rather than calendar months or years',()=>
  expect(new Set(year.map(day=>day.date)).size).toBe(365);
 });
 
-it('keeps rendered dates tied to the fetched snapshot until the clock refreshes',async()=>{
- const {api}=fixture();const view=render(<FriendWeek api={api} friend={friend}/>);await screen.findByText('View details');
- api.today=()=>new Date(2026,10,6,0,1);view.rerender(<FriendWeek api={api} friend={{...friend,nickname:'Pal'}}/>);
- expect(document.querySelector('time[datetime="2026-11-06"]')).toBeNull();
- fireEvent.focus(window);await screen.findByText('View details');
- expect(document.querySelector('time[datetime="2026-11-06"]')).not.toBeNull();
+it('uses half-open local midnight boundaries, preserving calendar-day arithmetic',()=>{
+ const now=new Date(2026,10,5,23,59);const bounds=recentBounds(now);
+ expect(new Date(bounds.from)).toEqual(new Date(2026,9,30));
+ expect(new Date(bounds.until)).toEqual(new Date(2026,10,6));
 });
