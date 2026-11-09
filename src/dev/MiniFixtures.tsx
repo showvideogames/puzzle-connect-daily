@@ -132,7 +132,6 @@ export default function MiniFixtures() {
   return (
     <div style={{ zoom: Math.min(3, Math.max(1, Number(params.get("zoom")) || 1)) }} className="min-h-screen flex flex-col items-center pt-2 pb-12">
       <GameHeader showHint user={null} onSignOut={() => {}} variant="minimal" format={format} />
-      <div className="w-full max-w-[840px] border-b border-divider mb-2" />
       <p className="text-xs text-muted-foreground mb-2">
         DEV FIXTURE — {format.name} {format.sizeLabel}
         {rainbow ? " Rainbow" : " Classic"}

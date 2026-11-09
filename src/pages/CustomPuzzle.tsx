@@ -146,7 +146,6 @@ export default function CustomPuzzle() {
         user={user ?? null}
         onSignOut={() => signOutOfRainbow()}
         simplifiedIcons
-        showCreateLink={false}
         wideHeader
       />
       <div className="w-full max-w-[840px] border-b border-border mb-1 md:mb-3" />

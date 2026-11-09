@@ -284,10 +284,7 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
         user={user}
         onSignOut={handleSignOut}
         variant="minimal"
-        // Create a Puzzle lives in the menu instead (SettingsModal).
-        showCreateLink={false}
       />
-      <div className={`w-full max-w-[840px] border-b border-divider mb-1 md:mb-2`} />
 
       {/* Silly goose toast — shown when hint tapped after puzzle complete */}
       {showSillyGoose && (
