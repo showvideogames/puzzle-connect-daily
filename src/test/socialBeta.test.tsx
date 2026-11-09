@@ -102,7 +102,8 @@ const ROUTES_TODAY = [
 ];
 
 function Where() {
-  return <p data-testid="where">{useLocation().pathname}</p>;
+  const location = useLocation();
+  return <p data-testid="where">{`${location.pathname} ${JSON.stringify(location.state)}`}</p>;
 }
 
 const menu = (props = {}) => (
@@ -153,13 +154,13 @@ describe("beta", () => {
     expect(routes.filter((route) => ROUTES_TODAY.includes(route))).toEqual(ROUTES_TODAY);
   }, 60000);
 
-  it("offers Friends & Groups in the Settings menu, which opens /friends", () => {
+  it("offers Friends & Groups in the Settings menu, which opens the Friends home", () => {
     vi.stubEnv("VITE_SHARED_SOCIAL", "beta");
     const onClose = vi.fn();
     render(menu({ onClose }));
     fireEvent.click(screen.getByRole("button", { name: "Friends & Groups" }));
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId("where")).toHaveTextContent("/friends");
+    expect(screen.getByTestId("where")).toHaveTextContent('/friends {"friendsHome":true}');
   });
 
   it("offers Edit profile to someone signed in, which opens the editor on /friends", () => {

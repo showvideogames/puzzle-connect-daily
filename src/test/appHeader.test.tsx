@@ -4,7 +4,7 @@
  * their order, the 44px targets, the brand and the hamburger drawer.
  */
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSocial } from "@/components/social/appSocial";
 
@@ -146,6 +146,17 @@ describe("hamburger drawer", () => {
     fireEvent.keyDown(drawer, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Menu" })).toBeNull());
     expect(trigger).toHaveFocus();
+  });
+
+  it("sends Friends & Groups to the Friends home, even from /friends", async () => {
+    function Where() {
+      const location = useLocation();
+      return <p data-testid="where">{`${location.pathname} ${JSON.stringify(location.state)}`}</p>;
+    }
+    render(<MemoryRouter initialEntries={["/friends"]}><MinimalHeader /><Where /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "Menu" })).getByRole("link", { name: "Friends & Groups" }));
+    expect(screen.getByTestId("where")).toHaveTextContent('/friends {"friendsHome":true}');
   });
 
   it("the close button closes it too, and focus returns", async () => {

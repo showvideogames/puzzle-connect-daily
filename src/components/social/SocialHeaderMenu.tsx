@@ -59,7 +59,7 @@ function SignedInMenu({ social, onAccount }: { social: AppSocial; onAccount: () 
   return <ProfileMenu profile={profile} pendingCount={pendingCount}
     onOpenChange={open => { if (open) void refresh(); }}
     onProfile={() => navigate("/friends", { state: { editProfile: true } })}
-    onFriends={() => navigate("/friends")}
+    onFriends={() => navigate("/friends", { state: { friendsHome: true } })}
     onAccount={onAccount} />;
 }
 
@@ -69,7 +69,7 @@ export function SocialHeaderMenu({ social, onAccount }: { social: AppSocial; onA
   const navigate = useNavigate();
   if (session.kind !== "signed-in") return <ProfileMenu profile={null} pendingCount={null}
     onProfile={() => navigate("/friends", { state: { editProfile: true } })}
-    onFriends={() => navigate("/friends")} onAccount={onAccount} />;
+    onFriends={() => navigate("/friends", { state: { friendsHome: true } })} onAccount={onAccount} />;
   return <SignedInMenu key={sessionKey(session)} social={social} onAccount={onAccount} />;
 }
 
