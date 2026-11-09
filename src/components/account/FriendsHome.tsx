@@ -1,6 +1,6 @@
 import { ProfileAvatar } from "./ProfileAvatar";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Copy, UserPlus, ChevronRight, Plus, UserRound } from "lucide-react";
+import { Check, Copy, UserPlus, ChevronRight, Plus, UserRound } from "lucide-react";
 import type { FriendResult } from "@/lib/friendResults";
 import { cn } from "@/lib/utils";
 import {
@@ -44,6 +44,9 @@ interface FriendsHomeProps {
   activity?: ReactNode;
 }
 
+/** How long the copy icon shows a check after the friend code is copied. */
+const COPIED_CHECK_MS = 2000;
+
 /** One half of the Home / Groups switch. */
 const segment = (current: boolean) =>
   cn(
@@ -79,6 +82,22 @@ export function FriendsHome({
     [toast, setToast] = useState<string | null>(null);
   const [toastVersion, setToastVersion] = useState(0);
   const dismiss = useCallback(() => setToast(null), []);
+  // The code the copy icon shows a check for, briefly after a copy succeeds. Only
+  // the latest click counts, a failure clears it, and another code (a different
+  // account) never shows it.
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout>>();
+  const copyAttempt = useRef(0);
+  useEffect(() => () => {
+    copyAttempt.current += 1;
+    clearTimeout(copiedTimer.current);
+  }, []);
+  const markCopied = (code: string | null) => {
+    clearTimeout(copiedTimer.current);
+    setCopiedCode(code);
+    if (code) copiedTimer.current = setTimeout(() => setCopiedCode(null), COPIED_CHECK_MS);
+  };
+  const CopyIcon = copiedCode === friendCode ? Check : Copy;
   const allFriends = useRef<HTMLHeadingElement>(null);
   const recent = activity !== undefined;
   const todayLabel = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(today ?? new Date());
@@ -130,12 +149,15 @@ export function FriendsHome({
             aria-label="Copy friend code"
             className="flex min-h-16 shrink-0 items-center gap-4 rounded-2xl border border-[hsl(258_100%_85%)] bg-[hsl(258_100%_97%)] py-2 pl-4 pr-3 text-left transition-colors hover:bg-[hsl(258_100%_95%)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(258_90%_52%)] focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-[hsl(258_70%_55%)] dark:bg-[hsl(258_55%_20%)] dark:hover:bg-[hsl(258_55%_20%)]"
             onClick={async () => {
+              const attempt = ++copyAttempt.current, code = friendCode;
               setToastVersion((n) => n + 1);
               try {
-                await navigator.clipboard.writeText(friendCode);
+                await navigator.clipboard.writeText(code);
                 setToast("Copied to clipboard");
+                if (attempt === copyAttempt.current) markCopied(code);
               } catch {
                 setToast("Could not copy. Select and copy your code instead.");
+                if (attempt === copyAttempt.current) markCopied(null);
               }
             }}
           >
@@ -147,7 +169,7 @@ export function FriendsHome({
                 {friendCode}
               </strong>
             </span>
-            <Copy aria-hidden="true" className={`h-6 w-6 shrink-0 ${purpleText}`} />
+            <CopyIcon aria-hidden="true" className={`h-6 w-6 shrink-0 ${purpleText}`} />
           </button>
         )}
       </header>

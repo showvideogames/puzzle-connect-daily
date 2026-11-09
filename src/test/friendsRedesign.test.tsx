@@ -190,16 +190,24 @@ describe("the Friends home header", () => {
     expect(screen.getByText("R8T-6NZ").className).toMatch(/text-xl.*font-black/);
   });
 
-  it("shows the copy toast outside the header, fixed, so the header never changes", async () => {
+  // The header with each icon reduced to its classes, minus which icon it is.
+  const frame = (header: HTMLElement) => {
+    const copy = header.cloneNode(true) as HTMLElement;
+    copy.querySelectorAll("svg").forEach((svg) => svg.replaceWith(`<svg ${svg.getAttribute("class")?.replace(/lucide-(copy|check)/, "lucide-icon")} aria-hidden=${svg.getAttribute("aria-hidden")}>`));
+    return copy.innerHTML;
+  };
+
+  it("shows the copy toast outside the header, fixed, so the header only swaps its icon", async () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true });
     home();
     const header = screen.getByRole("banner");
-    const before = header.innerHTML;
+    const before = frame(header);
     fireEvent.click(screen.getByRole("button", { name: "Copy friend code" }));
     const toast = await screen.findByText("Copied to clipboard");
     expect(header).not.toContainElement(toast);
     expect(toast).toHaveClass("fixed");
-    expect(header.innerHTML).toBe(before);
+    expect(header.querySelector(".lucide-check")).not.toBeNull();
+    expect(frame(header)).toBe(before);
   });
 
   it("greets by Display Name when it is known, and plainly when it isn't", () => {
@@ -216,6 +224,91 @@ describe("the Friends home header", () => {
     home({ onAddFriend });
     fireEvent.click(screen.getByRole("button", { name: "Add friend" }));
     expect(onAddFriend).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the friend code copy check", () => {
+  afterEach(() => vi.useRealTimers());
+  const props = { gameName: "Rainbow Categories", results: [friend], tab: "friends" as const, onTabChange: vi.fn(), onAddFriend: vi.fn(), groups: null };
+  const clipboard = (writeText: () => Promise<void>) => Object.defineProperty(navigator, "clipboard", { value: { writeText: vi.fn(writeText) }, configurable: true });
+  const button = () => screen.getByRole("button", { name: "Copy friend code" });
+  const icon = () => button().querySelector("svg")!;
+  const copy = () => act(async () => fireEvent.click(button()));
+  const wait = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+
+  it("swaps to a check for 2 seconds on success, beside the unchanged toast, label and icon size", async () => {
+    vi.useFakeTimers();
+    clipboard(async () => undefined);
+    render(<FriendsHome {...props} friendCode="R8T-6NZ" />);
+    expect(icon()).toHaveClass("lucide-copy");
+    await copy();
+    expect(icon()).toHaveClass("lucide-check", "h-6", "w-6", "shrink-0");
+    expect(icon()).toHaveAttribute("aria-hidden", "true");
+    expect(button()).toHaveAccessibleName("Copy friend code");
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("status")).toHaveTextContent("Copied to clipboard");
+    await wait(1999);
+    expect(icon()).toHaveClass("lucide-check");
+    await wait(1);
+    expect(icon()).toHaveClass("lucide-copy", "h-6", "w-6", "shrink-0");
+    expect(screen.getByRole("status")).toHaveTextContent("Copied to clipboard");
+    await wait(800);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("shows no check when the write is rejected, and a failure clears an earlier check", async () => {
+    vi.useFakeTimers();
+    clipboard(async () => { throw new Error("denied"); });
+    render(<FriendsHome {...props} friendCode="R8T-6NZ" />);
+    await copy();
+    expect(icon()).toHaveClass("lucide-copy");
+    expect(screen.getByRole("status")).toHaveTextContent(/Could not copy/);
+
+    clipboard(async () => undefined);
+    await copy();
+    expect(icon()).toHaveClass("lucide-check");
+    clipboard(async () => { throw new Error("denied"); });
+    await copy();
+    expect(icon()).toHaveClass("lucide-copy");
+  });
+
+  it("renews the 2 seconds on each repeated success", async () => {
+    vi.useFakeTimers();
+    clipboard(async () => undefined);
+    render(<FriendsHome {...props} friendCode="R8T-6NZ" />);
+    await copy();
+    await wait(1500);
+    await copy();
+    await wait(1500);
+    expect(icon()).toHaveClass("lucide-check");
+    await wait(500);
+    expect(icon()).toHaveClass("lucide-copy");
+  });
+
+  it("ignores an older copy that finishes after a newer one failed", async () => {
+    vi.useFakeTimers();
+    let finish!: () => void;
+    clipboard(() => new Promise<void>((done) => (finish = done)));
+    render(<FriendsHome {...props} friendCode="R8T-6NZ" />);
+    await copy();
+    clipboard(async () => { throw new Error("denied"); });
+    await copy();
+    await act(async () => finish());
+    expect(icon()).toHaveClass("lucide-copy");
+  });
+
+  it("drops the check for a different code, and leaves no timer after unmount", async () => {
+    vi.useFakeTimers();
+    clipboard(async () => undefined);
+    const { rerender, unmount } = render(<FriendsHome {...props} friendCode="R8T-6NZ" />);
+    await copy();
+    expect(icon()).toHaveClass("lucide-check");
+    rerender(<FriendsHome {...props} friendCode="K2P-9QW" />);
+    expect(icon()).toHaveClass("lucide-copy");
+    await copy();
+    expect(icon()).toHaveClass("lucide-check");
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 
