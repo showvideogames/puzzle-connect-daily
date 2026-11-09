@@ -835,3 +835,253 @@ describe("navigation intents after the page is already mounted", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("/friends null");
   });
 });
+
+describe("Friends & Groups from the profile editor", () => {
+  // The two intents the profile menu, drawer and Settings send.
+  function Menu() {
+    const navigate = useNavigate();
+    return <><button onClick={() => navigate("/friends", {state:{editProfile:true}})}>My profile</button><button onClick={() => navigate("/friends", {state:{friendsHome:true}})}>Friends & Groups</button></>;
+  }
+  const page = (social = holder.social, entry: unknown = "/friends") =>
+    <MemoryRouter initialEntries={[entry as string]}><Routes><Route path="/friends" element={<><Menu /><SocialPage social={social as AppSocial} code={null}/><Where /></>} /></Routes></MemoryRouter>;
+  // Focus first, as a real click or Enter does, so focus can be checked after the question.
+  const go = (name: "My profile" | "Friends & Groups") => act(async () => { const button = screen.getByRole("button",{name}); button.focus(); fireEvent.click(button); });
+  const nameField = () => screen.getByLabelText("Display Name");
+  const prompt = () => screen.queryByRole("alertdialog",{name:"Discard profile changes?"});
+  const openEditor = async () => { await go("My profile"); await screen.findByRole("heading",{name:"Edit your profile"}); };
+
+  it("goes straight to the Friends home when nothing changed, every time", async () => {
+    const { call } = stubSocial(SIGNED_IN);
+    render(page());
+    await screen.findByTestId("friends-home");
+    for (let i = 0; i < 3; i++) {
+      await openEditor();
+      await go("Friends & Groups");
+      expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+      expect(prompt()).toBeNull();
+    }
+    expect(screen.getByTestId("where")).toHaveTextContent("/friends null");
+    expect(opsCalled(call)).not.toContain("setProfile");
+  });
+
+  it("does not ask when a change was undone", async () => {
+    stubSocial(SIGNED_IN);
+    render(page());
+    await screen.findByTestId("friends-home");
+    await openEditor();
+    fireEvent.change(nameField(), { target: { value: "Alexa" } });
+    fireEvent.change(nameField(), { target: { value: "Alex" } });
+    await go("Friends & Groups");
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    expect(prompt()).toBeNull();
+  });
+
+  it("asks before losing changes: Stay keeps them, asking again works, Discard goes home without saving", async () => {
+    const { call } = stubSocial(SIGNED_IN);
+    render(page());
+    await screen.findByTestId("friends-home");
+    await openEditor();
+    fireEvent.change(nameField(), { target: { value: "Alexa" } });
+    const avatars = within(screen.getByRole("group",{name:"Choose your avatar"})).getAllByRole("radio") as HTMLInputElement[];
+    fireEvent.click(avatars.find(radio => !radio.checked)!);
+
+    await go("Friends & Groups");
+    const asking = await screen.findByRole("alertdialog",{name:"Discard profile changes?"});
+    fireEvent.click(within(asking).getByRole("button",{name:"Stay"}));
+    await waitFor(() => expect(prompt()).toBeNull());
+    expect(nameField()).toHaveValue("Alexa");
+    await waitFor(() => expect(nameField()).toHaveFocus());
+
+    await go("Friends & Groups");
+    fireEvent.keyDown(await screen.findByRole("alertdialog"), { key: "Escape" });
+    await waitFor(() => expect(prompt()).toBeNull());
+    expect(nameField()).toHaveValue("Alexa");
+    await waitFor(() => expect(nameField()).toHaveFocus());
+
+    await go("Friends & Groups");
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button",{name:"Discard changes"}));
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    await waitFor(() => expect(prompt()).toBeNull());
+    await waitFor(() => expect(screen.getByRole("heading",{level:1,name:"Friends"})).toHaveFocus());
+    expect(opsCalled(call)).not.toContain("setProfile");
+
+    await openEditor();
+    expect(nameField()).toHaveValue("Alex");
+    await go("Friends & Groups");
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    expect(prompt()).toBeNull();
+  });
+
+  it("keeps changes after a failed save, and still asks", async () => {
+    stubSocial(SIGNED_IN, { setProfile: () => refused("unavailable") });
+    render(page());
+    await screen.findByTestId("friends-home");
+    await openEditor();
+    fireEvent.change(nameField(), { target: { value: "Alexa" } });
+    await act(async () => fireEvent.click(screen.getByRole("button",{name:"Save changes"})));
+    expect(await screen.findByText("We couldn't save that. Please try again.")).toBeInTheDocument();
+    await go("Friends & Groups");
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button",{name:"Stay"}));
+    await waitFor(() => expect(prompt()).toBeNull());
+    expect(nameField()).toHaveValue("Alexa");
+  });
+
+  describe("while a save is under way", () => {
+    // Each save waits until the test answers it.
+    let answer!: (result: unknown) => void;
+    const pendingSaves = () => stubSocial(SIGNED_IN, { setProfile: () => new Promise(resolve => { answer = resolve; }) });
+    const stillSaving = () => screen.queryByRole("alertdialog",{name:"Still saving your profile"});
+    const saveAndAsk = async (value: string) => {
+      fireEvent.change(nameField(), { target: { value } });
+      await act(async () => fireEvent.click(screen.getByRole("button",{name:"Save changes"})));
+      expect(screen.getByRole("button",{name:"Saving…"})).toBeInTheDocument();
+      await go("Friends & Groups");
+      return screen.findByRole("alertdialog",{name:"Still saving your profile"});
+    };
+
+    it("says the save is still going and offers no discard; Stay waits in the editor until it lands", async () => {
+      const { call } = pendingSaves();
+      render(page());
+      await screen.findByTestId("friends-home");
+      await openEditor();
+      const asking = await saveAndAsk("Alexa");
+      expect(asking).toHaveTextContent("Your changes are being saved. Stay here, or go to Friends once they're saved.");
+      expect(within(asking).queryByRole("button",{name:"Discard changes"})).toBeNull();
+      expect(within(asking).getByRole("button",{name:"Go when saved"})).toBeInTheDocument();
+      expect(prompt()).toBeNull();
+
+      fireEvent.click(within(asking).getByRole("button",{name:"Stay"}));
+      await waitFor(() => expect(stillSaving()).toBeNull());
+      expect(nameField()).toHaveValue("Alexa");
+      await waitFor(() => expect(nameField()).toHaveFocus());
+      await act(async () => answer(yes({})));
+      expect(await screen.findByText("Profile saved.")).toBeInTheDocument();
+      expect(screen.getByTestId("friends-home")).toBeInTheDocument();
+
+      // The save lands while the question is open: the editor closes and the question goes with it.
+      await openEditor();
+      await saveAndAsk("Alexandra");
+      await act(async () => answer(yes({})));
+      expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+      await waitFor(() => expect(stillSaving()).toBeNull());
+      await openEditor();
+      expect(stillSaving()).toBeNull(); expect(prompt()).toBeNull();
+      expect(call.mock.calls.filter(([op]) => op === "setProfile").map(([, input]) => (input as { displayName: string }).displayName)).toEqual(["Alexa","Alexandra"]);
+    });
+
+    it("Go when saved keeps the editor until the save lands, then goes to the Friends home", async () => {
+      pendingSaves();
+      render(page());
+      await screen.findByTestId("friends-home");
+      await openEditor();
+      const asking = await saveAndAsk("Alexa");
+      fireEvent.click(within(asking).getByRole("button",{name:"Go when saved"}));
+      await waitFor(() => expect(stillSaving()).toBeNull());
+      expect(screen.getByRole("heading",{name:"Edit your profile"})).toBeInTheDocument();
+      expect(nameField()).toHaveValue("Alexa");
+      await waitFor(() => expect(nameField()).toHaveFocus());
+      await act(async () => answer(yes({})));
+      expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+      expect(screen.getByText("Profile saved.")).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole("heading",{level:1,name:"Friends"})).toHaveFocus());
+    });
+
+    it("keeps the changes when the save fails: back to the form after Stay, a plain discard question after Go when saved", async () => {
+      const { call } = pendingSaves();
+      render(page());
+      await screen.findByTestId("friends-home");
+      await openEditor();
+
+      // Fails with the question still open: it closes, and the changes and the error stay in the form.
+      await saveAndAsk("Alexa");
+      await act(async () => answer(refused("unavailable")));
+      await waitFor(() => expect(stillSaving()).toBeNull());
+      expect(prompt()).toBeNull();
+      expect(screen.getByText("We couldn't save that. Please try again.")).toBeInTheDocument();
+      expect(nameField()).toHaveValue("Alexa");
+      await waitFor(() => expect(nameField()).toHaveFocus());
+
+      // Now nothing is on its way, so Friends & Groups asks to discard.
+      await go("Friends & Groups");
+      fireEvent.click(within(await screen.findByRole("alertdialog",{name:"Discard profile changes?"})).getByRole("button",{name:"Stay"}));
+      await waitFor(() => expect(prompt()).toBeNull());
+      expect(nameField()).toHaveValue("Alexa");
+
+      // Fails after Go when saved: the player is asked whether to discard, with Stay focused, and can still go.
+      const asking = await saveAndAsk("Alexa");
+      fireEvent.click(within(asking).getByRole("button",{name:"Go when saved"}));
+      await waitFor(() => expect(stillSaving()).toBeNull());
+      await act(async () => answer(refused("unavailable")));
+      const discard = await screen.findByRole("alertdialog",{name:"Discard profile changes?"});
+      expect(discard).toHaveTextContent("Your profile changes haven't been saved.");
+      await waitFor(() => expect(within(discard).getByRole("button",{name:"Stay"})).toHaveFocus());
+      expect(nameField()).toHaveValue("Alexa");
+      fireEvent.click(within(discard).getByRole("button",{name:"Discard changes"}));
+      expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole("heading",{level:1,name:"Friends"})).toHaveFocus());
+      expect(call.mock.calls.filter(([op]) => op === "setProfile")).toHaveLength(2);
+      await openEditor();
+      expect(nameField()).toHaveValue("Alex");
+    });
+  });
+
+  it("wins over a profile request still loading", async () => {
+    let answer!: () => void;
+    stubSocial(SIGNED_IN, { getMe: () => new Promise(resolve => { answer = () => resolve(yes({ displayName: "Alex", animalId: "fox", backgroundColor: "#DED1F2", friendCode: "AAA-222", friendCount: 0, groupCount: 0 })); }) });
+    render(page(holder.social, { pathname: "/friends", state: { editProfile: true } }));
+    await go("Friends & Groups");
+    await act(async () => answer());
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    expect(screen.queryByRole("heading",{name:"Edit your profile"})).toBeNull();
+  });
+
+  it("drops the editor, its changes and the question when the account changes", async () => {
+    stubSocial(SIGNED_IN);
+    const first = holder.social;
+    const view = render(page(first));
+    await screen.findByTestId("friends-home");
+    await openEditor();
+    fireEvent.change(nameField(), { target: { value: "Alexa" } });
+    await go("Friends & Groups");
+    await screen.findByRole("alertdialog");
+    stubSocial({ ...SIGNED_IN, state: { scope: "scope-2", credential: "other" }, accountId: "u2", storedOwner: "u2", generation: 2 }, {
+      getMe: () => yes({ displayName: "Sam", animalId: "owl", backgroundColor: "#F8D0BD", friendCode: "BBB-333", friendCount: 0, groupCount: 0 }),
+    });
+    view.rerender(page(holder.social));
+    expect(await screen.findByTestId("friends-home")).toBeInTheDocument();
+    await waitFor(() => expect(prompt()).toBeNull());
+    expect(screen.queryByDisplayValue("Alexa")).toBeNull();
+    await go("Friends & Groups");
+    expect(prompt()).toBeNull();
+  });
+});
+
+describe("group order across an account change", () => {
+  it("drops an unsaved order with the account and shows the next account its own order", async () => {
+    vi.stubEnv("VITE_GROUP_ORDER", "true");
+    const first = stubSocial(SIGNED_IN, {
+      listMyGroups: () => yes([group("g1", "Book Nerds"), group("g2", "Puzzle Pals")]),
+      listGroupOrder: () => yes({ groupIds: ["g2", "g1"] }),
+    });
+    const page = () => <MemoryRouter initialEntries={["/friends"]}><Routes><Route path="/friends" element={<SocialPage social={holder.social as AppSocial} code={null}/>} /></Routes></MemoryRouter>;
+    const view = render(page());
+    await screen.findByTestId("friends-home");
+    fireEvent.click(screen.getByRole("button",{name:"Groups"}));
+    fireEvent.click(await screen.findByRole("button",{name:"Reorder groups"}));
+    fireEvent.click(screen.getByRole("button",{name:"Move Book Nerds up"}));
+    expect(screen.getAllByRole("listitem").map(row => row.textContent)).toEqual([expect.stringContaining("Book Nerds"), expect.stringContaining("Puzzle Pals")]);
+
+    const second = stubSocial({ ...SIGNED_IN, state: { scope: "scope-2", credential: "other" }, accountId: "u2", storedOwner: "u2", generation: 2 }, {
+      getMe: () => yes({ displayName: "Sam", animalId: "owl", backgroundColor: "#F8D0BD", friendCode: "BBB-333", friendCount: 0, groupCount: 2 }),
+      listMyGroups: () => yes([group("g3", "Chess Club"), group("g4", "Word Nerds")]),
+      listGroupOrder: () => yes({ groupIds: ["g4", "g3"] }),
+    });
+    view.rerender(page());
+    await screen.findByTestId("friends-home");
+    expect(screen.queryByRole("region",{name:"Reorder groups"})).toBeNull();
+    await waitFor(() => expect(screen.getAllByTestId("group-row").map(row => row.textContent)).toEqual([expect.stringContaining("Word Nerds"), expect.stringContaining("Chess Club")]));
+    expect(screen.queryByText("Book Nerds")).toBeNull();
+    expect(opsCalled(first.call)).not.toContain("setGroupOrder");
+    expect(opsCalled(second.call)).not.toContain("setGroupOrder");
+  });
+});

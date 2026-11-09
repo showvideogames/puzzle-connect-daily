@@ -36,7 +36,7 @@ describe('header identity and notifications', () => {
     await openMenu();
     expect(screen.getByText('Alex')).toBeInTheDocument();
     await act(async () => fireEvent.click(screen.getByRole('menuitem', { name: /Friends & Groups/ })));
-    expect(screen.getByTestId('location')).toHaveTextContent('/friends:null');
+    expect(screen.getByTestId('location')).toHaveTextContent('/friends:{"friendsHome":true}');
   });
   it('opens the existing profile route with its edit request and preserves account action', async () => {
     const fake = fixture(); const account = vi.fn(); open(fake, account);

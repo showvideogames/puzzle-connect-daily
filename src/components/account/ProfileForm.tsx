@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { avatarLabel } from "@/lib/avatarManifest";
 import {
   AVATAR_IDS,
@@ -24,6 +24,8 @@ interface ProfileFormProps {
   onLater?: () => void;
   /** Follows the choices as they change, for an avatar shown elsewhere on the page. */
   onDraftChange?: (draft: SharedProfile) => void;
+  /** Says whether the choices differ from `initial`, so leaving can ask before they are lost. */
+  onDirtyChange?: (dirty: boolean) => void;
   /** What happens next, such as a group invitation that is waiting. */
   notice?: ReactNode;
 }
@@ -34,10 +36,15 @@ interface ProfileFormProps {
  * only thing a player has to do. Real radio inputs, so arrow keys and screen
  * readers work without any code here.
  */
-export function ProfileForm({ mode, initial, onSave, onCancel, onLater, onDraftChange, notice }: ProfileFormProps) {
+export function ProfileForm({ mode, initial, onSave, onCancel, onLater, onDraftChange, onDirtyChange, notice }: ProfileFormProps) {
   const [name, setName] = useState(initial.displayName ?? "");
   const [animalId, setAnimalId] = useState<AvatarId>(initial.animalId);
   const [color, setColor] = useState<ProfileColor>(initial.backgroundColor);
+  const dirty = name !== (initial.displayName ?? "") || animalId !== initial.animalId || color !== initial.backgroundColor;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
   // Someone who already chose an avatar outside the short list must see it.
   const [showAll, setShowAll] = useState(!FEATURED_AVATARS.includes(initial.animalId));
   const [busy, setBusy] = useState(false);

@@ -59,7 +59,7 @@ function SocialRow({ onClose, onOpen }: { onClose: () => void; onOpen: () => voi
 /** Its own component so the router is only reached for inside the Menu section, where a router is already needed. */
 function BetaSocialRow({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
-  return <SocialRow onClose={onClose} onOpen={() => navigate("/friends")} />;
+  return <SocialRow onClose={onClose} onOpen={() => navigate("/friends", { state: { friendsHome: true } })} />;
 }
 
 /** The profile editor that Friends & Groups uses, opened straight away. */
