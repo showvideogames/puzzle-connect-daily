@@ -58,11 +58,10 @@ html {
 
     /* Tile colors */
     --tile: 36 18% 88%;
-    /* Selected tile: matches the reference mockup's selected-tile color
-       exactly (#3E3832). Light mode only — dark mode's own value below is
-       untouched. */
-    --tile-selected: 30 11% 22%;
-    --tile-selected-fg: var(--action-primary-fg);
+    /* Selected tile: neutral charcoal (#292929) with pure white text.
+       Light mode only; dark mode keeps its own values below. */
+    --tile-selected: 0 0% 16.0784313725%;
+    --tile-selected-fg: 0 0% 100%;
 
     /* Brand purple used by the Submit button when enabled — same values in
        light and dark (a fixed brand color, not a theme-adaptive token). */
