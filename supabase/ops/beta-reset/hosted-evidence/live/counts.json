@@ -1,0 +1,138 @@
+[
+  {
+    "table": "accounts",
+    "rows": 1
+  },
+  {
+    "table": "archive_access",
+    "rows": 0
+  },
+  {
+    "table": "beta_feedback",
+    "rows": 1
+  },
+  {
+    "table": "beta_playtests",
+    "rows": 64
+  },
+  {
+    "table": "creator_profiles",
+    "rows": 1
+  },
+  {
+    "table": "custom_puzzle_favorites",
+    "rows": 2
+  },
+  {
+    "table": "custom_puzzle_results",
+    "rows": 3
+  },
+  {
+    "table": "custom_puzzle_stats",
+    "rows": 2
+  },
+  {
+    "table": "custom_puzzles",
+    "rows": 2
+  },
+  {
+    "table": "cv_puzzles",
+    "rows": 0
+  },
+  {
+    "table": "cv_wordbank",
+    "rows": 0
+  },
+  {
+    "table": "device_identities",
+    "rows": 214
+  },
+  {
+    "table": "feedback",
+    "rows": 8
+  },
+  {
+    "table": "game_sessions",
+    "rows": 290
+  },
+  {
+    "table": "guess_events",
+    "rows": 1522
+  },
+  {
+    "table": "hint_events",
+    "rows": 10
+  },
+  {
+    "table": "luck_score_ceilings",
+    "rows": 1
+  },
+  {
+    "table": "puzzle_aggregates",
+    "rows": 68
+  },
+  {
+    "table": "puzzle_groups",
+    "rows": 530
+  },
+  {
+    "table": "puzzle_ratings",
+    "rows": 50
+  },
+  {
+    "table": "puzzle_versions",
+    "rows": 157
+  },
+  {
+    "table": "puzzles",
+    "rows": 133
+  },
+  {
+    "table": "user_roles",
+    "rows": 1
+  },
+  {
+    "table": "user_streaks",
+    "rows": 44
+  },
+  {
+    "table": "wtf_game_records",
+    "rows": 0
+  },
+  {
+    "table": "wtf_games",
+    "rows": 0
+  },
+  {
+    "table": "wtf_player_stats",
+    "rows": 0
+  },
+  {
+    "table": "wtf_players",
+    "rows": 0
+  },
+  {
+    "table": "wtf_puzzle_stats",
+    "rows": 0
+  },
+  {
+    "table": "xw_admins",
+    "rows": 2
+  },
+  {
+    "table": "xw_joke_reactions",
+    "rows": 32
+  },
+  {
+    "table": "xw_puzzles",
+    "rows": 13
+  },
+  {
+    "table": "xw_times",
+    "rows": 43
+  },
+  {
+    "table": "xw_votes",
+    "rows": 39
+  }
+]
