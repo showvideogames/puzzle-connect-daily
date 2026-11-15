@@ -35,7 +35,7 @@ test.describe("A public custom puzzle", () => {
 
   test("the header's stats button opens the PLAYER's stats @smoke", async ({ page }) => {
     await page.getByRole("button", { name: "My stats" }).click();
-    await expect(page.getByRole("dialog")).toContainText("My Stats");
+    await expect(page.getByRole("dialog")).toContainText("Your stats");
     // Not this puzzle's stats — a different modal with a different question.
     await expect(page.getByText("This Puzzle's Stats")).toHaveCount(0);
   });
@@ -44,7 +44,7 @@ test.describe("A public custom puzzle", () => {
     await page.getByRole("button", { name: "Puzzle Stats" }).click();
     await expect(page.getByText("This Puzzle's Stats")).toBeVisible();
     await expect(page.getByText("Statistics for this custom puzzle only.")).toBeVisible();
-    await expect(page.getByText("My Stats", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Your stats", { exact: true })).toHaveCount(0);
   });
 
   test("Create Your Own routes to /create @smoke", async ({ page }) => {
