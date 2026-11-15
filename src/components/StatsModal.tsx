@@ -5,7 +5,9 @@ import { GameStats } from "@/lib/types";
 import { X, Puzzle, Trophy, Flame, Crown, Star, LightbulbOff, BarChart3, ListOrdered } from "lucide-react";
 import { RainbowIcon } from "./RainbowIcon";
 import { ReverseRainbowIcon } from "./ReverseRainbowIcon";
-import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
+import { FULL_FORMAT, MINI_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
+
+import "./StatsModal.css";
 
 interface StatsModalProps {
   open: boolean;
@@ -20,20 +22,23 @@ interface StatsModalProps {
 }
 
 export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalProps) {
+  const [selectedFormat, setSelectedFormat] = useState(format);
+  useEffect(() => { if (open) setSelectedFormat(format); }, [open, format]);
   const [stats, setStats] = useState<GameStats | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
+    setStats(null);
     let cancelled = false;
-    loadStatsFromSupabase(format).then((s) => {
+    loadStatsFromSupabase(selectedFormat).then((s) => {
       if (cancelled) return;
       setStats(s);
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [open, format]);
+  }, [open, selectedFormat]);
 
   const winRate = stats ? winRateOf(stats) : 0;
   // 0 once the streak has lapsed (see displayStreakOf).
@@ -42,9 +47,9 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
   const topStats = stats
     ? [
         { value: stats.gamesPlayed, label: "Played", icon: Puzzle, colorClass: "text-[hsl(var(--brand-purple-from))]" },
-        { value: winRate, label: "Win %", icon: Trophy, colorClass: "text-group-2" },
-        { value: displayStreak, label: "Streak", icon: Flame, colorClass: "text-orange-500" },
-        { value: stats.maxStreak, label: "Max Streak", icon: Crown, colorClass: "text-amber-500" },
+        { value: `${winRate}%`, label: "Win rate", icon: Trophy, colorClass: "text-group-2" },
+        { value: displayStreak, label: "Current streak", icon: Flame, colorClass: "text-orange-500" },
+        { value: stats.maxStreak, label: "Best streak", icon: Crown, colorClass: "text-amber-500" },
       ]
     : [];
 
@@ -61,7 +66,7 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
         // The two Rainbow achievements are only meaningful for a format that
         // has a bonus category. A format without one would show a permanent
         // zero that no amount of play could ever move.
-        .filter((item) => format.hasRainbow || (item.key !== "rainbows" && item.key !== "reverserainbow"))
+        .filter((item) => selectedFormat.hasRainbow || (item.key !== "rainbows" && item.key !== "reverserainbow"))
     : [];
 
   return (
@@ -79,70 +84,82 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
             pt-[max(12px,env(safe-area-inset-top))] pb-[max(12px,env(safe-area-inset-bottom))]"
         >
           <DialogPrimitive.Content
-            className="pointer-events-auto w-full max-w-md
+            className="personal-stats pointer-events-auto w-full max-w-md
               max-h-[calc(100vh-24px)] max-h-[calc(100dvh-24px)]
               flex flex-col
-              bg-background border shadow-lg rounded-none sm:rounded-2xl
+              bg-background border shadow-lg
               data-[state=open]:animate-in data-[state=closed]:animate-out
               data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0
               data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95
               focus:outline-none"
           >
-            <div className="shrink-0 flex items-center justify-between gap-2 px-6 pt-6 pb-2">
-              <DialogPrimitive.Title className="text-2xl font-extrabold tracking-tight">My Stats</DialogPrimitive.Title>
+            <div className="personal-stats-brand">
+              <img src="/rainbow-categories-logo-stacked.webp" alt="Rainbow Categories" />
               <DialogPrimitive.Close
                 aria-label="Close"
                 className="shrink-0 -mr-2 -mt-1 w-9 h-9 flex items-center justify-center rounded-full
                   text-muted-foreground hover:bg-secondary transition-colors active:scale-95
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <X className="w-4 h-4" />
+                <X className="w-6 h-6" />
               </DialogPrimitive.Close>
             </div>
 
-            <div className="min-h-0 overflow-y-auto px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+            <div className="personal-stats-scroll min-h-0 overflow-y-auto">
+              <div className="personal-stats-heading">
+                <DialogPrimitive.Title>Your stats</DialogPrimitive.Title>
+                <div className="personal-stats-toggle" role="group" aria-label="Stats format">
+                  {[FULL_FORMAT, MINI_FORMAT].map((item) => <button type="button" key={item.id}
+                    aria-pressed={selectedFormat.id === item.id} onClick={() => setSelectedFormat(item)}>{item.name}</button>)}
+                </div>
+              </div>
+              <DialogPrimitive.Description className="sr-only">Your personal {selectedFormat.name} game statistics.</DialogPrimitive.Description>
               {loading && (
-                <div className="flex justify-center items-center h-40">
+                <div role="status" aria-label="Loading stats" className="flex justify-center items-center h-40">
                   <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
 
               {!loading && stats && (
-                <div className="space-y-5 pt-2">
+                <div className="personal-stats-body">
                   {/* Top stat cards */}
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="personal-stats-metrics">
                     {topStats.map((item) => {
                       const Icon = item.icon;
                       return (
                         <div
                           key={item.label}
-                          className="flex flex-col items-center gap-1 rounded-2xl border border-border bg-card px-1.5 py-3"
+                          className="personal-stats-metric"
                         >
-                          <Icon className={`w-5 h-5 ${item.colorClass}`} />
-                          <div className="text-2xl font-extrabold tabular-nums leading-none">{item.value}</div>
-                          <div className="text-[11px] text-muted-foreground text-center leading-tight">{item.label}</div>
+                          <Icon className={`personal-stats-icon ${item.colorClass}`} />
+                          <div><div className="personal-stats-label">{item.label}</div>
+                          <div className="personal-stats-value">{item.value}</div></div>
                         </div>
                       );
                     })}
                   </div>
 
+                  <div className="personal-stats-achievements">
+                    <AchievementCard kind="perfect" label={<>Perfect<br />games</>} value={stats.perfectGamesCount} />
+                    {selectedFormat.hasRainbow && <AchievementCard kind="rainbow" label={<>Rainbows<br />spotted</>} value={stats.rainbowSpottedCount} />}
+                  </div>
                   {/* Mistake Distribution */}
-                  <div className="rounded-2xl border border-border bg-card px-4 py-4">
-                    <h3 className="text-base font-bold mb-3">Mistake Distribution</h3>
+                  <div className="personal-stats-distribution">
+                    <h3>Mistake distribution</h3>
                     <div className="space-y-2">
                       {stats.guessDistribution.map((count, i) => {
                         const max = Math.max(...stats.guessDistribution, 1);
                         const pct = count > 0 ? Math.max((count / max) * 100, 4) : 0;
                         return (
-                          <div key={i} className="flex items-center gap-3">
-                            <span className="w-3 text-sm text-muted-foreground text-right shrink-0 tabular-nums">{i}</span>
-                            <div className="flex-1 h-3.5 rounded-full bg-muted overflow-hidden">
+                          <div key={i} className="personal-stats-bar-row">
+                            <span className="personal-stats-bucket">{i}</span>
+                            <div className="personal-stats-track">
                               <div
                                 className="h-full rounded-full bg-[hsl(var(--brand-purple-from))] transition-all duration-500"
                                 style={{ width: `${pct}%` }}
                               />
                             </div>
-                            <span className="w-5 text-sm font-semibold tabular-nums text-right shrink-0">{count}</span>
+                            <span className="personal-stats-count">{count}</span>
                           </div>
                         );
                       })}
@@ -156,7 +173,7 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                     <div className="rounded-2xl border border-border bg-card px-4 py-4">
                       <h3 className="text-base font-bold mb-1">Advanced Stats</h3>
                       <div>
-                        {advancedStats.map((item) => (
+                        {advancedStats.filter((item) => item.key !== "perfect" && item.key !== "rainbows").map((item) => (
                           <div
                             key={item.key}
                             className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-0"
@@ -179,4 +196,21 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
+}
+
+function AchievementCard({ kind, label, value }: { kind: "perfect" | "rainbow"; label: React.ReactNode; value: number }) {
+  return <div className={`personal-stats-achievement ${kind}`}>
+    <svg viewBox="0 0 280 156" aria-hidden="true">
+      <g stroke="#a331ff" strokeWidth="5" strokeLinecap="round"><path d="m44 53 -9 -12 m7 32 -15 -4 m201 -16 9 -12 m-4 32 15 -4" /></g>
+      {kind === "rainbow" && <g fill="none" strokeWidth="10">
+        {["#ff43a0", "#ff9860", "#ffda43", "#94dc54", "#42cbdc", "#9461ff"].map((color, i) =>
+          <path key={color} stroke={color} d={`M ${60+i*9} 128 A ${80-i*9} ${80-i*9} 0 0 1 ${220-i*9} 128`} />)}
+      </g>}
+      <path fill="#ffffff" opacity=".85" d="M0 156 C0 133 16 119 34 121 C43 95 73 94 88 112 C104 87 135 90 145 113 C160 103 177 107 183 121 C203 93 230 106 233 126 C262 121 280 135 280 156Z" />
+      {kind === "perfect" && <><path d="m140 38 16 35 37 5 -27 26 7 37 -33 -18 -33 18 7 -37 -27 -26 37 -5Z" fill="#ffdf54" stroke="#f4a000" strokeWidth="5" strokeLinejoin="round" />
+        <path d="m140 48 2 42 39 -8 -29 24 16 26 -29 -15 -25 15 8 -30 -26 -21 32 -2Z" fill="#fff19a" /></>}
+    </svg>
+    <div className="personal-stats-achievement-label">{label}</div>
+    <div className="personal-stats-achievement-value">{value}</div>
+  </div>;
 }
