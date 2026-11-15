@@ -1706,7 +1706,7 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
           onClick={() => setPaletteMode("select")}
           className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
             ${paletteMode === "select"
-              ? "bg-foreground text-background ring-2 ring-foreground ring-offset-2 ring-offset-background"
+              ? "bg-foreground text-background ring-2 ring-foreground ring-offset-1 ring-offset-background"
               : "bg-secondary hover:bg-secondary/80"
             }`}
           aria-label="Select mode"
@@ -1723,8 +1723,8 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
           <button
             key={color}
             onClick={() => setPaletteMode(color)}
-            className={`w-10 h-10 rounded-lg ${swatchClass} hover:scale-110 transition-all
-              ${paletteMode === color ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : ""}`}
+            className={`w-10 h-10 rounded-lg ${swatchClass} transition-all
+              ${paletteMode === color ? "ring-2 ring-foreground ring-offset-1 ring-offset-background" : ""}`}
             aria-label={`${label} paint`}
           />
         ))}
@@ -1732,7 +1732,7 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
           onClick={() => setPaletteMode("eraser")}
           className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
             ${paletteMode === "eraser"
-              ? "bg-foreground text-background ring-2 ring-foreground ring-offset-2 ring-offset-background"
+              ? "bg-foreground text-background ring-2 ring-foreground ring-offset-1 ring-offset-background"
               : "bg-secondary hover:bg-secondary/80"
             }`}
           aria-label="Eraser"
