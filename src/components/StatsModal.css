@@ -1,0 +1,68 @@
+.personal-stats { color: #2b1042; border: 0; border-radius: 30px; max-width: 428px; font-family: 'Nunito Sans Variable', 'Nunito Sans', sans-serif; }
+.personal-stats-brand { display:flex; justify-content:space-between; align-items:center; padding:24px 20px 20px; flex-shrink:0; }
+.personal-stats-brand img { width:160px; height:auto; }
+.personal-stats-brand button { color:inherit; margin:0 10px 0 0; }
+.personal-stats-scroll { padding:0 20px 22px; }
+.personal-stats-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:8px 0 28px; }
+.personal-stats-heading h2 { font-size:36px; font-weight:1000; letter-spacing:-1.2px; line-height:1.1; }
+.personal-stats-toggle { display:flex; flex-shrink:0; border-radius:999px; background:#eeebf7; padding:3px; }
+.personal-stats-toggle button { padding:9px 17px; border-radius:999px; font-size:18px; font-weight:800; color:#494157; }
+.personal-stats-toggle button[aria-pressed=true] { background:linear-gradient(110deg,#a32cf5,#8617df); color:white; box-shadow:0 2px 5px #8424b926; }
+.personal-stats button:focus-visible { outline:3px solid #a232ef; outline-offset:3px; }
+.personal-stats-body { display:grid; gap:16px; }
+.personal-stats-metrics,.personal-stats-achievements { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.personal-stats-metric { display:flex; align-items:center; gap:14px; padding:16px 14px; min-height:117px; border-radius:28px; background:linear-gradient(135deg,#fae8ff,#f2e5ff); }
+.personal-stats-metric:nth-child(2) { background:linear-gradient(135deg,#e2fce9,#d4f8df); }
+.personal-stats-metric:nth-child(3) { background:linear-gradient(135deg,#fff4df,#ffe8cb); }
+.personal-stats-metric:nth-child(4) { background:linear-gradient(135deg,#fffddb,#fff6ad); }
+.personal-stats-icon { width:36px; height:36px; flex-shrink:0; stroke-width:2; }
+.personal-stats-label { font-size:18px; font-weight:750; line-height:1.1; }
+.personal-stats-value { font-size:42px; line-height:1.1; font-weight:1000; letter-spacing:-1.5px; font-variant-numeric:tabular-nums; margin-top:5px; overflow-wrap:anywhere; }
+.personal-stats-achievement { overflow:hidden; text-align:center; border-radius:28px; background:linear-gradient(#eee3ff 45%,#f7f0ff 45%); box-shadow:0 4px 0 #e6d5ff; padding-bottom:16px; }
+.personal-stats-achievement.rainbow { background:linear-gradient(#dfe6ff 45%,#e9f2ff 45%); box-shadow:0 4px 0 #c4d9ff; }
+.personal-stats-achievement svg { width:100%; height:auto; display:block; }
+.personal-stats-achievement-label { font-size:23px; font-weight:900; line-height:1; margin:10px 0 6px; }
+.personal-stats-achievement-value { color:#821cce; font-size:56px; font-weight:1000; line-height:1; letter-spacing:-2px; overflow-wrap:anywhere; }
+.personal-stats-distribution { border:1.5px solid #dbd0e8; border-radius:28px; padding:14px 18px 18px; margin-top:3px; }
+.personal-stats-distribution h3 { font-size:26px; line-height:1.2; font-weight:1000; letter-spacing:-.65px; margin-bottom:16px; }
+.personal-stats-bar-row { display:flex; align-items:center; gap:18px; font-size:24px; line-height:1.2; font-variant-numeric:tabular-nums; }
+.personal-stats-bucket { width:18px; flex-shrink:0; text-align:center; }
+.personal-stats-track { flex:1; height:20px; border-radius:999px; background:#eee7f7; overflow:hidden; }
+.personal-stats-track > div { background:linear-gradient(90deg,#9028e7,#a334ef); }
+.personal-stats-count { min-width:30px; flex-shrink:0; text-align:right; }
+.dark .personal-stats { color:#f7edff; background:#24182f; }
+.dark .personal-stats-metric { background:#432951; }
+.dark .personal-stats-metric:nth-child(2) { background:#1b4430; }
+.dark .personal-stats-metric:nth-child(3) { background:#49301e; }
+.dark .personal-stats-metric:nth-child(4) { background:#423b19; }
+.dark .personal-stats-toggle { background:#41344e; }
+.dark .personal-stats-toggle button { color:#eee5f7; }
+.dark .personal-stats-achievement { background:linear-gradient(#46305b 45%,#352447 45%); box-shadow:0 4px 0 #61447c; }
+.dark .personal-stats-achievement.rainbow { background:linear-gradient(#28395c 45%,#23324c 45%); box-shadow:0 4px 0 #3c5481; }
+.dark .personal-stats-achievement-value { color:#ce8dff; }
+.dark .personal-stats-track { background:#463453; }
+.dark .personal-stats-distribution { border-color:#60476e; }
+@media(max-width:390px) {
+  .personal-stats-scroll { padding-left:16px; padding-right:16px; }
+  .personal-stats-heading h2 { font-size:30px; }
+  .personal-stats-toggle button { padding:8px 13px; font-size:16px; }
+  .personal-stats-metric { gap:10px; padding:14px 12px; min-height:108px; border-radius:24px; }
+  .personal-stats-label { font-size:16px; }
+  .personal-stats-value { font-size:36px; }
+  .personal-stats-icon { width:30px; height:30px; }
+  .personal-stats-distribution h3 { font-size:23px; }
+}
+/* Match the approved white surface independently of the game board theme. */
+.personal-stats { background:#fff; }
+@media(max-width:390px) {
+  .personal-stats-brand { padding:20px 18px 14px; }
+  .personal-stats-brand img { width:140px; }
+  .personal-stats-heading { margin-bottom:24px; }
+  .personal-stats-achievement-label { font-size:21px; }
+  .personal-stats-achievement-value { font-size:49px; }
+  .personal-stats-achievement { padding-bottom:14px; }
+}
+.personal-stats-metric:nth-child(1) .personal-stats-icon { color:#a331ff; }
+.personal-stats-metric:nth-child(2) .personal-stats-icon { color:#16c840; }
+.personal-stats-metric:nth-child(3) .personal-stats-icon { color:#ff7200; }
+.personal-stats-metric:nth-child(4) .personal-stats-icon { color:#f5a500; }
