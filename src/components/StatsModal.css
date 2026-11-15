@@ -62,3 +62,7 @@
   .personal-stats-achievement-value { font-size:49px; }
   .personal-stats-achievement { padding-bottom:14px; }
 }
+.personal-stats-metric:nth-child(1) .personal-stats-icon { color:#a331ff; }
+.personal-stats-metric:nth-child(2) .personal-stats-icon { color:#16c840; }
+.personal-stats-metric:nth-child(3) .personal-stats-icon { color:#ff7200; }
+.personal-stats-metric:nth-child(4) .personal-stats-icon { color:#f5a500; }
