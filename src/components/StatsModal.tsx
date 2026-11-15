@@ -84,10 +84,10 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
             pt-[max(12px,env(safe-area-inset-top))] pb-[max(12px,env(safe-area-inset-bottom))]"
         >
           <DialogPrimitive.Content
-            className="personal-stats pointer-events-auto w-full max-w-md
+            className="personal-stats pointer-events-auto w-full
               max-h-[calc(100vh-24px)] max-h-[calc(100dvh-24px)]
               flex flex-col
-              bg-background border shadow-lg
+              border shadow-lg
               data-[state=open]:animate-in data-[state=closed]:animate-out
               data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0
               data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95
