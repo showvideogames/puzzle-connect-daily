@@ -30,20 +30,28 @@ export function useLeaveGuard(active: boolean) {
     if (!active && blocker.state === "blocked") blocker.reset();
   }, [active, blocker]);
 
-  const stay = () => {
-    if (blocker.state !== "blocked") return;
+  const restoreCanceledPop = () => {
     // A second rapid Back can attempt to leave the document while the router
     // is restoring a blocked POP. Canceling the native beforeunload prompt
-    // cancels that queued restoration in Chromium. Resume it before resetting
-    // the blocker; its pending POP listener still owns the restoration event.
+    // cancels that queued restoration in Chromium. Resume it before either
+    // decision: reset consumes the restoration event, while proceed waits for
+    // that event before replaying the requested navigation.
     const currentIndex = window.history.state?.idx;
     if (documentDeparture.current && typeof entryIndex.current === "number" &&
         typeof currentIndex === "number" && currentIndex !== entryIndex.current) {
       window.history.go(entryIndex.current - currentIndex);
     }
     documentDeparture.current = false;
+  };
+  const stay = () => {
+    if (blocker.state !== "blocked") return;
+    restoreCanceledPop();
     blocker.reset();
   };
-  const leave = () => { if (blocker.state === "blocked") blocker.proceed(); };
+  const leave = () => {
+    if (blocker.state !== "blocked") return;
+    restoreCanceledPop();
+    blocker.proceed();
+  };
   return { asking: blocker.state === "blocked", stay, leave, from };
 }
