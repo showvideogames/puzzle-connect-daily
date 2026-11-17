@@ -76,7 +76,7 @@ test("two tabs never silently clobber; retry restores after owner closes", async
   await expect(other.getByText("Draft open in another tab", { exact: true })).toBeVisible();
   await title(page).fill("Last first-tab edit");
   await page.close();
-  await other.getByRole("button", { name: "Try again" }).click();
+  await other.getByRole("button", { name: "Try again", exact: true }).click();
   await expect(title(other)).toHaveValue("Last first-tab edit");
   await title(other).fill("New owner edit");
   expect(JSON.parse((await saved(other))!).title).toBe("New owner edit");
@@ -108,6 +108,12 @@ test("pending creation blocks Back and edits; failure retains and success clears
   expect(await saved(page)).toBeNull();
 });
 test("Forward Stay/Leave and rapid repeated Back keep the creator mounted", async ({ page }) => {
+  let nativeWarnings = 0;
+  page.on("dialog", async dialog => {
+    expect(dialog.type()).toBe("beforeunload");
+    nativeWarnings++;
+    await dialog.dismiss();
+  });
   await start(page); await title(page).fill("History fixture");
   await page.getByRole("link", { name: "Home", exact: true }).click();
   await question(page).getByRole("button", { name: "Leave", exact: true }).click();
@@ -115,8 +121,11 @@ test("Forward Stay/Leave and rapid repeated Back keep the creator mounted", asyn
   await expect(title(page)).toHaveValue("History fixture");
   await page.evaluate(() => history.forward());
   await question(page).getByRole("button", { name: "Keep editing" }).click();
+  await expect(question(page)).not.toBeVisible();
+  await expect(page).toHaveURL(/\/create$/);
   await expect(title(page)).toHaveValue("History fixture");
   await page.evaluate(() => { history.back(); history.back(); });
+  await expect.poll(() => nativeWarnings).toBe(1);
   await expect(question(page)).toBeVisible();
   await question(page).getByRole("button", { name: "Keep editing" }).click();
   await expect(page).toHaveURL(/\/create$/);

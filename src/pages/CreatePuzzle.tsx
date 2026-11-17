@@ -237,7 +237,7 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
   }
 
   const leavePrompt = (
-    <AlertDialog open={guard.asking} onOpenChange={(open) => { if (!open) guard.stay(); }}>
+    <AlertDialog open={guard.asking} onOpenChange={(open) => { if (!open && !leaving.current) guard.stay(); }}>
       <AlertDialogContent
         onCloseAutoFocus={(event) => {
           if (leaving.current) return;
