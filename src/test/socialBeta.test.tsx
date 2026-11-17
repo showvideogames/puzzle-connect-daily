@@ -6,7 +6,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { Children, isValidElement, type ReactNode } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { MemoryRouter, useLocation, type RouteObject } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsModal } from "@/components/SettingsModal";
 import { socialBetaOn } from "@/components/social/socialFlag";
@@ -56,12 +56,19 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/** Every route in App, in order, without rendering it: App is one tree of elements. */
+/** Inspect the data router supplied to RouterProvider without rendering pages. */
 function routePaths(node: ReactNode): string[] {
   const paths: string[] = [];
   Children.forEach(node, (child) => {
     if (!isValidElement(child)) return;
-    const { path: routePath, children } = child.props as { path?: unknown; children?: ReactNode };
+    const { path: routePath, children, router } = child.props as {
+      path?: unknown; children?: ReactNode; router?: { routes: RouteObject[] };
+    };
+    const visit = (routes: RouteObject[]) => routes.forEach(route => {
+      if (route.path) paths.push(route.path);
+      if (route.children) visit(route.children);
+    });
+    if (router) visit(router.routes);
     if (typeof routePath === "string") paths.push(routePath);
     paths.push(...routePaths(children));
   });

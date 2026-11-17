@@ -1,10 +1,11 @@
+import "./creatorTestStorage";
 /**
  * Category Emoji: an explicit, optional, literal visual per category (and for
  * the Rainbow), independent of the category name and the Small Hint.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { createMemoryRouter, RouterProvider, MemoryRouter } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { FakeSupabase } from "./fakeSupabase";
 import type { Puzzle } from "@/lib/types";
@@ -370,9 +371,7 @@ describe("/create builder page", () => {
   const renderCreate = () =>
     render(
       <HelmetProvider>
-        <MemoryRouter>
-          <CreatePuzzle />
-        </MemoryRouter>
+        <RouterProvider router={createMemoryRouter([{ path: "*", element: <CreatePuzzle /> }])} />
       </HelmetProvider>
     );
 
@@ -424,7 +423,7 @@ describe("/create builder page", () => {
     fireEvent.change(rainbowInput(), { target: { value: "🌈" } });
     expect(rainbowInput().value).toBe("🌈");
 
-    fireEvent.click(screen.getByRole("button", { name: "Start Over" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start fresh" }));
     fireEvent.click(await screen.findByRole("button", { name: "Yes, start over" }));
     for (const card of cards()) {
       (within(card).getAllByRole("textbox") as HTMLInputElement[]).forEach((i) => expect(i.value).toBe(""));

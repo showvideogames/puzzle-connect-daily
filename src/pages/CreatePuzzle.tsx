@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Link2, Play, Copy, Check } from "lucide-react";
 import { SEO } from "@/components/SEO";
@@ -14,6 +14,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { CreatorDraftStore, encodeDraft } from "@/lib/builder/creatorDraft";
+import { useCreatorDraftStore } from "@/hooks/useCreatorDraftStore";
 import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,8 +52,19 @@ const parseWords = (value: string) =>
 
 
 export default function CreatePuzzle() {
+  const recovery = useCreatorDraftStore();
+  if (recovery.busy) return <main className="max-w-lg mx-auto p-6 space-y-4">
+    <h1 className="text-xl font-bold">Draft open in another tab</h1>
+    <p>Only one creator tab can edit this device’s draft at a time. Close the other creator tab, then try again.</p>
+    <Button onClick={recovery.retry}>Try again</Button>
+  </main>;
+  if (!recovery.store && !recovery.unavailable) return <p role="status">Opening your draft…</p>;
+  return <CreatorEditor store={recovery.store} />;
+}
+
+function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
   const navigate = useNavigate();
-  const builder = useBuilderForm();
+  const builder = useBuilderForm("full", store?.draft?.builder);
   // Same shared builder as Admin, configured by format. /create only offers
   // Full today (see the FormatSelector below), so these resolve to the Full
   // labels — but they are derived, not hardcoded, so enabling Mini here is a
@@ -60,23 +73,38 @@ export default function CreatePuzzle() {
   const CATEGORY_LABELS = categoryColorLabels(format);
   const DIFFICULTY_LABELS = difficultyLabels(format);
 
-  const [puzzleTitle, setPuzzleTitle] = useState("");
-  const [designerName, setDesignerName] = useState("");
+  const [puzzleTitle, setPuzzleTitle] = useState(store?.draft?.title ?? "");
+  const [designerName, setDesignerName] = useState(store?.draft?.designer ?? "");
   // Rainbow is the default for a brand-new puzzle; the style lives in the
   // shared builder so Start Over restores it the same way as everything else.
   const styleTab = builder.style;
-  const [visibility, setVisibility] = useState<CustomPuzzleVisibility>("public");
+  const [visibility, setVisibility] = useState<CustomPuzzleVisibility>(store?.draft?.visibility ?? "public");
   const [showEmojiCodes, setShowEmojiCodes] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ shareId: string; shortCode: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // The header leads away from a puzzle that isn't saved anywhere yet: ask
-  // first while there is something to lose, and hold on while it is being created.
-  const unsaved = builder.isDirty || puzzleTitle.trim() !== "" || designerName.trim() !== "" || visibility !== "public";
+  const draft = useMemo(() => ({ title: puzzleTitle, designer: designerName, visibility, builder: builder.snapshot }),
+    [puzzleTitle, designerName, visibility, builder.snapshot]);
+  const serialized = encodeDraft(draft);
+  const baseline = useRef(serialized);
+  const resetting = useRef(false);
+  const edited = useRef(false);
+  if (resetting.current) { baseline.current = serialized; resetting.current = false; edited.current = false; }
+  if (serialized !== baseline.current) edited.current = true;
+  const [storageError, setStorageError] = useState(store?.error ?? (!store ? "Automatic recovery is unavailable in this browser. Changes will be lost after you leave." : null));
+  const [saved, setSaved] = useState(!!store?.draft);
+  const changed = edited.current;
+  const unsaved = changed || saved || builder.isDirty || puzzleTitle !== "" || designerName !== "";
+  useLayoutEffect(() => {
+    if (result || !changed || !store) return;
+    setSaved(store.save(draft));
+    setStorageError(store.error);
+  }, [draft, changed, store, result]);
   const guard = useLeaveGuard(!result && (unsaved || creating));
   const leaving = useRef(false);
+  const submitting = useRef(false);
 
   const normalizedGroups = useMemo(
     () =>
@@ -114,9 +142,13 @@ export default function CreatePuzzle() {
 
   const canAttempt = builder.hasAll16;
 
-  // Clears every field but the designer name, then restores the new-puzzle
-  // defaults (Rainbow, alphabetize on, fresh random board, Public).
+  // Explicitly discard the one recovery copy before clearing the editor.
   function handleStartOver() {
+    if (store && !store.clear()) { setStorageError(store.error); return; }
+    resetting.current = true;
+    setStorageError(store ? store.error : storageError);
+    setSaved(false);
+    setDesignerName("");
     setPuzzleTitle("");
     setVisibility("public");
     setError(null);
@@ -124,12 +156,14 @@ export default function CreatePuzzle() {
   }
 
   async function handleCreate() {
+    if (submitting.current) return;
     const validationError = validate();
     if (validationError) {
       setError(validationError);
       return;
     }
     setError(null);
+    submitting.current = true;
     setCreating(true);
     try {
       const wordOrder = builder.textsFor(builder.wordOrderIds).map(normalizeWord);
@@ -160,11 +194,14 @@ export default function CreatePuzzle() {
           alphabetizeCompleted: builder.alphabetizeCompleted,
         },
       });
+      if (store) setStorageError(store.clear(false) ? null : store.error);
       setResult({ shareId, shortCode });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("createCustomPuzzle failed:", err);
-      setError(err?.message || "Something went wrong creating your puzzle. Please try again.");
+      setError(err && typeof err === "object" && "message" in err && typeof err.message === "string"
+        ? err.message : "Something went wrong creating your puzzle. Please try again.");
     } finally {
+      submitting.current = false;
       setCreating(false);
     }
   }
@@ -216,14 +253,14 @@ export default function CreatePuzzle() {
           <AlertDialogDescription>
             {creating
               ? "Stay here until it's created, and you'll get its link to share."
-              : "What you've entered isn't saved anywhere yet, so it will be lost."}
+              : saved && !storageError ? "Your draft is saved in this browser on this device and will return when you open Create. It has not been published." : "Your latest changes are not safely saved in this browser and may be lost if you leave."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel className="h-11">{creating ? "Stay" : "Keep editing"}</AlertDialogCancel>
           {!creating && (
             <AlertDialogAction className="h-11" onClick={() => { leaving.current = true; guard.leave(); }}>
-              Discard and leave
+              Leave
             </AlertDialogAction>
           )}
         </AlertDialogFooter>
@@ -246,6 +283,7 @@ export default function CreatePuzzle() {
             <Check className="w-7 h-7 text-primary" />
           </div>
           <h1 className="text-2xl font-tile font-bold">Puzzle Created!</h1>
+          {storageError && <p role="alert">Your puzzle was created, but the local recovery copy could not be cleared. {storageError}</p>}
           <p className="text-sm text-muted-foreground">
             <span className="font-semibold text-foreground">{puzzleTitle.trim()}</span> — {visibility === "public" ? "Public" : "Private"}
           </p>
@@ -289,6 +327,10 @@ export default function CreatePuzzle() {
       </div>
 
       <main className="max-w-5xl mx-auto px-4 mt-6">
+        <p className="text-sm mb-4" role="status" aria-label="Draft recovery">{storageError ?? (saved
+          ? "Draft saved in this browser on this device. It will restore automatically when you return."
+          : "One draft is saved automatically in this browser on this device as you edit.")}</p>
+        <fieldset disabled={creating} className="min-w-0">
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-8 lg:items-start">
           {/* ── Editor column ── */}
           <div className="space-y-5 min-w-0">
@@ -365,7 +407,7 @@ export default function CreatePuzzle() {
             <CategoryList
               keys={builder.groups.map((g) => g.poolIds[0])}
               labels={[...CATEGORY_LABELS]}
-              onMove={builder.moveGroup}
+              onMove={(from, to) => { if (!submitting.current) builder.moveGroup(from, to); }}
               renderCard={(i, dnd) => {
                 const g = builder.groups[i];
                 return (
@@ -414,7 +456,7 @@ export default function CreatePuzzle() {
                 theme={builder.theme}
                 onThemeChange={builder.setTheme}
                 displayOrderTiles={rainbowDisplayTiles}
-                onReorderDisplay={builder.setRainbowWordOrderIds}
+                onReorderDisplay={(ids) => { if (!submitting.current) builder.setRainbowWordOrderIds(ids); }}
                 hideTheme
               />
             )}
@@ -440,7 +482,7 @@ export default function CreatePuzzle() {
               <Button onClick={handleCreate} disabled={creating || !canAttempt}>
                 {creating ? "Creating…" : "Create Game"}
               </Button>
-              <StartOverButton onConfirm={handleStartOver} disabled={creating} />
+              <StartOverButton label="Start fresh" description="This discards the saved draft on this device and clears every field, including your name. It cannot be undone." onConfirm={handleStartOver} disabled={creating} />
             </div>
             {!canAttempt && (
               <p className="text-xs text-muted-foreground">Fill in all {format.categoryCount} categories with {format.answersPerCategory} answers each to continue.</p>
@@ -451,7 +493,7 @@ export default function CreatePuzzle() {
           <div className="mt-6 lg:mt-0 lg:sticky lg:top-4">
             <StartingBoardArranger
               tiles={boardTiles}
-              onReorder={builder.setWordOrderIds}
+              onReorder={(ids) => { if (!submitting.current) builder.setWordOrderIds(ids); }}
               onRandomize={builder.randomizeWordOrder}
               title={puzzleTitle}
               designerName={designerName}
@@ -461,6 +503,7 @@ export default function CreatePuzzle() {
             />
           </div>
         </div>
+        </fieldset>
       </main>
 
       <EmojiCodesModal open={showEmojiCodes} onClose={() => setShowEmojiCodes(false)} />
