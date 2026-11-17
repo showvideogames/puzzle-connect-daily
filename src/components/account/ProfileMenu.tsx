@@ -1,12 +1,13 @@
 import { UserRound, UsersRound, Settings } from "lucide-react";
 import type { SharedProfile } from "@/lib/sharedProfile";
-import { ProfileAvatar } from "./ProfileAvatar";
+import { AccountIcon } from "./AccountIcon";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
 interface ProfileMenuProps {
+  signedIn?: boolean;
   profile: SharedProfile | null;
   /** Null means still loading or unavailable, never an invented zero. */
   pendingCount: number | null;
@@ -17,7 +18,7 @@ interface ProfileMenuProps {
 }
 
 /** Presentational only: the session owner supplies identity and pending requests. */
-export function ProfileMenu({ profile, pendingCount, onProfile, onFriends, onAccount, onOpenChange }: ProfileMenuProps) {
+export function ProfileMenu({ signedIn = false, profile, pendingCount, onProfile, onFriends, onAccount, onOpenChange }: ProfileMenuProps) {
   const count = pendingCount !== null && Number.isFinite(pendingCount) ? Math.max(0, Math.floor(pendingCount)) : 0;
   const notice = count > 0 ? `${count} pending ${count === 1 ? "notification" : "notifications"}` : "";
   return (
@@ -28,7 +29,7 @@ export function ProfileMenu({ profile, pendingCount, onProfile, onFriends, onAcc
           aria-label={`Profile menu${notice ? `, ${notice}` : ""}`}
           className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          {profile ? <ProfileAvatar animalId={profile.animalId} backgroundColor={profile.backgroundColor} size={40} /> : <UserRound aria-hidden="true" className="h-6 w-6" />}
+          <AccountIcon filled={signedIn} className="h-6 w-6" />
           {count > 0 && <span aria-hidden="true" data-testid="profile-notification" className="absolute right-0 top-0 h-3 w-3 rounded-full border-2 border-background bg-yellow-400 ring-1 ring-yellow-700/40" />}
         </button>
       </DropdownMenuTrigger>
