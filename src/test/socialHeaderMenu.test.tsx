@@ -29,6 +29,16 @@ async function openMenu() {
 }
 
 describe('header identity and notifications', () => {
+  it('uses confirmed session fill even before the profile loads, without a header avatar', async () => {
+    const fake = fixture();
+    fake.readMe.mockImplementation(() => new Promise(() => {}));
+    open(fake);
+    const button = screen.getByRole('button', { name: /^Profile menu/ });
+    expect(button.querySelector('svg')).toHaveAttribute('fill', 'currentColor');
+    expect(button.querySelector('img')).toBeNull();
+    fake.become({ state: null, accountId: null, storedOwner: null, generation: 2, checkRunning: false } as unknown as SessionFacts);
+    expect(screen.getByRole('button', { name: /^Profile menu/ }).querySelector('svg')).toHaveAttribute('fill', 'none');
+  });
   it('counts incoming requests only and reads no results, friends, or groups', async () => {
     const fake = fixture(); open(fake);
     await screen.findByRole('button', { name: 'Profile menu, 1 pending notification' });

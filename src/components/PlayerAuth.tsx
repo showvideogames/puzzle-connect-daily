@@ -1,3 +1,4 @@
+import { AccountIcon as PersonIcon } from "./account/AccountIcon";
 import { lazy, Suspense, useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -29,25 +30,6 @@ interface PlayerAuthProps {
   onEditProfile?: () => void;
 }
 
-function PersonIcon({ filled, className }: { filled: boolean; className?: string }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-      <circle
-        cx="12" cy="8" r="4"
-        fill={filled ? "hsl(var(--foreground))" : "none"}
-        stroke="hsl(var(--foreground))"
-        strokeWidth="1.75"
-      />
-      <path
-        d="M4 20c0-4 3.6-7 8-7s8 3 8 7"
-        fill={filled ? "hsl(var(--foreground))" : "none"}
-        stroke="hsl(var(--foreground))"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 /**
  * The account control: one "Sign In" that leaves for the shared sign-in page,
@@ -147,7 +129,7 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
           className="p-1 sm:p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95"
           aria-label="Account"
         >
-          <PersonIcon filled className="w-4 h-4 sm:w-5 sm:h-5" />
+          <PersonIcon filled className="h-6 w-6" />
         </button>}
 
         {showDropdown && (
@@ -245,7 +227,7 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
           className="p-1 sm:p-2 rounded-lg hover:bg-secondary transition-colors duration-150 active:scale-95 shrink-0"
           aria-label="Sign in"
         >
-          <PersonIcon filled={false} className="w-4 h-4 sm:w-5 sm:h-5" />
+          <PersonIcon filled={false} className="h-6 w-6" />
         </button>
       )}
 

@@ -56,7 +56,7 @@ function SignedInMenu({ social, onAccount }: { social: AppSocial; onAccount: () 
     };
   }, [refresh, location.key]);
 
-  return <ProfileMenu profile={profile} pendingCount={pendingCount}
+  return <ProfileMenu signedIn profile={profile} pendingCount={pendingCount}
     onOpenChange={open => { if (open) void refresh(); }}
     onProfile={() => navigate("/friends", { state: { editProfile: true } })}
     onFriends={() => navigate("/friends", { state: { friendsHome: true } })}
