@@ -1,10 +1,11 @@
+import "./creatorTestStorage";
 /**
  * Builder polish shared by Admin and /create: category drag-reorder, Rainbow
  * default, Start Over, live preview header and full-colour category cards.
  */
 import { describe, it, expect, vi } from "vitest";
 import { act, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { createMemoryRouter, RouterProvider, MemoryRouter } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -207,9 +208,7 @@ describe("builder reset (Start Over) restores every new-puzzle default", () => {
 function renderCreate() {
   return render(
     <HelmetProvider>
-      <MemoryRouter>
-        <CreatePuzzle />
-      </MemoryRouter>
+      <RouterProvider router={createMemoryRouter([{ path: "*", element: <CreatePuzzle /> }])} />
     </HelmetProvider>
   );
 }
@@ -329,7 +328,7 @@ describe("/create builder page", () => {
     expect(cardOrder()).toEqual(["Cat 1", "Cat 2", "Cat 0", "Cat 3"]);
   });
 
-  it("Start Over asks first, then clears everything but the designer name", async () => {
+  it("Start fresh asks first, then clears every field and recovery copy", async () => {
     renderCreate();
     fillPage();
     fireEvent.change(screen.getByLabelText("Puzzle Title"), { target: { value: "Golf Words" } });
@@ -337,7 +336,7 @@ describe("/create builder page", () => {
     fireEvent.click(within(screen.getByRole("group", { name: "Puzzle style" })).getByRole("button", { name: "Classic" }));
     fireEvent.click(screen.getByLabelText(/alphabetize answers/i));
 
-    fireEvent.click(screen.getByRole("button", { name: "Start Over" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start fresh" }));
     // Confirmation shown; nothing cleared yet.
     expect(await screen.findByText("Start over?")).toBeTruthy();
     expect((screen.getByLabelText("Puzzle Title") as HTMLInputElement).value).toBe("Golf Words");
@@ -345,13 +344,13 @@ describe("/create builder page", () => {
     expect((screen.getByLabelText("Puzzle Title") as HTMLInputElement).value).toBe("Golf Words");
     expect(cardOrder()).toEqual(["Cat 0", "Cat 1", "Cat 2", "Cat 3"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Start Over" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start fresh" }));
     fireEvent.click(await screen.findByRole("button", { name: "Yes, start over" }));
 
     expect((screen.getByLabelText("Puzzle Title") as HTMLInputElement).value).toBe("");
-    // Designer name preserved.
-    expect((screen.getByLabelText(/Your Name/) as HTMLInputElement).value).toBe("Sam West");
-    expect(screen.getByTestId("preview-byline").textContent).toBe("Created by Sam West");
+    // Start fresh also clears the designer.
+    expect((screen.getByLabelText(/Your Name/) as HTMLInputElement).value).toBe("");
+    expect(screen.getByTestId("preview-byline").textContent).toBe("Created by you");
     expect(screen.getByTestId("preview-title").textContent).toBe("My Custom Puzzle");
     for (const card of screen.getAllByTestId(/^category-card-/)) {
       (within(card).getAllByRole("textbox") as HTMLInputElement[]).forEach((i) => expect(i.value).toBe(""));

@@ -1,3 +1,4 @@
+import "./creatorTestStorage";
 /**
  * "Hint Only" for a Category Emoji.
  *
@@ -12,7 +13,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { createMemoryRouter, RouterProvider, MemoryRouter } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { FakeSupabase } from "./fakeSupabase";
 import type { Puzzle, PuzzleGroup } from "@/lib/types";
@@ -784,9 +785,7 @@ describe("/create page", () => {
   const renderCreate = () =>
     render(
       <HelmetProvider>
-        <MemoryRouter>
-          <CreatePuzzle />
-        </MemoryRouter>
+        <RouterProvider router={createMemoryRouter([{ path: "*", element: <CreatePuzzle /> }])} />
       </HelmetProvider>
     );
 
@@ -828,7 +827,7 @@ describe("/create page", () => {
     fill();
     cards().forEach((card) => fireEvent.click(within(card).getByLabelText(HINT_ONLY)));
     expect(screen.getAllByLabelText(HINT_ONLY).filter((b) => (b as HTMLInputElement).checked)).toHaveLength(4);
-    fireEvent.click(screen.getByRole("button", { name: "Start Over" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start fresh" }));
     fireEvent.click(await screen.findByRole("button", { name: "Yes, start over" }));
     expect(screen.getAllByLabelText(HINT_ONLY).every((b) => !(b as HTMLInputElement).checked)).toBe(true);
   });

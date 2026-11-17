@@ -16,15 +16,16 @@ interface StartOverButtonProps {
   /** Overrides the confirmation sentence (used for the existing-puzzle case). */
   description?: string;
   disabled?: boolean;
+  label?: string;
 }
 
 /** Secondary "Start Over" button that never clears anything without confirmation. */
-export function StartOverButton({ onConfirm, description, disabled }: StartOverButtonProps) {
+export function StartOverButton({ onConfirm, description, disabled, label = "Start Over" }: StartOverButtonProps) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <Button type="button" variant="outline" onClick={() => setOpen(true)} disabled={disabled}>
-        Start Over
+        {label}
       </Button>
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>

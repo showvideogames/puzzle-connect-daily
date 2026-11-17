@@ -240,12 +240,12 @@ function blankState(format: PuzzleFormat): BuilderState {
   };
 }
 
-export function useBuilderForm(initialFormat: PuzzleFormatId = "full") {
+export function useBuilderForm(initialFormat: PuzzleFormatId = "full", recovered?: BuilderState) {
   // Computed once, lazily, and shared across every field's initial value —
   // groups and wordOrderIds MUST come from the same blankState() call (not
   // two independent ones), or wordOrderIds would reference ids that don't
   // match the groups actually created for this mount.
-  const [initial] = useState(() => blankState(getFormat(initialFormat)));
+  const [initial] = useState(() => recovered ?? blankState(getFormat(initialFormat)));
   const [format, setFormatState] = useState<PuzzleFormat>(initial.format);
   const [groups, setGroups] = useState<BuilderGroupForm[]>(initial.groups);
   const [rainbowHerringIds, setRainbowHerringIds] = useState<(string | null)[]>(initial.rainbowHerringIds);
@@ -549,7 +549,16 @@ export function useBuilderForm(initialFormat: PuzzleFormatId = "full") {
     [slotById]
   );
 
+  const snapshot = useMemo<BuilderState>(() => ({
+    format, groups, rainbowHerringIds, rainbowWordOrderIds, rainbowCategoryName,
+    rainbowHintWord, rainbowCategoryEmoji, rainbowCategoryEmojiHintOnly, theme,
+    alphabetizeCompleted, wordOrderIds, style,
+  }), [format, groups, rainbowHerringIds, rainbowWordOrderIds, rainbowCategoryName,
+    rainbowHintWord, rainbowCategoryEmoji, rainbowCategoryEmojiHintOnly, theme,
+    alphabetizeCompleted, wordOrderIds, style]);
+
   return {
+    snapshot,
     // state
     format,
     groups,

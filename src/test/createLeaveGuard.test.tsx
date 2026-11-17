@@ -1,12 +1,13 @@
+import "./creatorTestStorage";
 /**
  * /create now has the site header, whose links lead away from a puzzle that
  * isn't saved anywhere. With nothing entered they go straight there; with
  * anything entered they ask first, Keep editing keeps every field, and
- * Discard and leave goes. While the puzzle is being created they hold on.
+ * Leave goes. While the puzzle is being created they hold on.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { createMemoryRouter, RouterProvider, useLocation } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -47,12 +48,10 @@ function Where() {
 function renderCreate() {
   return render(
     <HelmetProvider>
-      <MemoryRouter initialEntries={["/create"]}>
-        <Routes>
-          <Route path="/create" element={<><CreatePuzzle /><Where /></>} />
-          <Route path="*" element={<Where />} />
-        </Routes>
-      </MemoryRouter>
+      <RouterProvider router={createMemoryRouter([
+        { path: "/create", element: <><CreatePuzzle /><Where /></> },
+        { path: "*", element: <Where /> },
+      ], { initialEntries: ["/create"] })} />
     </HelmetProvider>
   );
 }
@@ -112,7 +111,7 @@ describe("/create with the site header", () => {
     const home = within(header()).getByRole("link", { name: "Home" });
     await press(home);
     const question = await screen.findByRole("alertdialog", { name: "Leave without creating your puzzle?" });
-    expect(question).toHaveTextContent("What you've entered isn't saved anywhere yet, so it will be lost.");
+    expect(question).toHaveTextContent("Your draft is saved in this browser on this device and will return when you open Create.");
     await waitFor(() => expect(within(question).getByRole("button", { name: "Keep editing" })).toHaveFocus());
     fireEvent.click(within(question).getByRole("button", { name: "Keep editing" }));
     await waitFor(() => expect(asking()).toBeNull());
@@ -127,7 +126,7 @@ describe("/create with the site header", () => {
     expectEverythingKept();
   });
 
-  it("Discard and leave goes where the menu link pointed", async () => {
+  it("Leave goes where the menu link pointed", async () => {
     renderCreate();
     fillEverything();
     const menu = within(header()).getByRole("button", { name: "Menu" });
@@ -135,7 +134,7 @@ describe("/create with the site header", () => {
     const drawer = await screen.findByRole("dialog", { name: "Menu" });
     await press(within(drawer).getByRole("link", { name: "Rainbow Mini" }));
     const question = await screen.findByRole("alertdialog", { name: "Leave without creating your puzzle?" });
-    fireEvent.click(within(question).getByRole("button", { name: "Discard and leave" }));
+    fireEvent.click(within(question).getByRole("button", { name: "Leave" }));
     await waitFor(() => expect(where()).toBe("/mini"));
   });
 
@@ -181,7 +180,7 @@ describe("/create with the site header", () => {
     expect(screen.getByRole("button", { name: "Creating…" })).toBeDisabled();
     await press(within(header()).getByRole("link", { name: "Home" }));
     const holding = await screen.findByRole("alertdialog", { name: "Still creating your puzzle" });
-    expect(within(holding).queryByRole("button", { name: "Discard and leave" })).toBeNull();
+    expect(within(holding).queryByRole("button", { name: "Leave" })).toBeNull();
     await act(async () => created.answer!({ shareId: "share-1", shortCode: "abc123" }));
     expect(await screen.findByRole("heading", { name: "Puzzle Created!" })).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
@@ -204,5 +203,73 @@ describe("/create with the site header", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Network trouble.");
     expectEverythingKept();
     expect(where()).toBe("/create");
+  });
+});
+
+describe("automatic creator recovery", () => {
+  it("restores all entered fields on return without a restore action", () => {
+    const first = renderCreate();
+    fillEverything();
+    const previous = localStorage.getItem("rainbow-creator-draft-v1");
+    first.unmount();
+    renderCreate();
+    expectEverythingKept();
+    expect(localStorage.getItem("rainbow-creator-draft-v1")).toBe(previous);
+  });
+
+  it("saves a partial draft and also saves an edit back to its original value", () => {
+    const first = renderCreate();
+    fireEvent.change(title(), { target: { value: "Partial" } });
+    const field = within(cards()[0]).getAllByRole("textbox")[2];
+    fireEvent.change(field, { target: { value: "one, two, " } });
+    first.unmount();
+    const second = renderCreate();
+    expect(title().value).toBe("Partial");
+    expect(within(cards()[0]).getAllByRole("textbox")[2]).toHaveValue("one, two, ");
+    fireEvent.change(title(), { target: { value: "Changed" } });
+    fireEvent.change(title(), { target: { value: "Partial" } });
+    second.unmount();
+    renderCreate();
+    expect(title().value).toBe("Partial");
+  });
+
+  it("retains malformed data and explains the error, then Start fresh enables recovery", async () => {
+    localStorage.setItem("rainbow-creator-draft-v1", "broken");
+    renderCreate();
+    expect(screen.getByRole("status", { name: "Draft recovery" })).toHaveTextContent("kept unchanged");
+    fireEvent.change(title(), { target: { value: "Unsafe" } });
+    expect(localStorage.getItem("rainbow-creator-draft-v1")).toBe("broken");
+    fireEvent.click(screen.getByRole("button", { name: "Start fresh" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Yes, start over" }));
+    expect(title().value).toBe("");
+    expect(localStorage.getItem("rainbow-creator-draft-v1")).toBeNull();
+    fireEvent.change(title(), { target: { value: "New" } });
+    expect(screen.getByRole("status", { name: "Draft recovery" })).toHaveTextContent("Draft saved");
+  });
+
+  it("keeps the draft on failure and clears it only on confirmed creation", async () => {
+    renderCreate(); fillEverything();
+    const previous = localStorage.getItem("rainbow-creator-draft-v1");
+    fireEvent.click(screen.getByRole("button", { name: "Create Game" }));
+    expect(title()).toBeDisabled();
+    expect(localStorage.getItem("rainbow-creator-draft-v1")).toBe(previous);
+    await act(async () => created.fail?.(new Error("Fixture failure")));
+    expect(localStorage.getItem("rainbow-creator-draft-v1")).toBe(previous);
+    expect(title()).not.toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Create Game" }));
+    await act(async () => created.answer?.({ shareId: "fixture", shortCode: "fixture" }));
+    expect(screen.getByRole("heading", { name: "Puzzle Created!" })).toBeInTheDocument();
+    expect(localStorage.getItem("rainbow-creator-draft-v1")).toBeNull();
+  });
+
+  it("failed deletion does not clear the editor and reports the failure", async () => {
+    renderCreate(); fillEverything();
+    const previous = localStorage.getItem("rainbow-creator-draft-v1");
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => { throw new Error("Denied"); });
+    fireEvent.click(screen.getByRole("button", { name: "Start fresh" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Yes, start over" }));
+    expectEverythingKept();
+    expect(screen.getByRole("status", { name: "Draft recovery" })).toHaveTextContent("could not be updated");
+    expect(localStorage.getItem("rainbow-creator-draft-v1")).toBe(previous);
   });
 });
