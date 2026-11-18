@@ -3,6 +3,7 @@ import { Puzzle } from "@/lib/types";
 import { GameSettings } from "@/lib/settings";
 import { useGame } from "@/hooks/useGame";
 import { WordTile } from "./WordTile";
+import { PaletteSelectionOutline } from "./PaletteSelectionOutline";
 import { SolvedGroup } from "./SolvedGroup";
 import { RainbowRevealBar } from "./RainbowRevealBar";
 import { dedupeHintMarkers } from "@/lib/hints";
@@ -1704,14 +1705,16 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
       <div className="flex items-center justify-center gap-2 mt-4">
         <button
           onClick={() => setPaletteMode("select")}
-          className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
+          className={`relative w-10 h-10 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-foreground focus-visible:outline-offset-[5px] flex items-center justify-center
             ${paletteMode === "select"
-              ? "bg-foreground text-background ring-2 ring-foreground ring-offset-1 ring-offset-background"
+              ? "text-background"
               : "bg-secondary hover:bg-secondary/80"
             }`}
           aria-label="Select mode"
+          aria-pressed={paletteMode === "select"}
         >
-          <MousePointer2 className="w-5 h-5" />
+          <MousePointer2 className="relative z-10 w-5 h-5" />
+          {paletteMode === "select" && <PaletteSelectionOutline />}
         </button>
         {/* One swatch per colour THIS FORMAT uses, in difficulty order —
             Full gets Yellow/Green/Blue/Red, Mini gets Green/Blue/Red.
@@ -1719,25 +1722,29 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
             picker also renders, so the two colouring interfaces can never
             drift apart; see categoryPalette.ts for why the fills are the
             solved-bar CSS variables rather than hardcoded hexes. */}
-        {categorySwatches(format).map(({ color, label, swatchClass }) => (
+        {categorySwatches(format).map(({ difficulty, color, label, swatchClass }) => (
           <button
             key={color}
             onClick={() => setPaletteMode(color)}
-            className={`w-10 h-10 rounded-lg ${swatchClass} transition-all
-              ${paletteMode === color ? "ring-2 ring-foreground ring-offset-1 ring-offset-background" : ""}`}
+            className={`relative w-10 h-10 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-foreground focus-visible:outline-offset-[5px] ${paletteMode === color ? "" : swatchClass}`}
             aria-label={`${label} paint`}
-          />
+            aria-pressed={paletteMode === color}
+          >
+            {paletteMode === color && <PaletteSelectionOutline fill={`hsl(var(--group-${difficulty}))`} />}
+          </button>
         ))}
         <button
           onClick={() => setPaletteMode("eraser")}
-          className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all
+          className={`relative w-10 h-10 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-foreground focus-visible:outline-offset-[5px] flex items-center justify-center
             ${paletteMode === "eraser"
-              ? "bg-foreground text-background ring-2 ring-foreground ring-offset-1 ring-offset-background"
+              ? "text-background"
               : "bg-secondary hover:bg-secondary/80"
             }`}
           aria-label="Eraser"
+          aria-pressed={paletteMode === "eraser"}
         >
-          <Eraser className="w-5 h-5" />
+          <Eraser className="relative z-10 w-5 h-5" />
+          {paletteMode === "eraser" && <PaletteSelectionOutline />}
         </button>
       </div>
   ) : null;
