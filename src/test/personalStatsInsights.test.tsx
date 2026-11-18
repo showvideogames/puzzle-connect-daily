@@ -31,9 +31,20 @@ describe('personal history insights', () => {
   const insights=personalStatsInsights([row(['red'],true,'in_game'),row(['green'],true,'post_game'),row([],true,null)],FULL_FORMAT);
   render(<PersonalStatsInsightsCards insights={insights} hasRainbow />);
   expect(screen.getByRole('img',{name:'First 50%. Last 50%'})).toBeInTheDocument();
-  expect(screen.getByText('Known Timing Only')).toBeInTheDocument();
+  expect(screen.queryByText('Known Timing Only')).not.toBeInTheDocument();
+  const card=document.querySelector('.personal-stats-timing-card')!;
+  expect([...card.children].filter(e=>!e.classList.contains('sr-only')).map(e=>e.tagName.toLowerCase())).toEqual(['h3','svg']);
   expect(document.querySelector('.personal-stats-timing-card')).toHaveAccessibleDescription(/1 historical finds have unknown timing/);
   expect(screen.getByText('Tie')).toBeInTheDocument();
+ });
+ it('uses pink/purple and positions the First majority label higher within its slice', () => {
+  const insights=personalStatsInsights([],FULL_FORMAT); insights.rainbowTiming={first:7,last:3,unknown:2};
+  render(<PersonalStatsInsightsCards insights={insights} hasRainbow />);
+  const chart=screen.getByRole('img',{name:'First 70%. Last 30%'});
+  expect([...chart.querySelectorAll('path')].map(p=>p.getAttribute('fill'))).toEqual(['#f6a6d2','#8739d7']);
+  const first=chart.querySelector('text')!;
+  expect(Number(first.getAttribute('y'))).toBeLessThan(135);
+  expect(screen.queryByText('Known Timing Only')).not.toBeInTheDocument();
  });
  it('keeps a small readable slice label inside the chart without a side legend', () => {
   const insights=personalStatsInsights([],FULL_FORMAT); insights.rainbowTiming={first:9,last:1,unknown:0};

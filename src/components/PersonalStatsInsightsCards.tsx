@@ -7,8 +7,8 @@ const percent = (share: number) => share > 0 && share < .01 ? '<1%' : share < 1 
 function TimingPie({ first, last }: { first: number; last: number }) {
   const total = first + last;
   const slices = [
-    { label: 'First', share: first / total, start: 0, fill: '#ffdf54', text: '#2b1042' },
-    { label: 'Last', share: last / total, start: first / total, fill: '#dc3150', text: '#fff' },
+    { label: 'First', share: first / total, start: 0, fill: '#f6a6d2', text: '#2b1042' },
+    { label: 'Last', share: last / total, start: first / total, fill: '#8739d7', text: '#fff' },
   ];
   const point = (turn: number, radius: number) => [120 + Math.sin(turn * Math.PI * 2) * radius, 120 - Math.cos(turn * Math.PI * 2) * radius];
   const description = slices.map(s => `${s.label} ${percent(s.share)}`).join('. ');
@@ -18,7 +18,8 @@ function TimingPie({ first, last }: { first: number; last: number }) {
       const [x1,y1] = point(s.start,110), [x2,y2] = point(s.start+s.share,110);
       const compact = s.share < .2;
       const middle = s.start+s.share/2;
-      const [x,y] = s.share === 1 ? [120,120] : point(middle,compact ? 80 : 64);
+      const [x,centerY] = s.share === 1 ? [120,120] : point(middle,compact ? 80 : 64);
+      const y = centerY - (s.label === 'First' && s.share > .5 && s.share < 1 ? 24 : 0);
       let rotation = middle * 360 - 90;
       if (rotation > 90) rotation -= 180;
       // Very small slices cannot hold legible labels. Their exact percentage
@@ -45,7 +46,6 @@ export function PersonalStatsInsightsCards({ insights, hasRainbow }: { insights:
       <h3 id="rainbow-timing-title">First vs Last</h3>
       {classified > 0 ? <TimingPie first={timing.first} last={timing.last} /> :
         <div className="personal-stats-empty"><span aria-hidden="true">—</span>{timing.unknown ? 'Timing Unknown' : 'No Rainbows Yet'}</div>}
-      {classified > 0 && timing.unknown > 0 && <span className="personal-stats-status">Known Timing Only</span>}
       <p id="rainbow-timing-description" className="sr-only">When you spotted the Rainbow. Percentages use only finds with known timing. {timing.unknown} historical finds have unknown timing and are excluded.</p>
     </section>}
     <section className="personal-stats-insight" aria-labelledby="starting-color-title" aria-describedby="starting-color-description">
