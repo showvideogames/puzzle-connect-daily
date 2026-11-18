@@ -1,3 +1,4 @@
+import { personalStatsInsights } from "./personalStatsInsights";
 import { supabase } from "@/integrations/supabase/client";
 import { GameStats } from "./types";
 import type { EntryContext } from "./entryContext";
@@ -562,6 +563,7 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
   const emptyDistribution = () => Array<number>(historicalMaxMistakes + 1).fill(0);
 
   const empty: GameStats = {
+    insights: personalStatsInsights([], format),
     gamesPlayed: 0,
     gamesWon: 0,
     currentStreak: 0,
@@ -745,6 +747,7 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
     }
 
     return {
+      insights: personalStatsInsights(rows, format),
       gamesPlayed: rows.length,
       gamesWon,
       currentStreak: streak?.current_streak ?? 0,

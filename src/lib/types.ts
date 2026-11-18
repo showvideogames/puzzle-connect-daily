@@ -91,6 +91,7 @@ export interface Puzzle {
 }
 
 export interface GameStats {
+  insights: import("./personalStatsInsights").PersonalStatsInsights;
   gamesPlayed: number;
   gamesWon: number;
   currentStreak: number;

@@ -1,3 +1,4 @@
+import { PersonalStatsInsightsCards } from "./PersonalStatsInsightsCards";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
 import { displayStreakOf, loadStatsFromSupabase, winRateOf } from "@/lib/gameStats";
@@ -182,6 +183,7 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                           </div>
                         ))}
                       </dl>
+                      <PersonalStatsInsightsCards insights={stats.insights} hasRainbow={selectedFormat.hasRainbow} />
                     </section>
                   )}
                 </div>

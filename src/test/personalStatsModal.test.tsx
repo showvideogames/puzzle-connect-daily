@@ -5,7 +5,7 @@ import { MINI_FORMAT } from '@/lib/puzzleFormat';
 import type { GameStats } from '@/lib/types';
 import { loadStatsFromSupabase } from '@/lib/gameStats';
 vi.mock('@/lib/gameStats', async (original) => ({ ...await original<typeof import('@/lib/gameStats')>(), loadStatsFromSupabase: vi.fn() }));
-const empty: GameStats = { gamesPlayed:0,gamesWon:0,currentStreak:0,maxStreak:0,lastPlayedDate:null,guessDistribution:[0,0,0,0,0],rainbowSpotRate:null,rainbowSpottedCount:0,hardestFirstCount:0,perfectGamesCount:0,noHintsUsedCount:0,inOrderCount:0,reverseRainbowCount:0,averageMistakes:0 };
+const empty: GameStats = { insights: {rainbowTiming:{first:0,last:0,unknown:0},startingColors:{counts:{},leaders:[],known:0,excluded:0}}, gamesPlayed:0,gamesWon:0,currentStreak:0,maxStreak:0,lastPlayedDate:null,guessDistribution:[0,0,0,0,0],rainbowSpotRate:null,rainbowSpottedCount:0,hardestFirstCount:0,perfectGamesCount:0,noHintsUsedCount:0,inOrderCount:0,reverseRainbowCount:0,averageMistakes:0 };
 const full = { ...empty, gamesPlayed:19, gamesWon:15, maxStreak:9, perfectGamesCount:7, rainbowSpottedCount:11, guessDistribution:[7,4,3,1,4] };
 const mini = { ...empty, gamesPlayed:3, gamesWon:2, maxStreak:2, perfectGamesCount:1, rainbowSpottedCount:2 };
 beforeEach(() => vi.mocked(loadStatsFromSupabase).mockImplementation(async f => f?.id === 'mini' ? mini : full));
