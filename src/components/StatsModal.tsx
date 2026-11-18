@@ -59,7 +59,7 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
         { key: "perfect", label: "Perfect Games", value: stats.perfectGamesCount, icon: <Star className="w-4 h-4 text-amber-500" fill="currentColor" /> },
         { key: "nohints", label: "No Hint Wins", value: stats.noHintsUsedCount, icon: <LightbulbOff className="w-full h-full" /> },
         { key: "inorder", label: "In Order", value: stats.inOrderCount, icon: <ListOrdered className="w-full h-full" /> },
-        { key: "reverserainbow", label: "Reverse Rainbow", value: stats.reverseRainbowCount, icon: <ReverseRainbowAchievementIcon /> },
+        { key: "reverserainbow", label: "Reverse Rainbows", value: stats.reverseRainbowCount, icon: <ReverseRainbowAchievementIcon /> },
         { key: "avgmistakes", label: "Average Mistakes", value: stats.averageMistakes.toFixed(1), icon: <BarChart3 className="w-full h-full" /> },
       ]
         // The two Rainbow achievements are only meaningful for a format that
