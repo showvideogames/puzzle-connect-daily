@@ -31,6 +31,7 @@ describe('personal history insights', () => {
   const insights=personalStatsInsights([row(['red'],true,'in_game'),row(['green'],true,'post_game'),row([],true,null)],FULL_FORMAT);
   render(<PersonalStatsInsightsCards insights={insights} hasRainbow />);
   expect(screen.getByRole('img',{name:'First 50%. Last 50%'})).toBeInTheDocument();
+  expect(document.querySelector('.personal-stats-slice-majority')).toBeNull();
   expect(screen.queryByText('Known Timing Only')).not.toBeInTheDocument();
   const card=document.querySelector('.personal-stats-timing-card')!;
   expect([...card.children].filter(e=>!e.classList.contains('sr-only')).map(e=>e.tagName.toLowerCase())).toEqual(['h3','svg']);
@@ -41,7 +42,15 @@ describe('personal history insights', () => {
   const insights=personalStatsInsights([],FULL_FORMAT); insights.rainbowTiming={first:7,last:3,unknown:2};
   render(<PersonalStatsInsightsCards insights={insights} hasRainbow />);
   const chart=screen.getByRole('img',{name:'First 70%. Last 30%'});
-  expect([...chart.querySelectorAll('path')].map(p=>p.getAttribute('fill'))).toEqual(['#f6a6d2','#8739d7']);
+  expect([...chart.querySelectorAll('path')].map(p=>p.getAttribute('fill'))).toEqual(['#c73589','#8739d7']);
+  expect(screen.getByRole('heading',{name:'Spotted the Rainbow 🌈'})).toBeInTheDocument();
+  for(const text of chart.querySelectorAll('text')) expect(text).toHaveAttribute('fill','#fff');
+  expect(chart.querySelectorAll('.personal-stats-slice-majority')).toHaveLength(1);
+  const luminance=(hex:string)=>{
+    const channels=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4);
+    return channels[0]*.2126+channels[1]*.7152+channels[2]*.0722;
+  };
+  for(const path of chart.querySelectorAll('path')) expect(1.05/(luminance(path.getAttribute('fill')!)+.05)).toBeGreaterThanOrEqual(4.5);
   const first=chart.querySelector('text')!;
   expect(Number(first.getAttribute('y'))).toBeLessThan(135);
   expect(screen.queryByText('Known Timing Only')).not.toBeInTheDocument();

@@ -7,7 +7,7 @@ const percent = (share: number) => share > 0 && share < .01 ? '<1%' : share < 1 
 function TimingPie({ first, last }: { first: number; last: number }) {
   const total = first + last;
   const slices = [
-    { label: 'First', share: first / total, start: 0, fill: '#f6a6d2', text: '#2b1042' },
+    { label: 'First', share: first / total, start: 0, fill: '#c73589', text: '#fff' },
     { label: 'Last', share: last / total, start: first / total, fill: '#8739d7', text: '#fff' },
   ];
   const point = (turn: number, radius: number) => [120 + Math.sin(turn * Math.PI * 2) * radius, 120 - Math.cos(turn * Math.PI * 2) * radius];
@@ -17,6 +17,7 @@ function TimingPie({ first, last }: { first: number; last: number }) {
     {slices.filter(s => s.share > 0).map(s => {
       const [x1,y1] = point(s.start,110), [x2,y2] = point(s.start+s.share,110);
       const compact = s.share < .2;
+      const majority = s.share > .5;
       const middle = s.start+s.share/2;
       const [x,centerY] = s.share === 1 ? [120,120] : point(middle,compact ? 80 : 64);
       const y = centerY - (s.label === 'First' && s.share > .5 && s.share < 1 ? 24 : 0);
@@ -29,9 +30,9 @@ function TimingPie({ first, last }: { first: number; last: number }) {
           <path d={`M120 120 L${x1} ${y1} A110 110 0 ${s.share > .5 ? 1 : 0} 1 ${x2} ${y2} Z`} fill={s.fill} />}
         {s.share >= .05 && (compact
           ? <text transform={`translate(${x} ${y}) rotate(${rotation})`} textAnchor="middle" dominantBaseline="central" fill={s.text} className="personal-stats-slice-compact"><tspan className="personal-stats-slice-name">{s.label}</tspan> <tspan>{percent(s.share)}</tspan></text>
-          : <text x={x} y={y-5} textAnchor="middle" fill={s.text}>
+          : <text x={x} y={y-(majority ? 9 : 5)} textAnchor="middle" fill={s.text} className={majority ? "personal-stats-slice-majority" : undefined}>
             <tspan x={x} className="personal-stats-slice-name">{s.label}</tspan>
-            <tspan x={x} dy="25" className="personal-stats-slice-percent">{percent(s.share)}</tspan>
+            <tspan x={x} dy={majority ? 32 : 25} className="personal-stats-slice-percent">{percent(s.share)}</tspan>
           </text>)}
       </g>;
     })}
@@ -43,7 +44,7 @@ export function PersonalStatsInsightsCards({ insights, hasRainbow }: { insights:
   const classified = timing.first + timing.last;
   return <div className="personal-stats-insights">
     {hasRainbow && <section className="personal-stats-insight personal-stats-timing-card" aria-labelledby="rainbow-timing-title" aria-describedby="rainbow-timing-description">
-      <h3 id="rainbow-timing-title">First vs Last</h3>
+      <h3 id="rainbow-timing-title">Spotted the Rainbow 🌈</h3>
       {classified > 0 ? <TimingPie first={timing.first} last={timing.last} /> :
         <div className="personal-stats-empty"><span aria-hidden="true">—</span>{timing.unknown ? 'Timing Unknown' : 'No Rainbows Yet'}</div>}
       <p id="rainbow-timing-description" className="sr-only">When you spotted the Rainbow. Percentages use only finds with known timing. {timing.unknown} historical finds have unknown timing and are excluded.</p>

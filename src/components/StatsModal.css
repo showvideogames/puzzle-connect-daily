@@ -136,3 +136,6 @@
 .dark .personal-stats-advanced-card.nohintstreak .personal-stats-advanced-icon, .dark .personal-stats-advanced-card.nohints .personal-stats-advanced-icon { color:#ce8dff; }
 
 .personal-stats-slice-compact, .personal-stats-slice-compact .personal-stats-slice-name { font-size:12px; font-weight:900; }
+
+.personal-stats-slice-majority .personal-stats-slice-name { font-size:20px; }
+.personal-stats-slice-majority .personal-stats-slice-percent { font-size:34px; }
