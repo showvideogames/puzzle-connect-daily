@@ -49,6 +49,7 @@ declare
   _session_device text;
   _session_format text;
   _is_official    boolean;
+  _identity       text;
   _completed_at   timestamptz := now();
   _rows           integer;
   _first_solve    text := _solve_order ->> 0;
@@ -69,11 +70,26 @@ begin
     into _puzzle_id, _user_id, _session_device, _session_format
     from public.game_sessions gs
    where gs.id = _session_id
-     and gs.status = 'in_progress';
+     and gs.status = 'in_progress'
+   FOR UPDATE;
+
+  -- Ownership can change while waiting for an import or another completion.
+  -- Recheck capability against the locked, current row before any write.
+  if not public.session_capability_ok(_session_id, _device_id, _device_token) then
+    return null;
+  end if;
 
   if _puzzle_id is null then
     return null;
   end if;
+
+  -- Match the baseline completed-INSERT lock, BEFORE classifying official.
+  -- The unique indexes prevent duplicate officials, but without this lock a
+  -- racing completion fails with 23505 instead of completing as a replay.
+  -- Lock order: session row -> puzzle/owner -> no-hint owner/format trigger.
+  _identity := case when _user_id is not null then 'u:' || _user_id::text
+                    else 'd:' || _session_device end;
+  perform pg_advisory_xact_lock(hashtextextended(coalesce(_puzzle_id, '') || '|' || _identity, 0));
 
   _is_official := not exists (
     select 1
@@ -86,6 +102,7 @@ begin
          (_user_id is not null and other.user_id = _user_id)
          or (
            _user_id is null
+           and other.user_id is null
            and _session_device is not null
            and _session_device <> 'unknown'
            and other.device_id = _session_device

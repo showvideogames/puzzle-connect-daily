@@ -35,10 +35,11 @@ try {
  await applySchemaPlan(db,plan.filter(x=>x.label.includes('0003_')));
  assert.deepEqual((await db.query('select id,won,hints_used,completed_at from public.game_sessions')).rows,before);
  assert.deepEqual(await history(d),[]); // no reset/backfill
- const a=await start(d);assert.equal(await finish(d,a.id),true);
+ const a=await start(d);const replay=await start(d,a.pid);
+ assert.equal(await finish(d,a.id),true);
  const first=await history(d);assert.equal(first[0].qualified,true);
  assert.equal(await finish(d,a.id),null);assert.deepEqual(await history(d),first);
- const replay=await start(d,a.pid);assert.equal(await finish(d,replay.id,false),false);
+ assert.equal(await finish(d,replay.id,false),false);
  assert.deepEqual(await history(d),first); // non-official loss cannot break streak
  const b=await start(d);await finish(d,b.id);
  await db.query("update public.game_sessions set completed_at='1990-01-01' where id=$1",[b.id]);
@@ -78,6 +79,15 @@ try {
  await db.exec('SET ROLE authenticated');assert.equal((await summary(fresh)).tracked,count);await db.exec('RESET ROLE');
  await actAs(null);assert.deepEqual(await history(fresh),[]); // account-owned data not exposed as guest
  await actAs(uid);
+ // Import an unfinished game: the old guest capability must not finalize
+ // the now-account-owned row. The account can finish it once, in place.
+ await actAs(null);const moving=await device();const pendingImport=await start(moving);
+ await actAs(uid);await db.query('select * from public.import_guest_history($1,$2)',[moving.device_id,moving.device_token]);
+ const importedPending=(await db.query<{user_id:string;no_hint_completion_order:string|null}>('select user_id,no_hint_completion_order from public.game_sessions where id=$1',[pendingImport.id])).rows[0];
+ assert.equal(importedPending.user_id,uid);assert.equal(importedPending.no_hint_completion_order,null);
+ await actAs(null);assert.equal(await finish(moving,pendingImport.id),null);
+ await actAs(uid);assert.equal(await finish(moving,pendingImport.id),true);
+ assert.equal(await finish(moving,pendingImport.id),null);
  // Every persisted completion order is unique, even with replay/rollback gaps.
  const unique=(await db.query<{n:number;u:number}>('select count(no_hint_completion_order)::int n,count(distinct no_hint_completion_order)::int u from public.game_sessions')).rows[0];
  assert.equal(unique.n,unique.u);

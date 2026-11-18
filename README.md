@@ -82,3 +82,34 @@ to a live database. The owned-object inventory was regenerated from that databas
 preserving the previously recorded platform-extension inventory (PGlite omits those
 Supabase extensions). Real HTTP/auth and concurrent-connection acceptance still need
 the disposable Supabase verification before release.
+
+Concurrency release review (unreleased migration 0003): the baseline's partial
+unique indexes `game_sessions_one_official_per_device` and
+`game_sessions_one_official_per_user` already prevent two official results for
+one puzzle/owner. Previously two completions could both classify themselves as
+official before the no-hint trigger lock; the loser then failed with a unique
+violation, rolling back all effects. Finalization now locks its session row,
+rechecks capability/ownership, and takes the same puzzle/owner advisory lock as
+legacy completed inserts **before** official classification. The later no-hint
+owner/format lock remains responsible for acceptance ordering.
+
+Import retains session IDs and completion sequence values; overlapping account
+results demote the imported result instead of duplicating it. The existing device
+lock and retirement compare-and-swap make repeat imports no-ops. Imported history
+is merged by its original completion sequence, not import date. No sequence is
+assigned to pre-tracking completions. Concurrent imports from different devices,
+or an import racing an account completion, still rely on the baseline unique
+indexes: a collision rolls the whole transaction back and requires a retry; no
+claim is made that those pre-existing races are now automatically retried.
+
+`npm run e2e:db:no-hint-concurrency` adds a guarded real-Supabase acceptance check:
+it holds one completion transaction open, observes a second connection blocking,
+then checks one official result and one replay, a single aggregate increment,
+HTTP summary/retry stability, and guest/account Full/Mini isolation. It requires
+`e2e:up` and `e2e:reset`; it never applies migrations or resets a database itself.
+This check has **not passed locally yet**: Docker's daemon socket is absent,
+`.env.e2e`/local keys and the seed manifest are missing, and the safety guard
+refuses execution before any database connection. The in-process PostgreSQL
+checks pass but cannot establish multi-connection or GoTrue/PostgREST behavior.
+Before release, also exercise concurrent import/finalization and import retries
+on that disposable stack. The private UI preview is unchanged by this review.
