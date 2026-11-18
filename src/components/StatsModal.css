@@ -79,9 +79,8 @@
 .personal-stats-advanced-card.inorder { background:linear-gradient(135deg,#e2fce9,#d4f8df); }
 .personal-stats-advanced-card.inorder .personal-stats-advanced-icon { color:#168c39; }
 .personal-stats-advanced-card.reverserainbow { background:linear-gradient(135deg,#e4edff,#dce5ff); }
-/* The shared arc occupies the lower half of its SVG before the wrapper flips
-   it. Center and enlarge its artwork only in this advanced-stat icon slot. */
-.personal-stats-advanced-card.reverserainbow .personal-stats-advanced-icon svg { transform:translateY(-17.5%) scale(1.15); transform-origin:center; }
+/* Give the achievement rainbow a substantial, tightly framed icon slot. */
+.personal-stats-advanced-card.reverserainbow .personal-stats-advanced-icon { width:72px; height:40px; }
 .personal-stats-advanced-card.avgmistakes { background:linear-gradient(135deg,#fff4df,#ffe8cb); }
 .personal-stats-advanced-card.avgmistakes .personal-stats-advanced-icon { color:#c85d00; }
 .personal-stats-advanced-card:last-child:nth-child(odd) { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:16px; }
@@ -100,4 +99,8 @@
   .personal-stats-advanced h3 { font-size:23px; }
   .personal-stats-advanced-card { padding:16px 14px; border-radius:24px; }
   .personal-stats-advanced-icon { width:32px; height:32px; }
+}
+
+@media(max-width:390px) {
+  .personal-stats-advanced-card.reverserainbow .personal-stats-advanced-icon { width:64px; height:36px; }
 }

@@ -4,7 +4,6 @@ import { displayStreakOf, loadStatsFromSupabase, winRateOf } from "@/lib/gameSta
 import { GameStats } from "@/lib/types";
 import { X, Puzzle, Trophy, Flame, Crown, Mountain, Star, LightbulbOff, BarChart3, ListOrdered } from "lucide-react";
 import { RainbowIcon } from "./RainbowIcon";
-import { ReverseRainbowIcon } from "./ReverseRainbowIcon";
 import { FULL_FORMAT, MINI_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 
 import "./StatsModal.css";
@@ -58,9 +57,9 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
         { key: "rainbows", label: "Rainbows Spotted", value: stats.rainbowSpottedCount, icon: <RainbowIcon className="w-4 h-4" /> },
         { key: "hardest", label: "Hardest Category First", value: stats.hardestFirstCount, icon: <Mountain className="w-full h-full" /> },
         { key: "perfect", label: "Perfect Games", value: stats.perfectGamesCount, icon: <Star className="w-4 h-4 text-amber-500" fill="currentColor" /> },
-        { key: "nohints", label: "No Hints Used", value: stats.noHintsUsedCount, icon: <LightbulbOff className="w-full h-full" /> },
+        { key: "nohints", label: "No Hint Wins", value: stats.noHintsUsedCount, icon: <LightbulbOff className="w-full h-full" /> },
         { key: "inorder", label: "In Order", value: stats.inOrderCount, icon: <ListOrdered className="w-full h-full" /> },
-        { key: "reverserainbow", label: "Reverse Rainbow", value: stats.reverseRainbowCount, icon: <ReverseRainbowIcon className="w-full h-full" /> },
+        { key: "reverserainbow", label: "Reverse Rainbow", value: stats.reverseRainbowCount, icon: <ReverseRainbowAchievementIcon /> },
         { key: "avgmistakes", label: "Average Mistakes", value: stats.averageMistakes.toFixed(1), icon: <BarChart3 className="w-full h-full" /> },
       ]
         // The two Rainbow achievements are only meaningful for a format that
@@ -192,6 +191,17 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
         </div>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+  );
+}
+
+function ReverseRainbowAchievementIcon() {
+  return (
+    <svg viewBox="54 42 172 92" fill="none" className="w-full h-full" aria-hidden="true">
+      <g strokeWidth="10" transform="translate(0 176) scale(1 -1)">
+        {["#ff43a0", "#ff9860", "#ffda43", "#94dc54", "#42cbdc", "#9461ff"].map((color, i) =>
+          <path key={color} stroke={color} d={`M ${60+i*9} 128 A ${80-i*9} ${80-i*9} 0 0 1 ${220-i*9} 128`} />)}
+      </g>
+    </svg>
   );
 }
 
