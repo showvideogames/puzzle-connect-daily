@@ -126,3 +126,14 @@
 .personal-stats-insights .yellow { background:#ffdf54; }.personal-stats-insights .green { background:#94dc54; }.personal-stats-insights .blue { background:#79b9ff; }.personal-stats-insights .red { background:#ff8d9d; }
 .dark .personal-stats-insight { border-color:#60476e; }
 @media(max-width:390px) { .personal-stats-insight { padding:18px 14px; border-radius:24px; }.personal-stats-timing { gap:18px; }.personal-stats-pie { width:104px; height:104px; } }
+
+.personal-stats-nohint { margin-top:16px; background:linear-gradient(135deg,#f3e9ff,#e9e7ff); }
+.personal-stats-nohint > .personal-stats-icon { color:#a331ff; margin-bottom:12px; }
+.dark .personal-stats-nohint { background:#35294d; }
+.dark .personal-stats-nohint > .personal-stats-icon { color:#ce8dff; }
+
+.personal-stats-metric > div { min-width:0; }
+.personal-stats-rate .personal-stats-value { white-space:nowrap; overflow-wrap:normal; }
+.personal-stats-distribution-caption { font-size:14px; font-weight:750; margin:-7px 0 14px; }
+.personal-stats-legacy-note { margin-top:0; }
+@media(max-width:390px) { .personal-stats-rate .personal-stats-value { font-size:clamp(24px,8vw,36px); } }

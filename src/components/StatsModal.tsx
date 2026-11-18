@@ -40,6 +40,9 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
     return () => { cancelled = true; };
   }, [open, selectedFormat]);
 
+  const formatChoices = format.id === MINI_FORMAT.id ? [MINI_FORMAT, FULL_FORMAT] : [FULL_FORMAT, MINI_FORMAT];
+  const visibleDistribution = stats?.guessDistribution.slice(0, selectedFormat.maxMistakes + 1) ?? [];
+  const legacyDistributionCount = stats?.guessDistribution.slice(selectedFormat.maxMistakes + 1).reduce((sum, count) => sum + count, 0) ?? 0;
   const winRate = stats ? winRateOf(stats) : 0;
   // 0 once the streak has lapsed (see displayStreakOf).
   const displayStreak = stats ? displayStreakOf(stats) : 0;
@@ -109,7 +112,7 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
               <div className="personal-stats-heading">
                 <DialogPrimitive.Title>Your Stats</DialogPrimitive.Title>
                 <div className="personal-stats-toggle" role="group" aria-label="Stats Format">
-                  {[FULL_FORMAT, MINI_FORMAT].map((item) => <button type="button" key={item.id}
+                  {formatChoices.map((item) => <button type="button" key={item.id}
                     aria-pressed={selectedFormat.id === item.id} onClick={() => setSelectedFormat(item)}>{item.name}</button>)}
                 </div>
               </div>
@@ -129,7 +132,7 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                       return (
                         <div
                           key={item.label}
-                          className="personal-stats-metric"
+                          className={`personal-stats-metric${item.label === "Win Rate" ? " personal-stats-rate" : ""}`}
                         >
                           <Icon className={`personal-stats-icon ${item.colorClass}`} />
                           <div><div className="personal-stats-label">{item.label}</div>
@@ -146,9 +149,10 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                   {/* Mistake Distribution */}
                   <div className="personal-stats-distribution">
                     <h3>Mistake Distribution</h3>
+                    <p className="personal-stats-distribution-caption">Failure Bucket: {selectedFormat.maxMistakes} Mistakes</p>
                     <div className="space-y-2">
-                      {stats.guessDistribution.map((count, i) => {
-                        const max = Math.max(...stats.guessDistribution, 1);
+                      {visibleDistribution.map((count, i) => {
+                        const max = Math.max(...visibleDistribution, 1);
                         const pct = count > 0 ? Math.max((count / max) * 100, 4) : 0;
                         return (
                           <div key={i} className="personal-stats-bar-row">
@@ -166,6 +170,7 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                     </div>
                   </div>
 
+                  {legacyDistributionCount > 0 && <p className="personal-stats-insight-note personal-stats-legacy-note">{legacyDistributionCount} historical {legacyDistributionCount === 1 ? "game with" : "games with"} more than {selectedFormat.maxMistakes} mistakes {legacyDistributionCount === 1 ? "is" : "are"} not shown in the chart. Original results remain in your totals.</p>}
                   {/* Advanced Stats — hidden until the player has at least one
                       recorded game, so a brand-new player doesn't see a wall
                       of zeroes (same gate the previous version used). */}
@@ -183,6 +188,19 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                           </div>
                         ))}
                       </dl>
+                      <section className="personal-stats-insight personal-stats-nohint" aria-labelledby="no-hint-streak-title">
+                        <Flame className="personal-stats-icon" aria-hidden="true" />
+                        <h3 id="no-hint-streak-title">Best No-Hint Streak</h3>
+                        <p className="personal-stats-insight-caption">Consecutive Official Wins Without Hints</p>
+                        <div className="personal-stats-value">{stats.noHintStreak.best ?? "—"}</div>
+                        {stats.noHintStreak.best === null
+                          ? <p className="personal-stats-insight-note">Tracking is unavailable right now.</p>
+                          : <>
+                            <p className="personal-stats-insight-note">Based on {stats.noHintStreak.tracked} official {stats.noHintStreak.tracked === 1 ? "game" : "games"} recorded since tracking began. Earlier games are not included.</p>
+                            {stats.noHintStreak.unknown > 0 && <p className="personal-stats-insight-note">Hint status is unknown for {stats.noHintStreak.unknown} {stats.noHintStreak.unknown === 1 ? "game" : "games"}; these break a verified streak.</p>}
+                          </>}
+                        <p className="personal-stats-insight-note">Losses or hints break the streak. Calendar gaps do not.</p>
+                      </section>
                       <PersonalStatsInsightsCards insights={stats.insights} hasRainbow={selectedFormat.hasRainbow} />
                     </section>
                   )}

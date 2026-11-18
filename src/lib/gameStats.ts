@@ -1,3 +1,4 @@
+import { noHintStreakSummary, unavailableNoHintStreak } from "./noHintStreak";
 import { personalStatsInsights } from "./personalStatsInsights";
 import { supabase } from "@/integrations/supabase/client";
 import { GameStats } from "./types";
@@ -376,7 +377,7 @@ export interface FinalizeGameSessionParams {
   solveOrder: string[];
   guessHistory: GuessEventInput[];
   skipStreak?: boolean;
-  hintsUsed?: boolean;
+  hintsUsed?: boolean | null;
   shareGrid?: string;
 }
 
@@ -413,7 +414,7 @@ export async function finalizeGameSession(
     solveOrder,
     guessHistory,
     skipStreak = false,
-    hintsUsed = false,
+    hintsUsed = null,
     shareGrid = "",
   } = params;
 
@@ -563,6 +564,7 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
   const emptyDistribution = () => Array<number>(historicalMaxMistakes + 1).fill(0);
 
   const empty: GameStats = {
+    noHintStreak: unavailableNoHintStreak(),
     insights: personalStatsInsights([], format),
     gamesPlayed: 0,
     gamesWon: 0,
@@ -618,11 +620,14 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
     // clients (migration section 6), and the function applies BOTH the
     // completed-official filter and the ownership predicate server-side, so
     // there is no query shape a caller could vary to widen the result set.
-    const { data: sessions } = await supabase.rpc("get_own_completed_sessions", {
-      _device_id: deviceId,
-      _device_token: getDeviceToken(),
-      _format: format.statsNamespace,
-    });
+    const historyArgs = { _device_id: deviceId, _device_token: getDeviceToken(), _format: format.statsNamespace };
+    const [{ data: sessions }, noHintHistory] = await Promise.all([
+      supabase.rpc("get_own_completed_sessions", historyArgs),
+      supabase.rpc("get_own_no_hint_streak", historyArgs),
+    ]);
+    // A staged frontend or failed read must not claim a zero tracked streak.
+    const noHintStreak = noHintHistory.error || !Array.isArray(noHintHistory.data)
+      ? unavailableNoHintStreak() : noHintStreakSummary(noHintHistory.data[0]);
 
     const rows = (sessions ?? []) as unknown as OwnCompletedSession[];
 
@@ -747,6 +752,7 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
     }
 
     return {
+      noHintStreak,
       insights: personalStatsInsights(rows, format),
       gamesPlayed: rows.length,
       gamesWon,

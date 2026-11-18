@@ -22,15 +22,15 @@ shows up as a diff instead of as a surprise on a blank project.
 | Category | Count |
 |---|---|
 | Tables | 22 |
-| Columns | 190 |
+| Columns | 192 |
 | Constraints | 92 |
-| Indexes | 56 |
-| Functions | 59 |
-| Triggers | 4 |
+| Indexes | 57 |
+| Functions | 62 |
+| Triggers | 5 |
 | RLS policies | 25 |
 | Enum types | 1 |
 | Views | 0 |
-| Sequences | 0 |
+| Sequences | 1 |
 | Storage buckets | n/a (no storage on this backend) |
 
 ## Enum types
@@ -408,6 +408,8 @@ RLS: enabled. Grants: anon=SELECT, authenticated=SELECT, service_role=DELETE/INS
 | `rainbow_source` | text | null |  |
 | `puzzle_version_id` | uuid | null |  |
 | `format` | text | not null | `'full'::text` |
+| `no_hint_completion_order` | bigint | null |  |
+| `no_hint_qualified` | boolean | null |  |
 
 Constraints:
 
@@ -425,6 +427,7 @@ Indexes:
 - `CREATE INDEX game_sessions_format_device_idx ON public.game_sessions USING btree (format, device_id) WHERE (device_id IS NOT NULL)`
 - `CREATE INDEX game_sessions_format_user_idx ON public.game_sessions USING btree (format, user_id) WHERE (user_id IS NOT NULL)`
 - `CREATE INDEX game_sessions_in_progress_activity_idx ON public.game_sessions USING btree (last_activity_at) WHERE (status = 'in_progress'::text)`
+- `CREATE UNIQUE INDEX game_sessions_no_hint_order_unique ON public.game_sessions USING btree (no_hint_completion_order) WHERE (no_hint_completion_order IS NOT NULL)`
 - `CREATE UNIQUE INDEX game_sessions_one_official_per_device ON public.game_sessions USING btree (puzzle_id, device_id) WHERE (is_official AND (user_id IS NULL) AND (device_id IS NOT NULL) AND (device_id <> 'unknown'::text))`
 - `CREATE UNIQUE INDEX game_sessions_one_official_per_user ON public.game_sessions USING btree (puzzle_id, user_id) WHERE (is_official AND (user_id IS NOT NULL))`
 - `CREATE UNIQUE INDEX game_sessions_pkey ON public.game_sessions USING btree (id)`
@@ -435,6 +438,7 @@ Indexes:
 Triggers:
 
 - `CREATE TRIGGER game_sessions_sync_status_trigger BEFORE INSERT OR UPDATE ON public.game_sessions FOR EACH ROW EXECUTE FUNCTION game_sessions_sync_status()`
+- `CREATE TRIGGER zz_stamp_no_hint_completion BEFORE INSERT OR UPDATE ON public.game_sessions FOR EACH ROW EXECUTE FUNCTION stamp_no_hint_completion()`
 
 Policies:
 
@@ -807,6 +811,7 @@ Indexes:
 | `get_luck_report(_puzzle_id uuid, _device_id text, _device_token text)` | json | yes | stable | anon, authenticated, service_role |
 | `get_my_favorites()` | jsonb | yes | stable | authenticated, service_role |
 | `get_own_completed_sessions(_device_id text, _device_token text, _format text)` | TABLE(puzzle_id text, won boolean, mistakes integer, found_rainbow boolean, solve_order jsonb, hints_used boolean, rainbow_solve_index smallint, rainbow_source text, bonus_rainbow_attempted boolean, status text) | yes | stable | anon, authenticated, service_role |
+| `get_own_no_hint_streak(_device_id text, _device_token text, _format text)` | TABLE(best integer, tracked integer, unknown integer) | yes | stable | anon, authenticated, service_role |
 | `get_own_streak(_device_id text, _device_token text, _format text)` | TABLE(current_streak integer, longest_streak integer, last_played_date text) | yes | stable | anon, authenticated, service_role |
 | `get_puzzle_report(_puzzle_id uuid)` | json | yes | stable | anon, authenticated, service_role |
 | `get_puzzle_stats(_puzzle_id uuid)` | json | yes | stable | anon, authenticated, service_role |
@@ -817,6 +822,7 @@ Indexes:
 | `import_guest_history(_device_id text, _device_token text)` | TABLE(outcome text, sessions_claimed integer) | yes | volatile | authenticated, service_role |
 | `luck_eligible_paths(_puzzle_id text)` | TABLE(session_id uuid, user_id uuid, device_id text, path jsonb) | yes | stable | service_role |
 | `my_account()` | TABLE(user_id uuid, global_user_id text, email text, created_at timestamp with time zone) | yes | stable | authenticated, service_role |
+| `no_hint_history_for_owner(_device_id text, _device_token text, _format text)` | TABLE(completion_order text, qualified boolean) | yes | stable | none of the client roles |
 | `ping()` | boolean | no | stable | anon, authenticated, service_role |
 | `puzzle_versions_block_update()` | trigger | no | volatile | anon, authenticated, service_role |
 | `puzzles_check_current_version()` | trigger | no | volatile | anon, authenticated, service_role |
@@ -830,6 +836,7 @@ Indexes:
 | `session_capability_ok(_session_id uuid, _device_id text, _device_token text)` | boolean | yes | stable | anon, authenticated, service_role |
 | `set_custom_puzzle_favorite(_share_id text, _favorite boolean)` | jsonb | yes | volatile | authenticated, service_role |
 | `skill_score(_won boolean, _mistakes integer, _solve_order jsonb, _found_rainbow boolean, _rainbow_source text, _format text)` | integer | no | immutable | anon, authenticated, service_role |
+| `stamp_no_hint_completion()` | trigger | yes | volatile | service_role |
 | `start_beta_playtest(_puzzle_id uuid, _puzzle_version_id uuid, _device_id text, _device_token text)` | uuid | yes | volatile | anon, authenticated, service_role |
 | `submit_beta_feedback(_puzzle_id uuid, _puzzle_version_id uuid, _playtest_id uuid, _tester_name text, _fun_rating smallint, _difficulty_rating smallint, _rainbow_fairness_rating smallint, _confusing_or_incorrect text, _additional_comments text, _would_play_again boolean)` | uuid | yes | volatile | anon, authenticated, service_role |
 | `submit_custom_puzzle_result(_share_id text, _device_id text, _device_token text, _won boolean, _total_guesses smallint, _run_id uuid)` | boolean | yes | volatile | anon, authenticated, service_role |

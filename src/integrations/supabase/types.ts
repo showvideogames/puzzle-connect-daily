@@ -433,6 +433,8 @@ export type Database = {
           id: string
           is_official: boolean
           last_activity_at: string | null
+          no_hint_completion_order: number | null
+          no_hint_qualified: boolean | null
           mistakes: number
           puzzle_id: string
           puzzle_version_id: string | null
@@ -446,6 +448,8 @@ export type Database = {
           won: boolean | null
         }
         Insert: {
+          no_hint_completion_order?: number | null
+          no_hint_qualified?: boolean | null
           active_time_seconds?: number | null
           bonus_rainbow_attempted?: boolean
           completed_at?: string | null
@@ -470,6 +474,8 @@ export type Database = {
           won?: boolean | null
         }
         Update: {
+          no_hint_completion_order?: number | null
+          no_hint_qualified?: boolean | null
           active_time_seconds?: number | null
           bonus_rainbow_attempted?: boolean
           completed_at?: string | null
@@ -1033,6 +1039,10 @@ export type Database = {
         Returns: Json
       }
       get_my_favorites: { Args: never; Returns: Json }
+      get_own_no_hint_streak: {
+        Args: { _device_id?: string; _device_token?: string; _format?: string }
+        Returns: { best: number; tracked: number; unknown: number }[]
+      }
       get_own_completed_sessions: {
         Args: { _device_id?: string; _device_token?: string; _format?: string }
         Returns: {

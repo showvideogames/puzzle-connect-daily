@@ -51,3 +51,34 @@ architecture, safety model and troubleshooting — in
 [`e2e/README.md`](e2e/README.md). It never talks to production; see the
 [Safety](e2e/README.md#safety) section for how that is enforced rather than
 merely intended.
+
+### Forward-only Best No-Hint Streak (prepared, not deployed)
+
+Migration `0003_no_hint_streak.sql` adds completion order and explicit qualification
+without resetting or backfilling existing results. The statistic counts consecutive
+completed official games within Full or Mini: losses, hints, and unknown evidence
+break runs; calendar gaps do not. Archive official results count; replays do not.
+Order is database acceptance order, serialized per owner/format, not browser time.
+A failed transaction may leave sequence gaps; those gaps have no gameplay meaning.
+Guest import retains recorded order and the existing official-result deduplication.
+Late persisted hint events disqualify an otherwise qualifying completion at read time.
+Historical rows without a tracking order are outside the baseline; legacy direct
+completions after installation are unknown rather than assumed hint-free wins.
+
+The summary RPC aggregates server-side so an API row limit cannot truncate history.
+If that RPC is unavailable, the UI reports tracking unavailable rather than zero.
+Records that never reach the server cannot be counted; no missing history is inferred.
+
+Before release, review and apply **only the unapplied additive migration** to the
+intended Rainbow database through the normal migration workflow, verify guest and
+account completion/read permissions plus retries against a disposable Supabase stack,
+then deploy the matching frontend. No reset is part of this change. A future launch
+reset requires its own separately authorized procedure. Frontend rollback may leave
+these additive tracking fields/RPCs intact; do not delete recorded tracking evidence.
+
+Validation: `npm run e2e:db:no-hint` exercises the real SQL in disposable in-process
+PostgreSQL; `npm run e2e:db:verify` checks the full schema and seed. Neither connects
+to a live database. The owned-object inventory was regenerated from that database,
+preserving the previously recorded platform-extension inventory (PGlite omits those
+Supabase extensions). Real HTTP/auth and concurrent-connection acceptance still need
+the disposable Supabase verification before release.

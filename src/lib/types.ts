@@ -91,6 +91,7 @@ export interface Puzzle {
 }
 
 export interface GameStats {
+  noHintStreak: import("./noHintStreak").NoHintStreak;
   insights: import("./personalStatsInsights").PersonalStatsInsights;
   gamesPlayed: number;
   gamesWon: number;
