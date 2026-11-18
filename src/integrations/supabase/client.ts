@@ -1,4 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
+import { temporaryAuthRefusals } from '@/lib/authTransport';
+import { renewingFetch } from '@/lib/renewingFetch';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
 // The ONLY place the Supabase project is named: two environment values.
@@ -9,7 +11,12 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+let authEpoch = 0;
+const storedIdentity = (): string | null => {
+  try { return JSON.parse(localStorage.getItem('rc-auth') ?? 'null')?.user?.id ?? null; }
+  catch { return null; }
+};
+export const supabase: SupabaseClient<Database> = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
     // Explicit rather than the library's derived default, so the key is
@@ -24,5 +31,19 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     // lib/platformSignIn.ts), so a code appearing on any other page is
     // ignored rather than silently exchanged.
     detectSessionInUrl: false,
-  }
+  },
+  global: {
+    fetch: renewingFetch(async () => {
+      if (!storedIdentity()) return null;
+      const { data } = await supabase.auth.refreshSession();
+      // The SDK handles terminal refresh errors. Never revoke a newer session here.
+      return data.session?.access_token ?? null;
+    }, temporaryAuthRefusals((input, init) => fetch(input, init)), storedIdentity, () => authEpoch),
+  },
+});
+let lastIdentity = storedIdentity();
+supabase.auth.onAuthStateChange((event, session) => {
+  const next = session?.user.id ?? null;
+  if (event === 'SIGNED_OUT' || next !== lastIdentity) authEpoch++;
+  lastIdentity = next;
 });

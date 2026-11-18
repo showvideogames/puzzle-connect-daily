@@ -108,12 +108,21 @@ export function useAccountOnboarding() {
     // the server cannot be asked: the player is still who they were, and
     // must keep seeing their own boards rather than a guest's.
     const storedSessionOwner = async (): Promise<ProgressOwner> => {
+      const rememberedOwner = (): ProgressOwner => {
+        try {
+          const id: unknown = JSON.parse(localStorage.getItem('rc-auth') ?? 'null')?.user?.id;
+          return typeof id === 'string' && id.length > 0 ? accountOwner(id) : guestOwner();
+        } catch { return ownerRef.current ?? guestOwner(); }
+      };
       try {
-        const { data } = await supabase.auth.getSession();
+        const { data, error } = await supabase.auth.getSession();
+        // Offline ownership only, never authorization: keep boards/queued work
+        // in the account scope while its renewal cannot be checked.
+        if (error) return rememberedOwner();
         const id = data.session?.user?.id;
         return id ? accountOwner(id) : guestOwner();
       } catch {
-        return guestOwner();
+        return rememberedOwner();
       }
     };
 

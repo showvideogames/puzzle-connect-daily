@@ -7,6 +7,7 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authUnavailable, setAuthUnavailable] = useState(false);
   const [adminLoading, setAdminLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -18,11 +19,13 @@ export function useAuth() {
 
   useEffect(() => {
     let isMounted = true;
+    let revision = 0;
 
     const applySession = (nextSession: Session | null) => {
       if (!isMounted) return;
 
       const nextUser = nextSession?.user ?? null;
+      setAuthUnavailable(false);
       setSession(nextSession);
       setUser(nextUser);
       setAuthLoading(false);
@@ -38,32 +41,41 @@ export function useAuth() {
     };
 
     const initializeAuth = async () => {
-      const { data, error } = await supabase.auth.getSession();
-
-      if (error) {
-        console.error("Failed to restore auth session:", error);
-
-        if (error.code === "refresh_token_not_found") {
-          void supabase.auth.signOut({ scope: "local" });
+      const mine = ++revision;
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (!isMounted || mine !== revision) return;
+        if (error) {
+          // No credential or player-data changes for a failed check. The SDK
+          // emits SIGNED_OUT when a refresh credential is actually rejected.
+          setAuthUnavailable(true);
+          setAuthLoading(false);
+          return;
         }
-
-        applySession(null);
-        return;
+        applySession(data.session ?? null);
+      } catch {
+        if (isMounted && mine === revision) {
+          setAuthUnavailable(true);
+          setAuthLoading(false);
+        }
       }
-
-      applySession(data.session ?? null);
     };
 
-    void initializeAuth();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      revision++;
       applySession(nextSession);
     });
+    const onOnline = () => { void initializeAuth(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') void initializeAuth(); };
+    window.addEventListener('online', onOnline);
+    document.addEventListener('visibilitychange', onVisible);
+    void initializeAuth();
 
     return () => {
       isMounted = false;
+      revision++;
+      window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisible);
       subscription.unsubscribe();
     };
   }, []);
@@ -114,6 +126,7 @@ export function useAuth() {
     session,
     loading: authLoading || adminLoading,
     isAdmin,
+    authUnavailable,
     signOut: signOutOfRainbow,
   };
 }
