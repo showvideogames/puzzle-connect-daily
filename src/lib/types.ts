@@ -105,7 +105,7 @@ export interface GameStats {
   // Wins solved in ascending order. For non-Rainbow (4-groups-only) puzzles:
   // Yellow->Green->Blue->Red. For Rainbow puzzles: Rainbow->Yellow->Green
   // ->Blue->Red OR Yellow->Green->Blue->Red->Rainbow — the Rainbow must be
-  // found at one end, not in the middle. This relies on
+  // recorded FIRST or LAST, the two legal Rainbow opportunities. This relies on
   // game_sessions.rainbow_solve_index (added going forward; see the
   // migration comment on that column), so Rainbow-eligible rows saved
   // before that column existed can never qualify here — they are left out
@@ -113,7 +113,7 @@ export interface GameStats {
   inOrderCount: number;
   // Wins solved in descending order, mirroring inOrderCount: for Rainbow
   // puzzles only, Rainbow->Red->Blue->Green->Yellow OR Red->Blue->Green
-  // ->Yellow->Rainbow (Rainbow at one end, not the middle). A 4-groups-only
+  // ->Yellow->Rainbow (FIRST or LAST). A 4-groups-only
   // puzzle can never qualify. Same rainbow_solve_index dependency/historical
   // limitation as inOrderCount above.
   reverseRainbowCount: number;
@@ -153,8 +153,9 @@ export interface GameState {
   isWon: boolean;
   guessHistory: GuessAttempt[];
   gotRainbow: boolean;
-  // How many groups were already solved when the rainbow was found — lets
-  // the board and share grid place the rainbow at the right spot in the
-  // solve order instead of always pinning it to the top.
+  // Regular groups solved when the Rainbow was found. A post-loss bonus
+  // can have fewer than all groups solved (even zero), but is still LAST.
+  // This number alone cannot classify FIRST vs LAST; persisted history
+  // must use rainbow_source and leave unknown timing unclassified.
   rainbowSolveIndex: number | null;
 }

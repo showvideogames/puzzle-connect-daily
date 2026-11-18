@@ -858,8 +858,10 @@ export function useGame(
 
   // Marks the rainbow as found after the puzzle is already complete (the
   // "Spot the Rainbow?" bonus prompt). Records a guessHistory entry and solve
-  // position just like the mid-game find does, so the board and share grid
-  // read from the same source of truth regardless of which path found it.
+  // position just like the in-game FIRST find does, so the board and share
+  // grid read from the same source of truth. This bonus is always LAST,
+  // including after a loss with fewer than all regular categories solved;
+  // solvedGroups.length is not itself a First/Last classification.
   // guessedAt is required rather than defaulted here: it must be captured by
   // the caller (GameBoard's handleSpotResult) at the moment the player
   // actually submitted the bonus modal, not whenever this callback happens
@@ -1049,8 +1051,8 @@ export function useGame(
 
     // Hidden rainbow/flag: the selected words are exactly the herring set.
     // rainbowHerring is already null for a format with no bonus category and
-    // for a herring whose size does not match the board, so this whole branch
-    // is structurally unreachable on Mini.
+    // for a herring whose size does not match the board. Both Full and Mini
+    // can carry a valid Rainbow.
     const herring = rainbowHerring;
     const isRainbowHerring =
       !!herring &&

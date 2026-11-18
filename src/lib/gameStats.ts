@@ -599,7 +599,7 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
 
     // EVERY player-facing stat below is derived from `rows`, so this single
     // filter is what keeps all of them — Played, Win %, Mistake Distribution,
-    // Rainbows Spotted, Hardest Category First, Perfect Games, No Hints Used,
+    // Rainbows Spotted, Hardest Category First, Perfect Games, No Hint Wins,
     // In Order, Reverse Rainbow, Average Mistakes — describing COMPLETED
     // OFFICIAL games only.
     //
@@ -710,9 +710,13 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
 
         // "In Order" / "Reverse Rainbow" — see the doc comments on
         // GameStats.inOrderCount/reverseRainbowCount in types.ts.
-        // rainbow_solve_index is only ever 0 or 4 here to count as "at one
-        // end"; null (unknown/historical) or 1-3 (found in the middle)
-        // never qualify — never guessed at, never treated as a known miss.
+        // For these win-only achievements, the existing index check accepts
+        // 0 or format.categoryCount. Null/other indices do not qualify.
+        // This is not a First/Last classifier: legal Rainbow finds are FIRST
+        // (before any regular category) or LAST (the post-game bonus).
+        // After a loss, the browser's bonus index can be 0..categoryCount-1;
+        // that is still LAST, not a middle find. Classify timing from
+        // rainbow_source, preserving unknown historical sources as unknown.
         const rsi = (r as { rainbow_solve_index?: number | null }).rainbow_solve_index ?? null;
         const rainbowAtEnd = rsi === 0 || rsi === format.categoryCount;
         if (isRainbowEligible) {

@@ -31,7 +31,9 @@ export default function HowToPlay() {
             <li>You have 4 mistakes before the game ends.</li>
             <li>
               Hidden bonus: one word from each group secretly belongs to a 5th category — the
-              Rainbow. Find all 4 rainbow words without making a mistake to spot it.
+              Rainbow. Spot it FIRST, before solving any regular category, or LAST through
+              the bonus prompt after the game ends, whether you win or lose. Earlier mistakes
+              do not prevent you from spotting it.
             </li>
           </ol>
         </section>
