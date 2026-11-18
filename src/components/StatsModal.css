@@ -135,3 +135,5 @@
 
 .dark .personal-stats-advanced-card.nohintstreak, .dark .personal-stats-advanced-card.nohints { background:#432951; }
 .dark .personal-stats-advanced-card.nohintstreak .personal-stats-advanced-icon, .dark .personal-stats-advanced-card.nohints .personal-stats-advanced-icon { color:#ce8dff; }
+
+.personal-stats-slice-compact, .personal-stats-slice-compact .personal-stats-slice-name { font-size:12px; font-weight:900; }

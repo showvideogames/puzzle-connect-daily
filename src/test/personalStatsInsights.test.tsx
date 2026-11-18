@@ -35,6 +35,13 @@ describe('personal history insights', () => {
   expect(document.querySelector('.personal-stats-timing-card')).toHaveAccessibleDescription(/1 historical finds have unknown timing/);
   expect(screen.getByText('Tie')).toBeInTheDocument();
  });
+ it('keeps a small readable slice label inside the chart without a side legend', () => {
+  const insights=personalStatsInsights([],FULL_FORMAT); insights.rainbowTiming={first:9,last:1,unknown:0};
+  render(<PersonalStatsInsightsCards insights={insights} hasRainbow />);
+  expect(screen.getByRole('img',{name:'First 90%. Last 10%'})).toBeInTheDocument();
+  expect(document.querySelector('.personal-stats-slice-compact')).toHaveTextContent('Last 10%');
+  expect(document.querySelector('.personal-stats-timing-legend')).toBeNull();
+ });
  it.each([[1,0,'First 100%. Last 0%','Last'],[0,1,'First 0%. Last 100%','First'],[999,1,'First >99%. Last <1%','Last']])('handles zero/tiny slices without misplaced labels: %s/%s', (first,last,name,omitted) => {
   const insights=personalStatsInsights([],FULL_FORMAT);
   insights.rainbowTiming={first:Number(first),last:Number(last),unknown:0};

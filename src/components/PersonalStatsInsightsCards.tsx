@@ -16,16 +16,22 @@ function TimingPie({ first, last }: { first: number; last: number }) {
     <title>{description}</title>
     {slices.filter(s => s.share > 0).map(s => {
       const [x1,y1] = point(s.start,110), [x2,y2] = point(s.start+s.share,110);
-      const [x,y] = s.share === 1 ? [120,120] : point(s.start+s.share/2,64);
+      const compact = s.share < .2;
+      const middle = s.start+s.share/2;
+      const [x,y] = s.share === 1 ? [120,120] : point(middle,compact ? 80 : 64);
+      let rotation = middle * 360 - 90;
+      if (rotation > 90) rotation -= 180;
       // Very small slices cannot hold legible labels. Their exact percentage
       // stays in the chart's accessible name/title; never place it in another slice.
       return <g key={s.label} aria-hidden="true">
         {s.share === 1 ? <circle cx="120" cy="120" r="110" fill={s.fill} /> :
           <path d={`M120 120 L${x1} ${y1} A110 110 0 ${s.share > .5 ? 1 : 0} 1 ${x2} ${y2} Z`} fill={s.fill} />}
-        {s.share >= .12 && <text x={x} y={y-5} textAnchor="middle" fill={s.text}>
-          <tspan x={x} className="personal-stats-slice-name">{s.label}</tspan>
-          <tspan x={x} dy="25" className="personal-stats-slice-percent">{percent(s.share)}</tspan>
-        </text>}
+        {s.share >= .05 && (compact
+          ? <text transform={`translate(${x} ${y}) rotate(${rotation})`} textAnchor="middle" dominantBaseline="central" fill={s.text} className="personal-stats-slice-compact"><tspan className="personal-stats-slice-name">{s.label}</tspan> <tspan>{percent(s.share)}</tspan></text>
+          : <text x={x} y={y-5} textAnchor="middle" fill={s.text}>
+            <tspan x={x} className="personal-stats-slice-name">{s.label}</tspan>
+            <tspan x={x} dy="25" className="personal-stats-slice-percent">{percent(s.share)}</tspan>
+          </text>)}
       </g>;
     })}
   </svg>;
