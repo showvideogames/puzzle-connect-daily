@@ -66,3 +66,76 @@
 .personal-stats-metric:nth-child(2) .personal-stats-icon { color:#16c840; }
 .personal-stats-metric:nth-child(3) .personal-stats-icon { color:#ff7200; }
 .personal-stats-metric:nth-child(4) .personal-stats-icon { color:#f5a500; }
+
+.personal-stats-advanced h3 { font-size:26px; line-height:1.2; font-weight:1000; letter-spacing:-.65px; margin:4px 0 14px; }
+.personal-stats-advanced-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.personal-stats-advanced-card { padding:18px 16px; border-radius:28px; background:linear-gradient(135deg,#ffe8ef,#ffdae7); }
+.personal-stats-advanced-card dt { display:flex; flex-direction:column; align-items:flex-start; gap:12px; }
+.personal-stats-advanced-card .personal-stats-label { line-height:1.2; }
+.personal-stats-advanced-card .personal-stats-value { margin-top:10px; }
+.personal-stats-advanced-icon { display:flex; width:36px; height:36px; flex-shrink:0; color:#d32a68; }
+.personal-stats-advanced-card.nohintstreak, .personal-stats-advanced-card.nohints { background:linear-gradient(135deg,#fae8ff,#f2e5ff); }
+.personal-stats-advanced-card.nohintstreak .personal-stats-advanced-icon, .personal-stats-advanced-card.nohints .personal-stats-advanced-icon { color:#a331ff; }
+.personal-stats-advanced-card.inorder { background:linear-gradient(135deg,#e2fce9,#d4f8df); }
+.personal-stats-advanced-card.inorder .personal-stats-advanced-icon { color:#168c39; }
+.personal-stats-advanced-card.reverserainbow { background:linear-gradient(135deg,#e4edff,#dce5ff); }
+/* Give the achievement rainbow a substantial, tightly framed icon slot. */
+.personal-stats-advanced-card.reverserainbow .personal-stats-advanced-icon { width:72px; height:40px; }
+.personal-stats-advanced-card.avgmistakes { background:linear-gradient(135deg,#fff4df,#ffe8cb); }
+.personal-stats-advanced-card.avgmistakes .personal-stats-advanced-icon { color:#c85d00; }
+.personal-stats-advanced-card:last-child:nth-child(odd) { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.personal-stats-advanced-card:last-child:nth-child(odd) dt { flex-direction:row; align-items:center; }
+.personal-stats-advanced-card:last-child:nth-child(odd) dd { margin-top:0; }
+.dark .personal-stats-advanced-card { background:#4b2638; }
+.dark .personal-stats-advanced-icon { color:#ff8bb3; }
+.dark .personal-stats-advanced-card.inorder { background:#1b4430; }
+.dark .personal-stats-advanced-card.inorder .personal-stats-advanced-icon { color:#70e793; }
+.dark .personal-stats-advanced-card.reverserainbow { background:#28395c; }
+.dark .personal-stats-advanced-card.avgmistakes { background:#49301e; }
+.dark .personal-stats-advanced-card.avgmistakes .personal-stats-advanced-icon { color:#ffb56f; }
+@media(max-width:390px) {
+  .personal-stats-advanced h3 { font-size:23px; }
+  .personal-stats-advanced-card { padding:16px 14px; border-radius:24px; }
+  .personal-stats-advanced-icon { width:32px; height:32px; }
+}
+
+@media(max-width:390px) {
+  .personal-stats-advanced-card.reverserainbow .personal-stats-advanced-icon { width:64px; height:36px; }
+}
+.personal-stats-insights { display:grid; gap:16px; margin-top:16px; }
+.personal-stats-insight { border:1.5px solid #dbd0e8; border-radius:28px; padding:20px 18px; }
+.personal-stats-insight h3 { margin:0 0 6px; font-size:23px; }
+.personal-stats-insight-caption { font-size:15px; line-height:1.35; font-weight:750; }
+.personal-stats-insight-note,.personal-stats-insight-empty { font-size:14px; line-height:1.45; margin-top:12px; }
+/* A single square card lets the chart carry its own labels. */
+.personal-stats-timing-card { aspect-ratio:1; display:flex; flex-direction:column; align-items:stretch; position:relative; }
+.personal-stats-pie { display:block; width:100%; min-height:0; flex:1; }
+.personal-stats-slice-name { font-size:16px; font-weight:800; }
+.personal-stats-slice-percent { font-size:25px; font-weight:1000; font-variant-numeric:tabular-nums; }
+.personal-stats-empty { flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:6px; padding:22px 0; font-size:16px; font-weight:750; }
+.personal-stats-empty > span { font-size:42px; line-height:1; }
+.personal-stats-color-counts dt { display:flex; align-items:center; gap:7px; font-weight:800; }
+.personal-stats-tie { align-self:center; font-size:13px; font-weight:800; }
+.personal-stats-color-leaders { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+.personal-stats-color-chip { padding:7px 13px; border-radius:14px; font-size:22px; font-weight:900; color:#251336; }
+.personal-stats-color-counts { display:grid; gap:9px; margin-top:18px; }
+.personal-stats-color-counts > div { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.personal-stats-color-counts dd { font-weight:900; font-variant-numeric:tabular-nums; }
+.personal-stats-color-dot { width:14px; height:14px; border-radius:4px; }
+.personal-stats-insights .yellow { background:#ffdf54; }.personal-stats-insights .green { background:#94dc54; }.personal-stats-insights .blue { background:#79b9ff; }.personal-stats-insights .red { background:#ff8d9d; }
+.dark .personal-stats-insight { border-color:#60476e; }
+@media(max-width:390px) { .personal-stats-insight { padding:18px 14px; border-radius:24px; } }
+
+.personal-stats-metric > div { min-width:0; }
+.personal-stats-rate .personal-stats-value { white-space:nowrap; overflow-wrap:normal; }
+.personal-stats-distribution-caption { font-size:14px; font-weight:750; margin:-7px 0 14px; }
+.personal-stats-legacy-note { margin-top:0; }
+@media(max-width:390px) { .personal-stats-rate .personal-stats-value { font-size:clamp(24px,8vw,36px); } }
+
+.dark .personal-stats-advanced-card.nohintstreak, .dark .personal-stats-advanced-card.nohints { background:#432951; }
+.dark .personal-stats-advanced-card.nohintstreak .personal-stats-advanced-icon, .dark .personal-stats-advanced-card.nohints .personal-stats-advanced-icon { color:#ce8dff; }
+
+.personal-stats-slice-compact, .personal-stats-slice-compact .personal-stats-slice-name { font-size:12px; font-weight:900; }
+
+.personal-stats-slice-majority .personal-stats-slice-name { font-size:20px; }
+.personal-stats-slice-majority .personal-stats-slice-percent { font-size:34px; }

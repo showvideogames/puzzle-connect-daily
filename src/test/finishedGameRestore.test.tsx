@@ -891,6 +891,47 @@ it("a loss saves its final board before revealing it and never rewrites storage 
 
 
 describe("guest decision recovery", () => {
+  it.each([
+    ['game_sessions_one_official_per_user', 1, 'ready', 2],
+    ['game_sessions_one_official_per_device', 1, 'ready', 2],
+    ['game_sessions_one_official_per_user', 3, 'decision', 2],
+    ['unrelated_constraint', 1, 'decision', 1],
+    ['game_sessions_one_official_per_user_future', 1, 'decision', 1],
+  ])('retries only a known atomic import collision once: %s/%s', async (constraint, failures, phase, attempts) => {
+    await playOnAnotherDevice(guestOwner(), [Y]);
+    db.signIn('user-alice');
+    const hook=renderHook(()=>useAccountOnboarding()); await settle();
+    const rpc=db.rpc.bind(db); let calls=0;
+    const spy=vi.spyOn(db,'rpc').mockImplementation(async (name,args)=>{
+      if(name==='import_guest_history' && ++calls <= Number(failures)) return {data:null,error:{code:'23505',message:`duplicate key value violates unique constraint "${constraint}"`}};
+      return rpc(name,args);
+    });
+    await act(async()=>hook.result.current.addMyProgress());
+    expect(calls).toBe(attempts); expect(hook.result.current.state.phase).toBe(phase);
+    if(phase==='decision') {
+      expect(progressKeys().some(k=>k.includes('acct:user-alice/'))).toBe(false);
+      spy.mockRestore();
+      await act(async()=>hook.result.current.addMyProgress());
+      expect(hook.result.current.state.phase).toBe('ready');
+    } else spy.mockRestore();
+  });
+
+  it('does not retry an import collision after the account changes', async()=>{
+    await playOnAnotherDevice(guestOwner(), [Y]); db.signIn('user-alice');
+    const hook=renderHook(()=>useAccountOnboarding()); await settle();
+    const rpc=db.rpc.bind(db); let calls=0; let release!:()=>void;
+    const gate=new Promise<void>(resolve=>{release=resolve;});
+    const spy=vi.spyOn(db,'rpc').mockImplementation(async(name,args)=>{
+      if(name==='import_guest_history') { calls++; await gate; return {data:null,error:{code:'23505',message:'duplicate key value violates unique constraint "game_sessions_one_official_per_user"'}}; }
+      return rpc(name,args);
+    });
+    let pending!:Promise<void>; act(()=>{pending=hook.result.current.addMyProgress();});
+    db.signIn(null); act(()=>auth.listener?.('SIGNED_OUT',null)); await settle();
+    await act(async()=>{release();await pending;});
+    expect(calls).toBe(1); expect(progressKeys().some(k=>k.includes('acct:user-alice/'))).toBe(false);
+    spy.mockRestore();
+  });
+
   it("serializes competing clicks so only the first decision is sent", async () => {
     await playOnAnotherDevice(guestOwner(), [Y]);
     db.signIn("user-alice");

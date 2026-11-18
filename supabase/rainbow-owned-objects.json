@@ -1466,6 +1466,20 @@
           "notNull": true,
           "default": "'full'::text",
           "comment": "The board format this play belongs to, copied from the puzzle at session creation. Existing sessions default to 'full', which is what every one of them is."
+        },
+        {
+          "name": "no_hint_completion_order",
+          "type": "bigint",
+          "notNull": false,
+          "default": null,
+          "comment": "Forward-only database acceptance order at first completion after tracking migration. Immutable; NULL for pre-tracking history. Gaps do not break streaks. Replays are excluded at read time."
+        },
+        {
+          "name": "no_hint_qualified",
+          "type": "boolean",
+          "notNull": false,
+          "default": null,
+          "comment": "Completion-time no-hint win evidence. True only for an explicit unhinted win; NULL is unknown, never a win. The read RPC additionally checks losses and all persisted hint events."
         }
       ],
       "constraints": [
@@ -1524,6 +1538,10 @@
           "definition": "CREATE INDEX game_sessions_in_progress_activity_idx ON public.game_sessions USING btree (last_activity_at) WHERE (status = 'in_progress'::text)"
         },
         {
+          "name": "game_sessions_no_hint_order_unique",
+          "definition": "CREATE UNIQUE INDEX game_sessions_no_hint_order_unique ON public.game_sessions USING btree (no_hint_completion_order) WHERE (no_hint_completion_order IS NOT NULL)"
+        },
+        {
           "name": "game_sessions_one_official_per_device",
           "definition": "CREATE UNIQUE INDEX game_sessions_one_official_per_device ON public.game_sessions USING btree (puzzle_id, device_id) WHERE (is_official AND (user_id IS NULL) AND (device_id IS NOT NULL) AND (device_id <> 'unknown'::text))"
         },
@@ -1552,6 +1570,10 @@
         {
           "name": "game_sessions_sync_status_trigger",
           "definition": "CREATE TRIGGER game_sessions_sync_status_trigger BEFORE INSERT OR UPDATE ON public.game_sessions FOR EACH ROW EXECUTE FUNCTION game_sessions_sync_status()"
+        },
+        {
+          "name": "zz_stamp_no_hint_completion",
+          "definition": "CREATE TRIGGER zz_stamp_no_hint_completion BEFORE INSERT OR UPDATE ON public.game_sessions FOR EACH ROW EXECUTE FUNCTION stamp_no_hint_completion()"
         }
       ],
       "policies": [
@@ -2970,7 +2992,9 @@
     }
   ],
   "views": [],
-  "sequences": [],
+  "sequences": [
+    "no_hint_completion_order_seq"
+  ],
   "functions": [
     {
       "name": "account_email",
@@ -3454,6 +3478,42 @@
       "comment": null
     },
     {
+      "name": "get_own_no_hint_streak",
+      "args": "_device_id text, _device_token text, _format text",
+      "returns": "TABLE(best integer, tracked integer, unknown integer)",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "Best consecutive official no-hint wins since tracking began, independent of calendar gaps. Losses, hints and unknown evidence break runs. Server aggregation avoids API row limits."
+    },
+    {
+      "name": "get_own_personal_stats_history",
+      "args": "_device_id text, _device_token text, _format text",
+      "returns": "jsonb",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "Complete owned official history for one format in a single snapshot, not truncated by API row limits. Uses the existing completed-session ownership predicate."
+    },
+    {
       "name": "get_own_streak",
       "args": "_device_id text, _device_token text, _format text",
       "returns": "TABLE(current_streak integer, longest_streak integer, last_played_date text)",
@@ -3627,6 +3687,20 @@
         "service_role"
       ],
       "comment": null
+    },
+    {
+      "name": "no_hint_history_for_owner",
+      "args": "_device_id text, _device_token text, _format text",
+      "returns": "TABLE(completion_order text, qualified boolean)",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [],
+      "comment": "Owned, format-specific, completed official games recorded since forward tracking began; legacy history is not backfilled. Ordered by database acceptance sequence, not calendar date."
     },
     {
       "name": "ping",
@@ -3855,6 +3929,22 @@
         "service_role"
       ],
       "comment": "Lucky Bot skill score for one finished session. Full: 74–100 for a win, 50+ for a loss. Mini: the original 50–99 formula, unchanged. Mirrors src/lib/skillScore.ts exactly; keep the two in step."
+    },
+    {
+      "name": "stamp_no_hint_completion",
+      "args": "",
+      "returns": "trigger",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "service_role"
+      ],
+      "comment": null
     },
     {
       "name": "start_beta_playtest",

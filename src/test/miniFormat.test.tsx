@@ -488,6 +488,8 @@ describe("12. statistics and streaks stay isolated", () => {
     expect(fullStats.gamesWon).toBe(0);
     expect(fullStats.currentStreak).toBe(0);
     expect(fullStats.guessDistribution.every((n) => n === 0)).toBe(true);
+    expect(fullStats.insights.startingColors.known).toBe(0);
+    expect(miniStats.insights.startingColors.leaders).toEqual(["green"]);
 
     // Now win the Full, on the same date.
     const full = mount(fullPuzzle);
@@ -502,6 +504,8 @@ describe("12. statistics and streaks stay isolated", () => {
 
     expect(fullAfter.gamesPlayed).toBe(1);
     expect(fullAfter.currentStreak).toBe(1);
+    expect(fullAfter.insights.startingColors.leaders).toEqual(["yellow"]);
+    expect(miniAfter.insights).toEqual(miniStats.insights);
     // Both counted correctly, neither doubled.
     expect(miniAfter.gamesPlayed).toBe(1);
     expect(miniAfter.currentStreak).toBe(1);

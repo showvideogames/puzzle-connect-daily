@@ -25,6 +25,8 @@
     "e2e:down": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/down.ts",
     "e2e:reset": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/reset.ts",
     "e2e:seed": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/seed.ts",
+    "e2e:db:no-hint-concurrency": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/verify-no-hint-concurrency.ts",
+    "e2e:db:no-hint": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/verify-no-hint-streak.ts",
     "e2e:db:verify": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/verify-db.ts",
     "e2e:app": "vite build --mode e2e --outDir dist-e2e && vite preview --outDir dist-e2e --port 5183 --strictPort",
     "e2e:test": "playwright test --config e2e/playwright.config.ts",

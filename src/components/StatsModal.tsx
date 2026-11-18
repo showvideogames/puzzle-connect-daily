@@ -1,10 +1,10 @@
+import { PersonalStatsInsightsCards } from "./PersonalStatsInsightsCards";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
 import { displayStreakOf, loadStatsFromSupabase, winRateOf } from "@/lib/gameStats";
 import { GameStats } from "@/lib/types";
-import { X, Puzzle, Trophy, Flame, Crown, Star, LightbulbOff, BarChart3, ListOrdered } from "lucide-react";
+import { X, Puzzle, Trophy, Flame, Crown, Mountain, Star, LightbulbOff, BarChart3, ListOrdered } from "lucide-react";
 import { RainbowIcon } from "./RainbowIcon";
-import { ReverseRainbowIcon } from "./ReverseRainbowIcon";
 import { FULL_FORMAT, MINI_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 
 import "./StatsModal.css";
@@ -40,6 +40,9 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
     return () => { cancelled = true; };
   }, [open, selectedFormat]);
 
+  const formatChoices = format.id === MINI_FORMAT.id ? [MINI_FORMAT, FULL_FORMAT] : [FULL_FORMAT, MINI_FORMAT];
+  const visibleDistribution = stats?.guessDistribution.slice(0, selectedFormat.maxMistakes + 1) ?? [];
+  const legacyDistributionCount = stats?.guessDistribution.slice(selectedFormat.maxMistakes + 1).reduce((sum, count) => sum + count, 0) ?? 0;
   const winRate = stats ? winRateOf(stats) : 0;
   // 0 once the streak has lapsed (see displayStreakOf).
   const displayStreak = stats ? displayStreakOf(stats) : 0;
@@ -47,21 +50,22 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
   const topStats = stats
     ? [
         { value: stats.gamesPlayed, label: "Played", icon: Puzzle, colorClass: "text-[hsl(var(--brand-purple-from))]" },
-        { value: `${winRate}%`, label: "Win rate", icon: Trophy, colorClass: "text-group-2" },
-        { value: displayStreak, label: "Current streak", icon: Flame, colorClass: "text-orange-500" },
-        { value: stats.maxStreak, label: "Best streak", icon: Crown, colorClass: "text-amber-500" },
+        { value: `${winRate}%`, label: "Win Rate", icon: Trophy, colorClass: "text-group-2" },
+        { value: displayStreak, label: "Current Streak", icon: Flame, colorClass: "text-orange-500" },
+        { value: stats.maxStreak, label: "Best Streak", icon: Crown, colorClass: "text-amber-500" },
       ]
     : [];
 
   const advancedStats = stats
     ? [
         { key: "rainbows", label: "Rainbows Spotted", value: stats.rainbowSpottedCount, icon: <RainbowIcon className="w-4 h-4" /> },
-        { key: "hardest", label: "Hardest Category First", value: stats.hardestFirstCount, icon: <span className="w-3 h-3 rounded-[3px] bg-group-4 inline-block" /> },
+        { key: "nohints", label: "No Hint Wins", value: stats.noHintsUsedCount, icon: <LightbulbOff className="w-full h-full" /> },
+        { key: "nohintstreak", label: "Best No-Hint Streak", value: stats.noHintStreak.best ?? "—", icon: <Flame className="w-full h-full" /> },
+        { key: "hardest", label: "Hardest Category First", value: stats.hardestFirstCount, icon: <Mountain className="w-full h-full" /> },
         { key: "perfect", label: "Perfect Games", value: stats.perfectGamesCount, icon: <Star className="w-4 h-4 text-amber-500" fill="currentColor" /> },
-        { key: "nohints", label: "No Hints Used", value: stats.noHintsUsedCount, icon: <LightbulbOff className="w-4 h-4 text-[hsl(var(--brand-purple-from))]" /> },
-        { key: "inorder", label: "In Order", value: stats.inOrderCount, icon: <ListOrdered className="w-4 h-4 text-group-3" /> },
-        { key: "reverserainbow", label: "Reverse Rainbow", value: stats.reverseRainbowCount, icon: <ReverseRainbowIcon className="w-4 h-4" /> },
-        { key: "avgmistakes", label: "Average Mistakes", value: stats.averageMistakes.toFixed(1), icon: <BarChart3 className="w-4 h-4 text-muted-foreground" /> },
+        { key: "inorder", label: "In Order", value: stats.inOrderCount, icon: <ListOrdered className="w-full h-full" /> },
+        { key: "reverserainbow", label: "Reverse Rainbows", value: stats.reverseRainbowCount, icon: <ReverseRainbowAchievementIcon /> },
+        { key: "avgmistakes", label: "Average Mistakes", value: stats.averageMistakes.toFixed(1), icon: <BarChart3 className="w-full h-full" /> },
       ]
         // The two Rainbow achievements are only meaningful for a format that
         // has a bonus category. A format without one would show a permanent
@@ -107,15 +111,15 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
 
             <div className="personal-stats-scroll min-h-0 overflow-y-auto">
               <div className="personal-stats-heading">
-                <DialogPrimitive.Title>Your stats</DialogPrimitive.Title>
-                <div className="personal-stats-toggle" role="group" aria-label="Stats format">
-                  {[FULL_FORMAT, MINI_FORMAT].map((item) => <button type="button" key={item.id}
+                <DialogPrimitive.Title>Your Stats</DialogPrimitive.Title>
+                <div className="personal-stats-toggle" role="group" aria-label="Stats Format">
+                  {formatChoices.map((item) => <button type="button" key={item.id}
                     aria-pressed={selectedFormat.id === item.id} onClick={() => setSelectedFormat(item)}>{item.name}</button>)}
                 </div>
               </div>
               <DialogPrimitive.Description className="sr-only">Your personal {selectedFormat.name} game statistics.</DialogPrimitive.Description>
               {loading && (
-                <div role="status" aria-label="Loading stats" className="flex justify-center items-center h-40">
+                <div role="status" aria-label="Loading Stats" className="flex justify-center items-center h-40">
                   <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
@@ -129,7 +133,7 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                       return (
                         <div
                           key={item.label}
-                          className="personal-stats-metric"
+                          className={`personal-stats-metric${item.label === "Win Rate" ? " personal-stats-rate" : ""}`}
                         >
                           <Icon className={`personal-stats-icon ${item.colorClass}`} />
                           <div><div className="personal-stats-label">{item.label}</div>
@@ -140,15 +144,16 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                   </div>
 
                   <div className="personal-stats-achievements">
-                    <AchievementCard kind="perfect" label={<>Perfect<br />games</>} value={stats.perfectGamesCount} />
-                    {selectedFormat.hasRainbow && <AchievementCard kind="rainbow" label={<>Rainbows<br />spotted</>} value={stats.rainbowSpottedCount} />}
+                    <AchievementCard kind="perfect" label={<>Perfect<br />Games</>} value={stats.perfectGamesCount} />
+                    {selectedFormat.hasRainbow && <AchievementCard kind="rainbow" label={<>Rainbows<br />Spotted</>} value={stats.rainbowSpottedCount} />}
                   </div>
                   {/* Mistake Distribution */}
                   <div className="personal-stats-distribution">
-                    <h3>Mistake distribution</h3>
+                    <h3>Mistake Distribution</h3>
+                    <p className="personal-stats-distribution-caption">Failure Bucket: {selectedFormat.maxMistakes} Mistakes</p>
                     <div className="space-y-2">
-                      {stats.guessDistribution.map((count, i) => {
-                        const max = Math.max(...stats.guessDistribution, 1);
+                      {visibleDistribution.map((count, i) => {
+                        const max = Math.max(...visibleDistribution, 1);
                         const pct = count > 0 ? Math.max((count / max) * 100, 4) : 0;
                         return (
                           <div key={i} className="personal-stats-bar-row">
@@ -166,27 +171,30 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                     </div>
                   </div>
 
+                  {legacyDistributionCount > 0 && <p className="personal-stats-insight-note personal-stats-legacy-note">{legacyDistributionCount} historical {legacyDistributionCount === 1 ? "game with" : "games with"} more than {selectedFormat.maxMistakes} mistakes {legacyDistributionCount === 1 ? "is" : "are"} not shown in the chart. Original results remain in your totals.</p>}
                   {/* Advanced Stats — hidden until the player has at least one
                       recorded game, so a brand-new player doesn't see a wall
                       of zeroes (same gate the previous version used). */}
                   {stats.gamesPlayed > 0 && (
-                    <div className="rounded-2xl border border-border bg-card px-4 py-4">
-                      <h3 className="text-base font-bold mb-1">Advanced Stats</h3>
-                      <div>
+                    <section className="personal-stats-advanced" aria-labelledby="advanced-stats-title">
+                      <h3 id="advanced-stats-title">Advanced Stats</h3>
+                      <dl className="personal-stats-advanced-grid">
                         {advancedStats.filter((item) => item.key !== "perfect" && item.key !== "rainbows").map((item) => (
-                          <div
-                            key={item.key}
-                            className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-0"
-                          >
-                            <span className="flex items-center gap-2.5 text-sm text-muted-foreground">
-                              <span className="w-4 h-4 flex items-center justify-center shrink-0">{item.icon}</span>
-                              {item.label}
-                            </span>
-                            <span className="text-sm font-semibold tabular-nums">{item.value}</span>
+                          <div key={item.key} className={`personal-stats-advanced-card ${item.key}`} aria-describedby={item.key === "nohintstreak" ? "no-hint-streak-description" : undefined}>
+                            <dt>
+                              <span className="personal-stats-advanced-icon" aria-hidden="true">{item.icon}</span>
+                              <span className="personal-stats-label">{item.label}</span>
+                            </dt>
+                            <dd className="personal-stats-value">{item.value}</dd>
                           </div>
                         ))}
-                      </div>
-                    </div>
+                      </dl>
+                      <p id="no-hint-streak-description" className="sr-only">
+                        {stats.noHintStreak.best === null ? "Tracking is unavailable right now." : `Based on ${stats.noHintStreak.tracked} official games since tracking began. Earlier games are excluded. ${stats.noHintStreak.unknown} games have unknown hint status and break a verified streak.`}
+                        Consecutive official wins without hints. Losses or hints break the streak. Calendar gaps do not.
+                      </p>
+                      <PersonalStatsInsightsCards insights={stats.insights} hasRainbow={selectedFormat.hasRainbow} />
+                    </section>
                   )}
                 </div>
               )}
@@ -195,6 +203,17 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
         </div>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+  );
+}
+
+function ReverseRainbowAchievementIcon() {
+  return (
+    <svg viewBox="54 42 172 92" fill="none" className="w-full h-full" aria-hidden="true">
+      <g strokeWidth="10" transform="translate(0 176) scale(1 -1)">
+        {["#ff43a0", "#ff9860", "#ffda43", "#94dc54", "#42cbdc", "#9461ff"].map((color, i) =>
+          <path key={color} stroke={color} d={`M ${60+i*9} 128 A ${80-i*9} ${80-i*9} 0 0 1 ${220-i*9} 128`} />)}
+      </g>
+    </svg>
   );
 }
 

@@ -1173,6 +1173,7 @@ export class FakeSupabase {
           error: null,
         };
       }
+      case "get_own_personal_stats_history":
       case "get_own_completed_sessions": {
         const fmt = argFormat(args);
         const rows = this.tables.game_sessions

@@ -51,3 +51,101 @@ architecture, safety model and troubleshooting — in
 [`e2e/README.md`](e2e/README.md). It never talks to production; see the
 [Safety](e2e/README.md#safety) section for how that is enforced rather than
 merely intended.
+
+### Forward-only Best No-Hint Streak (prepared, not deployed)
+
+Migration `0003_no_hint_streak.sql` adds completion order and explicit qualification
+without resetting or backfilling existing results. The statistic counts consecutive
+completed official games within Full or Mini: losses, hints, and unknown evidence
+break runs; calendar gaps do not. Archive official results count; replays do not.
+Order is database acceptance order, serialized per owner/format, not browser time.
+A failed transaction may leave sequence gaps; those gaps have no gameplay meaning.
+Guest import retains recorded order and the existing official-result deduplication.
+Late persisted hint events disqualify an otherwise qualifying completion at read time.
+Historical rows without a tracking order are outside the baseline; legacy direct
+completions after installation are unknown rather than assumed hint-free wins.
+
+The summary RPC aggregates server-side so an API row limit cannot truncate history.
+If that RPC is unavailable, the UI reports tracking unavailable rather than zero.
+Records that never reach the server cannot be counted; no missing history is inferred.
+
+Before release, review and apply **only the unapplied additive migration** to the
+intended Rainbow database through the normal migration workflow, verify guest and
+account completion/read permissions plus retries against a disposable Supabase stack,
+then deploy the matching frontend. No reset is part of this change. A future launch
+reset requires its own separately authorized procedure. Frontend rollback may leave
+these additive tracking fields/RPCs intact; do not delete recorded tracking evidence.
+
+Validation: `npm run e2e:db:no-hint` exercises the real SQL in disposable in-process
+PostgreSQL; `npm run e2e:db:verify` checks the full schema and seed. Neither connects
+to a live database. The owned-object inventory was regenerated from that database,
+preserving the previously recorded platform-extension inventory (PGlite omits those
+Supabase extensions). Real HTTP/auth and concurrent-connection acceptance results are recorded below.
+
+Concurrency release review (unreleased migration 0003): the baseline's partial
+unique indexes `game_sessions_one_official_per_device` and
+`game_sessions_one_official_per_user` already prevent two official results for
+one puzzle/owner. Previously two completions could both classify themselves as
+official before the no-hint trigger lock; the loser then failed with a unique
+violation, rolling back all effects. Finalization now locks its session row,
+rechecks capability/ownership, and takes the same puzzle/owner advisory lock as
+legacy completed inserts **before** official classification. The later no-hint
+owner/format lock remains responsible for acceptance ordering.
+
+Import retains session IDs and completion sequence values; overlapping account
+results demote the imported result instead of duplicating it. The existing device
+lock and retirement compare-and-swap make repeat imports no-ops. Imported history
+is merged by its original completion sequence, not import date. No sequence is
+assigned to pre-tracking completions. Concurrent imports from different devices,
+or an import racing an account completion, still rely on the baseline unique
+indexes: a collision rolls the whole transaction back and requires a retry; no
+claim is made that those pre-existing races are now automatically retried.
+
+`npm run e2e:db:no-hint-concurrency` adds a guarded real-Supabase acceptance check:
+it holds one completion transaction open, observes a second connection blocking,
+then checks one official result and one replay, a single aggregate increment,
+HTTP summary/retry stability, and guest/account Full/Mini isolation. It requires
+`e2e:up` and `e2e:reset`; it never applies migrations or resets a database itself.
+Real-stack acceptance passed on 2026-11-18 after starting the already installed
+Docker app normally. The test used a temporary project ID
+`rainbow-stats-task4-e2e` on the guarded E2E ports, preserving the older stopped
+`rainbow-categories-e2e` and Crosspuns stacks. The documented `e2e:up` and
+`e2e:reset` workflow applied fixtures only to this newly created stack.
+
+All four overlapping-completion cases passed: guest/account × Full/Mini, with
+one official, one saved replay, a single aggregate increment, and stable
+PostgREST summary/retry results. Account setup/sign-in exercised local GoTrue.
+Three genuine concurrent import cases passed too: same-device import is a no-op
+for the loser; two-device imports and import/account-completion collisions reject
+with 23505, fully roll back the losing transaction, then succeed on retry with
+one account official and unchanged completion orders. The test now asserts those
+outcomes. The database checks explicitly retry after rollback. The client now also
+retries once for 23505 errors naming either official-result unique constraint,
+and only while the account/device decision is still current. Other errors and
+exhausted retries retain the recoverable Add My Progress choice. The task stack was stopped afterward; existing stacks and
+the private UI preview were unchanged. No live migration, reset or deployment
+was performed. Production rollout still requires the normal migration and
+frontend release procedure; no stats reset is included.
+
+
+Final independent review: no additional migration privilege leak or reachable
+single-RPC lock cycle was found. The real concurrency tests also pass with the
+normal daily `record_streak` path enabled (`_skip_streak=false`). A separate
+archive-path check retains `_skip_streak=true` coverage.
+
+The review found PostgREST's 1,000-row cap truncated the prior personal-history
+read. `get_own_personal_stats_history` now wraps the existing ownership/format
+filter in one scalar JSON snapshot; the stats loader uses that complete snapshot
+and batches puzzle metadata IDs in groups of 200. A real HTTP regression proved
+1,101 returned rows versus the original RPC's capped 1,000, with wrong-token and
+Mini isolation checks. This new RPC must be deployed with migration 0003 before
+the matching frontend; there is intentionally no fallback to truncated history.
+No changes were made to the approved stats layout or private fixture preview.
+
+Client review confirmed an import collision cannot silently mark history as
+imported: the database transaction rolls back, local progress is copied only on
+`imported`, and exhausted errors re-resolve the outstanding decision. Unit tests
+cover successful bounded retry, exhaustion/manual recovery, unrelated constraint
+errors, and an account change while the request is pending. The current UI has
+no dedicated collision error message; if both attempts fail, Add My Progress
+remains available. No general authentication or header behavior was changed.

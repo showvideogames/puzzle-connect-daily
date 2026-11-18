@@ -1,3 +1,5 @@
+import { noHintStreakSummary, unavailableNoHintStreak } from "./noHintStreak";
+import { personalStatsInsights } from "./personalStatsInsights";
 import { supabase } from "@/integrations/supabase/client";
 import { GameStats } from "./types";
 import type { EntryContext } from "./entryContext";
@@ -375,7 +377,7 @@ export interface FinalizeGameSessionParams {
   solveOrder: string[];
   guessHistory: GuessEventInput[];
   skipStreak?: boolean;
-  hintsUsed?: boolean;
+  hintsUsed?: boolean | null;
   shareGrid?: string;
 }
 
@@ -412,7 +414,7 @@ export async function finalizeGameSession(
     solveOrder,
     guessHistory,
     skipStreak = false,
-    hintsUsed = false,
+    hintsUsed = null,
     shareGrid = "",
   } = params;
 
@@ -562,6 +564,8 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
   const emptyDistribution = () => Array<number>(historicalMaxMistakes + 1).fill(0);
 
   const empty: GameStats = {
+    noHintStreak: unavailableNoHintStreak(),
+    insights: personalStatsInsights([], format),
     gamesPlayed: 0,
     gamesWon: 0,
     currentStreak: 0,
@@ -597,9 +601,9 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
     }
     const streak = (Array.isArray(streakRows) ? streakRows[0] : streakRows) ?? null;
 
-    // EVERY player-facing stat below is derived from `rows`, so this single
+    // The history-based stats below are derived from `rows`, so this single
     // filter is what keeps all of them — Played, Win %, Mistake Distribution,
-    // Rainbows Spotted, Hardest Category First, Perfect Games, No Hints Used,
+    // Rainbows Spotted, Hardest Category First, Perfect Games, No Hint Wins,
     // In Order, Reverse Rainbow, Average Mistakes — describing COMPLETED
     // OFFICIAL games only.
     //
@@ -611,18 +615,24 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
     //
     // (Current Streak / Max Streak come from user_streaks above, which is
     // only ever written at official completion — see finalizeGameSession.)
-    // Fetched through the get_own_completed_sessions RPC rather than a table
-    // query. game_sessions is no longer directly readable by anonymous
-    // clients (migration section 6), and the function applies BOTH the
+    // Fetched through the personal-stats snapshot wrapper around
+    // get_own_completed_sessions rather than a table query. game_sessions is no
+    // longer directly readable by anonymous clients (migration section 6), and the function applies BOTH the
     // completed-official filter and the ownership predicate server-side, so
     // there is no query shape a caller could vary to widen the result set.
-    const { data: sessions } = await supabase.rpc("get_own_completed_sessions", {
-      _device_id: deviceId,
-      _device_token: getDeviceToken(),
-      _format: format.statsNamespace,
-    });
+    const historyArgs = { _device_id: deviceId, _device_token: getDeviceToken(), _format: format.statsNamespace };
+    const [history, noHintHistory] = await Promise.all([
+      supabase.rpc("get_own_personal_stats_history", historyArgs),
+      supabase.rpc("get_own_no_hint_streak", historyArgs),
+    ]);
+    // A staged frontend or failed read must not claim a zero tracked streak.
+    const noHintStreak = noHintHistory.error || !Array.isArray(noHintHistory.data)
+      ? unavailableNoHintStreak() : noHintStreakSummary(noHintHistory.data[0]);
 
-    const rows = (sessions ?? []) as unknown as OwnCompletedSession[];
+    // Scalar JSON is one complete snapshot: SETOF history is capped at 1,000
+    // rows by PostgREST. Never quietly calculate totals from a partial read.
+    if (history.error || !Array.isArray(history.data)) throw history.error ?? new Error("Invalid personal stats history");
+    const rows = history.data as unknown as OwnCompletedSession[];
 
     // Separate query: which of these puzzles actually had a rainbow herring?
     // Skipped entirely for a format with no bonus category — there is nothing
@@ -631,11 +641,13 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
       ? Array.from(new Set(rows.map((r) => r.puzzle_id).filter(Boolean)))
       : [];
     const rainbowPuzzleIds = new Set<string>();
-    if (puzzleIds.length > 0) {
-      const { data: puzzleRows } = await supabase
+    // Bound both URL size and the metadata endpoint's row limit.
+    for (let offset = 0; offset < puzzleIds.length; offset += 200) {
+      const { data: puzzleRows, error: puzzleError } = await supabase
         .from("puzzles")
         .select("id, rainbow_herring")
-        .in("id", puzzleIds);
+        .in("id", puzzleIds.slice(offset, offset + 200));
+      if (puzzleError) throw puzzleError;
       for (const p of puzzleRows ?? []) {
         const herring = (p as any).rainbow_herring;
         if (Array.isArray(herring) && herring.length === format.categoryCount) {
@@ -710,9 +722,13 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
 
         // "In Order" / "Reverse Rainbow" — see the doc comments on
         // GameStats.inOrderCount/reverseRainbowCount in types.ts.
-        // rainbow_solve_index is only ever 0 or 4 here to count as "at one
-        // end"; null (unknown/historical) or 1-3 (found in the middle)
-        // never qualify — never guessed at, never treated as a known miss.
+        // For these win-only achievements, the existing index check accepts
+        // 0 or format.categoryCount. Null/other indices do not qualify.
+        // This is not a First/Last classifier: legal Rainbow finds are FIRST
+        // (before any regular category) or LAST (the post-game bonus).
+        // After a loss, the browser's bonus index can be 0..categoryCount-1;
+        // that is still LAST, not a middle find. Classify timing from
+        // rainbow_source, preserving unknown historical sources as unknown.
         const rsi = (r as { rainbow_solve_index?: number | null }).rainbow_solve_index ?? null;
         const rainbowAtEnd = rsi === 0 || rsi === format.categoryCount;
         if (isRainbowEligible) {
@@ -741,6 +757,8 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
     }
 
     return {
+      noHintStreak,
+      insights: personalStatsInsights(rows, format),
       gamesPlayed: rows.length,
       gamesWon,
       currentStreak: streak?.current_streak ?? 0,

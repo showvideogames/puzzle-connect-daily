@@ -327,11 +327,22 @@ export function useAccountOnboarding() {
       && getDeviceToken() === guestDeviceToken;
     decisionInFlight.current = true;
     try {
-      const { data, error } = await supabase.rpc(
+      const sendDecision = () => supabase.rpc(
         importProgress ? "import_guest_history" : "decline_guest_history",
         { _device_id: guestDeviceId, _device_token: guestDeviceToken }
       );
+      let response = await sendDecision();
+      // These two unique collisions mean another completion/import committed
+      // first and our entire import rolled back. One fresh attempt can now
+      // demote the duplicate normally. Never retry a different error, a
+      // decline, or a decision whose account/device changed while waiting.
+      if (importProgress && stillCurrent() && response.error?.code === "23505"
+        && ["game_sessions_one_official_per_device", "game_sessions_one_official_per_user"]
+          .some(constraint => response.error!.message.includes(`"${constraint}"`))) {
+        response = await sendDecision();
+      }
       if (!stillCurrent()) return;
+      const { data, error } = response;
       const row = (Array.isArray(data) ? data[0] : data) as { outcome?: string } | null;
       const success = importProgress ? "imported" : "started_fresh";
       if (error || !row || (row.outcome !== success && row.outcome !== "already_decided")) {
