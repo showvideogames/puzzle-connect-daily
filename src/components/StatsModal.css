@@ -68,6 +68,11 @@
 .personal-stats-metric:nth-child(4) .personal-stats-icon { color:#f5a500; }
 
 .personal-stats-advanced h3 { font-size:26px; line-height:1.2; font-weight:1000; letter-spacing:-.65px; margin:4px 0 14px; }
+.personal-stats-advanced-toggle { position:relative; width:100%; min-height:66px; display:block; padding:16px 48px; border-radius:18px; background:linear-gradient(90deg,#ff57a9 0%,#ffcd4b 25%,#64cf97 50%,#57b8ed 75%,#ac6df0 100%); color:#fff; font-size:24px; font-weight:900; line-height:1.2; text-align:center; }
+.personal-stats-advanced-toggle svg { position:absolute; right:18px; top:calc(50% - 12.5px); width:25px; height:25px; }
+.personal-stats-advanced-toggle[aria-expanded="true"] svg { transform:rotate(180deg); }
+.personal-stats-advanced-toggle:focus-visible { outline:3px solid #6d28d9; outline-offset:4px; }
+.dark .personal-stats-advanced-toggle:focus-visible { outline-color:#e7c5ff; }
 .personal-stats-advanced-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 .personal-stats-advanced-card { padding:18px 16px; border-radius:28px; background:linear-gradient(135deg,#ffe8ef,#ffdae7); }
 .personal-stats-advanced-card dt { display:flex; flex-direction:column; align-items:flex-start; gap:12px; }

@@ -92,6 +92,7 @@ describe('personal stats modal', () => {
  it('does not claim zero when forward tracking is unavailable', async () => {
   vi.mocked(loadStatsFromSupabase).mockResolvedValue({...full,noHintStreak:{best:null,tracked:0,unknown:0}});
   render(<StatsModal open onClose={() => {}} />);
+  fireEvent.click(await screen.findByRole('button',{name:'Advanced Stats'}));
   await screen.findByText('Best No-Hint Streak');
   const card=document.querySelector('.nohintstreak');
   expect(card).toHaveAccessibleDescription(/Tracking is unavailable right now/);
@@ -99,6 +100,27 @@ describe('personal stats modal', () => {
   expect(document.querySelector('.personal-stats-advanced-grid')?.children[0]).toHaveTextContent('No Hint Wins');
   expect(document.querySelector('.personal-stats-advanced-grid')?.children[1]).toBe(card);
   expect(card?.querySelector('p')).toBeNull();
+ });
+
+ it.each([FULL_FORMAT, MINI_FORMAT])('collapses Advanced Stats by default and on reopening from $name', async format => {
+  const view=render(<StatsModal open onClose={() => {}} format={format} />);
+  const toggle=await screen.findByRole('button',{name:'Advanced Stats'});
+  const panel=document.getElementById(toggle.getAttribute('aria-controls')!);
+  expect(toggle).toHaveAttribute('aria-expanded','false');
+  expect(panel).not.toBeVisible();
+  expect(screen.getByText('Mistake Distribution')).toBeVisible();
+  toggle.focus();
+  expect(toggle).toHaveFocus();
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute('aria-expanded','true');
+  expect(panel).toBeVisible();
+  expect(screen.getByText('No Hint Wins')).toBeVisible();
+  fireEvent.click(toggle);
+  expect(panel).not.toBeVisible();
+  fireEvent.click(toggle);
+  view.rerender(<StatsModal open={false} onClose={() => {}} format={format} />);
+  view.rerender(<StatsModal open onClose={() => {}} format={format} />);
+  expect(await screen.findByRole('button',{name:'Advanced Stats'})).toHaveAttribute('aria-expanded','false');
  });
 
 });
