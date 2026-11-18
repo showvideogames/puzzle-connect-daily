@@ -59,9 +59,10 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
   const advancedStats = stats
     ? [
         { key: "rainbows", label: "Rainbows Spotted", value: stats.rainbowSpottedCount, icon: <RainbowIcon className="w-4 h-4" /> },
+        { key: "nohints", label: "No Hint Wins", value: stats.noHintsUsedCount, icon: <LightbulbOff className="w-full h-full" /> },
+        { key: "nohintstreak", label: "Best No-Hint Streak", value: stats.noHintStreak.best ?? "—", icon: <Flame className="w-full h-full" /> },
         { key: "hardest", label: "Hardest Category First", value: stats.hardestFirstCount, icon: <Mountain className="w-full h-full" /> },
         { key: "perfect", label: "Perfect Games", value: stats.perfectGamesCount, icon: <Star className="w-4 h-4 text-amber-500" fill="currentColor" /> },
-        { key: "nohints", label: "No Hint Wins", value: stats.noHintsUsedCount, icon: <LightbulbOff className="w-full h-full" /> },
         { key: "inorder", label: "In Order", value: stats.inOrderCount, icon: <ListOrdered className="w-full h-full" /> },
         { key: "reverserainbow", label: "Reverse Rainbows", value: stats.reverseRainbowCount, icon: <ReverseRainbowAchievementIcon /> },
         { key: "avgmistakes", label: "Average Mistakes", value: stats.averageMistakes.toFixed(1), icon: <BarChart3 className="w-full h-full" /> },
@@ -179,7 +180,7 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                       <h3 id="advanced-stats-title">Advanced Stats</h3>
                       <dl className="personal-stats-advanced-grid">
                         {advancedStats.filter((item) => item.key !== "perfect" && item.key !== "rainbows").map((item) => (
-                          <div key={item.key} className={`personal-stats-advanced-card ${item.key}`}>
+                          <div key={item.key} className={`personal-stats-advanced-card ${item.key}`} aria-describedby={item.key === "nohintstreak" ? "no-hint-streak-description" : undefined}>
                             <dt>
                               <span className="personal-stats-advanced-icon" aria-hidden="true">{item.icon}</span>
                               <span className="personal-stats-label">{item.label}</span>
@@ -188,19 +189,10 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                           </div>
                         ))}
                       </dl>
-                      <section className="personal-stats-insight personal-stats-nohint" aria-labelledby="no-hint-streak-title">
-                        <Flame className="personal-stats-icon" aria-hidden="true" />
-                        <h3 id="no-hint-streak-title">Best No-Hint Streak</h3>
-                        <p className="personal-stats-insight-caption">Consecutive Official Wins Without Hints</p>
-                        <div className="personal-stats-value">{stats.noHintStreak.best ?? "—"}</div>
-                        {stats.noHintStreak.best === null
-                          ? <p className="personal-stats-insight-note">Tracking is unavailable right now.</p>
-                          : <>
-                            <p className="personal-stats-insight-note">Based on {stats.noHintStreak.tracked} official {stats.noHintStreak.tracked === 1 ? "game" : "games"} recorded since tracking began. Earlier games are not included.</p>
-                            {stats.noHintStreak.unknown > 0 && <p className="personal-stats-insight-note">Hint status is unknown for {stats.noHintStreak.unknown} {stats.noHintStreak.unknown === 1 ? "game" : "games"}; these break a verified streak.</p>}
-                          </>}
-                        <p className="personal-stats-insight-note">Losses or hints break the streak. Calendar gaps do not.</p>
-                      </section>
+                      <p id="no-hint-streak-description" className="sr-only">
+                        {stats.noHintStreak.best === null ? "Tracking is unavailable right now." : `Based on ${stats.noHintStreak.tracked} official games since tracking began. Earlier games are excluded. ${stats.noHintStreak.unknown} games have unknown hint status and break a verified streak.`}
+                        Consecutive official wins without hints. Losses or hints break the streak. Calendar gaps do not.
+                      </p>
                       <PersonalStatsInsightsCards insights={stats.insights} hasRainbow={selectedFormat.hasRainbow} />
                     </section>
                   )}

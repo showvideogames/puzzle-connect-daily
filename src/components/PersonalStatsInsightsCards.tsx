@@ -2,37 +2,56 @@ import type { PersonalStatsInsights } from '@/lib/personalStatsInsights';
 import type { CategoryColor } from '@/lib/puzzleFormat';
 
 const labels: Record<CategoryColor, string> = { yellow: 'Yellow', green: 'Green', blue: 'Blue', red: 'Red' };
+const percent = (share: number) => share > 0 && share < .01 ? '<1%' : share < 1 && share > .99 ? '>99%' : `${Math.round(share * 100)}%`;
+
+function TimingPie({ first, last }: { first: number; last: number }) {
+  const total = first + last;
+  const slices = [
+    { label: 'First', share: first / total, start: 0, fill: '#ffdf54', text: '#2b1042' },
+    { label: 'Last', share: last / total, start: first / total, fill: '#dc3150', text: '#fff' },
+  ];
+  const point = (turn: number, radius: number) => [120 + Math.sin(turn * Math.PI * 2) * radius, 120 - Math.cos(turn * Math.PI * 2) * radius];
+  const description = slices.map(s => `${s.label} ${percent(s.share)}`).join('. ');
+  return <svg className="personal-stats-pie" viewBox="0 0 240 240" role="img" aria-label={description}>
+    <title>{description}</title>
+    {slices.filter(s => s.share > 0).map(s => {
+      const [x1,y1] = point(s.start,110), [x2,y2] = point(s.start+s.share,110);
+      const [x,y] = s.share === 1 ? [120,120] : point(s.start+s.share/2,64);
+      // Very small slices cannot hold legible labels. Their exact percentage
+      // stays in the chart's accessible name/title; never place it in another slice.
+      return <g key={s.label} aria-hidden="true">
+        {s.share === 1 ? <circle cx="120" cy="120" r="110" fill={s.fill} /> :
+          <path d={`M120 120 L${x1} ${y1} A110 110 0 ${s.share > .5 ? 1 : 0} 1 ${x2} ${y2} Z`} fill={s.fill} />}
+        {s.share >= .12 && <text x={x} y={y-5} textAnchor="middle" fill={s.text}>
+          <tspan x={x} className="personal-stats-slice-name">{s.label}</tspan>
+          <tspan x={x} dy="25" className="personal-stats-slice-percent">{percent(s.share)}</tspan>
+        </text>}
+      </g>;
+    })}
+  </svg>;
+}
+
 export function PersonalStatsInsightsCards({ insights, hasRainbow }: { insights: PersonalStatsInsights; hasRainbow: boolean }) {
   const { rainbowTiming: timing, startingColors: colors } = insights;
   const classified = timing.first + timing.last;
-  const firstPercent = classified ? Math.round(timing.first / classified * 100) : 0;
   return <div className="personal-stats-insights">
-    {hasRainbow && <section className="personal-stats-insight" aria-labelledby="rainbow-timing-title">
+    {hasRainbow && <section className="personal-stats-insight personal-stats-timing-card" aria-labelledby="rainbow-timing-title" aria-describedby="rainbow-timing-description">
       <h3 id="rainbow-timing-title">First vs Last</h3>
-      <p className="personal-stats-insight-caption">When You Spotted the Rainbow</p>
-      {classified > 0 ? <>
-        <div className="personal-stats-timing">
-          <div className="personal-stats-pie" aria-hidden="true" style={{ background: `conic-gradient(#a331ff 0 ${timing.first / classified * 100}%, #008b91 0 100%)` }} />
-          <dl className="personal-stats-timing-legend">
-            <div><dt><span className="timing-first" />First</dt><dd>{firstPercent}% <small>({timing.first})</small></dd></div>
-            <div><dt><span className="timing-last" />Last</dt><dd>{100 - firstPercent}% <small>({timing.last})</small></dd></div>
-          </dl>
-        </div>
-        <p className="personal-stats-insight-note">Based on {classified} Rainbow {classified === 1 ? 'find' : 'finds'} with known timing.</p>
-      </> : <p className="personal-stats-insight-empty">No Rainbow finds with known timing yet.</p>}
-      {timing.unknown > 0 && <p className="personal-stats-insight-note">Timing unknown for {timing.unknown} historical {timing.unknown === 1 ? 'find' : 'finds'}; excluded from the chart.</p>}
+      {classified > 0 ? <TimingPie first={timing.first} last={timing.last} /> :
+        <div className="personal-stats-empty"><span aria-hidden="true">—</span>{timing.unknown ? 'Timing Unknown' : 'No Rainbows Yet'}</div>}
+      {classified > 0 && timing.unknown > 0 && <span className="personal-stats-status">Known Timing Only</span>}
+      <p id="rainbow-timing-description" className="sr-only">When you spotted the Rainbow. Percentages use only finds with known timing. {timing.unknown} historical finds have unknown timing and are excluded.</p>
     </section>}
-    <section className="personal-stats-insight" aria-labelledby="starting-color-title">
+    <section className="personal-stats-insight" aria-labelledby="starting-color-title" aria-describedby="starting-color-description">
       <h3 id="starting-color-title">Favorite Starting Color</h3>
-      <p className="personal-stats-insight-caption">Your First Regular Category Solved</p>
       {colors.known > 0 ? <>
-        <div className="personal-stats-color-leaders">{colors.leaders.map(color => <span key={color} className={`personal-stats-color-chip ${color}`}>{labels[color]}</span>)}</div>
-        {colors.leaders.length > 1 && <p className="personal-stats-insight-note">Tied for Most Frequent</p>}
+        <div className="personal-stats-color-leaders">{colors.leaders.map(color => <span key={color} className={`personal-stats-color-chip ${color}`}>{labels[color]}</span>)}
+          {colors.leaders.length > 1 && <span className="personal-stats-tie">Tie</span>}
+        </div>
         <dl className="personal-stats-color-counts">{(Object.entries(colors.counts) as [CategoryColor, number][]).map(([color, count]) =>
           <div key={color}><dt><span className={`personal-stats-color-dot ${color}`} />{labels[color]}</dt><dd>{count}</dd></div>)}</dl>
-        <p className="personal-stats-insight-note">Based on {colors.known} {colors.known === 1 ? 'game' : 'games'} with a recorded starting color. Rainbow is excluded.</p>
-      </> : <p className="personal-stats-insight-empty">No recorded starting colors yet.</p>}
-      {colors.excluded > 0 && <p className="personal-stats-insight-note">{colors.excluded} {colors.excluded === 1 ? 'game has' : 'games have'} no usable solve order; excluded.</p>}
+      </> : <div className="personal-stats-empty"><span aria-hidden="true">—</span>No Recorded Colors</div>}
+      <p id="starting-color-description" className="sr-only">First regular category solved; Rainbow is excluded. {colors.known} games have a recorded starting color. {colors.excluded} games have no usable solve order and are excluded.{colors.leaders.length > 1 ? ' Tied for most frequent.' : ''}</p>
     </section>
   </div>;
 }

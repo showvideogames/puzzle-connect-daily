@@ -23,16 +23,24 @@ describe('personal history insights', () => {
   const insights=personalStatsInsights([],FULL_FORMAT);
   expect(insights.startingColors.leaders).toEqual([]);
   render(<PersonalStatsInsightsCards insights={insights} hasRainbow />);
-  expect(screen.getByText('No Rainbow finds with known timing yet.')).toBeInTheDocument();
-  expect(screen.getByText('No recorded starting colors yet.')).toBeInTheDocument();
-  expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  expect(screen.getByText('No Rainbows Yet')).toBeInTheDocument();
+  expect(screen.getByText('No Recorded Colors')).toBeInTheDocument();
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
  });
  it('uses only classified finds as the denominator and discloses unknown finds separately', () => {
   const insights=personalStatsInsights([row(['red'],true,'in_game'),row(['green'],true,'post_game'),row([],true,null)],FULL_FORMAT);
   render(<PersonalStatsInsightsCards insights={insights} hasRainbow />);
-  expect(screen.getAllByText('50%',{exact:false})).toHaveLength(2);
-  expect(screen.getByText('Timing unknown for 1 historical find; excluded from the chart.')).toBeInTheDocument();
-  expect(screen.getByText('Tied for Most Frequent')).toBeInTheDocument();
+  expect(screen.getByRole('img',{name:'First 50%. Last 50%'})).toBeInTheDocument();
+  expect(screen.getByText('Known Timing Only')).toBeInTheDocument();
+  expect(document.querySelector('.personal-stats-timing-card')).toHaveAccessibleDescription(/1 historical finds have unknown timing/);
+  expect(screen.getByText('Tie')).toBeInTheDocument();
+ });
+ it.each([[1,0,'First 100%. Last 0%','Last'],[0,1,'First 0%. Last 100%','First'],[999,1,'First >99%. Last <1%','Last']])('handles zero/tiny slices without misplaced labels: %s/%s', (first,last,name,omitted) => {
+  const insights=personalStatsInsights([],FULL_FORMAT);
+  insights.rainbowTiming={first:Number(first),last:Number(last),unknown:0};
+  render(<PersonalStatsInsightsCards insights={insights} hasRainbow />);
+  expect(screen.getByRole('img',{name:String(name)})).toBeInTheDocument();
+  expect([...document.querySelectorAll('.personal-stats-slice-name')].some(e=>e.textContent===omitted)).toBe(false);
  });
  it('does not draw a pie for unknown-only finds or manufacture a middle segment', () => {
   render(<PersonalStatsInsightsCards insights={personalStatsInsights([row(null,true,null)],MINI_FORMAT)} hasRainbow />);

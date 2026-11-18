@@ -74,8 +74,8 @@
 .personal-stats-advanced-card .personal-stats-label { line-height:1.2; }
 .personal-stats-advanced-card .personal-stats-value { margin-top:10px; }
 .personal-stats-advanced-icon { display:flex; width:36px; height:36px; flex-shrink:0; color:#d32a68; }
-.personal-stats-advanced-card.nohints { background:linear-gradient(135deg,#fae8ff,#f2e5ff); }
-.personal-stats-advanced-card.nohints .personal-stats-advanced-icon { color:#a331ff; }
+.personal-stats-advanced-card.nohintstreak, .personal-stats-advanced-card.nohints { background:linear-gradient(135deg,#fae8ff,#f2e5ff); }
+.personal-stats-advanced-card.nohintstreak .personal-stats-advanced-icon, .personal-stats-advanced-card.nohints .personal-stats-advanced-icon { color:#a331ff; }
 .personal-stats-advanced-card.inorder { background:linear-gradient(135deg,#e2fce9,#d4f8df); }
 .personal-stats-advanced-card.inorder .personal-stats-advanced-icon { color:#168c39; }
 .personal-stats-advanced-card.reverserainbow { background:linear-gradient(135deg,#e4edff,#dce5ff); }
@@ -88,8 +88,6 @@
 .personal-stats-advanced-card:last-child:nth-child(odd) dd { margin-top:0; }
 .dark .personal-stats-advanced-card { background:#4b2638; }
 .dark .personal-stats-advanced-icon { color:#ff8bb3; }
-.dark .personal-stats-advanced-card.nohints { background:#432951; }
-.dark .personal-stats-advanced-card.nohints .personal-stats-advanced-icon { color:#ce8dff; }
 .dark .personal-stats-advanced-card.inorder { background:#1b4430; }
 .dark .personal-stats-advanced-card.inorder .personal-stats-advanced-icon { color:#70e793; }
 .dark .personal-stats-advanced-card.reverserainbow { background:#28395c; }
@@ -109,14 +107,16 @@
 .personal-stats-insight h3 { margin:0 0 6px; font-size:23px; }
 .personal-stats-insight-caption { font-size:15px; line-height:1.35; font-weight:750; }
 .personal-stats-insight-note,.personal-stats-insight-empty { font-size:14px; line-height:1.45; margin-top:12px; }
-.personal-stats-timing { display:flex; align-items:center; gap:24px; margin-top:20px; }
-.personal-stats-pie { width:116px; height:116px; flex-shrink:0; border-radius:50%; }
-.personal-stats-timing-legend { display:grid; gap:12px; }
-.personal-stats-timing-legend dt,.personal-stats-color-counts dt { display:flex; align-items:center; gap:7px; font-weight:800; }
-.personal-stats-timing-legend dd { font-size:24px; font-weight:900; font-variant-numeric:tabular-nums; }
-.personal-stats-timing-legend small { font-size:14px; font-weight:700; }
-.personal-stats-timing-legend dt span { width:12px; height:12px; border-radius:50%; }
-.timing-first { background:#a331ff; }.timing-last { background:#008b91; }
+/* A single square card lets the chart carry its own labels. */
+.personal-stats-timing-card { aspect-ratio:1; display:flex; flex-direction:column; align-items:stretch; position:relative; }
+.personal-stats-pie { display:block; width:100%; min-height:0; flex:1; }
+.personal-stats-slice-name { font-size:16px; font-weight:800; }
+.personal-stats-slice-percent { font-size:25px; font-weight:1000; font-variant-numeric:tabular-nums; }
+.personal-stats-status { align-self:center; font-size:11px; font-weight:750; line-height:1; }
+.personal-stats-empty { flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:6px; padding:22px 0; font-size:16px; font-weight:750; }
+.personal-stats-empty > span { font-size:42px; line-height:1; }
+.personal-stats-color-counts dt { display:flex; align-items:center; gap:7px; font-weight:800; }
+.personal-stats-tie { align-self:center; font-size:13px; font-weight:800; }
 .personal-stats-color-leaders { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
 .personal-stats-color-chip { padding:7px 13px; border-radius:14px; font-size:22px; font-weight:900; color:#251336; }
 .personal-stats-color-counts { display:grid; gap:9px; margin-top:18px; }
@@ -125,15 +125,13 @@
 .personal-stats-color-dot { width:14px; height:14px; border-radius:4px; }
 .personal-stats-insights .yellow { background:#ffdf54; }.personal-stats-insights .green { background:#94dc54; }.personal-stats-insights .blue { background:#79b9ff; }.personal-stats-insights .red { background:#ff8d9d; }
 .dark .personal-stats-insight { border-color:#60476e; }
-@media(max-width:390px) { .personal-stats-insight { padding:18px 14px; border-radius:24px; }.personal-stats-timing { gap:18px; }.personal-stats-pie { width:104px; height:104px; } }
-
-.personal-stats-nohint { margin-top:16px; background:linear-gradient(135deg,#f3e9ff,#e9e7ff); }
-.personal-stats-nohint > .personal-stats-icon { color:#a331ff; margin-bottom:12px; }
-.dark .personal-stats-nohint { background:#35294d; }
-.dark .personal-stats-nohint > .personal-stats-icon { color:#ce8dff; }
+@media(max-width:390px) { .personal-stats-insight { padding:18px 14px; border-radius:24px; } }
 
 .personal-stats-metric > div { min-width:0; }
 .personal-stats-rate .personal-stats-value { white-space:nowrap; overflow-wrap:normal; }
 .personal-stats-distribution-caption { font-size:14px; font-weight:750; margin:-7px 0 14px; }
 .personal-stats-legacy-note { margin-top:0; }
 @media(max-width:390px) { .personal-stats-rate .personal-stats-value { font-size:clamp(24px,8vw,36px); } }
+
+.dark .personal-stats-advanced-card.nohintstreak, .dark .personal-stats-advanced-card.nohints { background:#432951; }
+.dark .personal-stats-advanced-card.nohintstreak .personal-stats-advanced-icon, .dark .personal-stats-advanced-card.nohints .personal-stats-advanced-icon { color:#ce8dff; }

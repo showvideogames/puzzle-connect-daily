@@ -80,9 +80,13 @@ describe('personal stats modal', () => {
  it('does not claim zero when forward tracking is unavailable', async () => {
   vi.mocked(loadStatsFromSupabase).mockResolvedValue({...full,noHintStreak:{best:null,tracked:0,unknown:0}});
   render(<StatsModal open onClose={() => {}} />);
-  await screen.findByText('Tracking is unavailable right now.');
-  expect(screen.getByText('Consecutive Official Wins Without Hints')).toBeInTheDocument();
-  expect(screen.getByText('Losses or hints break the streak. Calendar gaps do not.')).toBeInTheDocument();
+  await screen.findByText('Best No-Hint Streak');
+  const card=document.querySelector('.nohintstreak');
+  expect(card).toHaveAccessibleDescription(/Tracking is unavailable right now/);
+  expect(card).toHaveTextContent('—');
+  expect(document.querySelector('.personal-stats-advanced-grid')?.children[0]).toHaveTextContent('No Hint Wins');
+  expect(document.querySelector('.personal-stats-advanced-grid')?.children[1]).toBe(card);
+  expect(card?.querySelector('p')).toBeNull();
  });
 
 });
