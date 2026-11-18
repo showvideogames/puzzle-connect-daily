@@ -128,8 +128,6 @@
 
 .personal-stats-metric > div { min-width:0; }
 .personal-stats-rate .personal-stats-value { white-space:nowrap; overflow-wrap:normal; }
-.personal-stats-distribution-caption { font-size:14px; font-weight:750; margin:-7px 0 14px; }
-.personal-stats-legacy-note { margin-top:0; }
 @media(max-width:390px) { .personal-stats-rate .personal-stats-value { font-size:clamp(24px,8vw,36px); } }
 
 .dark .personal-stats-advanced-card.nohintstreak, .dark .personal-stats-advanced-card.nohints { background:#432951; }
