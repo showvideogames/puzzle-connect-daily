@@ -22,7 +22,7 @@ const admin = createClient(config.apiUrl, config.serviceRoleKey, options);
 const observer = new pg.Client({ connectionString: config.dbUrl });
 const a = new pg.Client({ connectionString: config.dbUrl });
 const b = new pg.Client({ connectionString: config.dbUrl });
-const query = `select public.finalize_game_session($1,$2,$3,true,0,10,false,null,'[]'::jsonb,false,'',true,'2000-01-01') as result`;
+const query = `select public.finalize_game_session($1,$2,$3,true,0,10,false,null,'[]'::jsonb,false,'',false,'2000-01-01') as result`;
 let uid: string | undefined;
 try {
   await Promise.all([observer.connect(), a.connect(), b.connect()]);
@@ -79,6 +79,22 @@ try {
     assert.ifError(again.error); assert.deepEqual(again.data, after.data);
     console.log(`PASS concurrent ${signedIn ? 'account' : 'guest'} ${format}: one official, replay saved, HTTP summary/retry stable`);
   }
+  // Prove the scalar snapshot escapes the actual HTTP max_rows cap, while
+  // ownership and format predicates remain unchanged.
+  const longIdentity=await guest.rpc('create_device_identity'); assert.ifError(longIdentity.error);
+  const longDevice=longIdentity.data[0];
+  await observer.query(`with p as (insert into public.puzzles(date,format,is_published)
+    select '4000-01-01'::date+n,'full',true from generate_series(1,1101) n returning id)
+    insert into public.game_sessions(puzzle_id,device_id,won,mistakes,hints_used)
+    select id::text,$1,true,0,false from p`,[longDevice.device_id]);
+  const historyArgs={_device_id:longDevice.device_id,_device_token:longDevice.device_token,_format:'full'};
+  const capped=await guest.rpc('get_own_completed_sessions',historyArgs); assert.ifError(capped.error); assert.equal(capped.data.length,1000);
+  const complete=await guest.rpc('get_own_personal_stats_history',historyArgs); assert.ifError(complete.error); assert.equal(complete.data.length,1101);
+  for(const args of [{...historyArgs,_format:'mini'},{...historyArgs,_device_token:'invalid'}]) {
+    const denied=await guest.rpc('get_own_personal_stats_history',args); assert.ifError(denied.error); assert.deepEqual(denied.data,[]);
+  }
+  console.log('PASS HTTP history snapshot: 1101 rows vs capped 1000, Mini isolation, wrong-token denial');
+
   // Import races use real independent transactions. Existing uniqueness
   // constraints may reject a different-device collision; prove full rollback
   // and that retry demotes only the duplicate, preserving completion order.

@@ -25,7 +25,7 @@ shows up as a diff instead of as a surprise on a blank project.
 | Columns | 192 |
 | Constraints | 92 |
 | Indexes | 57 |
-| Functions | 62 |
+| Functions | 63 |
 | Triggers | 5 |
 | RLS policies | 25 |
 | Enum types | 1 |
@@ -812,6 +812,7 @@ Indexes:
 | `get_my_favorites()` | jsonb | yes | stable | authenticated, service_role |
 | `get_own_completed_sessions(_device_id text, _device_token text, _format text)` | TABLE(puzzle_id text, won boolean, mistakes integer, found_rainbow boolean, solve_order jsonb, hints_used boolean, rainbow_solve_index smallint, rainbow_source text, bonus_rainbow_attempted boolean, status text) | yes | stable | anon, authenticated, service_role |
 | `get_own_no_hint_streak(_device_id text, _device_token text, _format text)` | TABLE(best integer, tracked integer, unknown integer) | yes | stable | anon, authenticated, service_role |
+| `get_own_personal_stats_history(_device_id text, _device_token text, _format text)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_own_streak(_device_id text, _device_token text, _format text)` | TABLE(current_streak integer, longest_streak integer, last_played_date text) | yes | stable | anon, authenticated, service_role |
 | `get_puzzle_report(_puzzle_id uuid)` | json | yes | stable | anon, authenticated, service_role |
 | `get_puzzle_stats(_puzzle_id uuid)` | json | yes | stable | anon, authenticated, service_role |

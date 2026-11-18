@@ -1043,6 +1043,10 @@ export type Database = {
         Args: { _device_id?: string; _device_token?: string; _format?: string }
         Returns: { best: number; tracked: number; unknown: number }[]
       }
+      get_own_personal_stats_history: {
+        Args: { _device_id?: string; _device_token?: string; _format?: string }
+        Returns: Json
+      }
       get_own_completed_sessions: {
         Args: { _device_id?: string; _device_token?: string; _format?: string }
         Returns: {

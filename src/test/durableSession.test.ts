@@ -3086,3 +3086,24 @@ describe("write volume", () => {
     expect(db.writeLog.every((w) => w.table !== "hint_events")).toBe(true);
   });
 });
+
+it('loads complete personal history beyond the API row cap and batches puzzle metadata', async () => {
+  db.signIn(null);
+  db.tables.game_sessions = [];
+  db.tables.puzzles = [];
+  for (let n=0; n<1101; n++) {
+    const id=`long-history-${n}`;
+    db.tables.puzzles.push({id,rainbow_herring:puzzle.rainbowHerring});
+    db.tables.game_sessions.push({id,puzzle_id:id,device_id:getDeviceId(),user_id:null,format:'full',status:'won',is_official:true,won:true,mistakes:0,hints_used:false,found_rainbow:true,rainbow_source:n<550?'in_game':'post_game',solve_order:[n===1100?'red':'orange']});
+  }
+  db.tables.game_sessions.push({id:'mini',puzzle_id:'mini',device_id:getDeviceId(),user_id:null,format:'mini',status:'won',is_official:true,won:true});
+  const from = vi.spyOn(db,'from');
+  const stats=await loadStatsFromSupabase();
+  expect(stats.gamesPlayed).toBe(1101);
+  expect(stats.rainbowSpottedCount).toBe(1101);
+  expect(stats.insights.rainbowTiming).toEqual({first:550,last:551,unknown:0});
+  expect(stats.insights.startingColors.counts).toEqual({yellow:1100,green:0,blue:0,red:1});
+  expect(from.mock.calls.filter(([table])=>table==='puzzles')).toHaveLength(6);
+  expect(db.rpcLog).toContain('get_own_personal_stats_history');
+  from.mockRestore();
+});

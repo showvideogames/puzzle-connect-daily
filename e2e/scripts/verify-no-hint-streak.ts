@@ -96,5 +96,12 @@ try {
  await db.query("with p as (insert into public.puzzles(date,format,is_published) select '3000-01-01'::date + n,'full',true from generate_series(1,1101) n returning id) insert into public.game_sessions(puzzle_id,device_id,mistakes) select id::text,$1,0 from p",[many.device_id]);
  await db.query("update public.game_sessions set status='won',won=true,is_official=true,completed_at=now(),no_hint_qualified=true where device_id=$1",[many.device_id]);
  assert.deepEqual(await summary(many),{best:1101,tracked:1101,unknown:0});
+ await db.exec('SET ROLE anon');
+ const snapshot=(await db.query<{history:unknown[]}>('select public.get_own_personal_stats_history($1,$2,$3) as history',[many.device_id,many.device_token,'full'])).rows[0].history;
+ assert.equal(snapshot.length,1101);
+ for(const [token,format] of [['invalid','full'],[many.device_token,'mini']]) {
+   assert.deepEqual((await db.query<{history:unknown[]}>('select public.get_own_personal_stats_history($1,$2,$3) as history',[many.device_id,token,format])).rows[0].history,[]);
+ }
+ await db.exec('RESET ROLE');
  console.log('PASS: forward baseline, guest/account RPCs, retry, replay, loss/hints/unknown, late hint, rollback/retry, Full/Mini, archive/calendar gaps, import/deduplication, ownership and grants.');
 } finally { await db.close(); }

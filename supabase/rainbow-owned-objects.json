@@ -3496,6 +3496,24 @@
       "comment": "Best consecutive official no-hint wins since tracking began, independent of calendar gaps. Losses, hints and unknown evidence break runs. Server aggregation avoids API row limits."
     },
     {
+      "name": "get_own_personal_stats_history",
+      "args": "_device_id text, _device_token text, _format text",
+      "returns": "jsonb",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "Complete owned official history for one format in a single snapshot, not truncated by API row limits. Uses the existing completed-session ownership predicate."
+    },
+    {
       "name": "get_own_streak",
       "args": "_device_id text, _device_token text, _format text",
       "returns": "TABLE(current_streak integer, longest_streak integer, last_played_date text)",

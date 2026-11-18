@@ -241,4 +241,15 @@ COMMENT ON FUNCTION public.get_own_no_hint_streak(text,text,text) IS 'Best conse
 COMMENT ON COLUMN public.game_sessions.no_hint_completion_order IS 'Forward-only database acceptance order at first completion after tracking migration. Immutable; NULL for pre-tracking history. Gaps do not break streaks. Replays are excluded at read time.';
 COMMENT ON COLUMN public.game_sessions.no_hint_qualified IS 'Completion-time no-hint win evidence. True only for an explicit unhinted win; NULL is unknown, never a win. The read RPC additionally checks losses and all persisted hint events.';
 COMMENT ON FUNCTION public.no_hint_history_for_owner(text,text,text) IS 'Owned, format-specific, completed official games recorded since forward tracking began; legacy history is not backfilled. Ordered by database acceptance sequence, not calendar date.';
+-- One scalar JSON snapshot avoids PostgREST's SETOF row cap. The existing
+-- function remains the sole ownership/format predicate; restoration callers
+-- retain its original interface. No history or gameplay records are changed.
+CREATE FUNCTION public.get_own_personal_stats_history(_device_id text DEFAULT NULL, _device_token text DEFAULT NULL, _format text DEFAULT 'full')
+RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT coalesce(jsonb_agg(to_jsonb(history)), '[]'::jsonb)
+    FROM public.get_own_completed_sessions(_device_id, _device_token, _format) history;
+$$;
+REVOKE ALL ON FUNCTION public.get_own_personal_stats_history(text,text,text) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_own_personal_stats_history(text,text,text) TO anon, authenticated, service_role;
+COMMENT ON FUNCTION public.get_own_personal_stats_history(text,text,text) IS 'Complete owned official history for one format in a single snapshot, not truncated by API row limits. Uses the existing completed-session ownership predicate.';
 COMMIT;

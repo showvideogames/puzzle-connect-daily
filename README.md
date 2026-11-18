@@ -119,8 +119,33 @@ Three genuine concurrent import cases passed too: same-device import is a no-op
 for the loser; two-device imports and import/account-completion collisions reject
 with 23505, fully roll back the losing transaction, then succeed on retry with
 one account official and unchanged completion orders. The test now asserts those
-outcomes. These retries are test-driven explicit retries, **not** a new automatic
-client retry feature. The task stack was stopped afterward; existing stacks and
+outcomes. The database checks explicitly retry after rollback. The client now also
+retries once for 23505 errors naming either official-result unique constraint,
+and only while the account/device decision is still current. Other errors and
+exhausted retries retain the recoverable Add My Progress choice. The task stack was stopped afterward; existing stacks and
 the private UI preview were unchanged. No live migration, reset or deployment
 was performed. Production rollout still requires the normal migration and
 frontend release procedure; no stats reset is included.
+
+
+Final independent review: no additional migration privilege leak or reachable
+single-RPC lock cycle was found. The real concurrency tests also pass with the
+normal daily `record_streak` path enabled (`_skip_streak=false`). A separate
+archive-path check retains `_skip_streak=true` coverage.
+
+The review found PostgREST's 1,000-row cap truncated the prior personal-history
+read. `get_own_personal_stats_history` now wraps the existing ownership/format
+filter in one scalar JSON snapshot; the stats loader uses that complete snapshot
+and batches puzzle metadata IDs in groups of 200. A real HTTP regression proved
+1,101 returned rows versus the original RPC's capped 1,000, with wrong-token and
+Mini isolation checks. This new RPC must be deployed with migration 0003 before
+the matching frontend; there is intentionally no fallback to truncated history.
+No changes were made to the approved stats layout or private fixture preview.
+
+Client review confirmed an import collision cannot silently mark history as
+imported: the database transaction rolls back, local progress is copied only on
+`imported`, and exhausted errors re-resolve the outstanding decision. Unit tests
+cover successful bounded retry, exhaustion/manual recovery, unrelated constraint
+errors, and an account change while the request is pending. The current UI has
+no dedicated collision error message; if both attempts fail, Add My Progress
+remains available. No general authentication or header behavior was changed.

@@ -601,7 +601,7 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
     }
     const streak = (Array.isArray(streakRows) ? streakRows[0] : streakRows) ?? null;
 
-    // EVERY player-facing stat below is derived from `rows`, so this single
+    // The history-based stats below are derived from `rows`, so this single
     // filter is what keeps all of them — Played, Win %, Mistake Distribution,
     // Rainbows Spotted, Hardest Category First, Perfect Games, No Hint Wins,
     // In Order, Reverse Rainbow, Average Mistakes — describing COMPLETED
@@ -615,21 +615,24 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
     //
     // (Current Streak / Max Streak come from user_streaks above, which is
     // only ever written at official completion — see finalizeGameSession.)
-    // Fetched through the get_own_completed_sessions RPC rather than a table
-    // query. game_sessions is no longer directly readable by anonymous
-    // clients (migration section 6), and the function applies BOTH the
+    // Fetched through the personal-stats snapshot wrapper around
+    // get_own_completed_sessions rather than a table query. game_sessions is no
+    // longer directly readable by anonymous clients (migration section 6), and the function applies BOTH the
     // completed-official filter and the ownership predicate server-side, so
     // there is no query shape a caller could vary to widen the result set.
     const historyArgs = { _device_id: deviceId, _device_token: getDeviceToken(), _format: format.statsNamespace };
-    const [{ data: sessions }, noHintHistory] = await Promise.all([
-      supabase.rpc("get_own_completed_sessions", historyArgs),
+    const [history, noHintHistory] = await Promise.all([
+      supabase.rpc("get_own_personal_stats_history", historyArgs),
       supabase.rpc("get_own_no_hint_streak", historyArgs),
     ]);
     // A staged frontend or failed read must not claim a zero tracked streak.
     const noHintStreak = noHintHistory.error || !Array.isArray(noHintHistory.data)
       ? unavailableNoHintStreak() : noHintStreakSummary(noHintHistory.data[0]);
 
-    const rows = (sessions ?? []) as unknown as OwnCompletedSession[];
+    // Scalar JSON is one complete snapshot: SETOF history is capped at 1,000
+    // rows by PostgREST. Never quietly calculate totals from a partial read.
+    if (history.error || !Array.isArray(history.data)) throw history.error ?? new Error("Invalid personal stats history");
+    const rows = history.data as unknown as OwnCompletedSession[];
 
     // Separate query: which of these puzzles actually had a rainbow herring?
     // Skipped entirely for a format with no bonus category — there is nothing
@@ -638,11 +641,13 @@ export async function loadStatsFromSupabase(format: PuzzleFormat = FULL_FORMAT):
       ? Array.from(new Set(rows.map((r) => r.puzzle_id).filter(Boolean)))
       : [];
     const rainbowPuzzleIds = new Set<string>();
-    if (puzzleIds.length > 0) {
-      const { data: puzzleRows } = await supabase
+    // Bound both URL size and the metadata endpoint's row limit.
+    for (let offset = 0; offset < puzzleIds.length; offset += 200) {
+      const { data: puzzleRows, error: puzzleError } = await supabase
         .from("puzzles")
         .select("id, rainbow_herring")
-        .in("id", puzzleIds);
+        .in("id", puzzleIds.slice(offset, offset + 200));
+      if (puzzleError) throw puzzleError;
       for (const p of puzzleRows ?? []) {
         const herring = (p as any).rainbow_herring;
         if (Array.isArray(herring) && herring.length === format.categoryCount) {
