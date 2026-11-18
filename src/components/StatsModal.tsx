@@ -1,9 +1,9 @@
 import { PersonalStatsInsightsCards } from "./PersonalStatsInsightsCards";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { displayStreakOf, loadStatsFromSupabase, winRateOf } from "@/lib/gameStats";
 import { GameStats } from "@/lib/types";
-import { X, Puzzle, Trophy, Flame, Crown, Mountain, Star, LightbulbOff, BarChart3, ListOrdered } from "lucide-react";
+import { X, Puzzle, Trophy, Flame, Crown, Mountain, Star, LightbulbOff, BarChart3, ListOrdered, ChevronDown } from "lucide-react";
 import { RainbowIcon } from "./RainbowIcon";
 import { FULL_FORMAT, MINI_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 
@@ -23,7 +23,9 @@ interface StatsModalProps {
 
 export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalProps) {
   const [selectedFormat, setSelectedFormat] = useState(format);
-  useEffect(() => { if (open) setSelectedFormat(format); }, [open, format]);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const advancedContentId = useId();
+  useEffect(() => { if (open) { setSelectedFormat(format); setAdvancedOpen(false); } }, [open, format]);
   const [stats, setStats] = useState<GameStats | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -179,7 +181,15 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                       of zeroes (same gate the previous version used). */}
                   {stats.gamesPlayed > 0 && (
                     <section className="personal-stats-advanced" aria-labelledby="advanced-stats-title">
-                      <h3 id="advanced-stats-title">Advanced Stats</h3>
+                      <h3 id="advanced-stats-title">
+                        <button type="button" className="personal-stats-advanced-toggle"
+                          aria-expanded={advancedOpen} aria-controls={advancedContentId}
+                          onClick={() => setAdvancedOpen((value) => !value)}>
+                          <span>Advanced Stats</span>
+                          <ChevronDown aria-hidden="true" />
+                        </button>
+                      </h3>
+                      <div id={advancedContentId} hidden={!advancedOpen}>
                       <dl className="personal-stats-advanced-grid">
                         {advancedStats.filter((item) => item.key !== "perfect" && item.key !== "rainbows").map((item) => (
                           <div key={item.key} className={`personal-stats-advanced-card ${item.key}`} aria-describedby={item.key === "nohintstreak" ? "no-hint-streak-description" : undefined}>
@@ -196,6 +206,7 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                         Consecutive official wins without hints. Losses or hints break the streak. Calendar gaps do not.
                       </p>
                       <PersonalStatsInsightsCards insights={stats.insights} hasRainbow={selectedFormat.hasRainbow} />
+                      </div>
                     </section>
                   )}
                 </div>
