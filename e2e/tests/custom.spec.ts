@@ -35,7 +35,7 @@ test.describe("A public custom puzzle", () => {
 
   test("the header's stats button opens the PLAYER's stats @smoke", async ({ page }) => {
     await page.getByRole("button", { name: "My stats" }).click();
-    await expect(page.getByRole("dialog")).toContainText("Your stats");
+    await expect(page.getByRole("dialog")).toContainText("Your Stats");
     // Not this puzzle's stats — a different modal with a different question.
     await expect(page.getByText("This Puzzle's Stats")).toHaveCount(0);
   });
