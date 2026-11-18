@@ -75,6 +75,29 @@ const miniPuzzle: Puzzle = {
 
 const ALL_COLORS = ["Yellow", "Green", "Blue", "Red"] as const;
 
+describe("palette selection", () => {
+  it.each([fullPuzzle, miniPuzzle])("exposes exactly one selected tool and moves its outline without replacing buttons ($id)", (puzzle) => {
+    renderBoard(puzzle, { colorPaletteMode: true });
+    const select = screen.getByRole("button", { name: "Select mode" });
+    const row = select.parentElement!;
+    const buttons = Array.from(row.querySelectorAll("button"));
+    expect(select.getAttribute("aria-pressed")).toBe("true");
+    for (const target of [...buttons.slice(1), select]) {
+      fireEvent.click(target);
+      expect(row.querySelectorAll('[aria-pressed="true"]')).toHaveLength(1);
+      expect(target.getAttribute("aria-pressed")).toBe("true");
+      expect(row.querySelectorAll('svg[aria-hidden="true"] rect[stroke]')).toHaveLength(1);
+      expect(target.querySelector('svg[focusable="false"] rect[stroke]')).not.toBeNull();
+      const swatch = categorySwatches(puzzle.format === "mini" ? MINI_FORMAT : FULL_FORMAT)
+        .find(({ label }) => `${label} paint` === target.getAttribute("aria-label"));
+      expect(target.querySelector("svg rect")?.getAttribute("fill")).toBe(
+        swatch ? `hsl(var(--group-${swatch.difficulty}))` : "hsl(var(--foreground))"
+      );
+      expect(Array.from(row.querySelectorAll("button"))).toEqual(buttons);
+    }
+  });
+});
+
 function renderBoard(puzzle: Puzzle, settings: Partial<GameSettings>) {
   return render(
     <MemoryRouter>
