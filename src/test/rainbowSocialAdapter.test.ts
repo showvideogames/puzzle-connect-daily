@@ -1854,6 +1854,19 @@ describe("useAccountOnboarding finding no user", () => {
 
   const nobodySignedIn = { data: { user: null }, error: { name: "AuthSessionMissingError", message: "no session" } };
 
+  it("keeps account boards scoped correctly when both user and session renewal checks fail", async () => {
+    const rainbow = await signedIn();
+    auth.getUser.mockResolvedValue({ data: { user: null }, error: { name: "AuthRetryableFetchError", message: "offline" } });
+    auth.getSession.mockResolvedValue({ data: { session: null }, error: { name: "AuthRetryableFetchError", message: "offline" } });
+    const stored = localStorage.getItem(AUTH_KEY);
+    const hook = await renderOnboarding();
+    await waitFor(() => expect(hook.result.current.state.phase).toBe("saving_unavailable"));
+    expect(hook.result.current.owner).toEqual({ kind: "account", userId: ALEX.user_id });
+    expect(localStorage.getItem(AUTH_KEY)).toBe(stored);
+    expect(rainbow.accountCheckState()).toBe("unsettled");
+    await expectRefused(rainbow, "checking");
+  });
+
   it("forgets the confirmation when the user check fails, with the player still on screen", async () => {
     const rainbow = await signedIn();
     expectSessionFor(rainbow, ALEX);
