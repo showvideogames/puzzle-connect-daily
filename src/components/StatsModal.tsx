@@ -148,9 +148,12 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                     {selectedFormat.hasRainbow && <AchievementCard kind="rainbow" label={<>Rainbows<br />Spotted</>} value={stats.rainbowSpottedCount} />}
                   </div>
                   {/* Mistake Distribution */}
-                  <div className="personal-stats-distribution">
+                  <div className="personal-stats-distribution" role="group" aria-label="Mistake Distribution" aria-describedby="mistake-distribution-description">
                     <h3>Mistake Distribution</h3>
-                    <p className="personal-stats-distribution-caption">Failure Bucket: {selectedFormat.maxMistakes} Mistakes</p>
+                    <p id="mistake-distribution-description" className="sr-only">
+                      The {selectedFormat.maxMistakes}-mistake bucket includes losses.
+                      {legacyDistributionCount > 0 && <> {legacyDistributionCount} historical {legacyDistributionCount === 1 ? "game with" : "games with"} more than {selectedFormat.maxMistakes} mistakes {legacyDistributionCount === 1 ? "is" : "are"} not shown in the chart. Original results remain in your totals.</>}
+                    </p>
                     <div className="space-y-2">
                       {visibleDistribution.map((count, i) => {
                         const max = Math.max(...visibleDistribution, 1);
@@ -171,7 +174,6 @@ export function StatsModal({ open, onClose, format = FULL_FORMAT }: StatsModalPr
                     </div>
                   </div>
 
-                  {legacyDistributionCount > 0 && <p className="personal-stats-insight-note personal-stats-legacy-note">{legacyDistributionCount} historical {legacyDistributionCount === 1 ? "game with" : "games with"} more than {selectedFormat.maxMistakes} mistakes {legacyDistributionCount === 1 ? "is" : "are"} not shown in the chart. Original results remain in your totals.</p>}
                   {/* Advanced Stats — hidden until the player has at least one
                       recorded game, so a brand-new player doesn't see a wall
                       of zeroes (same gate the previous version used). */}

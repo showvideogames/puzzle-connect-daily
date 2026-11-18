@@ -67,14 +67,26 @@ describe('personal stats modal', () => {
     expect(order()).toEqual(expected);
   }
  });
- it('limits Mini chart to 0–3 and discloses untouched historical buckets', async () => {
+ it('limits Mini chart to 0–3 and describes untouched historical buckets only for accessibility', async () => {
   vi.mocked(loadStatsFromSupabase).mockResolvedValue({...mini,guessDistribution:[1,2,3,4,5,6]});
   render(<StatsModal open onClose={() => {}} format={MINI_FORMAT} />);
   await screen.findByText('67%');
   expect([...document.querySelectorAll('.personal-stats-bucket')].map(b=>b.textContent)).toEqual(['0','1','2','3']);
-  expect(screen.getByText('Failure Bucket: 3 Mistakes')).toBeInTheDocument();
-  expect(screen.getByText(/11 historical games with more than 3 mistakes/)).toBeInTheDocument();
+  expect(screen.queryByText(/Failure Bucket:/)).not.toBeInTheDocument();
+  expect(document.getElementById('mistake-distribution-description')).toHaveClass('sr-only');
+  expect(screen.getByRole('group',{name:'Mistake Distribution'})).toHaveAccessibleDescription(/3-mistake bucket includes losses.*11 historical games with more than 3 mistakes/);
+  expect(document.querySelector('.personal-stats-legacy-note')).toBeNull();
   expect([...document.querySelectorAll('.personal-stats-count')].map(b=>b.textContent)).toEqual(['1','2','3','4']);
+ });
+
+ it.each([FULL_FORMAT,MINI_FORMAT])('keeps $name distribution explanations nonvisual', async format => {
+  render(<StatsModal open onClose={() => {}} format={format} />);
+  await screen.findByText(format.id === 'mini' ? '67%' : '79%');
+  expect(screen.queryByText(/Failure Bucket:/)).not.toBeInTheDocument();
+  expect(document.querySelector('.personal-stats-distribution-caption')).toBeNull();
+  expect(document.querySelector('.personal-stats-legacy-note')).toBeNull();
+  expect(document.getElementById('mistake-distribution-description')).toHaveClass('sr-only');
+  expect(screen.getByRole('group',{name:'Mistake Distribution'})).toHaveAccessibleDescription(`The ${format.maxMistakes}-mistake bucket includes losses.`);
  });
 
  it('does not claim zero when forward tracking is unavailable', async () => {
