@@ -7,7 +7,7 @@ const percent = (share: number) => share > 0 && share < .01 ? '<1%' : share < 1 
 function TimingPie({ first, last }: { first: number; last: number }) {
   const total = first + last;
   const slices = [
-    { label: 'First', share: first / total, start: 0, fill: '#c73589', text: '#fff' },
+    { label: 'First', share: first / total, start: 0, fill: '#f6a6d2', text: '#fff' },
     { label: 'Last', share: last / total, start: first / total, fill: '#8739d7', text: '#fff' },
   ];
   const point = (turn: number, radius: number) => [120 + Math.sin(turn * Math.PI * 2) * radius, 120 - Math.cos(turn * Math.PI * 2) * radius];
