@@ -80,8 +80,7 @@ Validation: `npm run e2e:db:no-hint` exercises the real SQL in disposable in-pro
 PostgreSQL; `npm run e2e:db:verify` checks the full schema and seed. Neither connects
 to a live database. The owned-object inventory was regenerated from that database,
 preserving the previously recorded platform-extension inventory (PGlite omits those
-Supabase extensions). Real HTTP/auth and concurrent-connection acceptance still need
-the disposable Supabase verification before release.
+Supabase extensions). Real HTTP/auth and concurrent-connection acceptance results are recorded below.
 
 Concurrency release review (unreleased migration 0003): the baseline's partial
 unique indexes `game_sessions_one_official_per_device` and
@@ -107,9 +106,21 @@ it holds one completion transaction open, observes a second connection blocking,
 then checks one official result and one replay, a single aggregate increment,
 HTTP summary/retry stability, and guest/account Full/Mini isolation. It requires
 `e2e:up` and `e2e:reset`; it never applies migrations or resets a database itself.
-This check has **not passed locally yet**: Docker's daemon socket is absent,
-`.env.e2e`/local keys and the seed manifest are missing, and the safety guard
-refuses execution before any database connection. The in-process PostgreSQL
-checks pass but cannot establish multi-connection or GoTrue/PostgREST behavior.
-Before release, also exercise concurrent import/finalization and import retries
-on that disposable stack. The private UI preview is unchanged by this review.
+Real-stack acceptance passed on 2026-11-18 after starting the already installed
+Docker app normally. The test used a temporary project ID
+`rainbow-stats-task4-e2e` on the guarded E2E ports, preserving the older stopped
+`rainbow-categories-e2e` and Crosspuns stacks. The documented `e2e:up` and
+`e2e:reset` workflow applied fixtures only to this newly created stack.
+
+All four overlapping-completion cases passed: guest/account × Full/Mini, with
+one official, one saved replay, a single aggregate increment, and stable
+PostgREST summary/retry results. Account setup/sign-in exercised local GoTrue.
+Three genuine concurrent import cases passed too: same-device import is a no-op
+for the loser; two-device imports and import/account-completion collisions reject
+with 23505, fully roll back the losing transaction, then succeed on retry with
+one account official and unchanged completion orders. The test now asserts those
+outcomes. These retries are test-driven explicit retries, **not** a new automatic
+client retry feature. The task stack was stopped afterward; existing stacks and
+the private UI preview were unchanged. No live migration, reset or deployment
+was performed. Production rollout still requires the normal migration and
+frontend release procedure; no stats reset is included.

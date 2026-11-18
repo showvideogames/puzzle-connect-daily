@@ -79,6 +79,66 @@ try {
     assert.ifError(again.error); assert.deepEqual(again.data, after.data);
     console.log(`PASS concurrent ${signedIn ? 'account' : 'guest'} ${format}: one official, replay saved, HTTP summary/retry stable`);
   }
+  // Import races use real independent transactions. Existing uniqueness
+  // constraints may reject a different-device collision; prove full rollback
+  // and that retry demotes only the duplicate, preserving completion order.
+  for (const mode of ['same-device', 'two-imports', 'account-completion']) {
+    const puzzle = (await observer.query(`insert into public.puzzles(date,format,is_published)
+      select max(date)+1,'full',true from public.puzzles returning id`)).rows[0].id;
+    async function makeGuest() {
+      const identity = await guest.rpc('create_device_identity'); assert.ifError(identity.error);
+      const d = identity.data[0];
+      const start = await guest.rpc('create_game_session', {_puzzle_id:puzzle,_device_id:d.device_id,_device_token:d.device_token,_entry_context:'archive_calendar'});
+      assert.ifError(start.error); assert.ok(start.data);
+      await observer.query(query,[start.data,d.device_id,d.device_token]);
+      return {...d,id:start.data};
+    }
+    const first = await makeGuest();
+    const second = mode === 'same-device' ? first : await makeGuest();
+    const ordersBefore = (await observer.query('select id,no_hint_completion_order from public.game_sessions where id=any($1::uuid[]) order by id',[[first.id,second.id]])).rows;
+    let accountSession: string | undefined;
+    let accountDevice: {device_id:string;device_token:string} | undefined;
+    if (mode === 'account-completion') {
+      const device = await account.rpc('create_device_identity'); assert.ifError(device.error); accountDevice=device.data[0];
+      const start=await account.rpc('create_game_session',{_puzzle_id:puzzle,_device_id:accountDevice!.device_id,_device_token:accountDevice!.device_token,_entry_context:'archive_calendar'});
+      assert.ifError(start.error); accountSession=start.data;
+    }
+    await a.query('begin'); await b.query('begin');
+    for (const connection of [a,b]) {
+      await connection.query('set local role authenticated');
+      await connection.query("select set_config('request.jwt.claims',$1,true)",[JSON.stringify({sub:uid,role:'authenticated'})]);
+    }
+    if (mode === 'account-completion') {
+      assert.equal((await a.query(query,[accountSession,accountDevice!.device_id,accountDevice!.device_token])).rows[0].result,true);
+    } else {
+      assert.equal((await a.query('select * from public.import_guest_history($1,$2)',[first.device_id,first.device_token])).rows[0].outcome,'imported');
+    }
+    const pending = b.query('select * from public.import_guest_history($1,$2)',[second.device_id,second.device_token]).then(result=>({result,error:null}),error=>({result:null,error}));
+    let blocked=false;
+    for(let n=0;n<100;n++) {
+      blocked=(await observer.query('select $1 = any(pg_blocking_pids($2)) as blocked',[pidA,pidB])).rows[0].blocked;
+      if(blocked)break;
+      await new Promise(resolve=>setTimeout(resolve,20));
+    }
+    assert.ok(blocked,'Import must overlap the other transaction');
+    await a.query('commit'); const outcome=await pending;
+    if(mode==='same-device') {
+      assert.ifError(outcome.error); assert.equal(outcome.result!.rows[0].outcome,'already_decided');
+      await b.query('commit');
+    } else {
+      assert.equal(outcome.error?.code,'23505'); await b.query('rollback');
+      const rolledBack=(await observer.query('select retired_at from public.device_identities where device_id=$1',[second.device_id])).rows[0];
+      assert.equal(rolledBack.retired_at,null);
+      assert.equal((await observer.query('select user_id from public.game_sessions where id=$1',[second.id])).rows[0].user_id,null);
+      const retry=await account.rpc('import_guest_history',{_device_id:second.device_id,_device_token:second.device_token});
+      assert.ifError(retry.error); assert.equal(retry.data[0].outcome,'imported');
+    }
+    assert.deepEqual((await observer.query('select id,no_hint_completion_order from public.game_sessions where id=any($1::uuid[]) order by id',[[first.id,second.id]])).rows,ordersBefore);
+    assert.equal((await observer.query('select count(*)::int n from public.game_sessions where puzzle_id=$1 and user_id=$2 and is_official',[puzzle,uid])).rows[0].n,1);
+    const repeat=await account.rpc('import_guest_history',{_device_id:second.device_id,_device_token:second.device_token});
+    assert.ifError(repeat.error); assert.equal(repeat.data[0].outcome,'credential_invalid');
+    console.log(`PASS import ${mode}: unique official, immutable order, ${mode==='same-device'?'concurrent no-op':'atomic collision rollback and successful retry'}`);
+  }
 } finally {
   await Promise.allSettled([a.query('rollback'),b.query('rollback')]);
   await Promise.allSettled([a.end(),b.end(),observer.end()]);
