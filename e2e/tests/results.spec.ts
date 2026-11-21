@@ -64,7 +64,7 @@ async function loseTheGame(page: Page) {
     await submitButton(page).click();
     if (i === guesses.length - 1) break;
     // A wrong guess leaves its tiles selected; clear them for the next one.
-    const deselect = page.getByRole("button", { name: "Deselect All" });
+    const deselect = page.getByRole("button", { name: "Clear selection" });
     await expect(deselect).toBeEnabled({ timeout: 10_000 });
     await deselect.click();
   }

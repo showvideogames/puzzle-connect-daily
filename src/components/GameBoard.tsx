@@ -62,7 +62,7 @@ const DIFFICULTY_SQUARE: Record<number, string> = {
   4: "🟥",
 };
 
-// Matches the colors used by MistakeDots — yellow, green, blue, red
+// The puzzle category colors, not the lives meter.
 const DIFFICULTY_COLOR: Record<number, string> = {
   1: "bg-yellow-400",
   2: "bg-green-500",
@@ -416,11 +416,8 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
   // Mini's tile grid, solved bars and Rainbow reveal bar are capped to a
   // compact, near-square-tile width regardless of useWideBoard — a Mini is
   // a quick 3x3, not a scaled-down Full, so it never grows into the same
-  // desktop board width a Full/wideBoard context gets. Nothing else reads
-  // this: the surrounding page container, the instruction line and the
-  // Shuffle/Deselect/Submit controls keep whatever width useWideBoard
-  // already gave them, so those controls stay their current comfortable
-  // width instead of shrinking down with the board.
+  // desktop board width a Full/wideBoard context gets. The compact
+  // controls are sized independently of this grid.
   const isMiniBoard = format.id === "mini";
 
   const [historyExpanded, setHistoryExpanded] = useState(true);
@@ -1643,7 +1640,10 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
   useEffect(() => {
     if (isOneAwayKind && !triggeredSetStillSelected) dismissFeedback();
   }, [isOneAwayKind, triggeredSetStillSelected, dismissFeedback]);
-  const feedbackKind = alreadyGuessed ? `already-${alreadyGuessed}` : guessFeedback ?? (showRainbowPopup ? "spotted" : null);
+  // A new resolved miss supersedes any still-visible warning from an earlier
+  // duplicate submission. A duplicate never creates a new guess record.
+  const duplicateFeedback = guessFeedback ? null : alreadyGuessed;
+  const feedbackKind = duplicateFeedback ? `already-${duplicateFeedback}` : guessFeedback ?? (showRainbowPopup ? "spotted" : null);
 
   // One visual family: a white pill with a strong purple outline and bold
   // purple lettering (the Submit button's purple). The pill is sized to its
@@ -1657,13 +1657,24 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
   const oneAwayCopy = `One Away...${oneAwayColor ? ` ${oneAwayColor.square}` : ""}`;
   const feedbackAnnouncement = !feedbackKind
     ? ""
-    : alreadyGuessed
-      ? (alreadyGuessed === "oneaway" ? "Already guessed — one away!" : "Already guessed!")
+    : duplicateFeedback
+      ? (duplicateFeedback === "oneaway" ? "Already guessed — one away!" : "Already guessed!")
       : guessFeedback === "incorrect" ? "Incorrect"
       : guessFeedback === "almost" ? `One Away... ${theme.emoji}`
       : guessFeedback === "oneaway" ? (oneAwayColor ? `One Away... ${oneAwayColor.name} category` : oneAwayCopy)
       : theme.spottedMessage;
-  const feedbackPill = !feedbackKind ? null : guessFeedback && !alreadyGuessed ? (
+  const remainingLives = Math.max(0, state.maxMistakes - state.mistakes);
+  const lifeAnnouncement = remainingLives === 1
+    ? "Last life."
+    : `${remainingLives} lives remaining.`;
+  const finalMiss = !!lastGuess && !lastGuess.isCorrect && !lastGuess.isRainbow &&
+    state.isComplete && !state.isWon && remainingLives === 0;
+  const spokenFeedback = finalMiss
+    ? `${lastGuess.isAlmostRainbow ? "One away from the Rainbow." : lastGuess.isOneAway ? "One away." : "Incorrect."} No lives remaining.`
+    : guessFeedback && !duplicateFeedback
+      ? `${feedbackAnnouncement}. ${lifeAnnouncement}`
+      : feedbackAnnouncement;
+  const feedbackPill = !feedbackKind ? null : guessFeedback && !duplicateFeedback ? (
     <div className={`${purplePill} gap-2 px-3`} data-testid="guess-feedback">
       {guessFeedback === "incorrect" ? "Incorrect" : guessFeedback === "almost" ? `One Away... ${theme.emoji}` : oneAwayCopy}
       {/* 28px circle, with a 44px invisible tap area around it. */}
@@ -1678,9 +1689,9 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
         <X className="w-4 h-4" strokeWidth={3} />
       </button>
     </div>
-  ) : alreadyGuessed ? (
+  ) : duplicateFeedback ? (
     <div className={`${purplePill} px-3.5`} data-testid="guess-feedback">
-      {alreadyGuessed === "oneaway" ? "Already guessed — one away!" : "Already guessed!"}
+      {duplicateFeedback === "oneaway" ? "Already guessed — one away!" : "Already guessed!"}
     </div>
   ) : (
     // Animated (or static, per the Rainbow Animation setting) rainbow fill for
@@ -1699,7 +1710,7 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
   );
 
 
-  // Color Palette Mode buttons, below the Shuffle/Deselect/Submit row, so
+  // Color Palette Mode buttons, below the Shuffle/Submit/Clear row, so
   // neither turning the setting on nor switching modes can move the grid.
   const paletteRow = colorPaletteMode && remainingWords.length > 0 ? (
       <div className="flex items-center justify-center gap-2 mt-4">
@@ -1897,63 +1908,35 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
         </div>
       )}
       {/* Announced through a region that is always present. */}
-      <div role="status" aria-live="polite" className="sr-only">
-        {feedbackAnnouncement}
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {spokenFeedback}
       </div>
 
-      {/* Mistakes dots — hidden when viewing an already-completed puzzle.
-          The running solve time is never shown during active play (on any
-          format) — timing itself, persistence, hidden-tab pausing and
-          completion logic are all unchanged in useGame/activeTimer; only
-          this live readout is gone. The frozen final time still appears
-          once the run finishes (see showEndState below) and still goes
-          into Mini's share text (generateShareText reads activeSecondsRef
-          regardless of whether this live span ever rendered). With no
-          second item in this row, the pill is simply centered. */}
+      {/* The inline label shares a fixed-height row with the meter. */}
       {!wasAlreadyComplete.current && (
         <div className="mt-2 md:mt-4 w-full flex items-center justify-center">
-          <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} plain />
+          <MistakeDots mistakes={state.mistakes} max={state.maxMistakes} playing={!state.isComplete} />
         </div>
       )}
 
-      {/* Controls — a 3-column grid so Shuffle/Clear/Submit are always
-          exactly equal width and the row spans close to the board's own
-          width (100% on mobile, 80% on desktop), rather than three
-          fixed-width buttons floating narrower than the grid above them. */}
       {!state.isComplete && (
         <>
-          <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-2 sm:mt-3">
+          <div className="mx-auto mt-2 grid w-full max-w-[288px] grid-cols-[44px_minmax(0,180px)_44px] items-center justify-center gap-2.5 sm:mt-3">
             <button
+              type="button"
+              aria-label="Shuffle"
+              title="Shuffle"
               onClick={shuffle}
               disabled={isChecking || reveal !== null}
-              className={`game-secondary w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold transition-colors
-                bg-action-secondary-bg text-action-secondary-fg border border-transparent
-                shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
-                dark:bg-secondary dark:text-foreground dark:border-border
-                dark:hover:bg-muted active:scale-95 dark:disabled:opacity-40
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-                focus-visible:ring-offset-2 focus-visible:ring-offset-background
-                disabled:cursor-default`}
+              className="grid h-11 w-11 place-items-center rounded-full bg-[#ececec] text-[#383838]
+                transition-colors enabled:hover:bg-[#e0e0e0] enabled:active:scale-95 disabled:cursor-default disabled:opacity-50
+                dark:bg-secondary dark:text-foreground dark:enabled:hover:bg-muted
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              Shuffle
-            </button>
-            <button
-              onClick={handleDeselectAll}
-              disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
-              className={`game-secondary w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold transition-colors
-                border border-transparent
-                shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none
-                dark:bg-secondary dark:text-foreground dark:border-border
-                dark:hover:bg-muted active:scale-95 dark:disabled:opacity-40
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-                focus-visible:ring-offset-2 focus-visible:ring-offset-background
-                disabled:cursor-default ${
-                  state.selectedWords.length === 0
-                    ? "bg-disabled-bg text-disabled-fg"
-                    : "bg-action-secondary-bg text-action-secondary-fg"
-                }`}
-            >
-              Deselect All
+              <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none"
+                stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h3c4 0 7 12 12 12h3m-4-4 4 4-4 4M3 18h3c2 0 3.5-2.5 5-5m2-3c1.5-2.3 3-4 5-4h3m-4-4 4 4-4 4" />
+              </svg>
             </button>
             <button
               onClick={handleSubmit}
@@ -1969,14 +1952,27 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
             >
               Submit
             </button>
+            <button
+              type="button"
+              aria-label="Clear selection"
+              title="Clear selection"
+              onClick={handleDeselectAll}
+              disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
+              className="group grid h-11 w-11 place-items-center rounded-full bg-[#ececec] text-[#383838]
+                transition-colors enabled:hover:bg-[#e0e0e0] enabled:active:scale-95 disabled:cursor-default
+                disabled:bg-[rgba(64,64,64,.05)] disabled:text-[#a5a5a5]
+                dark:bg-[#303030] dark:text-[#e8e8e8] dark:enabled:hover:bg-[#404040] dark:disabled:bg-[rgba(200,200,200,.05)] dark:disabled:text-[#929292]
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              <svg className="size-6 group-disabled:size-5" viewBox="0 0 24 24" aria-hidden="true" fill="none"
+                stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M9 9l6 6m0-6-6 6" />
+              </svg>
+            </button>
           </div>
           {paletteRow}
           {(colorCodeTiles || colorPaletteMode) && hasAnyColor && (
-            // Same w-full md:w-[80%] mx-auto grid-cols-3 gap-2 math as the
-            // Shuffle/Deselect All/Submit row above, with the button in the
-            // center column only — guarantees this matches one of those
-            // buttons' width exactly (not an eyeballed value) while staying
-            // centered, rather than sizing its own single-button container.
+            // This clears painted marks, independently of Clear selection.
             <div className="w-full md:w-[80%] mx-auto grid grid-cols-3 gap-2 mt-2 sm:mt-3">
               <div aria-hidden="true" />
               <button

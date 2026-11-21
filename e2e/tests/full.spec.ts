@@ -60,7 +60,7 @@ test.describe("Public Full — today's puzzle", () => {
       ).toBeVisible();
       // The dots are decorative (aria-hidden); the status line is the real
       // announcement of how many mistakes remain.
-      await expect(mistakesRemaining(page)).toHaveText("4 of 4 mistakes remaining");
+      await expect(mistakesRemaining(page)).toHaveText("4 of 4 lives remaining");
     });
 
     test("a category can be selected and submitted @smoke", async ({ page }) => {
@@ -75,7 +75,7 @@ test.describe("Public Full — today's puzzle", () => {
       // The solved answers leave the grid.
       await expect(tiles(page)).toHaveCount(12);
       // No mistake was spent.
-      await expect(mistakesRemaining(page)).toHaveText("4 of 4 mistakes remaining");
+      await expect(mistakesRemaining(page)).toHaveText("4 of 4 lives remaining");
     });
 
     test("the Rainbow is found by selecting its answers on the board", async ({ page }) => {
@@ -90,7 +90,7 @@ test.describe("Public Full — today's puzzle", () => {
       for (const word of FULL_RAINBOW.rainbowHerring!) {
         await expect(tile(page, word)).toBeVisible();
       }
-      await expect(mistakesRemaining(page)).toHaveText("4 of 4 mistakes remaining");
+      await expect(mistakesRemaining(page)).toHaveText("4 of 4 lives remaining");
     });
 
     test("a finished game shows results, freezes, and offers sharing", async ({ page }) => {

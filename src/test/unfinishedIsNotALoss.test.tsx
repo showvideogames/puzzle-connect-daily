@@ -193,7 +193,7 @@ describe("three categories solved is never a loss", () => {
     const submit = () => screen.getByRole("button", { name: "Submit" });
     async function play(words: string[]) {
       // A wrong guess stays selected on the board, so clear it first.
-      const deselect = screen.getByRole("button", { name: "Deselect All" });
+      const deselect = screen.getByRole("button", { name: "Clear selection" });
       if (!deselect.hasAttribute("disabled")) {
         await act(async () => {
           deselect.click();

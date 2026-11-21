@@ -1,43 +1,37 @@
 interface MistakeDotsProps {
   mistakes: number;
   max: number;
-  /** Bare text and dots, no pill (the refreshed Full Daily layout). */
-  plain?: boolean;
+  playing: boolean;
 }
 
-export function MistakeDots({ mistakes, max, plain = false }: MistakeDotsProps) {
-  const remaining = max - mistakes;
+export function MistakeDots({ mistakes, max, playing }: MistakeDotsProps) {
+  const remaining = Math.max(0, max - mistakes);
   return (
-    // A quiet metadata pill rather than text/dots floating directly on the
-    // page — bg-card/border-border are the same theme-aware tokens the
-    // Guess History panel already uses, so this reads correctly in both
-    // themes without a dark-specific override. The shadow is light-mode
-    // only (dark already gets its separation from the border/bg contrast
-    // against the page, and doesn't need an added shadow layer).
-    <div
-      className={plain
-        ? "mx-auto w-fit flex items-center gap-1.5 justify-center py-1"
-        : `mx-auto w-fit flex items-center gap-1.5 justify-center rounded-full border border-border bg-card
-        px-4 py-2 shadow-[0_1px_2px_rgba(30,25,20,0.04),0_2px_6px_rgba(30,25,20,0.05)] dark:shadow-none`}
-    >
-      <span className="text-sm md:text-base text-slate mr-1">Mistakes remaining:</span>
-      <span className="sr-only" role="status">
-        {`${remaining} of ${max} mistakes remaining`}
+    <div className="mx-auto flex h-6 w-fit items-center justify-center gap-3">
+      {/* The board's feedback live region announces losses. This static
+          description keeps the count available without announcing it twice. */}
+      <span className="sr-only" data-testid="lives-remaining">
+        {remaining} of {max} lives remaining
       </span>
-      <div className="flex items-center gap-2">
-        {Array.from({ length: max }).map((_, i) => (
-          <div
-            key={i}
-            aria-hidden="true"
-            className={`w-4 h-4 shrink-0 aspect-square rounded-full transition-colors duration-300 ${
-              // These communicate lives/mistakes remaining, not the puzzle
-              // categories — neutral in both themes, never category colors.
-              i < remaining
-                ? "bg-ink dark:bg-foreground"
-                : "bg-disabled-bg dark:bg-muted"
-            }`}
-          />
-        ))}
+      <div aria-hidden="true" className="contents">
+        {playing && remaining === 1 && (
+          <span className="whitespace-nowrap text-sm font-bold text-[#6d38b5] dark:text-[#c9a7ff]">
+            Last Life
+          </span>
+        )}
+        <div className="flex items-center gap-1.5">
+          {Array.from({ length: max }, (_, i) => (
+            <span
+              key={i}
+              data-life={i < remaining ? "filled" : "spent"}
+              className={`h-2 w-[23px] rounded-full border transition-colors duration-200 motion-reduce:transition-none ${
+                i < remaining
+                  ? "border-[#6d38b5] bg-[#6d38b5] dark:border-[#c9a7ff] dark:bg-[#c9a7ff]"
+                  : "border-[#8c7c9e] dark:border-[#ab99bd]"
+              }`}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
