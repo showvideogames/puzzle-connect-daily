@@ -185,11 +185,11 @@ describe("Full Hint: the visual stays put whatever the checkbox says", () => {
 
   const visuals = () => screen.getAllByTestId("hint-visual").map((n) => n.textContent);
 
-  function board(p: Puzzle) {
+  function board(p: Puzzle, smallHintUsed = false) {
     localStorage.clear();
     render(
       <MemoryRouter>
-        <GameBoard puzzle={p} settings={{} as never} customMode showModeBadge={false} fullHintUsed />
+        <GameBoard puzzle={p} settings={{} as never} customMode showModeBadge={false} fullHintUsed smallHintUsed={smallHintUsed} />
       </MemoryRouter>
     );
   }
@@ -205,6 +205,45 @@ describe("Full Hint: the visual stays put whatever the checkbox says", () => {
     );
     await screen.findAllByTestId("hint-visual");
     expect(visuals()).toEqual(["___ 💬", "🎵", "🚘", ""]);
+  });
+
+  it("frames Full Hint visuals by named color and preserves mixed custom images and text", async () => {
+    board({
+      ...puzzle([{ categoryEmoji: "👋 :caveman: + img:caveman" }, { category: "Legacy 🚘" }, {}, {}]),
+      rainbowHerring: WORDS.map((words) => words[0].toUpperCase()),
+      rainbowCategoryName: "Bonus answer",
+      rainbowCategoryEmoji: "🛸",
+      theme: "july4",
+    });
+    await screen.findAllByTestId("hint-visual");
+    const yellow = screen.getByRole("group", { name: "Picture hint for the yellow category" });
+    expect(yellow.getAttribute("data-hint-color")).toBe("yellow");
+    expect(yellow.textContent).toBe("👋  + ");
+    expect(within(yellow).getAllByRole("img", { name: "caveman" })).toHaveLength(2);
+    expect(screen.getByRole("group", { name: "Picture hint for the green category" }).textContent).toBe("🚘");
+    const bonus = screen.getByRole("group", { name: "Picture hint for the Flag category" });
+    expect(bonus.getAttribute("data-hint-color")).toBe("bonus");
+    expect(bonus.style.getPropertyValue("--picture-hint-frame")).toBe(resolveTheme("july4").gradient);
+    expect(bonus.textContent).toBe("🛸");
+    expect(within(bonus).queryByText("Bonus answer")).toBeNull();
+  });
+
+  it("keeps Mini word hints filled and Mini picture hints in green, blue and red order", async () => {
+    const miniGroups = MINI_WORDS.map((words, i) => ({
+      category: `Mini ${i}`,
+      words,
+      difficulty: (i + 2) as 2 | 3 | 4,
+      hintWord: `word hint ${i}`,
+      categoryEmoji: ["😱", "👰", "Ⓤ"][i],
+    })).reverse();
+    board({ ...puzzle([]), format: "mini", groups: miniGroups }, true);
+    await screen.findAllByTestId("hint-visual");
+    expect(visuals()).toEqual(["😱", "👰", "Ⓤ"]);
+    expect(screen.queryByRole("group", { name: "Picture hint for the yellow category" })).toBeNull();
+    const word = screen.getByText("word hint 0");
+    expect(word.className).toContain("bg-green-600");
+    expect(word.className).toContain("h-10");
+    expect(word.closest(".picture-hint-chip")).toBeNull();
   });
 
   it("checked and unchecked are indistinguishable in the hint", async () => {

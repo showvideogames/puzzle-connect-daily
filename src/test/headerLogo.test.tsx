@@ -129,7 +129,11 @@ describe("game header", () => {
     const { unmount } = renderHeader();
     expect(header().className).toContain("max-w-[840px]");
     expect(header().className).toContain("mb-1 md:mb-2");
+    expect(header().className.split(/\s+/)).toEqual(expect.arrayContaining(["px-3", "md:px-0"]));
     unmount();
+    const mini = renderHeader({ format: MINI_FORMAT });
+    expect(header().className).not.toContain("md:px-0");
+    mini.unmount();
     renderHeader({ variant: "default", showHint: false });
     expect(header().className).toContain("max-w-2xl");
     expect(header().className).toContain("mb-4");

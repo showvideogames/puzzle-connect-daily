@@ -7,13 +7,17 @@ const theme = (selector: string) => css.match(new RegExp(`${selector} \\{([^}]+)
 const token = (block: string, name: string) => block.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1];
 
 describe("selected tile colors", () => {
-  it("uses #292929 and pure white in light mode", () => {
+  it("uses the exact warm charcoal #35312E and pure white in light mode", () => {
     const light = theme(":root");
     const background = token(light, "--tile-selected") ?? "";
     const [hue, saturation, lightness] = background.split(" ").map(parseFloat);
-    expect(hue).toBe(0);
-    expect(saturation).toBe(0);
-    expect(Math.round((lightness / 100) * 255)).toBe(0x29);
+    const l = lightness / 100;
+    const a = saturation / 100 * Math.min(l, 1 - l);
+    const channel = (n: number) => {
+      const k = (n + hue / 30) % 12;
+      return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+    };
+    expect([channel(0), channel(8), channel(4)]).toEqual([0x35, 0x31, 0x2e]);
     expect(token(light, "--tile-selected-fg")).toBe("0 0% 100%");
   });
 

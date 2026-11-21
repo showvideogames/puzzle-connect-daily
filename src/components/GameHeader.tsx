@@ -82,6 +82,7 @@ export function GameHeader({
         settingsLabel="Settings and menu"
         showProfile={!!user && socialBetaOn()}
         game={variant === "minimal" || wideHeader}
+        alignFullBoard={variant === "minimal" && format.id === "full"}
       />
       <FeedbackModal open={feedbackOpen} onClose={closeFeedback} user={user} />
     </>

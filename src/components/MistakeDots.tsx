@@ -24,9 +24,9 @@ export function MistakeDots({ mistakes, max, playing }: MistakeDotsProps) {
             <span
               key={i}
               data-life={i < remaining ? "filled" : "spent"}
-              className={`h-2 w-[23px] rounded-full border transition-colors duration-200 motion-reduce:transition-none ${
+              className={`h-2.5 w-7 sm:w-[30px] rounded-full border transition-colors duration-200 motion-reduce:transition-none ${
                 i < remaining
-                  ? "border-[#6d38b5] bg-[#6d38b5] dark:border-[#c9a7ff] dark:bg-[#c9a7ff]"
+                  ? "border-transparent bg-gradient-to-br from-[hsl(var(--brand-purple-from))] to-[hsl(var(--brand-purple-to))]"
                   : "border-[#8c7c9e] dark:border-[#ab99bd]"
               }`}
             />

@@ -28,6 +28,8 @@ interface AppHeaderProps {
   showProfile?: boolean;
   /** The game pages: the board's 840px width, and only a small gap above the board. */
   game?: boolean;
+  /** Full Daily: match the grid’s outer edges at the desktop breakpoint. */
+  alignFullBoard?: boolean;
 }
 
 /**
@@ -56,10 +58,11 @@ export function AppHeader({
   settingsLabel = "Settings",
   showProfile = true,
   game = false,
+  alignFullBoard = false,
 }: AppHeaderProps) {
   const crowded = !!onHint && showProfile && !!user;
   return (
-    <header className={`w-full mx-auto px-3 ${game ? "max-w-[840px] mb-1 md:mb-2" : "max-w-2xl mb-4"}`} data-testid="app-header">
+    <header className={`w-full mx-auto px-3 ${alignFullBoard ? "md:px-0" : ""} ${game ? "max-w-[840px] mb-1 md:mb-2" : "max-w-2xl mb-4"}`} data-testid="app-header">
       <div className="flex h-14 md:h-16 items-center gap-1 max-[359px]:gap-0.5 rounded-2xl border border-border bg-card px-1.5 max-[359px]:px-1 sm:px-2 md:px-3 shadow-sm">
         <AppMenuDrawer onFeedback={onFeedback} />
         <Link

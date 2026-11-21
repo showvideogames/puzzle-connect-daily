@@ -19,7 +19,7 @@ import { ResultsDialog } from "./ResultsDialog";
 import { SpotRainbowPrompt } from "./SpotRainbowPrompt";
 import { PuzzleModeBadge } from "./PuzzleModeBadge";
 import { X, TrendingUp, Eraser, MousePointer2, History, ChevronDown, RotateCcw } from "lucide-react";
-import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
 import { useImagePreload } from "@/hooks/useImagePreload";
 import type { User } from "@supabase/supabase-js";
@@ -41,7 +41,7 @@ import { loadPlayedDifficulties } from "@/lib/puzzleVersion";
 import { buildCustomShareText, buildOfficialShareText } from "@/lib/shareText";
 import { customPuzzlePath } from "@/lib/customPuzzles";
 import { resolveCategoryVisual, splitCategoryVisual } from "@/lib/categoryVisual";
-import { formatOf, progressStorageId, rainbowHerringFor, type CategoryColor } from "@/lib/puzzleFormat";
+import { formatOf, progressStorageId, rainbowHerringFor, DIFFICULTY_COLOR_NAME, type CategoryColor } from "@/lib/puzzleFormat";
 import { lookupFinishedGame, type RestoredGame } from "@/lib/finishedGame";
 import { ownerKey, useProgressOwner, type ProgressOwner } from "@/lib/progressOwner";
 import { categorySwatches } from "@/lib/categoryPalette";
@@ -62,18 +62,7 @@ const DIFFICULTY_SQUARE: Record<number, string> = {
   4: "🟥",
 };
 
-// The puzzle category colors, not the lives meter.
-const DIFFICULTY_COLOR: Record<number, string> = {
-  1: "bg-yellow-400",
-  2: "bg-green-500",
-  3: "bg-blue-500",
-  4: "bg-red-500",
-};
-
-// Maps a word's group difficulty to the ResultGrid cell color it should
-// render — same yellow/green/blue/red assignment as DIFFICULTY_SQUARE/
-// DIFFICULTY_COLOR above, just as ResultCellKind values instead of
-// emoji/Tailwind classes.
+// Maps a word's group difficulty to its historical result-grid color.
 const DIFFICULTY_RESULT_KIND: Record<number, ResultCellKind> = {
   1: "yellow",
   2: "green",
@@ -1149,15 +1138,17 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
     }, 400);
   }, [rainbowHerring, markRainbowFound, isOfficialAttemptRef, sessionIdRef, activeSecondsRef, nextGuessNumber, state.solvedGroups.length, betaMode, storageId, oneAnswerPrompt]);
 
-  const hintItems = useCallback((): { color?: string; squareEmoji?: string; emoji: string }[] => {
+  const hintItems = useCallback((): { color: CategoryColor | "bonus"; label: string; emoji: string }[] => {
     const sorted = [...puzzle.groups].sort((a, b) => a.difficulty - b.difficulty);
-    const items: { color?: string; squareEmoji?: string; emoji: string }[] = sorted.map(g => ({
-      color: DIFFICULTY_COLOR[g.difficulty],
+    const items: { color: CategoryColor | "bonus"; label: string; emoji: string }[] = sorted.map(g => ({
+      color: DIFFICULTY_COLOR_NAME[g.difficulty],
+      label: `Picture hint for the ${DIFFICULTY_COLOR_NAME[g.difficulty]} category`,
       emoji: resolveCategoryVisual(g.categoryEmoji, g.category),
     }));
     if (rainbowHerring && (puzzle.rainbowCategoryName || puzzle.rainbowCategoryEmoji)) {
       items.push({
-        squareEmoji: theme.emoji,
+        color: "bonus",
+        label: `Picture hint for the ${theme.label} category`,
         emoji: resolveCategoryVisual(puzzle.rainbowCategoryEmoji, puzzle.rainbowCategoryName ?? ""),
       });
     }
@@ -1921,27 +1912,24 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
 
       {!state.isComplete && (
         <>
-          <div className="mx-auto mt-2 grid w-full max-w-[288px] grid-cols-[44px_minmax(0,180px)_44px] items-center justify-center gap-2.5 sm:mt-3">
+          <div className="mx-auto mt-2 grid w-full max-w-[328px] grid-cols-[48px_minmax(0,192px)_48px] items-center justify-center gap-2.5 sm:mt-3 sm:grid-cols-[50px_minmax(0,208px)_50px]">
             <button
               type="button"
               aria-label="Shuffle"
               title="Shuffle"
               onClick={shuffle}
               disabled={isChecking || reveal !== null}
-              className="grid h-11 w-11 place-items-center rounded-full bg-[#ececec] text-[#383838]
+              className="game-side-control grid h-12 w-12 place-items-center rounded-full bg-[#ececec] text-[#383838] sm:h-[50px] sm:w-[50px]
                 transition-colors enabled:hover:bg-[#e0e0e0] enabled:active:scale-95 disabled:cursor-default disabled:opacity-50
                 dark:bg-secondary dark:text-foreground dark:enabled:hover:bg-muted
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none"
-                stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h3c4 0 7 12 12 12h3m-4-4 4 4-4 4M3 18h3c2 0 3.5-2.5 5-5m2-3c1.5-2.3 3-4 5-4h3m-4-4 4 4-4 4" />
-              </svg>
+              <span className="game-shuffle-glyph size-[24px]" aria-hidden="true" />
             </button>
             <button
               onClick={handleSubmit}
               disabled={state.selectedWords.length !== format.answersPerCategory || isChecking || reveal !== null}
-              className={`game-submit w-full ${isMiniBoard ? "h-12" : "h-12 sm:h-14"} rounded-full text-sm md:text-base font-bold text-white transition-all
+              className={`game-submit w-full ${isMiniBoard ? "h-[52px]" : "h-[52px] sm:h-[60px]"} rounded-full text-[19px] md:text-[21px] font-bold text-white transition-all
                 bg-[linear-gradient(135deg,_hsl(var(--brand-purple-from)),_hsl(var(--brand-purple-to)))]
                 shadow-[0_6px_16px_-8px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]
                 hover:-translate-y-px active:scale-95
@@ -1958,7 +1946,7 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
               title="Clear selection"
               onClick={handleDeselectAll}
               disabled={state.selectedWords.length === 0 || isChecking || reveal !== null}
-              className="group grid h-11 w-11 place-items-center rounded-full bg-[#ececec] text-[#383838]
+              className="game-side-control group grid h-12 w-12 place-items-center rounded-full bg-[#ececec] text-[#383838] sm:h-[50px] sm:w-[50px]
                 transition-colors enabled:hover:bg-[#e0e0e0] enabled:active:scale-95 disabled:cursor-default
                 disabled:bg-[rgba(64,64,64,.05)] disabled:text-[#a5a5a5]
                 dark:bg-[#303030] dark:text-[#e8e8e8] dark:enabled:hover:bg-[#404040] dark:disabled:bg-[rgba(200,200,200,.05)] dark:disabled:text-[#929292]
@@ -2051,20 +2039,21 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
         </div>
       )}
 
-      {/* Hint pill */}
+      {/* Full Hint picture row; the Small Hint word chips below are unchanged. */}
       {fullHintVisible && (
         <div className="mt-4 flex justify-center">
           {hintVisible ? (
-            <div className="flex items-center gap-3 flex-wrap justify-center animate-fade-up">
+            <div className="flex w-full max-w-[740px] flex-wrap justify-center gap-2 animate-fade-up">
               {hintItems().map((item, i) => (
-                <span key={i} className="flex items-center gap-1.5 text-2xl leading-none">
-                  {item.color ? (
-                    <span className={`inline-block w-4 h-4 rounded-sm ${item.color}`} />
-                  ) : (
-                    <span>{item.squareEmoji}</span>
-                  )}
-                  <span className="text-base text-muted-foreground">:</span>
-                  <span data-testid="hint-visual">
+                <span
+                  key={i}
+                  role="group"
+                  aria-label={item.label}
+                  className="picture-hint-chip"
+                  data-hint-color={item.color}
+                  style={item.color === "bonus" ? { "--picture-hint-frame": theme.gradient } as CSSProperties : undefined}
+                >
+                  <span data-testid="hint-visual" className="picture-hint-content">
                     {splitCategoryVisual(item.emoji).map((part, k) =>
                       part.type === "text" ? (
                         <span key={k}>{part.value}</span>
