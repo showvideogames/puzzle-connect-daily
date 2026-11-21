@@ -58,9 +58,9 @@ html {
 
     /* Tile colors */
     --tile: 36 18% 88%;
-    /* Selected tile: warm charcoal (#35312E) with pure white text.
+    /* Selected tile: neutral graphite (#363636) with pure white text.
        Light mode only; dark mode keeps its own values below. */
-    --tile-selected: 25.7142857143 7.0707070707% 19.4117647059%;
+    --tile-selected: 0 0% 21.1764705882%;
     --tile-selected-fg: 0 0% 100%;
 
     /* Brand purple used by the Submit button when enabled — same values in
