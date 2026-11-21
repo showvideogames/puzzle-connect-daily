@@ -294,6 +294,12 @@ describe("colour palette stays put as categories are solved", () => {
     const submit = screen.getByRole("button", { name: "Submit" });
     const clear = screen.getByRole("button", { name: "Clear selection" });
     expect(before(shuffle, submit) && before(submit, clear)).toBe(true);
+    expect(shuffle.querySelector(".game-shuffle-glyph")).toHaveAttribute("aria-hidden", "true");
+    expect(shuffle).toHaveClass("game-side-control");
+    expect(clear).toHaveClass("game-side-control");
+    expect(submit).not.toHaveClass("game-side-control");
+    expect(submit).toHaveClass("text-[19px]", "md:text-[21px]");
+    expect(container.querySelector('[data-life="filled"]')).toHaveClass("bg-gradient-to-br");
     expect(clear).toBeDisabled();
     expect(screen.getByTestId("lives-remaining")).toHaveTextContent("4 of 4 lives remaining");
     expect(screen.queryByText("Last Life")).toBeNull();

@@ -58,9 +58,9 @@ html {
 
     /* Tile colors */
     --tile: 36 18% 88%;
-    /* Selected tile: neutral charcoal (#292929) with pure white text.
+    /* Selected tile: warm charcoal (#35312E) with pure white text.
        Light mode only; dark mode keeps its own values below. */
-    --tile-selected: 0 0% 16.0784313725%;
+    --tile-selected: 25.7142857143 7.0707070707% 19.4117647059%;
     --tile-selected-fg: 0 0% 100%;
 
     /* Brand purple used by the Submit button when enabled — same values in
@@ -228,6 +228,31 @@ html {
     border: 1px solid hsl(var(--tile-border));
     color: hsl(var(--ink));
     box-shadow: 0 1px 2px rgba(30, 25, 20, 0.04), 0 2px 6px rgba(30, 25, 20, 0.05);
+  }
+  /* Give the small gray game buttons the same low-key lift as the word
+     tiles, without giving a disabled control an active-looking shadow. */
+  .game-side-control:enabled {
+    border: 1px solid hsl(var(--tile-border));
+    box-shadow: 0 1px 2px rgb(30 25 20 / 0.06), 0 2px 5px rgb(30 25 20 / 0.08),
+      inset 0 1px 0 rgb(255 255 255 / 0.45);
+  }
+  .dark .game-side-control:enabled {
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.24), inset 0 1px 0 rgb(255 255 255 / 0.08);
+  }
+  .game-side-control:enabled:focus-visible {
+    box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow),
+      0 1px 2px rgb(30 25 20 / 0.06), 0 2px 5px rgb(30 25 20 / 0.08);
+  }
+  .dark .game-side-control:enabled:focus-visible {
+    box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow),
+      0 1px 3px rgb(0 0 0 / 0.24);
+  }
+  /* Deb’s supplied alpha image. No hand-redrawn curves or arrowheads. */
+  .game-shuffle-glyph {
+    background-color: currentColor;
+    -webkit-mask: url("./assets/shuffle-reference.png") center / contain no-repeat;
+    mask: url("./assets/shuffle-reference.png") center / contain no-repeat;
+    pointer-events: none;
   }
   /* A long tile word split over two lines (WordTile's splitLongWords): the
      hyphen is generated, not part of the word's text, and has empty alt text
@@ -787,4 +812,44 @@ html.layout-refresh .board-bars-square .solved-bar:not(.solved-bar-rainbow) .sol
   );
   background-size: 200% 100%;
   animation: rainbow-shimmer 3s ease-in-out infinite;
+}
+
+/* Full Hint only: the Small Hint tile row keeps its existing filled treatment. */
+.picture-hint-chip {
+  --picture-hint-color: hsl(var(--border));
+  --picture-hint-center: color-mix(in srgb, var(--picture-hint-color) 9%, hsl(var(--card)));
+  --picture-hint-frame: linear-gradient(var(--picture-hint-color), var(--picture-hint-color));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 3.25rem;
+  min-width: 0;
+  max-width: 9.25rem;
+  min-height: 2.5rem;
+  padding: 0.125rem 0.25rem;
+  border: 2px solid transparent;
+  border-radius: 0.5rem;
+  background: linear-gradient(var(--picture-hint-center), var(--picture-hint-center)) padding-box,
+    var(--picture-hint-frame) border-box;
+}
+.picture-hint-chip[data-hint-color="yellow"] { --picture-hint-color: #eab308; }
+.picture-hint-chip[data-hint-color="green"] { --picture-hint-color: #16a34a; }
+.picture-hint-chip[data-hint-color="blue"] { --picture-hint-color: #3b82f6; }
+.picture-hint-chip[data-hint-color="red"] { --picture-hint-color: #ef4444; }
+.picture-hint-chip[data-hint-color="bonus"] { --picture-hint-color: #a855f7; }
+
+.picture-hint-content {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 1.5rem;
+  line-height: 1.05;
+  text-align: center;
+}
+.picture-hint-content img {
+  max-width: 100%;
+  object-fit: contain;
+}
+
+@media (forced-colors: active) {
+  .picture-hint-chip { border-color: CanvasText; }
 }
