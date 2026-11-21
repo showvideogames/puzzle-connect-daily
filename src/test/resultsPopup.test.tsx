@@ -147,7 +147,7 @@ async function guess(container: HTMLElement, words: string[]) {
   for (const w of words) await click(tileButton(container, w));
   await click(screen.getByRole("button", { name: "Submit" }));
   await settle();
-  const deselect = screen.queryByRole("button", { name: "Deselect All" });
+  const deselect = screen.queryByRole("button", { name: "Clear selection" });
   if (deselect && !(deselect as HTMLButtonElement).disabled) await click(deselect);
 }
 

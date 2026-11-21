@@ -139,7 +139,7 @@ async function loseByGuessing() {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: /^submit$/i })); });
     await settle();
     // an incorrect guess leaves its tiles selected; clear before the next one
-    const deselect = screen.queryByRole("button", { name: /deselect all/i });
+    const deselect = screen.queryByRole("button", { name: "Clear selection" });
     if (deselect) await act(async () => { fireEvent.click(deselect); });
   }
 }

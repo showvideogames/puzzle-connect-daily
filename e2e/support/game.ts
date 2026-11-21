@@ -40,16 +40,9 @@ export function submitButton(page: Page): Locator {
   return page.getByRole("button", { name: "Submit", exact: true });
 }
 
-/**
- * The mistake counter's spoken form — "4 of 4 mistakes remaining".
- *
- * MistakeDots renders the dots themselves `aria-hidden` and puts the real
- * announcement in a `role="status"` line, so this reads the same thing a
- * screen reader would. Filtered rather than taken bare, because toast
- * regions are also status live-regions.
- */
+/** The discoverable (non-live) life count, separate from guess announcements. */
 export function mistakesRemaining(page: Page): Locator {
-  return page.locator('[role="status"]').filter({ hasText: /mistakes remaining/ });
+  return page.getByTestId("lives-remaining");
 }
 
 /**

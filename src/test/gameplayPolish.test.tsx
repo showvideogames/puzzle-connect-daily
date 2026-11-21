@@ -36,6 +36,7 @@ vi.mock("@/lib/analytics", () => ({ trackEvent: () => {} }));
 
 import { useGame } from "@/hooks/useGame";
 import { GameBoard } from "@/components/GameBoard";
+import { MistakeDots } from "@/components/MistakeDots";
 import { SolvedGroup } from "@/components/SolvedGroup";
 import { HintModal } from "@/components/HintModal";
 import { dedupeHintMarkers } from "@/lib/hints";
@@ -286,11 +287,55 @@ describe("colour palette stays put as categories are solved", () => {
 
   const before = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
+  it("keeps the controls ordered and announces each resolved miss once", async () => {
+    const { container } = renderBoard();
+    await settle();
+    const shuffle = screen.getByRole("button", { name: "Shuffle" });
+    const submit = screen.getByRole("button", { name: "Submit" });
+    const clear = screen.getByRole("button", { name: "Clear selection" });
+    expect(before(shuffle, submit) && before(submit, clear)).toBe(true);
+    expect(clear).toBeDisabled();
+    expect(screen.getByTestId("lives-remaining")).toHaveTextContent("4 of 4 lives remaining");
+    expect(screen.queryByText("Last Life")).toBeNull();
+    fireEvent.click(tileButton(container, "y1"));
+    expect(clear).toBeEnabled();
+    fireEvent.click(clear);
+    expect(clear).toBeDisabled();
+
+    const miss = ["y2", "y3", "g2", "g3"];
+    await solveGroup(container, miss);
+    const status = () => screen.getAllByRole("status").filter((node) => /life|lives/.test(node.textContent ?? ""));
+    expect(status()).toHaveLength(1);
+    expect(status()[0]).toHaveTextContent("Incorrect. 3 lives remaining.");
+    expect(screen.getByTestId("lives-remaining")).toHaveTextContent("3 of 4 lives remaining");
+
+    // Re-submitting the same selection is feedback, but does not spend a life.
+    fireEvent.click(submit);
+    await settle();
+    expect(screen.getByTestId("lives-remaining")).toHaveTextContent("3 of 4 lives remaining");
+    expect(status()).toHaveLength(0);
+
+    fireEvent.click(clear);
+    await solveGroup(container, ["y2", "y3", "y4", "g2"]);
+    expect(status()).toHaveLength(1);
+    expect(status()[0]).toHaveTextContent(/One Away.*2 lives remaining/);
+    fireEvent.click(clear);
+    await solveGroup(container, ["y2", "y3", "y4", "r2"]);
+    expect(screen.getByText("Last Life")).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-life="filled"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-life="spent"]')).toHaveLength(3);
+    fireEvent.click(clear);
+    await solveGroup(container, ["y2", "y3", "g2", "b2"]);
+    expect(screen.queryByText("Last Life")).toBeNull();
+    expect(status()).toHaveLength(1);
+    expect(status()[0]).toHaveTextContent("Incorrect. No lives remaining.");
+  });
+
   it("keeps instruction, solved bars, board, controls, palette in that order after every solve", async () => {
     const { container } = renderBoard();
     await settle();
 
-    // The palette sits below the Shuffle/Deselect/Submit row, outside the
+    // The palette sits below the Shuffle/Submit/Clear row, outside the
     // board, so neither solving a category nor switching modes can move it
     // relative to the board.
     const instruction = () => screen.getByText(/select four words that share a connection/i);
@@ -364,5 +409,18 @@ describe("text on coloured backgrounds is solid Ink", () => {
     // The softness is a lighter colour, not a translucent or opacity class.
     expect(btn.className).not.toMatch(/bg-group-1/);
     expect(btn.className).not.toMatch(/tile-paint-1\//);
+  });
+});
+
+describe("life meter", () => {
+  it("uses the supplied budget for fresh and legacy Mini, and hides Last Life on completion", () => {
+    const { container, rerender } = render(<MistakeDots mistakes={0} max={3} playing />);
+    expect(container.querySelectorAll('[data-life="filled"]')).toHaveLength(3);
+    expect(screen.queryByText("Last Life")).toBeNull();
+    rerender(<MistakeDots mistakes={3} max={4} playing />);
+    expect(container.querySelectorAll("[data-life]")).toHaveLength(4);
+    expect(screen.getByText("Last Life")).toBeInTheDocument();
+    rerender(<MistakeDots mistakes={3} max={4} playing={false} />);
+    expect(screen.queryByText("Last Life")).toBeNull();
   });
 });

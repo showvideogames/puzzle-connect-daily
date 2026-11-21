@@ -41,13 +41,13 @@ test.describe("Refresh restores an unfinished game", () => {
     ];
     for (const word of wrong) await tile(page, word).click();
     await page.getByRole("button", { name: "Submit", exact: true }).click();
-    await expect(mistakesRemaining(page)).toHaveText("3 of 4 mistakes remaining");
+    await expect(mistakesRemaining(page)).toHaveText("3 of 4 lives remaining");
 
     await page.reload();
 
     await expect(solvedBar(page, FULL_RAINBOW.groups[0].category)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(FULL_RAINBOW.rainbowCategoryName!)).toBeVisible();
-    await expect(mistakesRemaining(page)).toHaveText("3 of 4 mistakes remaining");
+    await expect(mistakesRemaining(page)).toHaveText("3 of 4 lives remaining");
     await expect(tiles(page)).toHaveCount(12);
 
     // The progress blob is keyed by the puzzle's own id for a Full official
