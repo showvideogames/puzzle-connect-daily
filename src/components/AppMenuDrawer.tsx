@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
-import type { LucideIcon } from "lucide-react";
-import { CircleHelp, Menu, MessageSquareText, SquarePen, UsersRound, X } from "lucide-react";
+import { Menu, UsersRound, X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { socialBetaOn } from "@/components/social/socialFlag";
 
@@ -14,31 +13,31 @@ export const HEADER_STROKE = 2.25;
 interface Destination {
   to: string;
   label: string;
-  icon: LucideIcon;
+  icon: "create" | "book" | "friends";
   state?: unknown;
   tone: string;
 }
 
 const PLAY = [
-  { to: "/", label: "Today's Puzzle", detail: null, art: "full", tone: "bg-[#e7d5f5] dark:bg-[#48345b]" },
-  { to: "/archive", label: "Puzzle Archive", detail: "Past daily puzzles.", art: "archive", tone: "bg-[#f5e3bd] dark:bg-[#4d3a25]" },
-  { to: "/mini", label: "Rainbow Mini", detail: "A smaller daily.", art: "mini", tone: "bg-[#c6e9ec] dark:bg-[#24464c]" },
-  { to: "/mini/archive", label: "Mini Archive", detail: "Past mini puzzles.", art: "miniArchive", tone: "bg-[#cfe9d7] dark:bg-[#2b493a]" },
+  { to: "/", label: "Today's Puzzle", detail: null, art: "full", tone: "bg-[#e8d7ff] dark:bg-[#48345b]" },
+  { to: "/archive", label: "Puzzle Archive", detail: "Past daily puzzles.", art: "archive", tone: "bg-[#fff08c] dark:bg-[#54471e]" },
+  { to: "/mini", label: "Rainbow Mini", detail: "A smaller daily.", art: "mini", tone: "bg-[#b7edf0] dark:bg-[#24464c]" },
+  { to: "/mini/archive", label: "Mini Archive", detail: "Past mini puzzles.", art: "miniArchive", tone: "bg-[#c3f1d3] dark:bg-[#2b493a]" },
 ] as const;
 type PlayArt = typeof PLAY[number]["art"];
 
 const DESTINATIONS: Destination[] = [
-  { to: "/create", label: "Create A Puzzle", icon: SquarePen, tone: "bg-[#f0e9fb] text-[#483862] dark:bg-[#443458] dark:text-[#eadbfd]" },
-  { to: "/how-to-play", label: "How To Play", icon: CircleHelp, tone: "bg-[#fff3e1] text-[#6a5445] dark:bg-[#493727] dark:text-[#ffe4bc]" },
+  { to: "/create", label: "Create A Puzzle", icon: "create", tone: "bg-[#f0e9fb] dark:bg-[#443458]" },
+  { to: "/how-to-play", label: "How To Play", icon: "book", tone: "bg-[#fff6d7] dark:bg-[#493727]" },
 ];
 
 const FRIENDS: Destination = {
-  to: "/friends", label: "Friends & Groups", icon: UsersRound, state: { friendsHome: true },
-  tone: "bg-[#ebefff] text-[#455288] dark:bg-[#303955] dark:text-[#dce4ff]",
+  to: "/friends", label: "Friends & Groups", icon: "friends", state: { friendsHome: true },
+  tone: "bg-[#ebefff] dark:bg-[#303955]",
 };
 
 const focusClass = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
-const rowClass = `flex min-h-12 w-full items-center gap-3 rounded-xl px-1.5 text-left text-[15px] font-bold leading-tight text-foreground hover:bg-secondary transition-colors aria-[current=page]:bg-secondary ${focusClass}`;
+const rowClass = `flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left text-[15px] font-bold leading-tight text-foreground hover:brightness-95 dark:hover:brightness-125 transition-[filter] aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/25 ${focusClass}`;
 
 function MenuArt({ art }: { art: PlayArt }) {
   if (art === "mini") {
@@ -51,15 +50,47 @@ function MenuArt({ art }: { art: PlayArt }) {
   const mini = art === "miniArchive";
   return (
     <svg aria-hidden="true" viewBox="0 0 56 56" width={mini ? 48 : 56} height={mini ? 48 : 56} className="shrink-0">
-      <rect x="5" y="9" width="46" height="44" rx="9" fill={mini ? "#acd0dc" : "#cbb4de"} />
+      <rect x="7" y="10" width="46" height="43" rx="9" fill={mini ? "#80ced0" : "#c5a5f0"} />
       <rect x="5" y="7" width="46" height="44" rx="9" fill="white" />
-      <path d="M5 16a9 9 0 0 1 9-9h28a9 9 0 0 1 9 9v5H5z" fill={mini ? "#4d91a7" : "#a172b8"} />
-      <path d="M17 5v7m22-7v7" stroke="#51435c" strokeWidth="3" strokeLinecap="round" />
-      {["#f1d1d7", "#f6e0b5", "#d5eadc", "#d9e9f5", "#e5d6f4", "#f1d1d7"].map((color, i) => (
-        <rect key={i} x={13 + (i % 3) * 11} y={26 + Math.floor(i / 3) * 10} width="7" height="7" rx="1.4" fill={color} />
+      <path d="M5 16a9 9 0 0 1 9-9h28a9 9 0 0 1 9 9v6H5z" fill={mini ? "#49c4c3" : "#c689e9"} />
+      <rect x="5" y="7" width="46" height="44" rx="9" stroke="#231d2a" strokeWidth="2.6" fill="none" />
+      <path d="M5 22h46M17 4v9m22-9v9" stroke="#231d2a" strokeWidth="3" strokeLinecap="round" />
+      {["#f54959", "#ffab34", "#ffc20e", "#1fae4b", "#3776f2", "#a45de8"].map((color, i) => (
+        <rect key={i} x={13 + (i % 3) * 11} y={27 + Math.floor(i / 3) * 10} width="7" height="7" rx="1.8" fill={color} />
       ))}
     </svg>
   );
+}
+
+function RowArt({ icon }: { icon: Destination["icon"] | "feedback" }) {
+  if (icon === "friends") return <UsersRound aria-hidden="true" className="h-6 w-6 text-foreground" strokeWidth={HEADER_STROKE} />;
+  return (
+    <svg aria-hidden="true" viewBox="0 0 32 32" className="h-[30px] w-[30px] shrink-0" fill="none" stroke="#231d2a" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      {icon === "create" && <>
+        <rect x="3" y="7" width="20" height="22" rx="3.5" fill="white" />
+        <path d="M3 18h20M13 7v22" />
+        <path d="m13 22 1.3-5.8L25 5.5l4.3 4.3-10.7 10.7z" fill="#ffd150" />
+        <path d="m23 7.5 2.8-2.8a1.5 1.5 0 0 1 2.1 0l2.2 2.2a1.5 1.5 0 0 1 0 2.1l-2.8 2.8z" fill="#f16e96" />
+      </>}
+      {icon === "book" && <>
+        <path d="M3 9c5-1 9 .5 13 3 4-2.5 8-4 13-3v17c-5-1-9 .2-13 2.5C12 26 8 25 3 26z" fill="#ffe462" />
+        <path d="M5 6c5-1 8.5.5 11 3v17c-3.8-2.5-7.5-3.2-11-2.5z" fill="#d9b7ff" />
+        <path d="M27 6c-5-1-8.5.5-11 3v17c3.8-2.5 7.5-3.2 11-2.5z" fill="#a8e6f4" />
+      </>}
+      {icon === "feedback" && <>
+        <path d="M29 16c0 6-5.6 10-12 10h-4l-6 4 1-6c-2.6-2-4-4.9-4-8 0-6 5.6-10 12.5-10S29 10 29 16z" fill="#ef9cb7" stroke="none" />
+        <path d="M27 14c0 5.7-5.4 9.7-12 9.7h-3.2L5 28l1.1-6.4c-2.4-1.7-3.6-4.4-3.6-7.6 0-5.8 5.5-10 12.3-10S27 8.2 27 14z" fill="white" />
+        {[9.5, 14.7, 19.9].map(x => <circle key={x} cx={x} cy="14" r="1.15" fill="#231d2a" stroke="none" />)}
+      </>}
+    </svg>
+  );
+}
+
+function TileSticker() {
+  return <svg aria-hidden="true" viewBox="0 0 48 42" className="ml-auto hidden h-9 w-10 shrink-0 text-foreground/90 min-[360px]:block" fill="none">
+    <rect x="22" y="15" width="21" height="21" rx="4" transform="rotate(17 22 15)" fill="currentColor" fillOpacity=".08" stroke="currentColor" strokeWidth="1.6" />
+    <rect x="3" y="10" width="22" height="22" rx="4" transform="rotate(-12 3 10)" className="fill-background" stroke="currentColor" strokeWidth="1.6" />
+  </svg>;
 }
 
 /** The shared hamburger drawer: Radix handles Escape, focus trap and restore. */
@@ -90,7 +121,7 @@ export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
           </div>
           <div className="flex items-center justify-between gap-2 pb-3">
             <SheetTitle className="text-[26px] font-extrabold leading-none tracking-tight">Menu</SheetTitle>
-            <SheetClose className={`${headerIconButton} border border-border bg-card`} aria-label="Close menu">
+            <SheetClose className={`${headerIconButton} border border-foreground/65 bg-card shadow-[2px_2px_0_#ccb5ee] dark:shadow-none`} aria-label="Close menu">
               <X aria-hidden="true" className={headerGlyph} strokeWidth={HEADER_STROKE} />
             </SheetClose>
           </div>
@@ -103,34 +134,33 @@ export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
               return (
                 <li key={to} className={wide ? "col-span-2 min-w-0" : "min-w-0"}>
                   <SheetClose asChild>
-                    <NavLink to={to} end className={`flex h-full text-foreground rounded-[14px] p-3 transition-[filter] hover:brightness-95 dark:hover:brightness-125 active:brightness-90 aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/20 ${wide ? "min-h-[74px] items-center gap-3" : "min-h-[109px] flex-col items-start gap-2 max-[359px]:px-2.5"} ${tone} ${focusClass}`}>
+                    <NavLink to={to} end className={`flex h-full text-foreground rounded-[14px] border border-foreground/65 dark:border-foreground/45 p-3 transition-[filter] hover:brightness-95 dark:hover:brightness-125 active:brightness-90 aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/20 ${wide ? "min-h-[74px] items-center gap-3" : "min-h-[109px] flex-col items-start gap-2 max-[359px]:px-2.5"} ${tone} ${focusClass}`}>
                       <MenuArt art={art} />
                       <span className="min-w-0">
                         <span className={`block font-extrabold leading-tight ${wide ? "text-[18px]" : "text-[16px]"}`}>{label}</span>
                         {detail && <span className="mt-0.5 block text-xs font-semibold leading-snug text-foreground/85">{detail}</span>}
                       </span>
+                      {wide && <TileSticker />}
                     </NavLink>
                   </SheetClose>
                 </li>
               );
             })}
           </ul>
-          <ul className="mt-3 space-y-0.5 border-t border-border pt-2">
-            {destinations.map(({ to, label, icon: Icon, state, tone }) => (
+          <ul className="mt-3 space-y-1.5 border-t border-border pt-2.5">
+            {destinations.map(({ to, label, icon, state, tone }) => (
               <li key={to}>
                 <SheetClose asChild>
-                  <NavLink to={to} state={state} end className={rowClass}>
-                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${tone}`}><Icon aria-hidden="true" className="h-4 w-4" strokeWidth={HEADER_STROKE} /></span>
+                  <NavLink to={to} state={state} end className={`${rowClass} ${tone}`}>
+                    <RowArt icon={icon} />
                     {label}
                   </NavLink>
                 </SheetClose>
               </li>
             ))}
             <li>
-              <button type="button" className={rowClass} onClick={() => { feedbackNext.current = true; setOpen(false); }}>
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#fceff2] text-[#a15461] dark:bg-[#492b36] dark:text-[#f4b8c7]">
-                  <MessageSquareText aria-hidden="true" className="h-4 w-4" strokeWidth={HEADER_STROKE} />
-                </span>
+              <button type="button" className={`${rowClass} bg-[#fbdce7] dark:bg-[#492b36]`} onClick={() => { feedbackNext.current = true; setOpen(false); }}>
+                <RowArt icon="feedback" />
                 Send Feedback
               </button>
             </li>
