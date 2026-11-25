@@ -21,11 +21,11 @@ shows up as a diff instead of as a surprise on a blank project.
 
 | Category | Count |
 |---|---|
-| Tables | 22 |
-| Columns | 194 |
-| Constraints | 93 |
-| Indexes | 58 |
-| Functions | 66 |
+| Tables | 23 |
+| Columns | 197 |
+| Constraints | 97 |
+| Indexes | 61 |
+| Functions | 75 |
 | Triggers | 5 |
 | RLS policies | 25 |
 | Enum types | 1 |
@@ -170,6 +170,31 @@ Indexes:
 Policies:
 
 - `Admins can read beta playtests` — SELECT to public; using `has_role(rainbow_uid(), 'admin'::app_role)`
+
+### `creator_follows`
+
+> One-way follows of a creator by a Rainbow account. Readable only through the follower's own get_following_feed; others see an aggregate count.
+
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
+
+| Column | Type | Null | Default |
+|---|---|---|---|
+| `follower_id` | uuid | not null |  |
+| `creator_id` | uuid | not null |  |
+| `created_at` | timestamp with time zone | not null | `now()` |
+
+Constraints:
+
+- `creator_follows_creator_id_fkey` FOREIGN KEY (creator_id) REFERENCES creator_profiles(user_id) ON DELETE CASCADE
+- `creator_follows_follower_id_fkey` FOREIGN KEY (follower_id) REFERENCES auth.users(id) ON DELETE CASCADE
+- `creator_follows_not_self` CHECK ((follower_id <> creator_id))
+- `creator_follows_pkey` PRIMARY KEY (follower_id, creator_id)
+
+Indexes:
+
+- `CREATE INDEX creator_follows_creator_idx ON public.creator_follows USING btree (creator_id)`
+- `CREATE INDEX creator_follows_follower_idx ON public.creator_follows USING btree (follower_id, created_at DESC)`
+- `CREATE UNIQUE INDEX creator_follows_pkey ON public.creator_follows USING btree (follower_id, creator_id)`
 
 ### `creator_profiles`
 
@@ -791,14 +816,18 @@ Indexes:
 | `admin_find_account(_email text)` | TABLE(user_id uuid, email text) | yes | stable | authenticated, service_role |
 | `admin_save_puzzle(_puzzle_id uuid, _metadata jsonb, _content jsonb)` | jsonb | yes | volatile | authenticated, service_role |
 | `admin_set_custom_puzzle_status(_puzzle_id uuid, _status text)` | boolean | yes | volatile | authenticated, service_role |
+| `community_creator_json(_c creator_profiles)` | jsonb | yes | stable | service_role |
 | `complete_beta_playtest(_playtest_id uuid, _device_id text, _device_token text, _won boolean, _mistakes integer, _hints_used boolean)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `create_custom_puzzle(_creator_name text, _title text, _visibility text, _content jsonb)` | jsonb | yes | volatile | anon, authenticated, service_role |
 | `create_device_identity()` | TABLE(device_id text, device_token text) | yes | volatile | anon, authenticated, service_role |
 | `create_game_session(_puzzle_id text, _device_id text, _device_token text, _entry_context text, _active_time_seconds integer, _mistakes integer, _puzzle_version_id uuid)` | uuid | yes | volatile | anon, authenticated, service_role |
 | `custom_creator_new_slug(_name text)` | text | no | volatile | service_role |
 | `custom_ensure_creator_profile(_uid uuid, _name text)` | void | yes | volatile | service_role |
+| `custom_puzzle_card_json(_p custom_puzzles)` | jsonb | yes | stable | service_role |
+| `custom_puzzle_in_community(_p custom_puzzles)` | boolean | no | stable | service_role |
 | `custom_puzzle_new_short_code()` | text | no | volatile | service_role |
 | `custom_puzzle_public_json(_p custom_puzzles)` | jsonb | yes | stable | service_role |
+| `custom_puzzle_share_id(_short_code text)` | text | yes | stable | anon, authenticated, service_role |
 | `custom_random_string(_alphabet text, _len integer)` | text | no | volatile | service_role |
 | `decline_guest_history(_device_id text, _device_token text)` | TABLE(outcome text) | yes | volatile | authenticated, service_role |
 | `delete_local_account(_user_id uuid)` | void | yes | volatile | service_role |
@@ -808,10 +837,13 @@ Indexes:
 | `finalize_game_session(_session_id uuid, _device_id text, _device_token text, _won boolean, _mistakes integer, _active_time_seconds integer, _found_rainbow boolean, _rainbow_solve_index smallint, _solve_order jsonb, _hints_used boolean, _share_grid text, _skip_streak boolean, _local_date text)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `game_sessions_sync_status()` | trigger | yes | volatile | anon, authenticated, service_role |
 | `get_archive_puzzles()` | TABLE(id uuid, date date, title text) | yes | stable | anon, authenticated, service_role |
+| `get_creator_community(_slug text)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_creator_profile(_slug text, _sort text)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_custom_puzzle(_share_id text)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_custom_puzzle_by_short_code(_short_code text)` | jsonb | yes | stable | anon, authenticated, service_role |
+| `get_custom_puzzle_cards(_share_ids text[])` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_custom_puzzle_stats(_share_id text)` | jsonb | yes | stable | anon, authenticated, service_role |
+| `get_following_feed(_limit integer, _offset integer)` | jsonb | yes | stable | authenticated, service_role |
 | `get_luck_report(_puzzle_id uuid, _device_id text, _device_token text)` | json | yes | stable | anon, authenticated, service_role |
 | `get_my_custom_puzzle_listing(_share_id text)` | jsonb | yes | stable | authenticated, service_role |
 | `get_my_favorites()` | jsonb | yes | stable | authenticated, service_role |
@@ -840,7 +872,9 @@ Indexes:
 | `record_streak(_user_id uuid, _device_id text, _won boolean, _local_date text, _format text)` | void | yes | volatile | service_role |
 | `reset_beta_playtest(_puzzle_id uuid, _device_id text, _device_token text)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `resolve_device_import(_device_id text, _device_token text)` | TABLE(outcome text, games_played integer, current_streak integer, longest_streak integer) | yes | stable | authenticated, service_role |
+| `search_community_creators(_query text, _limit integer, _offset integer)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `session_capability_ok(_session_id uuid, _device_id text, _device_token text)` | boolean | yes | stable | anon, authenticated, service_role |
+| `set_creator_follow(_slug text, _follow boolean)` | jsonb | yes | volatile | authenticated, service_role |
 | `set_custom_puzzle_community_listing(_share_id text, _listed boolean)` | jsonb | yes | volatile | authenticated, service_role |
 | `set_custom_puzzle_favorite(_share_id text, _favorite boolean)` | jsonb | yes | volatile | authenticated, service_role |
 | `skill_score(_won boolean, _mistakes integer, _solve_order jsonb, _found_rainbow boolean, _rainbow_source text, _format text)` | integer | no | immutable | anon, authenticated, service_role |

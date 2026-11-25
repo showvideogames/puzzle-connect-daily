@@ -16,18 +16,18 @@ import { E2E_DIR, loadE2eConfig } from "../env.ts";
 const config = loadE2eConfig();
 const preview = JSON.parse(fs.readFileSync(path.join(E2E_DIR, ".artifacts", "community-preview.json"), "utf8")) as {
   password: string;
-  accounts: Record<"wren" | "odie" | "pia", { email: string; name: string }>;
+  accounts: Record<"wren" | "odie" | "pia" | "quin", { email: string; name: string }>;
   puzzles: Record<string, { title: string; shareId: string; shortCode: string; listed: boolean }>;
 };
 const P = preview.puzzles;
 const creds = (k: "wren" | "odie" | "pia") => ({ email: preview.accounts[k].email, password: preview.password });
-const SHOTS = path.resolve(E2E_DIR, "..", "evidence", "community-preview");
+const SHOTS = path.resolve(E2E_DIR, "..", "evidence", "community-preview-2");
 fs.mkdirSync(SHOTS, { recursive: true });
 const shot = (page: Page, name: string, fullPage = true) =>
   page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage, animations: "disabled" });
 
 const LISTED = ["A Little Offbeat", "The Usual Suspects", "Something In The Air", "Pantry Raid", "Turn Of The Tides"];
-const NEVER = ["Link Only Lighthouse", "Private Parlour Games", "Anonymous Airship", "E2E Community Classic"];
+const NEVER = ["Link Only Lighthouse", "Private Parlour Games", "Anonymous Airship", "Quiet Quarry", "E2E Community Classic"];
 // Words and group names from the seeded puzzles: none may reach the feed.
 const SPOILERS = ["BONGO", "ALIBI", "BREEZE", "BASIL", "CORAL", "group 1", "Fictional first words"];
 
@@ -35,7 +35,7 @@ const grid = (page: Page) => page.getByTestId("community-grid");
 const cardTitles = async (page: Page) => grid(page).locator("li a[href^='/p/']").allInnerTexts();
 
 async function settled(page: Page) {
-  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByTestId("community-panel")).toHaveAttribute("aria-busy", "false");
 }
 async function openCommunity(page: Page, qs = "") {
   await page.goto(`/community${qs}`);
@@ -50,7 +50,7 @@ async function feedAfter(page: Page, action: () => Promise<unknown>) {
   await settled(page);
 }
 async function search(page: Page, q: string) {
-  const box = page.getByRole("searchbox", { name: "Search puzzles or creators" });
+  const box = page.getByRole("searchbox", { name: "Search puzzles" });
   if ((await box.inputValue()) === q) return;
   await feedAfter(page, () => box.fill(q));
 }
@@ -99,7 +99,7 @@ test("design review screenshots: desktop, 390px, 320px, dark, menu and keyboard 
   // Keyboard: Tab reaches search, then the sort buttons; Enter changes sort.
   await page.setViewportSize({ width: 1280, height: 800 });
   await openCommunity(page);
-  await page.getByRole("searchbox", { name: "Search puzzles or creators" }).focus();
+  await page.getByRole("searchbox", { name: "Search puzzles" }).focus();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Newest" })).toBeFocused();
   await page.keyboard.press("Tab");
@@ -146,7 +146,7 @@ test("guest: only explicitly listed puzzles, on every sort and search, with no a
   const body = await page.locator("main").innerText();
   for (const t of NEVER) expect(body).not.toContain(t);
   for (const s of SPOILERS) expect(body).not.toContain(s);
-  for (const q of ["Lighthouse", "Parlour", "Airship", "E2E Community"]) {
+  for (const q of ["Lighthouse", "Parlour", "Airship", "Quarry", "E2E Community"]) {
     for (const sort of ["Newest", "Most Played"] as const) {
       await sortBy(page, sort);
       await search(page, q);

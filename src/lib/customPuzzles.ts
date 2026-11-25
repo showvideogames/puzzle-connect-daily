@@ -523,3 +523,148 @@ export async function setCommunityListing(shareId: string, listed: boolean): Pro
   if (error) throw error;
   return !!(data as { listed?: boolean } | null)?.listed;
 }
+
+// ── Community part 2: creators, Follow, Following, bookmark lookups ────────
+// Saving still goes through the existing Favorites contracts above: an
+// account's set_custom_puzzle_favorite / get_my_favorites, and a guest's
+// device-only `custom-favorite:<shareId>` flags. Nothing here stores a save.
+
+type CardRow = {
+  title: string;
+  creator_name: string;
+  creator_slug: string | null;
+  mode: CustomPuzzleMode;
+  short_code: string;
+  finished_plays: number;
+  favorite_count: number;
+};
+
+function mapCard(p: CardRow): CommunityPuzzleListing {
+  return {
+    title: p.title,
+    creatorName: p.creator_name,
+    creatorSlug: p.creator_slug ?? null,
+    mode: p.mode,
+    shortCode: p.short_code,
+    finishedPlays: p.finished_plays ?? 0,
+    favoriteCount: p.favorite_count ?? 0,
+  };
+}
+
+/** A creator as Community shows them: public identity and aggregate counts only. */
+export interface CommunityCreator {
+  displayName: string;
+  publicSlug: string;
+  /** Puzzles in Community right now. */
+  listedCount: number;
+  followerCount: number;
+  /** Whether the CURRENT account follows them (false for guests). */
+  followedByMe: boolean;
+  isMe: boolean;
+}
+
+type CreatorRow = {
+  display_name: string;
+  public_slug: string;
+  listed_count: number;
+  follower_count: number;
+  followed_by_me: boolean;
+  is_me: boolean;
+};
+
+function mapCreator(c: CreatorRow): CommunityCreator {
+  return {
+    displayName: c.display_name,
+    publicSlug: c.public_slug,
+    listedCount: c.listed_count ?? 0,
+    followerCount: c.follower_count ?? 0,
+    followedByMe: !!c.followed_by_me,
+    isMe: !!c.is_me,
+  };
+}
+
+/** Creators with at least one puzzle in Community, by public name or slug. Throws on failure. */
+export async function searchCommunityCreators(params: { query?: string; offset?: number; limit?: number }): Promise<{ items: CommunityCreator[]; hasMore: boolean }> {
+  const { data, error } = await supabase.rpc("search_community_creators", {
+    _query: params.query?.trim() || undefined,
+    _limit: params.limit ?? COMMUNITY_PAGE_SIZE,
+    _offset: params.offset ?? 0,
+  });
+  if (error) throw error;
+  const r = (data ?? {}) as { items?: CreatorRow[]; has_more?: boolean };
+  return { items: (r.items ?? []).map(mapCreator), hasMore: !!r.has_more };
+}
+
+export interface CreatorCommunity extends CommunityCreator {
+  puzzles: CommunityPuzzleListing[];
+}
+
+/** The Community side of a creator page; null when the slug is unknown or the call fails. */
+export async function getCreatorCommunity(slug: string): Promise<CreatorCommunity | null> {
+  const { data, error } = await supabase.rpc("get_creator_community", { _slug: slug });
+  if (error || !data) return null;
+  const r = data as CreatorRow & { puzzles?: CardRow[] };
+  return { ...mapCreator(r), puzzles: (r.puzzles ?? []).map(mapCard) };
+}
+
+/** Sets (not toggles) a one-way follow. Throws with the server's message. */
+export async function setCreatorFollow(slug: string, follow: boolean): Promise<{ following: boolean; followerCount: number }> {
+  const { data, error } = await supabase.rpc("set_creator_follow", { _slug: slug, _follow: follow });
+  if (error) throw error;
+  const r = (data ?? {}) as { following?: boolean; follower_count?: number };
+  return { following: !!r.following, followerCount: r.follower_count ?? 0 };
+}
+
+export interface FollowingFeed {
+  items: CommunityPuzzleListing[];
+  hasMore: boolean;
+  /** Who the caller follows. Private to the caller. */
+  creators: CommunityCreator[];
+}
+
+/** The signed-in account's Following. Throws on failure (including for guests). */
+export async function getFollowingFeed(params: { offset?: number; limit?: number } = {}): Promise<FollowingFeed> {
+  const { data, error } = await supabase.rpc("get_following_feed", {
+    _limit: params.limit ?? COMMUNITY_PAGE_SIZE,
+    _offset: params.offset ?? 0,
+  });
+  if (error) throw error;
+  const r = (data ?? {}) as { items?: CardRow[]; has_more?: boolean; creators?: CreatorRow[] };
+  return { items: (r.items ?? []).map(mapCard), hasMore: !!r.has_more, creators: (r.creators ?? []).map(mapCreator) };
+}
+
+/** Share ids of every puzzle this browser saved as a guest (the existing device-only flags). */
+export function listLocalFavorites(): string[] {
+  const ids: string[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(LOCAL_FAVORITE_PREFIX) && localStorage.getItem(key) === "1") ids.push(key.slice(LOCAL_FAVORITE_PREFIX.length));
+    }
+  } catch {
+    // storage blocked: nothing saved on this device
+  }
+  return ids;
+}
+
+/** Card fields for share ids this browser already holds (guest bookmarks). Throws on failure. */
+export async function getCustomPuzzleCards(shareIds: string[]): Promise<(CommunityPuzzleListing & { shareId: string })[]> {
+  if (shareIds.length === 0) return [];
+  const { data, error } = await supabase.rpc("get_custom_puzzle_cards", { _share_ids: shareIds.slice(0, 200) });
+  if (error) throw error;
+  // share_id is our own input echoed back by the server, to pair each save with its card.
+  const rows = (Array.isArray(data) ? data : []) as unknown as (CardRow & { share_id: string })[];
+  return rows.map((r) => ({ ...mapCard(r), shareId: r.share_id }));
+}
+
+const shareIdCache = new Map<string, string>();
+
+/** The permanent share id the Favorites contracts key on, for a card's short code. */
+export async function resolveShareId(shortCode: string): Promise<string | null> {
+  const cached = shareIdCache.get(shortCode);
+  if (cached) return cached;
+  const { data, error } = await supabase.rpc("custom_puzzle_share_id", { _short_code: shortCode });
+  if (error || typeof data !== "string" || !data) return null;
+  shareIdCache.set(shortCode, data);
+  return data;
+}

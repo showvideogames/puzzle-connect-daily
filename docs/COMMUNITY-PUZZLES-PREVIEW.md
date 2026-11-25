@@ -68,9 +68,83 @@ deployed build, the route doesn't exist and no new UI renders.
 
 Guests can browse and play. Listing requires an account. No social feed or comments were added.
 
+## Part 2: creators, Follow, Following, Favorites (add-on)
+
+This is a separate commit on top of the base preview, with its own migration
+`0005_community_follows.sql`. It is still behind `VITE_COMMUNITY_PUZZLES=preview`
+and has not been applied to any hosted database.
+
+**Reused, not duplicated**
+
+* **Identity:** `creator_profiles` (public name and slug). There are no new accounts,
+  profiles or stored avatars. Rainbow stores no profile pictures
+  (`lib/sharedProfile.ts` only describes the shared format), so the avatar is a
+  monogram of the public name on one of the approved `PROFILE_COLORS`, chosen
+  from the slug (`lib/creatorAvatar.ts`).
+* **Saves:** bookmarks are the existing Favorites. Signed in, they use
+  `set_custom_puzzle_favorite` / `get_my_favorites`; as a guest, this browser's
+  `custom-favorite:<shareId>` flags. A save made in Community shows on the
+  puzzle page's Favorite button and on `/favorites`, and the other way round. As
+  before, a guest's device saves aren't merged into an account on sign-in.
+* **Creator page:** `/creator/:slug` with no `?view` is still the historical
+  landing (every Public puzzle, totals, sorts, `get_creator_profile` unchanged).
+  With the flag on it gains the avatar, public name, aggregate follower count,
+  Follow, and an **In Community** view (`?view=community`) listing only opted-in
+  puzzles. Community bylines link there. With the flag off, the page is exactly
+  as before.
+
+**New server pieces (`0005`)**
+
+* `creator_follows(follower_id, creator_id)`: one-way, no self-follows, removed
+  when either account is deleted. No client can read the table. A follower reads
+  only their own follows through `get_following_feed`; everyone else sees an
+  aggregate count.
+* `search_community_creators(q)`: only creators with at least one puzzle in
+  Community now, matched on public name or slug (a literal substring, no special
+  syntax, titles not matched). It is bounded like the puzzle feed.
+* `get_creator_community(slug)`: identity, counts, the caller's follow state and
+  only listed puzzles.
+* `set_creator_follow(slug, follow)`: account only, set rather than toggled.
+  Starting a follow needs a creator with a puzzle in Community; unfollowing is
+  always allowed.
+* `get_following_feed()`: the caller's follows and those creators' puzzles in
+  Community, newest listing first.
+* `get_custom_puzzle_cards(share_ids)` and `custom_puzzle_share_id(short_code)`:
+  card lookups, so the existing saves can be shown and set from cards. They
+  return nothing the caller can't already get from the existing
+  `get_custom_puzzle*` calls for ids they hold. The feeds still never include
+  share ids.
+* Every read re-checks 0004's rule (listed, Public, active, account-owned), so
+  unlisting, an admin hide or a deleted account removes a puzzle from Explore,
+  Creators search and Following immediately. Its direct links and anyone's saved
+  copy stay valid. Following never lists anything by itself; old puzzles stay
+  unlisted.
+
+**UI.** `/community` has **Explore / Following / Favorites** tabs (`?tab=`). Explore
+has a **Puzzles / Creators** switch (`?mode=creators`), search, and Newest (the
+default) / Most Played. Cards have the bookmark at the top right and a violet
+linked byline (the approved archive design's link colour; `violet-300` in dark
+mode). Phones get a single column. Following shows who you follow (private to you)
+and their newest puzzles. Favorites says it's private, and for guests that it's
+device-only. Guests can still explore, search and play; Follow explains that it
+needs sign-in.
+
+**No unplayed filter.** Custom-puzzle results are recorded per browser device,
+only for completed games, as best-effort writes, and aren't linked to accounts.
+That isn't reliable enough to tell a player what they haven't played, so the
+filter isn't offered.
+
+Out of scope, as asked: email, comments, DMs, notifications, follower lists,
+public player records and spoilers.
+
+Reproduce part 2 the same way as below. `npm run e2e:db:follows` runs its SQL rules
+in-process, and `npm run e2e:community` now runs both browser specs (12 checks).
+Part 2's screenshots are in `evidence/community-preview-2/`; the base set in
+`evidence/community-preview/` is unchanged.
+
 ## Rollout gates (not met, so the flag stays off in production)
 
-1. **A player report flow for custom puzzles.** Only the admin hide exists today. Until a report path, an admin queue for it, and a reviewed takedown time exist, `/community` should stay a private preview.
+1. **A player report flow for custom puzzles (and creators).** Only the admin hide exists today. Until a report path, an admin queue for it, and a reviewed takedown time exist, `/community` should stay a private preview.
 2. Review and apply `0004_community_listing.sql` to the intended database through the normal migration workflow, separately authorized. No migration was run on any shared or live database for this work.
 3. A hosted preview that is both access-protected and backed by a fixture-only database, if one is wanted. This branch used only the local disposable stack below.
 
@@ -140,7 +214,20 @@ browser isn't installed, set `COMMUNITY_CHROMIUM` to a local Chromium binary.
   deleted-account puzzles dropping out, literal and bounded search, real
   Most Played counts, pagination (48 max, offset cap, `has_more`), and grants
   (anon can browse but can't list or read the table).
-* `npm run e2e:community` (8 checks, real app plus local GoTrue/PostgREST):
+* `npm run e2e:db:follows` (part 2): 0005 changes no listing state. Creator search
+  needs a puzzle in Community now (a creator with only an unlisted Public puzzle
+  is excluded) and matches name or slug but not titles. Follow is account-only and
+  can't target yourself, a creator with nothing listed, or an unknown slug. Only
+  aggregate follower counts reach anyone but the follower. Following is
+  newest-first and shows only listed puzzles: never old, private or unlisted ones,
+  and a newly listed puzzle appears at the top. Unlist and admin hide remove a
+  puzzle from Following, Explore and the creator view, while its links and the
+  account's saved copy survive. Unlisting everything removes the creator from
+  search, and unfollowing still works. Guest card lookups keep order, include
+  link-only and private ids the guest holds, exclude hidden ones and are capped at
+  200. Account deletion removes follows, and grants are checked.
+* `npm run e2e:community` (12 checks; the first 8 are described here, the 4 part-2
+  checks follow this list), real app plus local GoTrue/PostgREST:
   * screenshots at 1280, 390 and 320 px, light and dark, with no sideways scroll
     and a single column on phones;
   * the menu row, with existing links intact;
@@ -157,6 +244,24 @@ browser isn't installed, set `COMMUNITY_CHROMIUM` to a local Chromium binary.
   * `/create`: the checkbox is off by default, disabled for Private and for guests,
     a Public unticked puzzle isn't listed, and a ticked one is listed at the top
     of Newest.
+* Part 2 in the browser:
+  * guest: the tabs, Newest as the default, violet bylines linking to
+    `/creator/…?view=community`, and the bookmark at the top right (44 px);
+  * Creators search excludes Quin (only an unlisted puzzle), doesn't match titles,
+    matches a bare slug suffix, and a guest Follow shows "Sign in";
+  * the creator page's Community view lists only opted-in puzzles, and the
+    historical All puzzles view still lists the link-only one;
+  * a guest saves a legacy `/custom/<shareId>` link-only puzzle with the existing
+    Favorite button and bookmarks a card; both appear in Favorites, the puzzle
+    page agrees, the save survives reload, and another browser has none;
+  * signed in, Pia finds Wren in Creators and follows them. Following matches
+    Wren's Newest order. Wren creates a new puzzle with List in Community ticked:
+    it tops Pia's Following, while one created without the opt-in never appears.
+    Wren unlists Pantry Raid: it leaves Following, Explore and Wren's count, but
+    stays in Pia's Favorites and its link plays. Odie sees "1 follower" and no
+    names, Wren sees no Follow on their own page, and Pia unfollows;
+  * dark mode, keyboard focus moving from card title to bookmark, and 320/390 px
+    with no sideways scroll.
 * The existing E2E suite with the flag off: 76/76. Unit tests: all files pass,
   including `src/test/communityPuzzles.test.tsx` (flag-off menu is exactly the
   existing links). Typecheck (app, social, e2e) and lint are clean. `e2e:db:verify`
@@ -174,3 +279,8 @@ Screenshots are in `evidence/community-preview/`.
 * Feed performance at production volume. The query is indexed for Newest, but
   Most Played and search scan eligible rows (bounded by page size and offset, not
   by table size).
+* No hosted preview exists for part 2 either. No access-protected, fixture-only hosted
+  environment is available, so nothing was hosted; the local stack above is the
+  reproducible preview.
+* At volume, creator search and the Following feed are bounded per page but not
+  separately indexed for name search.

@@ -324,6 +324,12 @@ export type Database = {
           },
         ]
       }
+      creator_follows: {
+        Row: { created_at: string; creator_id: string; follower_id: string }
+        Insert: { created_at?: string; creator_id: string; follower_id: string }
+        Update: { created_at?: string; creator_id?: string; follower_id?: string }
+        Relationships: []
+      }
       custom_puzzles: {
         Row: {
           community_listed: boolean
@@ -909,6 +915,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_creator_community: { Args: { _slug: string }; Returns: Json }
+      get_custom_puzzle_cards: { Args: { _share_ids: string[] }; Returns: Json }
+      get_following_feed: {
+        Args: { _limit?: number; _offset?: number }
+        Returns: Json
+      }
+      search_community_creators: {
+        Args: { _limit?: number; _offset?: number; _query?: string }
+        Returns: Json
+      }
+      set_creator_follow: {
+        Args: { _follow: boolean; _slug: string }
+        Returns: Json
+      }
+      custom_puzzle_share_id: { Args: { _short_code: string }; Returns: string }
       account_email: { Args: { _user_id: string }; Returns: string }
       admin_find_account: {
         Args: { _email: string }

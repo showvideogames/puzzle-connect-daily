@@ -532,6 +532,84 @@
       }
     },
     {
+      "name": "creator_follows",
+      "rlsEnabled": true,
+      "rlsForced": false,
+      "comment": "One-way follows of a creator by a Rainbow account. Readable only through the follower's own get_following_feed; others see an aggregate count.",
+      "columns": [
+        {
+          "name": "follower_id",
+          "type": "uuid",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "creator_id",
+          "type": "uuid",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "notNull": true,
+          "default": "now()",
+          "comment": null
+        }
+      ],
+      "constraints": [
+        {
+          "name": "creator_follows_creator_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (creator_id) REFERENCES creator_profiles(user_id) ON DELETE CASCADE"
+        },
+        {
+          "name": "creator_follows_follower_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (follower_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+        },
+        {
+          "name": "creator_follows_not_self",
+          "type": "c",
+          "definition": "CHECK ((follower_id <> creator_id))"
+        },
+        {
+          "name": "creator_follows_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (follower_id, creator_id)"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "creator_follows_creator_idx",
+          "definition": "CREATE INDEX creator_follows_creator_idx ON public.creator_follows USING btree (creator_id)"
+        },
+        {
+          "name": "creator_follows_follower_idx",
+          "definition": "CREATE INDEX creator_follows_follower_idx ON public.creator_follows USING btree (follower_id, created_at DESC)"
+        },
+        {
+          "name": "creator_follows_pkey",
+          "definition": "CREATE UNIQUE INDEX creator_follows_pkey ON public.creator_follows USING btree (follower_id, creator_id)"
+        }
+      ],
+      "triggers": [],
+      "policies": [],
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
+    },
+    {
       "name": "creator_profiles",
       "rlsEnabled": true,
       "rlsForced": false,
@@ -3087,6 +3165,22 @@
       "comment": "Admin-only moderation switch for a custom puzzle. No UI in this phase -- exists so a follow-up moderation dashboard needs no schema change."
     },
     {
+      "name": "community_creator_json",
+      "args": "_c creator_profiles",
+      "returns": "jsonb",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
       "name": "complete_beta_playtest",
       "args": "_playtest_id uuid, _device_id text, _device_token text, _won boolean, _mistakes integer, _hints_used boolean",
       "returns": "boolean",
@@ -3191,6 +3285,38 @@
       "comment": null
     },
     {
+      "name": "custom_puzzle_card_json",
+      "args": "_p custom_puzzles",
+      "returns": "jsonb",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
+      "name": "custom_puzzle_in_community",
+      "args": "_p custom_puzzles",
+      "returns": "boolean",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": false,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
       "name": "custom_puzzle_new_short_code",
       "args": "",
       "returns": "text",
@@ -3218,6 +3344,24 @@
         "search_path=public"
       ],
       "executableBy": [
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
+      "name": "custom_puzzle_share_id",
+      "args": "_short_code text",
+      "returns": "text",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
         "service_role"
       ],
       "comment": null
@@ -3376,6 +3520,24 @@
       "comment": null
     },
     {
+      "name": "get_creator_community",
+      "args": "_slug text",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
       "name": "get_creator_profile",
       "args": "_slug text, _sort text",
       "returns": "jsonb",
@@ -3430,6 +3592,24 @@
       "comment": "Fetches one custom puzzle by short_code (Public and Private alike; the code is the access mechanism). Same shape as get_custom_puzzle. Null if unknown or hidden by moderation."
     },
     {
+      "name": "get_custom_puzzle_cards",
+      "args": "_share_ids text[]",
+      "returns": "jsonb",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
       "name": "get_custom_puzzle_stats",
       "args": "_share_id text",
       "returns": "jsonb",
@@ -3446,6 +3626,23 @@
         "service_role"
       ],
       "comment": "Aggregate completed-play stats for one custom puzzle (by share_id, so Private stats require possessing the link): completed plays, wins, losses, average guesses over wins, and the fixed 4/5/6/7/8+ distribution. Never returns anything row-level."
+    },
+    {
+      "name": "get_following_feed",
+      "args": "_limit integer, _offset integer",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "The caller's followed creators and their puzzles currently in Community, newest listing first."
     },
     {
       "name": "get_luck_report",
@@ -3938,6 +4135,24 @@
       "comment": "Asked on every signed-in load: does THIS device still owe the one-time import decision? unauthenticated | no_guest_history | already_decided | credential_invalid | import_available (+ counts). Never writes."
     },
     {
+      "name": "search_community_creators",
+      "args": "_query text, _limit integer, _offset integer",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "Creators with at least one puzzle currently in Community, by public name or slug. Aggregate counts only."
+    },
+    {
       "name": "session_capability_ok",
       "args": "_session_id uuid, _device_id text, _device_token text",
       "returns": "boolean",
@@ -3950,6 +4165,23 @@
       ],
       "executableBy": [
         "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
+      "name": "set_creator_follow",
+      "args": "_slug text, _follow boolean",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
         "authenticated",
         "service_role"
       ],

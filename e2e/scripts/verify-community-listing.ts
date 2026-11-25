@@ -89,8 +89,9 @@ async function play(shareId: string, times: number) {
 
 try {
   const plan = buildSchemaPlan({ includeSupabaseStubs: true, includeReset: false });
-  const before = plan.filter((x) => !x.label.includes("0004_"));
-  await applySchemaPlan(db, before);
+  // Everything before 0004, then 0004 and whatever follows it, in order.
+  const at = plan.findIndex((x) => x.label.includes("0004_"));
+  await applySchemaPlan(db, plan.slice(0, at));
 
   // Puzzles that exist BEFORE the migration: an account's public link and a
   // private link, and an anonymous public link.
@@ -100,7 +101,7 @@ try {
   const oldAnon = await create(null, "Anonymous Fictional Link", "public", "Guest Fictional");
   const snapshot = (await db.query("select id, share_id, short_code, visibility, content from public.custom_puzzles order by id")).rows;
 
-  await applySchemaPlan(db, plan.filter((x) => x.label.includes("0004_")));
+  await applySchemaPlan(db, plan.slice(at));
 
   // 1. Additive: nothing changed, nothing is listed, on any sort or search.
   assert.deepEqual((await db.query("select id, share_id, short_code, visibility, content from public.custom_puzzles order by id")).rows, snapshot);

@@ -27,6 +27,8 @@ export const COMMUNITY_ACCOUNTS = {
   wren: { email: "e2e-wren@rainbow.test", name: "Wren Halloway" },
   odie: { email: "e2e-odie@rainbow.test", name: "Odie Marsh" },
   pia: { email: "e2e-pia@rainbow.test", name: "Pia Lindqvist" },
+  // Has a creator profile but nothing listed: never in Creators search.
+  quin: { email: "e2e-quin@rainbow.test", name: "Quin Ferro" },
 } as const;
 type AccountKey = keyof typeof COMMUNITY_ACCOUNTS;
 
@@ -58,6 +60,8 @@ const PUZZLES: PuzzleSpec[] = [
     words: [W("BEACON FLARE LAMP TORCH"), W("CAPE COVE INLET SPIT"), W("ANCHOR CHAIN HULL MAST"), W("GULL PELICAN PUFFIN TERN")] },
   { key: "private", owner: "wren", title: "Private Parlour Games", visibility: "private", mode: "classic", list: false, plays: 60,
     words: [W("CHARADES BINGO DOMINO SNAP"), W("ACE JACK KING QUEEN"), W("BISHOP KNIGHT PAWN ROOK"), W("DICE MARBLE TOKEN SPINNER")] },
+  { key: "quarry", owner: "quin", title: "Quiet Quarry", visibility: "public", mode: "classic", list: false, plays: 9,
+    words: [W("BASALT GRANITE MARBLE SLATE"), W("CHISEL DRILL PICK WEDGE"), W("CAVE DEN HOLLOW PIT"), W("BOULDER COBBLE GRAVEL PEBBLE")] },
   { key: "anon", owner: null, title: "Anonymous Airship", visibility: "public", mode: "classic", list: false, plays: 70,
     words: [W("BALLAST GONDOLA RUDDER RIGGING"), W("ALTITUDE CEILING DRIFT LIFT"), W("COMPASS SEXTANT CHART LOG"), W("HELIUM HYDROGEN NEON ARGON")] },
 ];
