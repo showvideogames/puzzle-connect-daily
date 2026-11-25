@@ -437,3 +437,89 @@ export async function getCustomPuzzleStats(shareId: string): Promise<CustomPuzzl
     },
   };
 }
+
+// ── Community Puzzles (preview; see lib/communityFlag.ts) ──────────────────
+
+export type CommunitySort = "newest" | "plays";
+
+/** One card in the Community feed. Card fields only: the server never sends content, ids or account data. */
+export interface CommunityPuzzleListing {
+  title: string;
+  creatorName: string;
+  creatorSlug: string | null;
+  mode: CustomPuzzleMode;
+  shortCode: string;
+  finishedPlays: number;
+  favoriteCount: number;
+}
+
+export interface CommunityPage {
+  items: CommunityPuzzleListing[];
+  hasMore: boolean;
+}
+
+export const COMMUNITY_PAGE_SIZE = 24;
+
+/** Throws on failure so the page can offer Retry rather than showing an empty feed. */
+export async function listCommunityPuzzles(params: {
+  query?: string;
+  sort?: CommunitySort;
+  offset?: number;
+  limit?: number;
+}): Promise<CommunityPage> {
+  const { data, error } = await supabase.rpc("list_community_puzzles", {
+    _query: params.query?.trim() || undefined,
+    _sort: params.sort ?? "newest",
+    _limit: params.limit ?? COMMUNITY_PAGE_SIZE,
+    _offset: params.offset ?? 0,
+  });
+  if (error) throw error;
+  const r = (data ?? {}) as {
+    items?: {
+      title: string;
+      creator_name: string;
+      creator_slug: string | null;
+      mode: CustomPuzzleMode;
+      short_code: string;
+      finished_plays: number;
+      favorite_count: number;
+    }[];
+    has_more?: boolean;
+  };
+  return {
+    items: (r.items ?? []).map((p) => ({
+      title: p.title,
+      creatorName: p.creator_name,
+      creatorSlug: p.creator_slug ?? null,
+      mode: p.mode,
+      shortCode: p.short_code,
+      finishedPlays: p.finished_plays ?? 0,
+      favoriteCount: p.favorite_count ?? 0,
+    })),
+    hasMore: !!r.has_more,
+  };
+}
+
+export interface CommunityListingState {
+  /** True only when the signed-in caller created this puzzle. */
+  owned: boolean;
+  listed: boolean;
+  /** Public and not hidden by moderation. */
+  canList: boolean;
+}
+
+/** The caller's own puzzle's Community state; null for a guest, an error, or someone else's puzzle. */
+export async function getMyCommunityListing(shareId: string): Promise<CommunityListingState | null> {
+  const { data, error } = await supabase.rpc("get_my_custom_puzzle_listing", { _share_id: shareId });
+  if (error || !data) return null;
+  const r = data as { owned?: boolean; listed?: boolean; can_list?: boolean };
+  if (!r.owned) return null;
+  return { owned: true, listed: !!r.listed, canList: !!r.can_list };
+}
+
+/** Sets (not toggles) the listing. Ownership and eligibility are enforced server-side; throws with the server's message. */
+export async function setCommunityListing(shareId: string, listed: boolean): Promise<boolean> {
+  const { data, error } = await supabase.rpc("set_custom_puzzle_community_listing", { _share_id: shareId, _listed: listed });
+  if (error) throw error;
+  return !!(data as { listed?: boolean } | null)?.listed;
+}

@@ -326,6 +326,8 @@ export type Database = {
       }
       custom_puzzles: {
         Row: {
+          community_listed: boolean
+          community_listed_at: string | null
           content: Json
           created_at: string
           created_by: string | null
@@ -338,6 +340,8 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          community_listed?: boolean
+          community_listed_at?: string | null
           content: Json
           created_at?: string
           created_by?: string | null
@@ -350,6 +354,8 @@ export type Database = {
           visibility: string
         }
         Update: {
+          community_listed?: boolean
+          community_listed_at?: string | null
           content?: Json
           created_at?: string
           created_by?: string | null
@@ -1030,6 +1036,10 @@ export type Database = {
         Returns: Json
       }
       get_custom_puzzle_stats: { Args: { _share_id: string }; Returns: Json }
+      get_my_custom_puzzle_listing: {
+        Args: { _share_id: string }
+        Returns: Json
+      }
       get_luck_report: {
         Args: {
           _device_id?: string
@@ -1098,6 +1108,10 @@ export type Database = {
           outcome: string
           sessions_claimed: number
         }[]
+      }
+      list_community_puzzles: {
+        Args: { _limit?: number; _offset?: number; _query?: string; _sort?: string }
+        Returns: Json
       }
       luck_eligible_paths: {
         Args: { _puzzle_id: string }
@@ -1183,6 +1197,10 @@ export type Database = {
       session_capability_ok: {
         Args: { _device_id: string; _device_token: string; _session_id: string }
         Returns: boolean
+      }
+      set_custom_puzzle_community_listing: {
+        Args: { _listed: boolean; _share_id: string }
+        Returns: Json
       }
       set_custom_puzzle_favorite: {
         Args: { _favorite: boolean; _share_id: string }

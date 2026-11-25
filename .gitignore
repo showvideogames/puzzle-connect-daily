@@ -44,6 +44,7 @@ supabase/.temp/
 # documents the shape and carries no keys at all.
 !.env.e2e.example
 dist-e2e
+dist-e2e-community
 e2e/.artifacts/
 e2e/supabase/.temp/
 e2e/supabase/.branches/

@@ -24,6 +24,7 @@ import NotFound from "./pages/NotFound.tsx";
 import { OnboardingGate } from "@/components/OnboardingGate";
 import { AppIconSync } from "@/components/AppIconSync";
 import { socialBetaOn } from "@/components/social/socialFlag";
+import { communityPuzzlesOn } from "@/lib/communityFlag";
 
 // Dev-only visual fixtures. import.meta.env.DEV is statically false in a
 // production build, so this lazy import (and the whole fixture module) is
@@ -36,6 +37,10 @@ const LuckyBotFixtures = import.meta.env.DEV ? lazy(() => import("./dev/LuckyBot
 // loads; on, they stay in their own chunks.
 const Friends = socialBetaOn() ? lazy(() => import("./pages/Friends.tsx")) : null;
 const Join = socialBetaOn() ? lazy(() => import("./pages/Join.tsx")) : null;
+
+// Community Puzzles preview (lib/communityFlag.ts). Off, the route does not
+// exist and the page is not in any chunk a player loads.
+const Community = communityPuzzlesOn() ? lazy(() => import("./pages/Community.tsx")) : null;
 
 const queryClient = new QueryClient();
 
@@ -71,6 +76,9 @@ const router = createBrowserRouter(createRoutesFromElements(
           <Route path="/custom/:shareId" element={<CustomPuzzle />} />
           <Route path="/creator/:publicSlug" element={<CreatorProfilePage />} />
           <Route path="/favorites" element={<Favorites />} />
+          {Community && (
+            <Route path="/community" element={<Suspense fallback={null}><Community /></Suspense>} />
+          )}
           {Friends && (
             <Route path="/friends" element={<Suspense fallback={null}><Friends /></Suspense>} />
           )}

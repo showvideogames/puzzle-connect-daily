@@ -22,10 +22,10 @@ shows up as a diff instead of as a surprise on a blank project.
 | Category | Count |
 |---|---|
 | Tables | 22 |
-| Columns | 192 |
-| Constraints | 92 |
-| Indexes | 57 |
-| Functions | 63 |
+| Columns | 194 |
+| Constraints | 93 |
+| Indexes | 58 |
+| Functions | 66 |
 | Triggers | 5 |
 | RLS policies | 25 |
 | Enum types | 1 |
@@ -303,9 +303,12 @@ RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNC
 | `content` | jsonb | not null |  |
 | `created_at` | timestamp with time zone | not null | `now()` |
 | `short_code` | text | not null |  |
+| `community_listed` | boolean | not null | `false` |
+| `community_listed_at` | timestamp with time zone | null |  |
 
 Constraints:
 
+- `custom_puzzles_community_requires_public` CHECK (((NOT community_listed) OR (visibility = 'public'::text)))
 - `custom_puzzles_created_by_fkey` FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL
 - `custom_puzzles_moderation_status_check` CHECK ((moderation_status = ANY (ARRAY['active'::text, 'hidden'::text])))
 - `custom_puzzles_pkey` PRIMARY KEY (id)
@@ -315,6 +318,7 @@ Constraints:
 
 Indexes:
 
+- `CREATE INDEX custom_puzzles_community_feed_idx ON public.custom_puzzles USING btree (community_listed_at DESC, short_code) WHERE (community_listed AND (visibility = 'public'::text) AND (moderation_status = 'active'::text) AND (created_by IS NOT NULL))`
 - `CREATE INDEX custom_puzzles_created_by_idx ON public.custom_puzzles USING btree (created_by) WHERE (created_by IS NOT NULL)`
 - `CREATE UNIQUE INDEX custom_puzzles_pkey ON public.custom_puzzles USING btree (id)`
 - `CREATE INDEX custom_puzzles_public_by_creator_idx ON public.custom_puzzles USING btree (created_by, created_at DESC) WHERE ((visibility = 'public'::text) AND (moderation_status = 'active'::text) AND (created_by IS NOT NULL))`
@@ -809,6 +813,7 @@ Indexes:
 | `get_custom_puzzle_by_short_code(_short_code text)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_custom_puzzle_stats(_share_id text)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_luck_report(_puzzle_id uuid, _device_id text, _device_token text)` | json | yes | stable | anon, authenticated, service_role |
+| `get_my_custom_puzzle_listing(_share_id text)` | jsonb | yes | stable | authenticated, service_role |
 | `get_my_favorites()` | jsonb | yes | stable | authenticated, service_role |
 | `get_own_completed_sessions(_device_id text, _device_token text, _format text)` | TABLE(puzzle_id text, won boolean, mistakes integer, found_rainbow boolean, solve_order jsonb, hints_used boolean, rainbow_solve_index smallint, rainbow_source text, bonus_rainbow_attempted boolean, status text) | yes | stable | anon, authenticated, service_role |
 | `get_own_no_hint_streak(_device_id text, _device_token text, _format text)` | TABLE(best integer, tracked integer, unknown integer) | yes | stable | anon, authenticated, service_role |
@@ -821,6 +826,7 @@ Indexes:
 | `has_official_result(_puzzle_id text, _device_id text, _device_token text)` | boolean | yes | stable | anon, authenticated, service_role |
 | `has_role(_user_id uuid, _role app_role)` | boolean | yes | stable | anon, authenticated, service_role |
 | `import_guest_history(_device_id text, _device_token text)` | TABLE(outcome text, sessions_claimed integer) | yes | volatile | authenticated, service_role |
+| `list_community_puzzles(_query text, _sort text, _limit integer, _offset integer)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `luck_eligible_paths(_puzzle_id text)` | TABLE(session_id uuid, user_id uuid, device_id text, path jsonb) | yes | stable | service_role |
 | `my_account()` | TABLE(user_id uuid, global_user_id text, email text, created_at timestamp with time zone) | yes | stable | authenticated, service_role |
 | `no_hint_history_for_owner(_device_id text, _device_token text, _format text)` | TABLE(completion_order text, qualified boolean) | yes | stable | none of the client roles |
@@ -835,6 +841,7 @@ Indexes:
 | `reset_beta_playtest(_puzzle_id uuid, _device_id text, _device_token text)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `resolve_device_import(_device_id text, _device_token text)` | TABLE(outcome text, games_played integer, current_streak integer, longest_streak integer) | yes | stable | authenticated, service_role |
 | `session_capability_ok(_session_id uuid, _device_id text, _device_token text)` | boolean | yes | stable | anon, authenticated, service_role |
+| `set_custom_puzzle_community_listing(_share_id text, _listed boolean)` | jsonb | yes | volatile | authenticated, service_role |
 | `set_custom_puzzle_favorite(_share_id text, _favorite boolean)` | jsonb | yes | volatile | authenticated, service_role |
 | `skill_score(_won boolean, _mistakes integer, _solve_order jsonb, _found_rainbow boolean, _rainbow_source text, _format text)` | integer | no | immutable | anon, authenticated, service_role |
 | `stamp_no_hint_completion()` | trigger | yes | volatile | service_role |

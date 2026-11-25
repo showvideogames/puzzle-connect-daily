@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
-import { Calendar, CircleHelp, Grid2x2, Grid3x3, Menu, MessageSquareText, SquarePen, UsersRound, X } from "lucide-react";
+import { Calendar, CircleHelp, Grid2x2, Grid3x3, LayoutGrid, Menu, MessageSquareText, SquarePen, UsersRound, X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { socialBetaOn } from "@/components/social/socialFlag";
+import { communityPuzzlesOn } from "@/lib/communityFlag";
 
 /** The header's own 44px target: a 24px glyph in the foreground colour, as in the header concept. */
 export const headerIconButton =
@@ -29,6 +30,9 @@ const DESTINATIONS: Destination[] = [
   { to: "/how-to-play", label: "How to play", icon: CircleHelp },
 ];
 
+/** Community Puzzles preview: shown only with the same flag that creates its route. Sits just before Create. */
+const COMMUNITY: Destination = { to: "/community", label: "Community Puzzles", icon: LayoutGrid };
+
 const FRIENDS: Destination = { to: "/friends", label: "Friends & Groups", icon: UsersRound, state: { friendsHome: true } };
 
 const rowClass =
@@ -44,7 +48,10 @@ export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
   // back on the hamburger (the frame after onCloseAutoFocus), so the feedback
   // dialog records the hamburger, not <body>, and returns focus there.
   const feedbackNext = useRef(false);
-  const destinations = socialBetaOn() ? [...DESTINATIONS, FRIENDS] : DESTINATIONS;
+  const base = communityPuzzlesOn()
+    ? DESTINATIONS.flatMap((d) => (d.to === "/create" ? [COMMUNITY, d] : [d]))
+    : DESTINATIONS;
+  const destinations = socialBetaOn() ? [...base, FRIENDS] : base;
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

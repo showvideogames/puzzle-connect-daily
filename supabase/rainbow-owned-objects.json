@@ -1016,9 +1016,28 @@
           "notNull": true,
           "default": null,
           "comment": "Permanent random URL-safe code for /p/:shortCode. Case-sensitive, unique. Possession is the access mechanism for a Private puzzle, exactly like share_id."
+        },
+        {
+          "name": "community_listed",
+          "type": "boolean",
+          "notNull": true,
+          "default": "false",
+          "comment": null
+        },
+        {
+          "name": "community_listed_at",
+          "type": "timestamp with time zone",
+          "notNull": false,
+          "default": null,
+          "comment": null
         }
       ],
       "constraints": [
+        {
+          "name": "custom_puzzles_community_requires_public",
+          "type": "c",
+          "definition": "CHECK (((NOT community_listed) OR (visibility = 'public'::text)))"
+        },
         {
           "name": "custom_puzzles_created_by_fkey",
           "type": "f",
@@ -1051,6 +1070,10 @@
         }
       ],
       "indexes": [
+        {
+          "name": "custom_puzzles_community_feed_idx",
+          "definition": "CREATE INDEX custom_puzzles_community_feed_idx ON public.custom_puzzles USING btree (community_listed_at DESC, short_code) WHERE (community_listed AND (visibility = 'public'::text) AND (moderation_status = 'active'::text) AND (created_by IS NOT NULL))"
+        },
         {
           "name": "custom_puzzles_created_by_idx",
           "definition": "CREATE INDEX custom_puzzles_created_by_idx ON public.custom_puzzles USING btree (created_by) WHERE (created_by IS NOT NULL)"
@@ -3443,6 +3466,23 @@
       "comment": "Lucky Bot Luck numbers for the caller's own first official attempt at a Full puzzle: eligible player count, how many took the same exact guess path, and the puzzle's ceiling. Counts only; never exposes another player's path or session."
     },
     {
+      "name": "get_my_custom_puzzle_listing",
+      "args": "_share_id text",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "For the caller's own puzzle: its Community listing state. Anyone else gets {owned:false}."
+    },
+    {
       "name": "get_my_favorites",
       "args": "",
       "returns": "jsonb",
@@ -3654,6 +3694,24 @@
         "service_role"
       ],
       "comment": null
+    },
+    {
+      "name": "list_community_puzzles",
+      "args": "_query text, _sort text, _limit integer, _offset integer",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "Community Puzzles feed: only puzzles their signed-in creator explicitly listed, that are Public, active and still account-owned. Bounded (<=48 per page, offset <=2000, query <=60 chars, literal substring). Card fields only: never content, ids, share_id, created_by or account data."
     },
     {
       "name": "luck_eligible_paths",
@@ -3896,6 +3954,23 @@
         "service_role"
       ],
       "comment": null
+    },
+    {
+      "name": "set_custom_puzzle_community_listing",
+      "args": "_share_id text, _listed boolean",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "The puzzle's own signed-in creator lists or unlists it in Community. Never changes visibility, links or content."
     },
     {
       "name": "set_custom_puzzle_favorite",

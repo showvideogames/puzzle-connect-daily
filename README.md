@@ -44,6 +44,8 @@ Rainbow owns. See `docs/CONFIG-INVENTORY.md` for every environment value,
 | `npm run typecheck:app` / `:e2e` | one project at a time, when you want the other's result too |
 | `npm run lint` | ESLint |
 | `npm run e2e:db:verify` | every migration on a clean in-process Postgres, plus the full fixture seed — no Docker needed |
+| `npm run e2e:db:community` | Community Puzzles listing rules on in-process Postgres (preview; see `docs/COMMUNITY-PUZZLES-PREVIEW.md`) |
+| `npm run e2e:community` | Community Puzzles browser checks and review screenshots, after `e2e:seed:community` (preview) |
 | `npm run e2e:test` | the browser end-to-end suite against a disposable local Supabase stack |
 
 The end-to-end suite has its own guide — prerequisites, first-time setup,

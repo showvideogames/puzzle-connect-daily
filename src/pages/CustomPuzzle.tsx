@@ -22,6 +22,8 @@ import {
   type CustomPlayablePuzzle,
 } from "@/lib/customPuzzles";
 import { useCustomFavorite } from "@/hooks/useCustomFavorite";
+import { CommunityListingControl } from "@/components/CommunityListingControl";
+import { communityPuzzlesOn } from "@/lib/communityFlag";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
 import { clearProgress } from "@/lib/gameProgress";
@@ -204,6 +206,9 @@ export default function CustomPuzzle() {
         />
       )}
 
+      {communityPuzzlesOn() && puzzle && !error && !loading && (
+        <CommunityListingControl shareId={puzzle.id} userId={user?.id ?? null} />
+      )}
       {puzzle && !error && !loading && <CustomPuzzleCta supportUrl={getSupportUrl()} />}
 
       <StatsModal open={activeModal === "stats"} onClose={() => setActiveModal(null)} />
