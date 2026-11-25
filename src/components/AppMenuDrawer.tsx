@@ -38,11 +38,11 @@ const FRIENDS: Destination = {
 };
 
 const focusClass = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
-const rowClass = `flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left text-[18px] font-black [font-family:'Nunito_Menu','Nunito_Sans_Variable',sans-serif] leading-tight text-foreground hover:brightness-95 dark:hover:brightness-125 transition-[filter] aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/25 ${focusClass}`;
+const rowClass = `flex min-h-[52px] w-full items-center gap-3 rounded-xl px-2.5 text-left text-[22px] max-[359px]:text-[20px] font-black [font-family:'Nunito_Menu','Nunito_Sans_Variable',sans-serif] leading-tight text-foreground hover:brightness-95 dark:hover:brightness-125 transition-[filter] aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/25 ${focusClass}`;
 
 function MenuArt({ art }: { art: PlayArt }) {
   if (art === "mini") {
-    return <img aria-hidden="true" src="/icons/mini-lagoon-tilted.png" alt="" width={62} height={62} className="block h-[60px] w-[60px] shrink-0" />;
+    return <img aria-hidden="true" src="/icons/mini-lagoon-tilted.png" alt="" width={74} height={74} className="block h-[74px] w-[74px] shrink-0 max-[359px]:h-[68px] max-[359px]:w-[68px]" />;
   }
   if (art === "full") {
     return <img aria-hidden="true" src="/icons/rainbow-icon-192-0e09e6d1.png" alt="" width={66} height={66} className="block h-16 w-16 shrink-0 rounded-xl" />;
@@ -89,7 +89,7 @@ function RowArt({ icon }: { icon: Destination["icon"] | "feedback" }) {
 }
 
 function TileSticker({ compact }: { compact: boolean }) {
-  return <svg aria-hidden="true" viewBox="0 0 48 42" className={`shrink-0 text-foreground ${compact ? "absolute right-2.5 top-3 h-8 w-9 max-[359px]:h-7 max-[359px]:w-8" : "ml-auto h-10 w-11 max-[359px]:h-8 max-[359px]:w-9"}`} fill="none">
+  return <svg aria-hidden="true" viewBox="0 0 48 42" className={`shrink-0 text-foreground ${compact ? "absolute right-2.5 top-3 h-10 w-11 max-[359px]:h-8 max-[359px]:w-9" : "ml-auto h-12 w-[52px] max-[359px]:h-9 max-[359px]:w-10"}`} fill="none">
     <rect x="22" y="15" width="21" height="21" rx="4" transform="rotate(17 22 15)" fill="currentColor" fillOpacity=".14" stroke="currentColor" strokeWidth="2.3" />
     <rect x="3" y="10" width="22" height="22" rx="4" transform="rotate(-12 3 10)" className="fill-white dark:fill-background" stroke="currentColor" strokeWidth="2.3" />
   </svg>;
@@ -136,7 +136,7 @@ export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
               return (
                 <li key={to} className={wide ? "col-span-2 min-w-0" : "min-w-0"}>
                   <SheetClose asChild>
-                    <NavLink to={to} end className={`relative flex h-full text-foreground rounded-[14px] border-[1.5px] border-foreground/80 dark:border-foreground/50 p-3 transition-[filter] hover:brightness-95 dark:hover:brightness-125 active:brightness-90 aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/15 ${wide ? "min-h-[84px] items-center gap-3 max-[359px]:gap-2" : "min-h-[117px] flex-col items-start gap-2 max-[359px]:px-2.5"} ${tone} ${focusClass}`}>
+                    <NavLink to={to} end className={`relative flex h-full text-foreground rounded-[14px] border-[1.5px] border-foreground/80 dark:border-foreground/50 p-3 transition-[filter] hover:brightness-95 dark:hover:brightness-125 active:brightness-90 aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/15 ${wide ? "min-h-[84px] items-center gap-3 max-[359px]:gap-2" : "min-h-[127px] flex-col items-start gap-2 max-[359px]:px-2.5"} ${tone} ${focusClass}`}>
                       <MenuArt art={art} />
                       <span className="min-w-0">
                         <span className={`block font-black [font-family:'Nunito_Menu','Nunito_Sans_Variable',sans-serif] leading-[1.08] ${wide ? "text-[23px] max-[359px]:text-[21px]" : "text-[20px] max-[359px]:text-[18px]"}`}>{label}</span>
