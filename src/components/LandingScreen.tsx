@@ -62,8 +62,7 @@ export function LandingScreen({ puzzle, user, onPlay, onSignInClick, format = FU
     const button = "inline-flex min-h-[50px] w-full items-center justify-center rounded-full px-5 text-lg font-extrabold leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#6924d6] active:scale-[.98]";
     return (
       <main
-        className="fixed inset-0 z-10 overflow-y-auto text-[#252324]"
-        style={{ background: "radial-gradient(ellipse at 49% 38%, #fffef4a6, transparent 60%), linear-gradient(145deg, #ffb4ca 0%, #ffd2b3 18%, #ffefa5 39%, #bee7c7 60%, #b0def3 79%, #d0b5ee 100%)" }}
+        className="fixed inset-0 z-10 overflow-y-auto bg-white text-[#252324]"
       >
         <div className="mx-auto flex min-h-full w-full max-w-[31rem] flex-col justify-center px-[clamp(1.25rem,5.5vw,2.5rem)] py-[clamp(1.25rem,4dvh,3rem)] text-center">
           <h1 className="w-full">
