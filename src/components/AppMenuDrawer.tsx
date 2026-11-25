@@ -1,4 +1,4 @@
-import "./menu-fredoka.css";
+import "./menu-nunito.css";
 import { useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Menu, UsersRound, X } from "lucide-react";
@@ -38,7 +38,7 @@ const FRIENDS: Destination = {
 };
 
 const focusClass = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
-const rowClass = `flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left text-[18px] font-bold [font-family:'Fredoka_Menu',ui-rounded,sans-serif] leading-tight text-foreground hover:brightness-95 dark:hover:brightness-125 transition-[filter] aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/25 ${focusClass}`;
+const rowClass = `flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left text-[18px] font-black [font-family:'Nunito_Menu','Nunito_Sans_Variable',sans-serif] leading-tight text-foreground hover:brightness-95 dark:hover:brightness-125 transition-[filter] aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/25 ${focusClass}`;
 
 function MenuArt({ art }: { art: PlayArt }) {
   if (art === "mini") {
@@ -122,7 +122,7 @@ export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
             {["bg-[#ffc20e]", "bg-[#1fae4b]", "bg-[#1e6ff0]", "bg-[#e8262b]"].map((tone) => <span key={tone} className={`h-[3px] ${tone}`} />)}
           </div>
           <div className="flex items-center justify-between gap-2 pb-3">
-            <SheetTitle className="text-[32px] font-bold [font-family:'Fredoka_Menu',ui-rounded,sans-serif] leading-none">Menu</SheetTitle>
+            <SheetTitle className="text-[32px] font-black [font-family:'Nunito_Menu','Nunito_Sans_Variable',sans-serif] leading-none">Menu</SheetTitle>
             <SheetClose className={`${headerIconButton} border border-foreground/65 bg-card shadow-[2px_2px_0_#ccb5ee] dark:shadow-none`} aria-label="Close menu">
               <X aria-hidden="true" className={headerGlyph} strokeWidth={HEADER_STROKE} />
             </SheetClose>
@@ -139,7 +139,7 @@ export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
                     <NavLink to={to} end className={`relative flex h-full text-foreground rounded-[14px] border-[1.5px] border-foreground/80 dark:border-foreground/50 p-3 transition-[filter] hover:brightness-95 dark:hover:brightness-125 active:brightness-90 aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/15 ${wide ? "min-h-[84px] items-center gap-3 max-[359px]:gap-2" : "min-h-[117px] flex-col items-start gap-2 max-[359px]:px-2.5"} ${tone} ${focusClass}`}>
                       <MenuArt art={art} />
                       <span className="min-w-0">
-                        <span className={`block font-bold [font-family:'Fredoka_Menu',ui-rounded,sans-serif] leading-[1.08] ${wide ? "text-[23px] max-[359px]:text-[21px]" : "text-[20px] max-[359px]:text-[18px]"}`}>{label}</span>
+                        <span className={`block font-black [font-family:'Nunito_Menu','Nunito_Sans_Variable',sans-serif] leading-[1.08] ${wide ? "text-[23px] max-[359px]:text-[21px]" : "text-[20px] max-[359px]:text-[18px]"}`}>{label}</span>
                         {detail && <span className="mt-0.5 block text-[13px] font-bold leading-snug text-foreground/90">{detail}</span>}
                       </span>
                       <TileSticker compact={!wide} />
