@@ -29,7 +29,9 @@ import { StartingBoardArranger } from "@/components/builder/StartingBoardArrange
 import { RainbowPanel } from "@/components/builder/RainbowPanel";
 import { EmojiCodesModal } from "@/components/EmojiCodesModal";
 import { normalizeWord } from "@/lib/builder/wordNormalization";
-import { createCustomPuzzle, setCommunityListing, type CustomPuzzleVisibility } from "@/lib/customPuzzles";
+import { createCustomPuzzle, setCommunityListing, setCustomPuzzleCover, type CustomPuzzleVisibility } from "@/lib/customPuzzles";
+import { CoverPicker, NO_COVER, draftToCover, type CoverDraft } from "@/components/community/CoverPicker";
+import { CreatorCoverArt } from "@/components/community/CreatorCoverArt";
 import { communityPuzzlesOn } from "@/lib/communityFlag";
 import { supabase } from "@/integrations/supabase/client";
 import { FormatSelector } from "@/components/builder/FormatSelector";
@@ -92,6 +94,9 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
   const [listInCommunity, setListInCommunity] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [listing, setListing] = useState<{ listed: boolean; error?: string } | null>(null);
+  // Optional creator cover: one emoji + one preset background, saved after create.
+  const [coverDraft, setCoverDraft] = useState<CoverDraft>(NO_COVER);
+  const [coverOutcome, setCoverOutcome] = useState<{ saved: boolean; error?: string } | null>(null);
   useEffect(() => {
     if (!community) return;
     supabase.auth.getSession().then(({ data: { session } }) => setSignedIn(!!session?.user));
@@ -167,6 +172,7 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
     setPuzzleTitle("");
     setVisibility("public");
     setListInCommunity(false);
+    setCoverDraft(NO_COVER);
     setError(null);
     builder.reset();
   }
@@ -221,6 +227,19 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
         }
       } else {
         setListing(community && visibility === "public" ? { listed: false } : null);
+      }
+      // The cover is its own owner-checked call too; if it fails, the puzzle
+      // simply keeps the standard cover and the result says so.
+      const chosenCover = draftToCover(coverDraft);
+      if (community && signedIn && chosenCover) {
+        try {
+          await setCustomPuzzleCover(shareId, chosenCover);
+          setCoverOutcome({ saved: true });
+        } catch (err: unknown) {
+          setCoverOutcome({ saved: false, error: err && typeof err === "object" && "message" in err && typeof err.message === "string" ? err.message : "Please try again." });
+        }
+      } else {
+        setCoverOutcome(null);
       }
       setResult({ shareId, shortCode });
     } catch (err: unknown) {
@@ -316,6 +335,14 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
           </p>
           {visibility === "private" && (
             <p className="text-xs text-muted-foreground">Only people with this link can access this puzzle.</p>
+          )}
+          {coverOutcome?.saved && draftToCover(coverDraft) && (
+            <CreatorCoverArt cover={draftToCover(coverDraft)} className="mx-auto aspect-[16/7] w-full max-w-sm rounded-2xl" emojiScale={0.24} />
+          )}
+          {coverOutcome && (
+            <p className="text-xs text-muted-foreground" data-testid="cover-result">
+              {coverOutcome.saved ? "Cover saved." : `Couldn't save the cover: ${coverOutcome.error} It has the standard cover for now.`}
+            </p>
           )}
           {listing && (
             <p className="text-xs text-muted-foreground" data-testid="community-listing-result">
@@ -534,6 +561,17 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
               <br />
               Type a code like <code className="text-[11px]">:caveman:</code> in an answer.
             </p>
+
+            {community && (
+              <CoverPicker
+                value={coverDraft}
+                onChange={setCoverDraft}
+                title={puzzleTitle}
+                creatorName={designerName}
+                disabled={!signedIn}
+                note={signedIn ? undefined : "Sign in to give your puzzle a cover. Without one it gets the standard Rainbow cover."}
+              />
+            )}
 
             {error && (
               <p className="text-sm text-destructive font-medium" role="alert">{error}</p>

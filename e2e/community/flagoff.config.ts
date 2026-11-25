@@ -1,6 +1,6 @@
 /**
- * "No change with the flag off": the same app built WITHOUT
- * VITE_COMMUNITY_PUZZLES, served on 127.0.0.1:5184, against the same
+ * The kill switch: the same app built with VITE_COMMUNITY_PUZZLES=off is
+ * exactly the pre-Community app, served on 127.0.0.1:5184, against the same
  * disposable stack. Run after e2e:seed:community.
  *
  *   npm run e2e:community:flagoff
@@ -28,7 +28,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "env -u VITE_COMMUNITY_PUZZLES npx vite build --mode e2e --outDir dist-e2e-flagoff && " +
+      "VITE_COMMUNITY_PUZZLES=off npx vite build --mode e2e --outDir dist-e2e-flagoff && " +
       "npx vite preview --outDir dist-e2e-flagoff --host 127.0.0.1 --port 5184 --strictPort",
     cwd: path.resolve(E2E_DIR, ".."),
     url: "http://127.0.0.1:5184",

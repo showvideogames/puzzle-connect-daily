@@ -1,12 +1,13 @@
 /**
- * Community Puzzles (the /community browse feed, its menu row, the builder's
- * "List in Community" control and the owner's list/unlist control) is a
- * PREVIEW. It needs migration 0004_community_listing.sql, which is not applied
- * to any hosted database, and a player report flow that does not exist yet
- * (only the admin hide exists), so it stays off unless a build sets
- * VITE_COMMUNITY_PUZZLES=preview. Off, the route does not exist and nothing
- * new renders: every existing page behaves exactly as before.
+ * Community Puzzles (the /community Explore, Following and Favorites pages,
+ * its menu row, the builder's "List in Community" and cover steps, the
+ * creator's list/unlist and cover controls, and the admin curation page).
+ *
+ * ON by default: shipping it is merging it, after migrations 0004-0008 are
+ * applied (docs/COMMUNITY-PUZZLES-RELEASE.md). VITE_COMMUNITY_PUZZLES=off is
+ * the emergency switch: set it and redeploy, and the route, menu row and every
+ * control above disappear again, with no data touched.
  */
 export function communityPuzzlesOn(flag: unknown = import.meta.env.VITE_COMMUNITY_PUZZLES): boolean {
-  return flag === "preview";
+  return flag !== "off";
 }

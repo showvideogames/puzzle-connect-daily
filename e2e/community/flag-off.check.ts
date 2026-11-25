@@ -1,6 +1,6 @@
 /**
- * With VITE_COMMUNITY_PUZZLES unset (every deployed build), nothing from the
- * Community preview exists: no route, no admin curation page, no menu row, no
+ * With VITE_COMMUNITY_PUZZLES=off (the emergency switch), nothing from
+ * Community exists: no route, no admin curation page, no menu row, no
  * creator-page additions, and shared puzzles play as before.
  */
 import fs from "node:fs";

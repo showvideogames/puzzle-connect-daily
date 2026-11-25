@@ -108,7 +108,7 @@ try {
   assert.equal(ex.featured?.title, "Pantry Raid");
   assert.deepEqual(titles(ex.picks), ["Turn Of The Tides", "Something In The Air", "A Little Offbeat", "The Usual Suspects"]);
   assert.ok(!titles(ex.picks).includes("Pantry Raid"));
-  assert.deepEqual(Object.keys(ex.featured!).sort(), ["creator_name", "creator_slug", "favorite_count", "finished_plays", "listed_at", "mode", "short_code", "title"]);
+  assert.deepEqual(Object.keys(ex.featured!).sort(), ["cover_background", "cover_emoji", "creator_name", "creator_slug", "favorite_count", "finished_plays", "listed_at", "mode", "short_code", "title"]);
   const raw = JSON.stringify(ex);
   for (const s of [pantry.share_id, pantry.puzzle_id, wren, admin, "Hidden Group"]) assert.ok(!raw.includes(s), `explore leaked ${s}`);
 

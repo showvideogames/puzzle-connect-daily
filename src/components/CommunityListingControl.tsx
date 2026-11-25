@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getMyCommunityListing, setCommunityListing, type CommunityListingState } from "@/lib/customPuzzles";
+import { getMyCommunityListing, setCommunityListing, setCustomPuzzleCover, type CommunityListingState } from "@/lib/customPuzzles";
+import { CoverPicker, draftToCover, type CoverDraft } from "@/components/community/CoverPicker";
+import type { CreatorCover } from "@/lib/creatorCover";
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
@@ -10,8 +12,19 @@ const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible
  * {owned:false} for them and refuses any change. Listing or unlisting never
  * touches the puzzle's links, visibility or content.
  */
-export function CommunityListingControl({ shareId, userId }: { shareId: string; userId: string | null }) {
+export function CommunityListingControl({ shareId, userId, title, creatorName, cover, onCoverChange }: {
+  shareId: string;
+  userId: string | null;
+  title?: string;
+  creatorName?: string;
+  cover?: CreatorCover | null;
+  onCoverChange?: (cover: CreatorCover | null) => void;
+}) {
   const [state, setState] = useState<CommunityListingState | null>(null);
+  const [editingCover, setEditingCover] = useState(false);
+  const [draft, setDraft] = useState<CoverDraft>({ emoji: cover?.emoji ?? null, background: cover?.background ?? null });
+  const [coverSaving, setCoverSaving] = useState(false);
+  const [coverMessage, setCoverMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,6 +68,17 @@ export function CommunityListingControl({ shareId, userId }: { shareId: string; 
           </p>
           {error && <p className="mt-1 text-sm text-destructive" role="alert">{error}</p>}
         </div>
+        <div className="flex flex-wrap gap-2">
+        {onCoverChange && (
+          <button
+            type="button"
+            onClick={() => { setDraft({ emoji: cover?.emoji ?? null, background: cover?.background ?? null }); setCoverMessage(null); setEditingCover((v) => !v); }}
+            aria-expanded={editingCover}
+            className={`inline-flex h-11 shrink-0 items-center justify-center rounded-full border border-border bg-card px-5 text-sm font-bold text-foreground hover:bg-secondary ${focusRing}`}
+          >
+            {cover ? "Edit cover" : "Add a cover"}
+          </button>
+        )}
         {(state.listed || state.canList) && (
           <button
             type="button"
@@ -66,7 +90,34 @@ export function CommunityListingControl({ shareId, userId }: { shareId: string; 
             {busy ? "Saving…" : state.listed ? "Unlist from Community" : "List in Community"}
           </button>
         )}
+        </div>
       </div>
+      {coverMessage && <p className={`mt-2 text-sm font-semibold ${coverMessage.kind === "error" ? "text-destructive" : "text-foreground"}`} role={coverMessage.kind === "error" ? "alert" : "status"}>{coverMessage.text}</p>}
+      {editingCover && onCoverChange && (
+        <div className="mt-3">
+          <CoverPicker
+            value={draft}
+            onChange={setDraft}
+            title={title ?? ""}
+            creatorName={creatorName ?? ""}
+            saving={coverSaving}
+            onSave={async () => {
+              setCoverSaving(true);
+              setCoverMessage(null);
+              try {
+                const saved = await setCustomPuzzleCover(shareId, draftToCover(draft));
+                onCoverChange(saved);
+                setCoverMessage({ kind: "ok", text: saved ? "Cover saved. It shows on your puzzle's card and page." : "Cover removed. Your puzzle uses the standard cover." });
+                setEditingCover(false);
+              } catch (err: unknown) {
+                setCoverMessage({ kind: "error", text: err && typeof err === "object" && "message" in err && typeof err.message === "string" ? err.message : "Couldn't save. Try again." });
+              } finally {
+                setCoverSaving(false);
+              }
+            }}
+          />
+        </div>
+      )}
     </section>
   );
 }

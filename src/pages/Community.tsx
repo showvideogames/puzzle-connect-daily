@@ -51,7 +51,8 @@ const NEWEST_PREVIEW = 6;
 const pillButton = `inline-flex h-11 items-center rounded-full border border-border bg-card px-5 text-sm font-bold text-foreground hover:bg-secondary disabled:opacity-60 ${cv.focus}`;
 /** Equal two-column covers on phones once they fit (360px and up); one column below. */
 const coverGrid = "mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:grid-cols-3";
-const PICK_COLUMNS: Record<number, string> = { 1: "md:grid-cols-2", 2: "md:grid-cols-2", 3: "md:grid-cols-3", 4: "md:grid-cols-4", 5: "md:grid-cols-3", 6: "md:grid-cols-3" };
+/** Editor's Picks on desktop: two horizontal cards per row (the approved Arcade Shelf / Make A Cover layout). */
+const PICK_COLUMNS: Record<number, string> = { 1: "md:grid-cols-2", 2: "md:grid-cols-2", 3: "md:grid-cols-2", 4: "md:grid-cols-2", 5: "md:grid-cols-2", 6: "md:grid-cols-2" };
 
 function Notice({ title, children, role }: { title: string; children?: ReactNode; role?: "alert" }) {
   return (
@@ -113,10 +114,10 @@ interface Saves {
 const bookmarkFor = (saves: Saves, p: SavedCard) => ({ saved: saves.saved.has(p.shortCode), onToggle: () => { void saves.toggle(p); } });
 const asCard = (p: SavedCard): ExploreCard => ({ title: p.title, shortCode: p.shortCode, mode: p.mode, creatorName: p.creatorName, creatorSlug: p.creatorSlug, finishedPlays: p.finishedPlays, cover: p.cover ?? null });
 
-function CoverGrid({ items, saves, testId, className = coverGrid, art = "creator" }: { items: SavedCard[]; saves: Saves; testId: string; className?: string; art?: CardArt }) {
+function CoverGrid({ items, saves, testId, className = coverGrid, art = "creator", rowOnDesktop = false }: { items: SavedCard[]; saves: Saves; testId: string; className?: string; art?: CardArt; rowOnDesktop?: boolean }) {
   return (
     <ul className={className} data-testid={testId}>
-      {items.map((p) => <CoverCard key={p.shortCode} card={asCard(p)} bookmark={bookmarkFor(saves, p)} art={art} />)}
+      {items.map((p) => <CoverCard key={p.shortCode} card={asCard(p)} bookmark={bookmarkFor(saves, p)} art={art} rowOnDesktop={rowOnDesktop} />)}
     </ul>
   );
 }
@@ -186,7 +187,7 @@ function ExploreHome({ saves }: { saves: Saves }) {
       {picks.length > 0 && (
         <section aria-labelledby="picks-heading" data-testid="editors-picks">
           <SectionHeading id="picks-heading">Editor's Picks</SectionHeading>
-          <CoverGrid items={picks} saves={saves} testId="picks-grid" art="editorial" className={`mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 ${PICK_COLUMNS[picks.length]}`} />
+          <CoverGrid items={picks} saves={saves} testId="picks-grid" art="editorial" rowOnDesktop className={`mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 ${PICK_COLUMNS[picks.length]}`} />
         </section>
       )}
 

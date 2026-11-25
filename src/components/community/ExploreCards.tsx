@@ -118,10 +118,10 @@ export function FeaturedCard({ card, bookmark }: { card: ExploreCard; bookmark?:
 }
 
 /** A shelf cover card (Editor's Picks, Following, Favorites, search). */
-export function CoverCard({ card, bookmark, art = "creator" }: { card: ExploreCard; bookmark?: BookmarkState; art?: CardArt }) {
+export function CoverCard({ card, bookmark, art = "creator", rowOnDesktop = false }: { card: ExploreCard; bookmark?: BookmarkState; art?: CardArt; rowOnDesktop?: boolean }) {
   return (
-    <li className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card" data-testid="community-card">
-      <CoverLink card={card} art={art} className="aspect-[16/10] w-full max-[359px]:aspect-[2/1]" />
+    <li className={`flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card ${rowOnDesktop ? "md:flex-row" : ""}`} data-testid="community-card">
+      <CoverLink card={card} art={art} className={`aspect-[16/10] w-full max-[359px]:aspect-[2/1] ${rowOnDesktop ? "md:aspect-auto md:w-[44%] md:min-h-[150px] md:shrink-0" : ""}`} />
       <div className="flex flex-1 flex-col gap-0.5 p-3 pt-2.5">
         <div className="flex items-start justify-between gap-1">
           <TitleLink card={card} className="pt-2 text-[17px]" />
@@ -144,7 +144,7 @@ export function CoverCard({ card, bookmark, art = "creator" }: { card: ExploreCa
 export function NewestRow({ card, bookmark }: { card: ExploreCard; bookmark?: BookmarkState }) {
   return (
     <li className="flex min-w-0 items-center gap-3 py-3" data-testid="community-card">
-      <CoverLink card={card} className="h-[56px] w-[76px] shrink-0 rounded-xl min-[380px]:h-[60px] min-[380px]:w-[84px] sm:h-[68px] sm:w-[104px]" />
+      <CoverLink card={card} className="h-[58px] w-[84px] shrink-0 rounded-xl min-[380px]:h-[64px] min-[380px]:w-[96px] sm:h-[84px] sm:w-[150px]" />
       <div className="min-w-0 flex-1">
         <TitleLink card={card} className="block text-base sm:text-[17px]" />
         <Byline name={card.creatorName} slug={card.creatorSlug} />

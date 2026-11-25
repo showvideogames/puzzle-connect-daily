@@ -26,17 +26,17 @@ async function menuLinks() {
 }
 
 describe("communityPuzzlesOn", () => {
-  it("is on only for the explicit preview value", () => {
-    expect(communityPuzzlesOn("preview")).toBe(true);
-    for (const v of [undefined, "", "true", "on", "beta", "PREVIEW", true, 1]) expect(communityPuzzlesOn(v)).toBe(false);
+  it("is on unless switched off with exactly \"off\"", () => {
+    expect(communityPuzzlesOn("off")).toBe(false);
+    for (const v of [undefined, "", "preview", "on", "true", "OFF?", 1]) expect(communityPuzzlesOn(v)).toBe(true);
   });
 });
 
 describe("menu", () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it("flag off: exactly the existing links, no Community row", async () => {
-    vi.stubEnv("VITE_COMMUNITY_PUZZLES", "");
+  it("switched off: exactly the existing links, no Community row", async () => {
+    vi.stubEnv("VITE_COMMUNITY_PUZZLES", "off");
     expect(await menuLinks()).toEqual(EXISTING);
   });
 
@@ -58,7 +58,7 @@ describe("listCommunityPuzzles", () => {
     });
     const page = await listCommunityPuzzles({ query: "  wren ", sort: "plays", offset: 24 });
     expect(rpc).toHaveBeenCalledWith("list_community_puzzles", { _query: "wren", _sort: "plays", _limit: 24, _offset: 24 });
-    expect(page).toEqual({ hasMore: true, items: [{ title: "A Little Offbeat", creatorName: "Wren Halloway", creatorSlug: null, mode: "rainbow", shortCode: "md42M6fUAj", finishedPlays: 3, favoriteCount: 1 }] });
+    expect(page).toEqual({ hasMore: true, items: [{ title: "A Little Offbeat", creatorName: "Wren Halloway", creatorSlug: null, mode: "rainbow", shortCode: "md42M6fUAj", finishedPlays: 3, favoriteCount: 1, cover: null }] });
   });
 
   it("throws on failure, so the page can offer Retry instead of an empty feed", async () => {

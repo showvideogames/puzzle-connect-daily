@@ -11,7 +11,7 @@ export const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoj
  * a soft ground. Never any text: the title always sits outside the art.
  * Decorative (aria-hidden); the title and credit beside it carry the meaning.
  */
-export function CreatorCoverArt({ cover, className = "", emojiScale = 0.42 }: { cover: CreatorCover | null | undefined; className?: string; emojiScale?: number }) {
+export function CreatorCoverArt({ cover, className = "", emojiScale = 0.42, emojiSize }: { cover: CreatorCover | null | undefined; className?: string; emojiScale?: number; emojiSize?: string }) {
   const resolved = resolveCover(cover);
   if (!resolved) {
     return (
@@ -33,7 +33,7 @@ export function CreatorCoverArt({ cover, className = "", emojiScale = 0.42 }: { 
       className={`flex items-center justify-center [container-type:inline-size] ${className}`}
       style={backgroundStyle(resolved.bg)}
     >
-      <span className="select-none leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.18)]" style={{ fontFamily: EMOJI_FONT, fontSize: `${Math.round(emojiScale * 100)}cqw` }}>
+      <span className="select-none leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.18)]" style={{ fontFamily: EMOJI_FONT, fontSize: emojiSize ?? `${Math.round(emojiScale * 100)}cqw` }}>
         {resolved.char}
       </span>
     </div>
