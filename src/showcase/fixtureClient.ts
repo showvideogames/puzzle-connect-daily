@@ -15,6 +15,8 @@ const ok = (data: unknown): Result => ({ data, error: null });
 const unavailable = (what: string): Result => ({ data: null, error: { message: `${what} isn't part of this showcase` } });
 
 const plays = new Map(PUZZLES.map((p) => [p.key, p.plays]));
+/** Signed-in saves per puzzle (the Most Liked count); the demo player's own saves add to it. */
+const likes = new Map(PUZZLES.map((p) => [p.key, p.favorites]));
 const wins = new Map(PUZZLES.map((p) => [p.key, Math.round(p.plays * 0.7)]));
 const guessTotals = new Map(PUZZLES.map((p) => [p.key, Math.round(p.plays * 0.7) * 6]));
 const runs = new Set<string>();
@@ -32,7 +34,7 @@ function card(p: ShowcasePuzzle) {
     mode: p.mode,
     short_code: p.shortCode,
     finished_plays: plays.get(p.key) ?? 0,
-    favorite_count: p.favorites,
+    favorite_count: likes.get(p.key) ?? 0,
     listed_at: p.listedAt,
     cover_emoji: p.cover?.emojis[0] ?? null,
     cover_emoji_2: p.cover?.emojis[1] ?? null,
@@ -64,7 +66,7 @@ function full(p: ShowcasePuzzle) {
     visibility: "public",
     content: content(p),
     creator_slug: p.creator.slug,
-    favorite_count: p.favorites,
+    favorite_count: likes.get(p.key) ?? 0,
     favorited_by_me: false,
     cover_emoji: p.cover?.emojis[0] ?? null,
     cover_emoji_2: p.cover?.emojis[1] ?? null,
@@ -112,7 +114,11 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
     }
     case "list_community_puzzles": {
       let list = listed().filter((p) => matches(a._query, p.title, p.creator.name));
-      list = a._sort === "plays" ? [...list].sort((x, y) => (plays.get(y.key) ?? 0) - (plays.get(x.key) ?? 0) || y.listedAt.localeCompare(x.listedAt)) : newestFirst(list);
+      // Same order as the server: the chosen count, then newest listing, then short code.
+      const tie = (x: ShowcasePuzzle, y: ShowcasePuzzle) => y.listedAt.localeCompare(x.listedAt) || x.shortCode.localeCompare(y.shortCode);
+      list = a._sort === "plays" ? [...list].sort((x, y) => (plays.get(y.key) ?? 0) - (plays.get(x.key) ?? 0) || tie(x, y))
+        : a._sort === "likes" ? [...list].sort((x, y) => (likes.get(y.key) ?? 0) - (likes.get(x.key) ?? 0) || tie(x, y))
+        : newestFirst(list);
       const pg = page(list, a._limit, a._offset);
       return ok({ ...pg, items: pg.items.map(card) });
     }
@@ -132,8 +138,8 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
       return ok({
         display_name: c.name, public_slug: c.slug, puzzle_count: mine.length,
         total_plays: mine.reduce((n, p) => n + (plays.get(p.key) ?? 0), 0),
-        total_favorites: mine.reduce((n, p) => n + p.favorites, 0),
-        puzzles: mine.map((p) => ({ title: p.title, mode: p.mode, short_code: p.shortCode, finished_plays: plays.get(p.key) ?? 0, favorite_count: p.favorites, created_at: p.listedAt })),
+        total_favorites: mine.reduce((n, p) => n + (likes.get(p.key) ?? 0), 0),
+        puzzles: mine.map((p) => ({ title: p.title, mode: p.mode, short_code: p.shortCode, finished_plays: plays.get(p.key) ?? 0, favorite_count: likes.get(p.key) ?? 0, created_at: p.listedAt })),
       });
     }
     case "get_custom_puzzle_by_short_code": {
@@ -203,6 +209,7 @@ export function publishDemoPuzzle(title: string, cover: { emojis: string[]; back
     ...(cover ? { cover } : {}),
   }));
   plays.set(`demo${demoCount}`, 0);
+  likes.set(`demo${demoCount}`, 0);
   return code;
 }
 

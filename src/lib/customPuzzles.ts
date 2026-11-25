@@ -454,7 +454,8 @@ export async function getCustomPuzzleStats(shareId: string): Promise<CustomPuzzl
 
 // ── Community Puzzles (preview; see lib/communityFlag.ts) ──────────────────
 
-export type CommunitySort = "newest" | "plays";
+/** Newest (first listing time), Most Played (finished plays), Most Liked (signed-in favourites only). */
+export type CommunitySort = "newest" | "plays" | "likes";
 
 /** One card in the Community feed. Card fields only: the server never sends content, ids or account data. */
 export interface CommunityPuzzleListing {
@@ -778,4 +779,42 @@ export async function setCustomPuzzleCover(shareId: string, cover: CreatorCover 
   if (error) throw error;
   const r = (data ?? {}) as { cover_emoji?: string | null; cover_emoji_2?: string | null; cover_emoji_3?: string | null; cover_background?: string | null };
   return parseCover(r.cover_emoji, r.cover_background, r.cover_emoji_2, r.cover_emoji_3);
+}
+
+// ── Optional 1-5 star rating, after finishing (migration 0010) ──────────────
+
+export interface MyCustomPuzzleRating {
+  /** The caller's own saved rating, or null. Never anyone else's. */
+  rating: number | null;
+  /** Signed in, not the puzzle's author, puzzle active. */
+  canRate: boolean;
+}
+
+/** The signed-in player's own rating of a puzzle and whether they may rate it. Null on any failure (the row simply isn't shown). */
+export async function getMyCustomPuzzleRating(shareId: string): Promise<MyCustomPuzzleRating | null> {
+  const { data, error } = await supabase.rpc("get_my_custom_puzzle_rating", { _share_id: shareId });
+  if (error || !data || typeof data !== "object") return null;
+  const r = data as { rating?: unknown; can_rate?: unknown };
+  const rating = typeof r.rating === "number" && Number.isInteger(r.rating) && r.rating >= 1 && r.rating <= 5 ? r.rating : null;
+  return { rating, canRate: r.can_rate === true };
+}
+
+/**
+ * Saves (or replaces) the signed-in player's 1-5 rating. The server also
+ * checks this browser finished the puzzle (its finish record for this
+ * device credential) and that the player isn't its author. Throws with the
+ * server's message.
+ */
+export async function setCustomPuzzleRating(shareId: string, rating: number): Promise<number> {
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw new Error("a rating is a whole number from 1 to 5");
+  const identity = await ensureDeviceIdentity();
+  if (!identity) throw new Error("finish the puzzle to rate it");
+  const { data, error } = await supabase.rpc("set_custom_puzzle_rating", {
+    _share_id: shareId,
+    _rating: rating,
+    _device_id: identity.deviceId,
+    _device_token: identity.deviceToken,
+  });
+  if (error) throw error;
+  return (data as { rating?: number } | null)?.rating ?? rating;
 }

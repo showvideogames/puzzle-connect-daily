@@ -67,16 +67,26 @@ end;
 $$;
 
 -- get_my_custom_puzzle_rating(text)
--- The caller's own rating of a puzzle, or null. Nobody else's, and no totals.
+-- The caller's own rating of a puzzle (or null), and whether they may rate it
+-- at all (signed in, not the author, puzzle active), so the Results screen
+-- shows the row only to players who can use it. The finish check stays in
+-- set_custom_puzzle_rating. Nobody else's rating, and no totals.
 CREATE FUNCTION public.get_my_custom_puzzle_rating(_share_id text) RETURNS jsonb
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-  select jsonb_build_object('rating', (
-    select r.rating from public.custom_puzzle_ratings r
-      join public.custom_puzzles cp on cp.id = r.custom_puzzle_id
-     where cp.share_id = _share_id and r.user_id = public.rainbow_uid()
-  ))
+  select jsonb_build_object(
+    'rating', (
+      select r.rating from public.custom_puzzle_ratings r
+        join public.custom_puzzles cp on cp.id = r.custom_puzzle_id
+       where cp.share_id = _share_id and r.user_id = public.rainbow_uid()
+    ),
+    'can_rate', public.rainbow_uid() is not null and exists (
+      select 1 from public.custom_puzzles cp
+       where cp.share_id = _share_id and cp.moderation_status = 'active'
+         and cp.created_by is distinct from public.rainbow_uid()
+    )
+  )
 $$;
 
 REVOKE ALL ON FUNCTION public.set_custom_puzzle_rating(_share_id text, _rating integer, _device_id text, _device_token text) FROM PUBLIC, anon, authenticated, service_role;

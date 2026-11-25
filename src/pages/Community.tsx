@@ -40,7 +40,26 @@ const TABS: { value: CommunityTab; label: string }[] = [
 const SORTS: { value: CommunitySort; label: string }[] = [
   { value: "newest", label: "Newest" },
   { value: "plays", label: "Most Played" },
+  { value: "likes", label: "Most Liked" },
 ];
+const SORT_TITLES: Record<CommunitySort, string> = { newest: "Newest", plays: "Most Played", likes: "Most Liked" };
+const SORT_NOTES: Record<CommunitySort, string> = {
+  newest: "Every Community puzzle, newest listing first.",
+  plays: "Every Community puzzle, most finished plays first.",
+  likes: "Every Community puzzle, most saved to signed-in Favorites first.",
+};
+const orderOf = (params: URLSearchParams): CommunitySort => (params.get("order") === "plays" ? "plays" : params.get("order") === "likes" ? "likes" : "newest");
+
+/**
+ * One page of the browse list. Newest is keyset-paged on first listing time;
+ * Most Played and Most Liked are sorted over the whole listed pool on the
+ * server, then paged, with deterministic ties.
+ */
+async function browsePage(order: CommunitySort, limit: number, offset: number, after: NewestCursor | null) {
+  if (order === "newest") return listCommunityNewest({ limit, after });
+  const page = await listCommunityPuzzles({ sort: order, offset, limit });
+  return { ...page, cursor: null as NewestCursor | null };
+}
 const MODES: { value: ExploreMode; label: string }[] = [
   { value: "puzzles", label: "Puzzles" },
   { value: "creators", label: "Creators" },
@@ -162,9 +181,9 @@ function CreateLink() {
  * a small Editor's Picks shelf (only when there are picks), and Newest, which
  * is independent of both: every listed puzzle by first listing time.
  */
-function ExploreHome({ saves }: { saves: Saves }) {
+function ExploreHome({ saves, order, onOrder }: { saves: Saves; order: CommunitySort; onOrder: (o: CommunitySort) => void }) {
   const [curated, setCurated] = useState<CommunityExplore | null | undefined>(undefined);
-  const newest = usePaged<CommunityPuzzleListing>("home-newest", true, () => listCommunityNewest({ limit: NEWEST_PREVIEW }), (p) => p.shortCode);
+  const newest = usePaged<CommunityPuzzleListing>(`home-${order}`, true, () => browsePage(order, NEWEST_PREVIEW, 0, null), (p) => p.shortCode);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,8 +212,11 @@ function ExploreHome({ saves }: { saves: Saves }) {
 
       <section aria-labelledby="newest-heading" data-testid="newest-section">
         <SectionHeading id="newest-heading" action={
-          newest.items.length > 0 ? <Link to="/community?view=newest" className={`inline-flex h-11 items-center rounded-full px-2 text-base ${cv.link} ${cv.focus}`}>See all<span className="sr-only"> newest puzzles</span></Link> : null
-        }>Newest</SectionHeading>
+          newest.items.length > 0 ? <Link to={`/community?view=newest${order === "newest" ? "" : `&order=${order}`}`} className={`inline-flex h-11 items-center rounded-full px-2 text-base ${cv.link} ${cv.focus}`}>See all<span className="sr-only"> {SORT_TITLES[order].toLowerCase()} puzzles</span></Link> : null
+        }>{SORT_TITLES[order]}</SectionHeading>
+        <div className="mt-2">
+          <Segmented label="Sort puzzles" options={SORTS} value={order} onChange={onOrder} />
+        </div>
         {newest.status === "error" ? (
           <Notice title="Couldn't load the newest puzzles." role="alert">
             <button type="button" onClick={newest.retry} className={`mt-4 ${pillButton}`}>Retry</button>
@@ -215,8 +237,12 @@ function ExploreHome({ saves }: { saves: Saves }) {
   );
 }
 
-/** See all / Newest: every listed puzzle by first listing time, keyset-paged so pages never repeat or skip. */
-function NewestView({ saves }: { saves: Saves }) {
+/**
+ * See all: every listed puzzle in the chosen order. Newest (the default) is
+ * keyset-paged so pages never repeat or skip; Most Played and Most Liked are
+ * sorted on the server over the whole pool before paging.
+ */
+function NewestView({ saves, order, onOrder }: { saves: Saves; order: CommunitySort; onOrder: (o: CommunitySort) => void }) {
   const [items, setItems] = useState<CommunityPuzzleListing[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [cursor, setCursor] = useState<NewestCursor | null>(null);
@@ -228,17 +254,17 @@ function NewestView({ saves }: { saves: Saves }) {
   useEffect(() => {
     let cancelled = false;
     setStatus("loading");
-    listCommunityNewest({ limit: COMMUNITY_PAGE_SIZE }).then(
+    browsePage(order, COMMUNITY_PAGE_SIZE, 0, null).then(
       (page) => { if (cancelled) return; setItems(page.items); setCursor(page.cursor); setHasMore(page.hasMore); setStatus("ready"); },
       () => { if (!cancelled) setStatus("error"); }
     );
     return () => { cancelled = true; };
-  }, [attempt]);
+  }, [attempt, order]);
 
   const more = useCallback(() => {
     setLoadingMore(true);
     setMoreError(false);
-    listCommunityNewest({ limit: COMMUNITY_PAGE_SIZE, after: cursor }).then(
+    browsePage(order, COMMUNITY_PAGE_SIZE, items.length, cursor).then(
       (page) => {
         setItems((prev) => {
           const seen = new Set(prev.map((p) => p.shortCode));
@@ -250,13 +276,16 @@ function NewestView({ saves }: { saves: Saves }) {
       },
       () => { setMoreError(true); setLoadingMore(false); }
     );
-  }, [cursor]);
+  }, [cursor, order, items.length]);
 
   return (
-    <section aria-label="Newest" data-testid="community-panel" aria-busy={status === "loading" || loadingMore}>
+    <section aria-label={SORT_TITLES[order]} data-testid="community-panel" aria-busy={status === "loading" || loadingMore}>
       <BackToExplore />
-      <h1 className={`mt-1 text-[30px] font-black tracking-tight ${cv.ink}`}>Newest</h1>
-      <p className="text-sm text-muted-foreground">Every Community puzzle, newest listing first.</p>
+      <h1 className={`mt-1 text-[30px] font-black tracking-tight ${cv.ink}`}>{SORT_TITLES[order]}</h1>
+      <p className="text-sm text-muted-foreground">{SORT_NOTES[order]}</p>
+      <div className="mt-3">
+        <Segmented label="Sort puzzles" options={SORTS} value={order} onChange={onOrder} />
+      </div>
       {status === "error" ? (
         <Notice title="Couldn't load the newest puzzles." role="alert">
           <button type="button" onClick={() => setAttempt((n) => n + 1)} className={`mt-4 ${pillButton}`}>Retry</button>
@@ -292,10 +321,10 @@ function useUrlQuery(params: URLSearchParams, setParams: ReturnType<typeof useSe
   return { query, setQuery, debounced };
 }
 
-/** Search: Puzzles (title or creator; Newest or Most Played) or Creators (public name or slug). */
+/** Search: Puzzles (title or creator; Newest, Most Played or Most Liked) or Creators (public name or slug). */
 function SearchView({ params, setParams, saves, signedIn }: { params: URLSearchParams; setParams: ReturnType<typeof useSearchParams>[1]; saves: Saves; signedIn: boolean | undefined }) {
   const mode: ExploreMode = params.get("mode") === "creators" ? "creators" : "puzzles";
-  const sort: CommunitySort = params.get("sort") === "plays" ? "plays" : "newest";
+  const sort: CommunitySort = params.get("sort") === "plays" ? "plays" : params.get("sort") === "likes" ? "likes" : "newest";
   const { query, setQuery, debounced } = useUrlQuery(params, setParams);
   const q = debounced.trim();
   const input = useRef<HTMLInputElement>(null);
@@ -502,6 +531,12 @@ export default function CommunityPage() {
     : params.get("view") === "search" || params.has("q") || params.has("mode") || params.has("sort") ? "search" : "home";
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const saves = useCommunitySaves(user === undefined ? undefined : user?.id ?? null);
+  // The browse order (Explore's list and See all); Newest is the default and leaves no parameter.
+  const setOrder = (o: CommunitySort) => {
+    const next = new URLSearchParams(params);
+    if (o === "newest") next.delete("order"); else next.set("order", o);
+    setParams(next, { replace: true });
+  };
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", loadSettings().darkMode);
@@ -535,8 +570,8 @@ export default function CommunityPage() {
         </ul>
       </nav>
       <main className="w-full max-w-[840px] px-4 flex-1">
-        {tab === "explore" && view === "home" && <ExploreHome saves={saves} />}
-        {tab === "explore" && view === "newest" && <NewestView saves={saves} />}
+        {tab === "explore" && view === "home" && <ExploreHome saves={saves} order={orderOf(params)} onOrder={setOrder} />}
+        {tab === "explore" && view === "newest" && <NewestView saves={saves} order={orderOf(params)} onOrder={setOrder} />}
         {tab === "explore" && view === "search" && <SearchView params={params} setParams={setParams} saves={saves} signedIn={user === undefined ? undefined : !!user} />}
         {tab === "following" && <FollowingPanel user={user} saves={saves} />}
         {tab === "favorites" && <FavoritesPanel user={user} saves={saves} />}

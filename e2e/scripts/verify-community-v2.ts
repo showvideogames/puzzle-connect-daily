@@ -160,13 +160,16 @@ try {
   await finish(rateMe, wrenDev);
   await rejects(rate(wren, 5, wrenDev), /can't rate your own puzzle/);
   assert.deepEqual(await rate(pia, 4), { rating: 4 });
-  assert.deepEqual(await call(pia, "public.get_my_custom_puzzle_rating($1)", [rateMe.share_id]), { rating: 4 });
+  assert.deepEqual(await call(pia, "public.get_my_custom_puzzle_rating($1)", [rateMe.share_id]), { rating: 4, can_rate: true });
   assert.deepEqual(await rate(pia, 2), { rating: 2 }); // edit
-  assert.deepEqual(await call(pia, "public.get_my_custom_puzzle_rating($1)", [rateMe.share_id]), { rating: 2 });
+  assert.deepEqual(await call(pia, "public.get_my_custom_puzzle_rating($1)", [rateMe.share_id]), { rating: 2, can_rate: true });
   assert.equal((await db.query<{ n: number }>("select count(*)::int n from public.custom_puzzle_ratings")).rows[0].n, 1);
-  assert.deepEqual(await call(odie, "public.get_my_custom_puzzle_rating($1)", [rateMe.share_id]), { rating: null }); // nobody else's
+  assert.deepEqual(await call(odie, "public.get_my_custom_puzzle_rating($1)", [rateMe.share_id]), { rating: null, can_rate: true }); // nobody else's
+  assert.deepEqual(await call(wren, "public.get_my_custom_puzzle_rating($1)", [rateMe.share_id]), { rating: null, can_rate: false }); // the author
+  assert.deepEqual(await call(pia, "public.get_my_custom_puzzle_rating($1)", ["nope"]), { rating: null, can_rate: false });
   await db.query("update public.custom_puzzles set moderation_status = 'hidden' where id = $1", [rateMe.puzzle_id]);
   await rejects(rate(pia, 5), /puzzle not found/);
+  assert.deepEqual(await call(pia, "public.get_my_custom_puzzle_rating($1)", [rateMe.share_id]), { rating: 2, can_rate: false });
   await db.query("update public.custom_puzzles set moderation_status = 'active' where id = $1", [rateMe.puzzle_id]);
   // Ratings never reach any public payload.
   for (const sql of ["public.get_custom_puzzle($1)", "public.get_custom_puzzle_stats($1)"]) {

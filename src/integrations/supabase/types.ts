@@ -939,6 +939,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      set_custom_puzzle_rating: {
+        Args: {
+          _device_id: string
+          _device_token: string
+          _rating: number
+          _share_id: string
+        }
+        Returns: Json
+      }
       set_custom_puzzle_cover_emojis: {
         Args: { _background: string | null; _emojis: string[] | null; _share_id: string }
         Returns: Json
@@ -1100,6 +1109,10 @@ export type Database = {
       }
       get_custom_puzzle_stats: { Args: { _share_id: string }; Returns: Json }
       get_my_custom_puzzle_listing: {
+        Args: { _share_id: string }
+        Returns: Json
+      }
+      get_my_custom_puzzle_rating: {
         Args: { _share_id: string }
         Returns: Json
       }
