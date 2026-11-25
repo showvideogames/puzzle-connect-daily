@@ -101,8 +101,7 @@ function PuzzleRow({ puzzle, community, onChange }: { puzzle: MyPuzzle; communit
           <h2 id={titleId} className={`text-base font-black leading-tight [overflow-wrap:anywhere] sm:text-[17px] ${cv.ink}`}>{puzzle.title}</h2>
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
             <span className={`rounded-full px-2 py-0.5 text-xs font-extrabold ${status.tone}`} data-testid="my-puzzle-status">{status.label}</span>
-            <span className="whitespace-nowrap">{puzzle.mode === "rainbow" ? "Rainbow" : "Classic"}</span>
-            <span className="whitespace-nowrap">Made {dateFmt.format(new Date(puzzle.createdAt))}</span>
+            <span className="whitespace-nowrap">{puzzle.mode === "rainbow" ? "Rainbow" : "Classic"} · Made {dateFmt.format(new Date(puzzle.createdAt))}</span>
           </p>
           <p className="mt-1 text-sm text-muted-foreground" data-testid="my-puzzle-note">{messageFor(puzzle, community)}</p>
         </div>

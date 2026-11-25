@@ -208,7 +208,48 @@ test("shelf to play: Featured, Picks and Newest, then a fictional puzzle played 
   await expect(rating.getByRole("button", { name: "2 stars" })).toHaveAttribute("aria-pressed", "true");
   await expect(rating.getByRole("button", { name: "4 stars" })).toHaveAttribute("aria-pressed", "false");
   await page.keyboard.press("Escape");
+
+  // My Puzzles, from the account area of Settings: the Demo Player's own puzzles, newest first.
+  await page.getByRole("button", { name: "Settings and menu" }).click();
+  await page.getByRole("button", { name: "My Puzzles" }).click();
+  const library = page.getByTestId("my-puzzles");
+  await expect(library).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByTestId("my-puzzles-list").getByRole("heading", { level: 2 })).toHaveText(["Frog Friends", "Secret Santa Swap", "Lantern Festival", "Mixtape Memories"]);
+  const mine = (title: string) => page.getByTestId("my-puzzle").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+  await expect(mine("Secret Santa Swap").getByTestId("my-puzzle-status")).toHaveText("Private");
+  await expect(mine("Secret Santa Swap").getByRole("button", { name: /^List / })).toHaveCount(0);
+  await expect(mine("Lantern Festival").getByTestId("my-puzzle-status")).toHaveText("In Community");
+  await expect(mine("Mixtape Memories").getByTestId("my-puzzle-status")).toHaveText("Link only");
+  await expect(library).not.toContainText("Pantry Raid");
+  await page.screenshot({ path: path.join(SHOTS, "showcase-phone-390-my-puzzles.png"), fullPage: true, animations: "disabled" });
+  // The older music puzzle gets a cover and goes into Community, then back out.
+  await mine("Mixtape Memories").getByRole("button", { name: "Add a cover for Mixtape Memories" }).click();
+  await page.getByTestId("cover-picker").getByRole("searchbox", { name: "Search emojis" }).fill("headphone");
+  await page.getByTestId("cover-picker").getByRole("option", { name: "headphone", exact: true }).click();
+  await page.getByTestId("cover-picker").getByRole("radio", { name: "Rainbow", exact: true }).click();
+  await page.getByTestId("cover-picker").getByRole("button", { name: "Save Cover" }).click();
+  await expect(mine("Mixtape Memories").getByTestId("my-puzzle-result")).toHaveText("Cover saved.");
+  await mine("Mixtape Memories").getByRole("button", { name: "List Mixtape Memories in Community" }).click();
+  await expect(mine("Mixtape Memories").getByTestId("my-puzzle-status")).toHaveText("In Community");
+  await page.screenshot({ path: path.join(SHOTS, "showcase-phone-390-my-puzzles-listed.png"), fullPage: false, animations: "disabled" });
+  // Now first in Community's Newest, with its new cover.
+  await page.getByRole("link", { name: "Rainbow Categories home" }).click();
+  await expect(panel).toHaveAttribute("aria-busy", "false");
+  const first = page.getByTestId("newest-list").getByTestId("community-card").first();
+  await expect(first.getByTestId("card-title")).toHaveText("Mixtape Memories");
+  await expect(first.locator("[data-cover-kind]")).toHaveAttribute("data-cover-emoji", "1F3A7-FE0F");
+  // Unlist it again from My Puzzles (the preview note links there for the Demo Player).
+  await page.getByTestId("showcase-my-puzzles").click();
+  await expect(library).toHaveAttribute("aria-busy", "false");
+  await mine("Mixtape Memories").getByRole("button", { name: "Unlist Mixtape Memories from Community" }).click();
+  await expect(mine("Mixtape Memories").getByTestId("my-puzzle-status")).toHaveText("Link only");
   await page.getByTestId("showcase-account").click();
+  // A guest gets the sign-in prompt, never the Demo Player's list.
+  await expect(page.getByTestId("my-puzzles-guest")).toBeVisible();
+  await expect(page.getByTestId("my-puzzles-list")).toHaveCount(0);
+  await page.getByRole("link", { name: "Rainbow Categories home" }).click();
+  await expect(panel).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByTestId("newest-list").getByTestId("card-title").first()).not.toHaveText("Mixtape Memories");
 
   // Desktop width too.
   await page.setViewportSize({ width: 1280, height: 860 });
