@@ -46,6 +46,8 @@ Rainbow owns. See `docs/CONFIG-INVENTORY.md` for every environment value,
 | `npm run e2e:db:verify` | every migration on a clean in-process Postgres, plus the full fixture seed — no Docker needed |
 | `npm run e2e:db:community` | Community Puzzles listing rules on in-process Postgres (preview; see `docs/COMMUNITY-PUZZLES-PREVIEW.md`) |
 | `npm run e2e:db:follows` | Community creator discovery, Follow, Following and bookmark lookups on in-process Postgres (preview) |
+| `npm run e2e:db:curation` | Community Explore curation (admin-only Featured/Picks) and keyset Newest on in-process Postgres (preview) |
+| `npm run e2e:community:flagoff` | builds without the Community flag and checks nothing of it exists (preview) |
 | `npm run e2e:community` | Community Puzzles browser checks and review screenshots, after `e2e:seed:community` (preview) |
 | `npm run e2e:test` | the browser end-to-end suite against a disposable local Supabase stack |
 

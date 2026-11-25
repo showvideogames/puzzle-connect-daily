@@ -128,13 +128,13 @@ function renderPage(path: string) {
 }
 
 describe("Community page, guest", () => {
-  it("Explore is the default tab, with Newest selected and Puzzles mode", async () => {
-    answers.list_community_puzzles = { items: [], has_more: false };
+  it("Explore is the default tab, with search one tap away (Explore home is covered in communityExplore.test.tsx)", async () => {
+    answers.get_community_explore = { featured: null, picks: [] };
+    answers.list_community_newest = { items: [], has_more: false };
     answers.get_custom_puzzle_cards = [];
     renderPage("/community");
     expect(screen.getByRole("link", { name: "Explore" }).getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("button", { name: "Newest" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Puzzles" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("link", { name: "Search Community puzzles and creators" }).getAttribute("href")).toBe("/community?view=search");
     expect(await screen.findByText("No Community puzzles yet.")).toBeTruthy();
     // No unplayed filter: Rainbow has no reliable per-player play record for custom puzzles.
     expect(screen.queryByRole("button", { name: /unplayed/i })).toBeNull();

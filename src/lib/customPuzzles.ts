@@ -668,3 +668,69 @@ export async function resolveShareId(shortCode: string): Promise<string | null> 
   shareIdCache.set(shortCode, data);
   return data;
 }
+
+// ── Community part 3: curated Explore, keyset Newest, admin curation ────────
+
+export interface CommunityExplore {
+  /** Admin-chosen, and only while it is in Community right now; null otherwise. */
+  featured: CommunityPuzzleListing | null;
+  picks: CommunityPuzzleListing[];
+}
+
+/** The curated shelf. Throws on failure so the page can fall back to Newest alone. */
+export async function getCommunityExplore(): Promise<CommunityExplore> {
+  const { data, error } = await supabase.rpc("get_community_explore");
+  if (error) throw error;
+  const r = (data ?? {}) as { featured?: CardRow | null; picks?: CardRow[] };
+  return { featured: r.featured ? mapCard(r.featured) : null, picks: (r.picks ?? []).map(mapCard) };
+}
+
+/** Where the next Newest page starts: the last item's first-listing time and short code. */
+export interface NewestCursor {
+  listedAt: string;
+  shortCode: string;
+}
+
+/**
+ * Every puzzle in Community by first listing time, newest first. Keyset-paged,
+ * so listings that change between pages never repeat or skip the rest.
+ */
+export async function listCommunityNewest(params: { limit?: number; after?: NewestCursor | null } = {}): Promise<{ items: CommunityPuzzleListing[]; hasMore: boolean; cursor: NewestCursor | null }> {
+  const { data, error } = await supabase.rpc("list_community_newest", {
+    _limit: params.limit ?? COMMUNITY_PAGE_SIZE,
+    _before_listed_at: params.after?.listedAt,
+    _before_short_code: params.after?.shortCode,
+  });
+  if (error) throw error;
+  const r = (data ?? {}) as { items?: (CardRow & { listed_at: string })[]; has_more?: boolean };
+  const rows = r.items ?? [];
+  const last = rows[rows.length - 1];
+  return { items: rows.map(mapCard), hasMore: !!r.has_more, cursor: last ? { listedAt: last.listed_at, shortCode: last.short_code } : null };
+}
+
+export interface CurationEntry {
+  slot: "featured" | "pick";
+  position: number;
+  shortCode: string;
+  title: string;
+  creatorName: string;
+  /** Whether Explore is showing it right now. */
+  shown: boolean;
+  hiddenReason: string | null;
+}
+
+/** Admin only (enforced by the server). Throws with the server's message. */
+export async function adminGetCuration(): Promise<CurationEntry[]> {
+  const { data, error } = await supabase.rpc("admin_get_community_curation");
+  if (error) throw error;
+  return ((Array.isArray(data) ? data : []) as unknown as {
+    slot: "featured" | "pick"; position: number; short_code: string; title: string; creator_name: string; shown: boolean; hidden_reason: string | null;
+  }[]).map((r) => ({ slot: r.slot, position: r.position, shortCode: r.short_code, title: r.title, creatorName: r.creator_name, shown: r.shown, hiddenReason: r.hidden_reason }));
+}
+
+/** Replaces the whole curation: one Featured (or none) and up to six ordered Picks. Admin only. */
+export async function adminSetCuration(featured: string | null, picks: string[]): Promise<CurationEntry[]> {
+  const { error } = await supabase.rpc("admin_set_community_curation", { _featured: featured, _picks: picks });
+  if (error) throw error;
+  return adminGetCuration();
+}

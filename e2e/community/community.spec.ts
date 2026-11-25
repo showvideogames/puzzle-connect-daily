@@ -21,7 +21,8 @@ const preview = JSON.parse(fs.readFileSync(path.join(E2E_DIR, ".artifacts", "com
 };
 const P = preview.puzzles;
 const creds = (k: "wren" | "odie" | "pia") => ({ email: preview.accounts[k].email, password: preview.password });
-const SHOTS = path.resolve(E2E_DIR, "..", "evidence", "community-preview-2");
+// Part 1/2 screenshots are committed under evidence/; re-runs since the Explore overhaul go to a git-ignored folder.
+const SHOTS = path.resolve(E2E_DIR, ".artifacts", "legacy-shots");
 fs.mkdirSync(SHOTS, { recursive: true });
 const shot = (page: Page, name: string, fullPage = true) =>
   page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage, animations: "disabled" });
@@ -32,14 +33,15 @@ const NEVER = ["Link Only Lighthouse", "Private Parlour Games", "Anonymous Airsh
 const SPOILERS = ["BONGO", "ALIBI", "BREEZE", "BASIL", "CORAL", "group 1", "Fictional first words"];
 
 const grid = (page: Page) => page.getByTestId("community-grid");
-const cardTitles = async (page: Page) => grid(page).locator("li a[href^='/p/']").allInnerTexts();
+const cardTitles = async (page: Page) => grid(page).getByTestId("card-title").allInnerTexts();
 
 async function settled(page: Page) {
   await expect(page.getByTestId("community-panel")).toHaveAttribute("aria-busy", "false");
 }
+/** The puzzle list these checks drive is Explore's search view since the Explore overhaul (part 3). */
 async function openCommunity(page: Page, qs = "") {
-  await page.goto(`/community${qs}`);
-  await expect(page.getByRole("heading", { name: "Community Puzzles", level: 1 })).toBeVisible({ timeout: 30_000 });
+  await page.goto(`/community?view=search${qs ? `&${qs.slice(1)}` : ""}`);
+  await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 30_000 });
   await settled(page);
 }
 /** Runs an action and waits for the feed request it causes, then for the page to settle. */
@@ -80,7 +82,7 @@ test("design review screenshots: desktop, 390px, 320px, dark, menu and keyboard 
     await expectNoHorizontalOverflow(page);
     // Single column on a phone.
     const xs = await grid(page).locator("li").evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().left))).size);
-    expect(xs).toBe(1);
+    expect(xs).toBe(width >= 360 ? 2 : 1); // two equal columns once they fit
     await shot(page, `community-phone-${width}-light`);
   }
   await search(page, "zzz no such puzzle");
@@ -108,7 +110,7 @@ test("design review screenshots: desktop, 390px, 320px, dark, menu and keyboard 
   await expect(page.getByRole("button", { name: "Most Played" })).toHaveAttribute("aria-pressed", "true");
   await expect(page).toHaveURL(/sort=plays/);
   await page.keyboard.press("Tab");
-  await expect(grid(page).getByRole("link", { name: "The Usual Suspects" })).toBeFocused();
+  await expect(grid(page).getByRole("link", { name: "The Usual Suspects", exact: true })).toBeFocused();
   await shot(page, "community-desktop-keyboard-focus", false);
 });
 
@@ -130,8 +132,10 @@ test.describe("dark mode", () => {
 test("guest: only explicitly listed puzzles, on every sort and search, with no answers", async ({ page }) => {
   await openCommunity(page);
   expect((await cardTitles(page)).sort()).toEqual([...LISTED].sort());
+  await page.goto("/community");
   await expect(page.getByRole("link", { name: "Create A Puzzle" })).toHaveAttribute("href", "/create");
   await expect(page.getByText("Play puzzles made by other Rainbow players.")).toBeVisible();
+  await openCommunity(page);
 
   // Newest = listing order (newest first); Most Played = real finished plays.
   expect(await cardTitles(page)).toEqual([...LISTED].reverse());
@@ -177,7 +181,7 @@ test("guest: only explicitly listed puzzles, on every sort and search, with no a
 test("guest: loading failure offers Retry, which recovers", async ({ page, pageProblems }) => {
   let fail = true;
   await page.route("**/rest/v1/rpc/list_community_puzzles", (route) => (fail ? route.fulfill({ status: 503, body: "{}" }) : route.continue()));
-  await page.goto("/community");
+  await page.goto("/community?view=search");
   await expect(page.getByText("Couldn't load Community puzzles.")).toBeVisible({ timeout: 30_000 });
   await shot(page, "community-desktop-error", false);
   fail = false;
@@ -193,7 +197,7 @@ test("guest: finds a puzzle, plays it to the end, and its play count goes up", a
   await search(page, "Pantry");
   const card = grid(page).locator("li").filter({ hasText: "Pantry Raid" });
   await expect(card).toContainText("7 plays");
-  await card.getByRole("link", { name: "Pantry Raid" }).click();
+  await card.getByRole("link", { name: "Pantry Raid", exact: true }).click();
   await expect(page).toHaveURL(`/p/${P.pantry.shortCode}`);
   await expect(page.getByRole("heading", { name: "Pantry Raid" })).toBeVisible();
   const groups = [

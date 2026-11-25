@@ -140,7 +140,75 @@ public player records and spoilers.
 Reproduce part 2 the same way as below. `npm run e2e:db:follows` runs its SQL rules
 in-process, and `npm run e2e:community` now runs both browser specs (12 checks).
 Part 2's screenshots are in `evidence/community-preview-2/`; the base set in
-`evidence/community-preview/` is unchanged.
+`evidence/community-preview/` is unchanged. Part 3's are in `evidence/community-preview-3/`.
+
+## Part 3: Explore visual overhaul and curation (add-on)
+
+This is a third commit with its own migration, `0006_community_curation.sql`. It
+is still behind `VITE_COMMUNITY_PUZZLES=preview`, not applied to any hosted
+database, and its visual direction is the approved "B / Arcade Shelf" with a
+compact Featured Puzzle taken from "A".
+
+**Explore, phone first**
+
+* **Header:** a compact header with the app's menu drawer, the real stacked
+  Rainbow Categories wordmark (`public/rainbow-categories-logo-stacked-480.webp`,
+  a 37 KB copy of the existing 221 KB file) and a search button. Below it sit the
+  Explore / Following / Favorites tabs, with a violet underline on the current one.
+* **Look:** a true-white page in light mode (the game pages' existing
+  `layout-refresh` theme), violet headings, links and Play buttons, and the
+  existing dark tokens in dark mode.
+* **Featured Puzzle:** one, compact, chosen by an admin. It appears only when
+  one is set and eligible, with no empty shell, and makes no daily promise.
+* **Editor's Picks:** up to six, in the admin's order, shown as two equal columns
+  on phones from 360 px (one column below that), and never repeating the
+  Featured Puzzle.
+* **Newest:** every listed puzzle by its *first* Community listing time, newest
+  first. It's independent of curation and popularity, includes new listings
+  whether or not they are curated, and never bumps a puzzle back up on re-list.
+  "See all" opens `?view=newest`, which is keyset-paged so listing changes
+  between pages never repeat or skip a puzzle. Search moved to `?view=search`;
+  old `?q=`, `?mode=creators` and `?sort=plays` links still open it.
+* **Cards:** a cover, the title, a visible linked creator credit, an accessible
+  bookmark (the existing Favorites) and a Play button on each. Zero counts and
+  extra boxes are gone; a play count shows only when it's above zero. Create
+  is a small "+ Create A Puzzle" link.
+
+**Covers.** `components/community/PuzzleCover.tsx` holds eight flat SVG scenes,
+each built around a Rainbow tile cluster, with three palettes each (24 looks,
+a few KB in total). A puzzle's cover is picked from its public short code only
+(`lib/puzzleCovers.ts`), never its title or content, so covers can't hint at
+solutions, the same puzzle looks the same everywhere, and nobody draws or uploads
+art. Covers are decorative (`aria-hidden`, no text). A small shelf can still
+occasionally show the same look twice.
+
+**Curation (admin only).** The page is `/admin/community` (flag-gated, `noIndex`).
+It uses the existing `useAuth` admin check and `AdminLogin` / `AdminNoAccess`
+screens, and the server checks `has_role(rainbow_uid(), 'admin')` like
+`admin_set_custom_puzzle_status`. The admin picks one Featured Puzzle and up to six
+ordered Picks, can reorder, replace and remove them, and saves the whole set at
+once. Only puzzles listed in Community can be chosen. The page shows any curated
+entry Explore is hiding, and why ("unlisted by its creator", "hidden by
+moderation", …). There's no automatic or popularity-based selection, and no
+reporting in this pass.
+
+**Server (`0006`)**
+
+* `community_curation`: one row per puzzle, so the Featured Puzzle can't also be
+  a Pick. At most one Featured and Pick positions 0 to 5. RLS is on and no client
+  can read the table.
+* `get_community_explore()` (public) re-checks 0004's eligibility on every read,
+  so an unlisted, hidden or account-deleted puzzle vanishes from Featured and
+  Picks while its curation row waits. Re-listing brings it back where the admin
+  left it.
+* `list_community_newest(limit, before_listed_at, before_short_code)` (public)
+  is ordered by `(community_listed_at desc, short_code)`.
+* `admin_get_community_curation()` and `admin_set_community_curation(featured,
+  picks)` are admin only. The set call validates and replaces the whole curation
+  under an advisory lock.
+
+Untouched: share links, creator search, Follow and Following, unlisting,
+private saves, and the creator page.
 
 ## Rollout gates (not met, so the flag stays off in production)
 
@@ -284,3 +352,56 @@ Screenshots are in `evidence/community-preview/`.
   reproducible preview.
 * At volume, creator search and the Following feed are bounded per page but not
   separately indexed for name search.
+
+## Verified in part 3
+
+These are the focused checks you asked for, all on fictional fixtures against
+the disposable stack:
+
+* `npm run e2e:db:curation`:
+  * 0006 is additive and admin only (guests and creators get 403);
+  * validation covers only listed puzzles, no duplicates, the Featured Puzzle
+    not also a Pick, and at most six Picks;
+  * reads re-check eligibility: unlisting or hiding removes the entry with no
+    empty shell, and re-listing restores it;
+  * replace and remove work;
+  * Newest follows first listing time regardless of curation, a newly listed
+    puzzle comes first, and re-listing doesn't bump;
+  * keyset pages match one big page at sizes 1, 2 and 4 and stay stable across
+    an insert or an unlist between pages, with ties broken by short code;
+  * grants are checked.
+* `npm run e2e:community -- explore.spec.ts` (5 browser checks):
+  * at 390 px: the real wordmark, a white background, three tabs, one compact
+    Featured Puzzle, Picks in admin order in two equal columns, a credit,
+    bookmark and Play on every card, no zero counts, covers with no text,
+    "See all", and a small Create link;
+  * keyboard order from the tabs into Featured (title, credit, Play, bookmark)
+    with a visible focus ring;
+  * 320 px with a single column and no sideways scroll, plus desktop and dark
+    mode;
+  * a guest plays from Featured and solves a category, then saves a Pick. The
+    Newest row and the Favorites tab agree, and the puzzle page shows it
+    Favorited;
+  * Newest matches the server, a never-curated new listing comes first, the
+    Featured Puzzle also appears in Newest, re-listing doesn't bump, and
+    See all lists the same order;
+  * curation: the admin page and RPC refuse a guest and a creator. Unlisting
+    the Featured Puzzle and a Pick removes them with no empty Featured shell,
+    and the link still plays. The admin sees why, replaces Featured, reorders,
+    removes, and saves; Explore follows with no duplicate. Re-listing doesn't
+    bring back removed curation, and with no curation Newest leads.
+* `npm run e2e:community:flagoff`: a build without the flag returns 404 for
+  `/community`, `?view=newest` and `/admin/community`. The menu has no
+  Community row, `/p/` and `/custom/` links play with no owner control, the
+  creator page is historical (totals, no Follow, avatar or Community view), and
+  `/create` has no List in Community.
+* The part 1 and 2 browser specs were updated for the new layout (search moved
+  to `?view=search`) and re-run once to confirm that share links, creator
+  search, Follow and Following, unlisting and private saves are preserved: 12/12.
+  Their screenshots now go to the git-ignored `e2e/.artifacts/legacy-shots`, so
+  the committed part 1 and 2 evidence is untouched. The 76-test main E2E suite
+  was not re-run this pass (focused checks only); the flag-off check covers it.
+
+Unit tests pass (all files, including the new `communityExplore.test.tsx`).
+Typecheck is clean, lint shows nothing new, `e2e:db:verify` passes, and the
+manifest was regenerated and checked.

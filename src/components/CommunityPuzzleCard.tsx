@@ -77,7 +77,7 @@ export function CommunityPuzzleCard({
     return (
       <li className="rounded-xl border border-border bg-card p-4 pr-2 flex flex-col gap-2 min-w-0" data-testid="community-card">
         <div className="flex items-start justify-between gap-1">
-          <div className="min-w-0 pt-1.5">{titleLink}</div>
+          <div className="min-w-0 pt-1.5" data-testid="card-title">{titleLink}</div>
           {bookmark && (
             <button
               type="button"

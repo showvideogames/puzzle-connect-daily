@@ -134,6 +134,22 @@ async function main(): Promise<number> {
     console.log(`  ${spec.list ? "listed  " : "unlisted"} ${spec.visibility.padEnd(7)} "${spec.title}" → /p/${row.short_code} (${spec.plays} plays)`);
   }
 
+  // Human curation for Explore, set by the fixture admin through the real
+  // admin-checked RPC: one Featured Puzzle and four ordered Editor's Picks.
+  const { ACCOUNTS } = await import("../fixtures/catalog.ts");
+  const adminAccount = Object.values(ACCOUNTS).find((a) => a.isAdmin);
+  if (!adminAccount) throw new Error("No admin fixture account.");
+  const adminClient = client(config.apiUrl, config.anonKey);
+  const signedIn = await adminClient.auth.signInWithPassword({ email: adminAccount.email, password: adminAccount.password });
+  if (signedIn.error) throw new Error(`admin sign-in failed: ${signedIn.error.message}`);
+  const curation = { featured: "pantry", picks: ["tides", "air", "offbeat", "usual"] };
+  const curated = await adminClient.rpc("admin_set_community_curation", {
+    _featured: out[curation.featured].shortCode,
+    _picks: curation.picks.map((k) => out[k].shortCode),
+  });
+  if (curated.error) throw new Error(`curation failed: ${curated.error.message}`);
+  console.log(`  curated: Featured "${out[curation.featured].title}"; Picks ${curation.picks.map((k) => `"${out[k].title}"`).join(", ")}`);
+
   const file = path.resolve("e2e/.artifacts/community-preview.json");
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify({

@@ -21,11 +21,11 @@ shows up as a diff instead of as a surprise on a blank project.
 
 | Category | Count |
 |---|---|
-| Tables | 23 |
-| Columns | 197 |
-| Constraints | 97 |
-| Indexes | 61 |
-| Functions | 75 |
+| Tables | 24 |
+| Columns | 202 |
+| Constraints | 102 |
+| Indexes | 64 |
+| Functions | 79 |
 | Triggers | 5 |
 | RLS policies | 25 |
 | Enum types | 1 |
@@ -170,6 +170,34 @@ Indexes:
 Policies:
 
 - `Admins can read beta playtests` — SELECT to public; using `has_role(rainbow_uid(), 'admin'::app_role)`
+
+### `community_curation`
+
+> Admin-chosen Featured Puzzle (one) and ordered Editor's Picks (up to six) for Community Explore. Public reads re-check eligibility every time.
+
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
+
+| Column | Type | Null | Default |
+|---|---|---|---|
+| `custom_puzzle_id` | uuid | not null |  |
+| `slot` | text | not null |  |
+| `position` | smallint | not null |  |
+| `set_by` | uuid | null |  |
+| `set_at` | timestamp with time zone | not null | `now()` |
+
+Constraints:
+
+- `community_curation_custom_puzzle_id_fkey` FOREIGN KEY (custom_puzzle_id) REFERENCES custom_puzzles(id) ON DELETE CASCADE
+- `community_curation_pkey` PRIMARY KEY (custom_puzzle_id)
+- `community_curation_position_check` CHECK ((((slot = 'featured'::text) AND ("position" = 0)) OR ((slot = 'pick'::text) AND ("position" >= 0) AND ("position" <= 5))))
+- `community_curation_set_by_fkey` FOREIGN KEY (set_by) REFERENCES auth.users(id) ON DELETE SET NULL
+- `community_curation_slot_check` CHECK ((slot = ANY (ARRAY['featured'::text, 'pick'::text])))
+
+Indexes:
+
+- `CREATE UNIQUE INDEX community_curation_one_featured ON public.community_curation USING btree (slot) WHERE (slot = 'featured'::text)`
+- `CREATE UNIQUE INDEX community_curation_pick_position ON public.community_curation USING btree ("position") WHERE (slot = 'pick'::text)`
+- `CREATE UNIQUE INDEX community_curation_pkey ON public.community_curation USING btree (custom_puzzle_id)`
 
 ### `creator_follows`
 
@@ -814,7 +842,9 @@ Indexes:
 |---|---|---|---|---|
 | `account_email(_user_id uuid)` | text | yes | stable | service_role |
 | `admin_find_account(_email text)` | TABLE(user_id uuid, email text) | yes | stable | authenticated, service_role |
+| `admin_get_community_curation()` | jsonb | yes | stable | authenticated, service_role |
 | `admin_save_puzzle(_puzzle_id uuid, _metadata jsonb, _content jsonb)` | jsonb | yes | volatile | authenticated, service_role |
+| `admin_set_community_curation(_featured text, _picks text[])` | jsonb | yes | volatile | authenticated, service_role |
 | `admin_set_custom_puzzle_status(_puzzle_id uuid, _status text)` | boolean | yes | volatile | authenticated, service_role |
 | `community_creator_json(_c creator_profiles)` | jsonb | yes | stable | service_role |
 | `complete_beta_playtest(_playtest_id uuid, _device_id text, _device_token text, _won boolean, _mistakes integer, _hints_used boolean)` | boolean | yes | volatile | anon, authenticated, service_role |
@@ -837,6 +867,7 @@ Indexes:
 | `finalize_game_session(_session_id uuid, _device_id text, _device_token text, _won boolean, _mistakes integer, _active_time_seconds integer, _found_rainbow boolean, _rainbow_solve_index smallint, _solve_order jsonb, _hints_used boolean, _share_grid text, _skip_streak boolean, _local_date text)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `game_sessions_sync_status()` | trigger | yes | volatile | anon, authenticated, service_role |
 | `get_archive_puzzles()` | TABLE(id uuid, date date, title text) | yes | stable | anon, authenticated, service_role |
+| `get_community_explore()` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_creator_community(_slug text)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_creator_profile(_slug text, _sort text)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_custom_puzzle(_share_id text)` | jsonb | yes | stable | anon, authenticated, service_role |
@@ -858,6 +889,7 @@ Indexes:
 | `has_official_result(_puzzle_id text, _device_id text, _device_token text)` | boolean | yes | stable | anon, authenticated, service_role |
 | `has_role(_user_id uuid, _role app_role)` | boolean | yes | stable | anon, authenticated, service_role |
 | `import_guest_history(_device_id text, _device_token text)` | TABLE(outcome text, sessions_claimed integer) | yes | volatile | authenticated, service_role |
+| `list_community_newest(_limit integer, _before_listed_at timestamp with time zone, _before_short_code text)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `list_community_puzzles(_query text, _sort text, _limit integer, _offset integer)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `luck_eligible_paths(_puzzle_id text)` | TABLE(session_id uuid, user_id uuid, device_id text, path jsonb) | yes | stable | service_role |
 | `my_account()` | TABLE(user_id uuid, global_user_id text, email text, created_at timestamp with time zone) | yes | stable | authenticated, service_role |

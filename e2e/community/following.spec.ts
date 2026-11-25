@@ -22,7 +22,8 @@ const preview = JSON.parse(fs.readFileSync(path.join(E2E_DIR, ".artifacts", "com
 };
 const P = preview.puzzles;
 const creds = (k: Who) => ({ email: preview.accounts[k].email, password: preview.password });
-const SHOTS = path.resolve(E2E_DIR, "..", "evidence", "community-preview-2");
+// Part 2 screenshots are committed under evidence/; re-runs since the Explore overhaul go to a git-ignored folder.
+const SHOTS = path.resolve(E2E_DIR, ".artifacts", "legacy-shots");
 fs.mkdirSync(SHOTS, { recursive: true });
 const shot = (page: Page, name: string, fullPage = true) =>
   page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage, animations: "disabled" });
@@ -47,7 +48,7 @@ async function searchCreators(page: Page, q: string) {
   if ((await box.inputValue()) === q) return;
   await feedAfter(page, () => box.fill(q), "/rpc/search_community_creators");
 }
-const titlesIn = (page: Page, testId: string) => page.getByTestId(testId).locator("li a[href^='/p/']").allInnerTexts();
+const titlesIn = (page: Page, testId: string) => page.getByTestId(testId).getByTestId("card-title").allInnerTexts();
 const creatorNames = (page: Page) => page.getByTestId("creator-grid").getByRole("link").allInnerTexts();
 const card = (page: Page, testId: string, title: string) => page.getByTestId(testId).getByTestId("community-card").filter({ has: page.getByRole("link", { name: title, exact: true }) });
 const bookmark = (page: Page, testId: string, title: string) => card(page, testId, title).getByRole("button", { name: `Save ${title} to Favorites` });
@@ -62,7 +63,7 @@ async function signedInPage(browser: Browser, who: Who, url = "/community") {
 test.describe.configure({ mode: "serial" });
 
 test("guest: Explore / Following / Favorites tabs, Puzzles and Creators search, creator page", async ({ page }) => {
-  await go(page, "/community");
+  await go(page, "/community?view=search");
   const tabs = page.getByRole("navigation", { name: "Community sections" });
   for (const t of ["Explore", "Following", "Favorites"]) await expect(tabs.getByRole("link", { name: t })).toBeVisible();
   await expect(tabs.getByRole("link", { name: "Explore" })).toHaveAttribute("aria-current", "page");
@@ -75,7 +76,9 @@ test("guest: Explore / Following / Favorites tabs, Puzzles and Creators search, 
   const bm = bookmark(page, "community-grid", "A Little Offbeat");
   const [cardBox, bmBox] = [await offbeat.boundingBox(), await bm.boundingBox()];
   expect(bmBox!.x + bmBox!.width).toBeGreaterThan(cardBox!.x + cardBox!.width - 24);
-  expect(bmBox!.y).toBeLessThan(cardBox!.y + 24);
+  // Since the Explore overhaul the bookmark tops the text under the cover, level with the title.
+  const titleBox = await offbeat.getByTestId("card-title").boundingBox();
+  expect(Math.abs(bmBox!.y - titleBox!.y)).toBeLessThan(16);
   expect(bmBox!.width).toBeGreaterThanOrEqual(44);
   await shot(page, "p2-explore-desktop-1280-light");
 
@@ -133,7 +136,7 @@ test("guest: legacy share link + save, card bookmark, both in Favorites on this 
   await expect(page.getByRole("button", { name: /^Favorited/ }).first()).toBeVisible();
 
   // Bookmark a card in Explore: the same device store.
-  await go(page, "/community");
+  await go(page, "/community?view=search");
   await bookmark(page, "community-grid", "Turn Of The Tides").click();
   await expect(bookmark(page, "community-grid", "Turn Of The Tides")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("status").filter({ hasText: "Saved on this device" })).toBeVisible();
@@ -152,7 +155,7 @@ test("guest: legacy share link + save, card bookmark, both in Favorites on this 
   await page.goto(`/p/${P.tides.shortCode}`);
   await expect(page.getByRole("button", { name: /^Favorited/ }).first()).toBeVisible({ timeout: 30_000 });
   await go(page, "/community?tab=favorites");
-  await card(page, "favorites-grid", "Link Only Lighthouse").getByRole("link", { name: "Link Only Lighthouse" }).click();
+  await card(page, "favorites-grid", "Link Only Lighthouse").getByRole("link", { name: "Link Only Lighthouse", exact: true }).click();
   await expect(page).toHaveURL(`/p/${P.linkOnly.shortCode}`);
   await expect(page.getByRole("button", { name: /BEACON/ })).toBeVisible();
 
@@ -242,7 +245,7 @@ test("signed in: creator search → Follow, Following newest-first, opt-in listi
   await go(pia, "/community?tab=favorites");
   await expect(pia.getByText("Only you can see your Favorites.")).toBeVisible();
   expect(await titlesIn(pia, "favorites-grid")).toContain("Pantry Raid");
-  await card(pia, "favorites-grid", "Pantry Raid").getByRole("link", { name: "Pantry Raid" }).click();
+  await card(pia, "favorites-grid", "Pantry Raid").getByRole("link", { name: "Pantry Raid", exact: true }).click();
   await expect(pia.getByRole("heading", { name: "Pantry Raid" })).toBeVisible({ timeout: 30_000 });
   await expect(pia.getByRole("button", { name: /^Favorited/ }).first()).toBeVisible();
 
@@ -270,7 +273,7 @@ test("signed in: creator search → Follow, Following newest-first, opt-in listi
   await expectNoHorizontalOverflow(pia);
   await shot(pia, "p2-creators-phone-390-light");
   await pia.setViewportSize({ width: 320, height: 720 });
-  await go(pia, "/community");
+  await go(pia, "/community?view=search");
   await expectNoHorizontalOverflow(pia);
   const xs = await pia.getByTestId("community-grid").locator("li").evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().left))).size);
   expect(xs).toBe(1);
@@ -295,11 +298,11 @@ test("signed in: creator search → Follow, Following newest-first, opt-in listi
 test.describe("dark mode", () => {
   test.use({ settings: { darkMode: true } });
   test("Explore and creators in dark mode, keyboard reaches the bookmark", async ({ page }) => {
-    await go(page, "/community");
+    await go(page, "/community?view=search");
     const byline = card(page, "community-grid", "A Little Offbeat").getByRole("link", { name: "Wren Halloway" });
     expect(await byline.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(196, 181, 253)"); // violet-300
     // Keyboard: card title, then its bookmark.
-    await card(page, "community-grid", "A Little Offbeat").getByRole("link", { name: "A Little Offbeat" }).focus();
+    await card(page, "community-grid", "A Little Offbeat").getByRole("link", { name: "A Little Offbeat", exact: true }).focus();
     await page.keyboard.press("Tab");
     await expect(bookmark(page, "community-grid", "A Little Offbeat")).toBeFocused();
     await shot(page, "p2-explore-desktop-1280-dark-bookmark-focus", false);

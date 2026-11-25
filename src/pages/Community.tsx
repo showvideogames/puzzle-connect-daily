@@ -1,30 +1,36 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Plus, Search, X } from "lucide-react";
-import { GameHeader } from "@/components/GameHeader";
+import { ChevronLeft, Plus, Search, X } from "lucide-react";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SEO } from "@/components/SEO";
-import { CommunityPuzzleCard, communityLink } from "@/components/CommunityPuzzleCard";
+import { CommunityHeader } from "@/components/community/CommunityHeader";
 import { CommunityCreatorCard } from "@/components/community/CommunityCreatorCard";
 import { CreatorAvatar } from "@/components/community/CreatorAvatar";
+import { CoverCard, FeaturedCard, NewestRow, type ExploreCard } from "@/components/community/ExploreCards";
+import { cv } from "@/lib/communityStyle";
 import { useCommunitySaves, type SavedCard } from "@/hooks/useCommunitySaves";
+import { useGamePageTheme } from "@/hooks/useGamePageTheme";
 import { usePaged } from "@/hooks/usePaged";
 import { supabase } from "@/integrations/supabase/client";
-import { signOutOfRainbow } from "@/lib/platformSignIn";
 import { loadSettings } from "@/lib/settings";
 import {
   COMMUNITY_PAGE_SIZE,
+  getCommunityExplore,
   getFollowingFeed,
+  listCommunityNewest,
   listCommunityPuzzles,
   searchCommunityCreators,
   type CommunityCreator,
+  type CommunityExplore,
   type CommunityPuzzleListing,
   type CommunitySort,
+  type NewestCursor,
 } from "@/lib/customPuzzles";
 import type { User } from "@supabase/supabase-js";
 
 export type CommunityTab = "explore" | "following" | "favorites";
 export type ExploreMode = "puzzles" | "creators";
+type ExploreView = "home" | "newest" | "search";
 
 const TABS: { value: CommunityTab; label: string }[] = [
   { value: "explore", label: "Explore" },
@@ -39,40 +45,31 @@ const MODES: { value: ExploreMode; label: string }[] = [
   { value: "puzzles", label: "Puzzles" },
   { value: "creators", label: "Creators" },
 ];
+/** How many Newest rows Explore's home shows before "See all". */
+const NEWEST_PREVIEW = 6;
 
-const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
-const pillButton = `inline-flex h-11 items-center rounded-full border border-border bg-card px-5 text-sm font-bold text-foreground hover:bg-secondary disabled:opacity-60 ${focusRing}`;
-const gridClass = "mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3";
-
-/**
- * Decorative branding only: a fixed 4×4 pattern in the Rainbow strip's four
- * tones. It is the same on every visit and never derived from any puzzle, so
- * it cannot hint at a category or an answer.
- */
-const MOTIF = ["#eeb574", "#e9899e", "#8fc3ab", "#a28ad1"];
-function CommunityMotif() {
-  return (
-    <span aria-hidden="true" className="grid max-[359px]:hidden shrink-0 grid-cols-4 gap-[3px] rounded-xl border border-border bg-card p-1.5 shadow-sm">
-      {Array.from({ length: 16 }, (_, i) => (
-        <span key={i} className="block h-[9px] w-[9px] rounded-[2px] sm:h-[11px] sm:w-[11px]" style={{ backgroundColor: MOTIF[(i + Math.floor(i / 4)) % 4], opacity: i % 3 === 0 ? 1 : 0.55 }} />
-      ))}
-    </span>
-  );
-}
+const pillButton = `inline-flex h-11 items-center rounded-full border border-border bg-card px-5 text-sm font-bold text-foreground hover:bg-secondary disabled:opacity-60 ${cv.focus}`;
+/** Equal two-column covers on phones once they fit (360px and up); one column below. */
+const coverGrid = "mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:grid-cols-3";
+const PICK_COLUMNS: Record<number, string> = { 1: "md:grid-cols-2", 2: "md:grid-cols-2", 3: "md:grid-cols-3", 4: "md:grid-cols-4", 5: "md:grid-cols-3", 6: "md:grid-cols-3" };
 
 function Notice({ title, children, role }: { title: string; children?: ReactNode; role?: "alert" }) {
   return (
-    <div className="mt-6 rounded-2xl border border-border bg-card p-6 text-center" role={role}>
-      <p className="text-base font-bold text-foreground break-words">{title}</p>
+    <div className="mt-5 rounded-2xl bg-violet-50 px-5 py-6 text-center dark:bg-white/5" role={role}>
+      <p className={`text-base font-extrabold break-words ${cv.ink}`}>{title}</p>
       {children}
     </div>
   );
 }
 
-function Skeleton({ tall = false }: { tall?: boolean }) {
-  return (
-    <ul className={gridClass} aria-hidden="true" data-testid="community-loading">
-      {Array.from({ length: 6 }, (_, i) => <li key={i} className={`${tall ? "h-[120px]" : "h-[80px]"} animate-pulse rounded-xl border border-border bg-card`} />)}
+function Skeleton({ rows = false }: { rows?: boolean }) {
+  return rows ? (
+    <ul className="mt-2" aria-hidden="true" data-testid="community-loading">
+      {Array.from({ length: 4 }, (_, i) => <li key={i} className="my-3 h-[60px] animate-pulse rounded-xl bg-muted" />)}
+    </ul>
+  ) : (
+    <ul className={coverGrid} aria-hidden="true" data-testid="community-loading">
+      {Array.from({ length: 4 }, (_, i) => <li key={i} className="h-[220px] animate-pulse rounded-2xl bg-muted" />)}
     </ul>
   );
 }
@@ -89,17 +86,17 @@ function MoreButton({ hasMore, loadingMore, moreError, onMore, what }: { hasMore
   );
 }
 
-function Segmented<T extends string>({ label, options, value, onChange, small = false }: { label: string; options: { value: T; label: string }[]; value: T; onChange: (v: T) => void; small?: boolean }) {
+function Segmented<T extends string>({ label, options, value, onChange }: { label: string; options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
   return (
-    <div role="group" aria-label={label} className="inline-flex shrink-0 rounded-full border border-border bg-secondary/60 p-1">
+    <div role="group" aria-label={label} className="inline-flex shrink-0 rounded-full bg-violet-50 p-1 dark:bg-white/5">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`${small ? "h-8 px-3.5" : "h-9 px-4"} rounded-full text-sm font-bold transition-colors ${focusRing}
-            ${value === o.value ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-card"}`}
+          className={`h-9 rounded-full px-4 text-sm font-extrabold transition-colors ${cv.focus}
+            ${value === o.value ? cv.play : `${cv.ink} hover:bg-white dark:hover:bg-white/10`}`}
         >
           {o.label}
         </button>
@@ -108,40 +105,172 @@ function Segmented<T extends string>({ label, options, value, onChange, small = 
   );
 }
 
-/** Card props shared by every Community list: the bookmark is the existing Favorites. */
+/** The bookmark on every card is the existing Favorites (see useCommunitySaves). */
 interface Saves {
   saved: Set<string>;
   toggle: (card: SavedCard) => Promise<number | null>;
 }
+const bookmarkFor = (saves: Saves, p: SavedCard) => ({ saved: saves.saved.has(p.shortCode), onToggle: () => { void saves.toggle(p); } });
+const asCard = (p: SavedCard): ExploreCard => ({ title: p.title, shortCode: p.shortCode, mode: p.mode, creatorName: p.creatorName, creatorSlug: p.creatorSlug, finishedPlays: p.finishedPlays });
 
-function PuzzleGrid({ items, saves, counts, onCount, testId }: {
-  items: SavedCard[];
-  saves: Saves;
-  counts: Record<string, number>;
-  onCount: (code: string, n: number) => void;
-  testId: string;
-}) {
+function CoverGrid({ items, saves, testId, className = coverGrid }: { items: SavedCard[]; saves: Saves; testId: string; className?: string }) {
   return (
-    <ul className={gridClass} data-testid={testId}>
-      {items.map((p) => (
-        <CommunityPuzzleCard
-          key={p.shortCode}
-          title={p.title}
-          shortCode={p.shortCode}
-          mode={p.mode}
-          designerName={p.creatorName}
-          creatorSlug={p.creatorSlug}
-          finishedPlays={p.finishedPlays}
-          favoriteCount={counts[p.shortCode] ?? p.favoriteCount}
-          community={{
-            bookmark: {
-              saved: saves.saved.has(p.shortCode),
-              onToggle: () => { void saves.toggle({ ...p, favoriteCount: counts[p.shortCode] ?? p.favoriteCount }).then((n) => { if (n !== null) onCount(p.shortCode, n); }); },
-            },
-          }}
-        />
-      ))}
+    <ul className={className} data-testid={testId}>
+      {items.map((p) => <CoverCard key={p.shortCode} card={asCard(p)} bookmark={bookmarkFor(saves, p)} />)}
     </ul>
+  );
+}
+
+function NewestList({ items, saves, testId }: { items: SavedCard[]; saves: Saves; testId: string }) {
+  return (
+    <ul className="divide-y divide-border" data-testid={testId}>
+      {items.map((p) => <NewestRow key={p.shortCode} card={asCard(p)} bookmark={bookmarkFor(saves, p)} />)}
+    </ul>
+  );
+}
+
+function SectionHeading({ id, children, action }: { id: string; children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="mt-7 flex items-end justify-between gap-3">
+      <h2 id={id} className={`text-[22px] font-black tracking-tight sm:text-2xl ${cv.ink}`}>{children}</h2>
+      {action}
+    </div>
+  );
+}
+
+function BackToExplore() {
+  return (
+    <Link to="/community" className={`mt-4 inline-flex h-11 items-center gap-1 rounded-full pr-3 text-sm font-extrabold ${cv.ink} ${cv.focus}`}>
+      <ChevronLeft aria-hidden="true" className="h-5 w-5" /> Explore
+    </Link>
+  );
+}
+
+function CreateLink() {
+  return (
+    <p className="mt-8 text-center">
+      <Link to="/create" className={`inline-flex h-11 items-center gap-1 rounded-full px-3 text-base ${cv.link} ${cv.focus}`}>
+        <Plus aria-hidden="true" className="h-4 w-4" strokeWidth={3} /> Create A Puzzle
+      </Link>
+    </p>
+  );
+}
+
+/**
+ * Explore's home: one human-chosen Featured Puzzle (only when there is one),
+ * a small Editor's Picks shelf (only when there are picks), and Newest, which
+ * is independent of both: every listed puzzle by first listing time.
+ */
+function ExploreHome({ saves }: { saves: Saves }) {
+  const [curated, setCurated] = useState<CommunityExplore | null | undefined>(undefined);
+  const newest = usePaged<CommunityPuzzleListing>("home-newest", true, () => listCommunityNewest({ limit: NEWEST_PREVIEW }), (p) => p.shortCode);
+
+  useEffect(() => {
+    let cancelled = false;
+    // If curation can't load, Explore simply shows Newest: no empty shells.
+    getCommunityExplore().then((c) => { if (!cancelled) setCurated(c); }, () => { if (!cancelled) setCurated(null); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const featured = curated?.featured ?? null;
+  const picks = curated?.picks ?? [];
+  const busy = curated === undefined || newest.status === "loading";
+
+  return (
+    <section aria-label="Explore" data-testid="community-panel" aria-busy={busy}>
+      <h1 className={`mt-5 text-[32px] font-black leading-[1.05] tracking-tight sm:text-[40px] ${cv.ink}`}>Community Puzzles</h1>
+      <p className="mt-1 text-base text-muted-foreground sm:text-lg">Play puzzles made by other Rainbow players.</p>
+
+      {featured && <FeaturedCard card={asCard(featured)} bookmark={bookmarkFor(saves, featured)} />}
+
+      {picks.length > 0 && (
+        <section aria-labelledby="picks-heading" data-testid="editors-picks">
+          <SectionHeading id="picks-heading">Editor's Picks</SectionHeading>
+          <CoverGrid items={picks} saves={saves} testId="picks-grid" className={`mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 ${PICK_COLUMNS[picks.length]}`} />
+        </section>
+      )}
+
+      <section aria-labelledby="newest-heading" data-testid="newest-section">
+        <SectionHeading id="newest-heading" action={
+          newest.items.length > 0 ? <Link to="/community?view=newest" className={`inline-flex h-11 items-center rounded-full px-2 text-base ${cv.link} ${cv.focus}`}>See all<span className="sr-only"> newest puzzles</span></Link> : null
+        }>Newest</SectionHeading>
+        {newest.status === "error" ? (
+          <Notice title="Couldn't load the newest puzzles." role="alert">
+            <button type="button" onClick={newest.retry} className={`mt-4 ${pillButton}`}>Retry</button>
+          </Notice>
+        ) : newest.status === "loading" && newest.items.length === 0 ? (
+          <Skeleton rows />
+        ) : newest.items.length === 0 ? (
+          <Notice title="No Community puzzles yet.">
+            <p className="mt-1 text-sm text-muted-foreground">Make one and choose “List in Community” to share it here.</p>
+          </Notice>
+        ) : (
+          <NewestList items={newest.items} saves={saves} testId="newest-list" />
+        )}
+      </section>
+
+      <CreateLink />
+    </section>
+  );
+}
+
+/** See all / Newest: every listed puzzle by first listing time, keyset-paged so pages never repeat or skip. */
+function NewestView({ saves }: { saves: Saves }) {
+  const [items, setItems] = useState<CommunityPuzzleListing[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [cursor, setCursor] = useState<NewestCursor | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+    listCommunityNewest({ limit: COMMUNITY_PAGE_SIZE }).then(
+      (page) => { if (cancelled) return; setItems(page.items); setCursor(page.cursor); setHasMore(page.hasMore); setStatus("ready"); },
+      () => { if (!cancelled) setStatus("error"); }
+    );
+    return () => { cancelled = true; };
+  }, [attempt]);
+
+  const more = useCallback(() => {
+    setLoadingMore(true);
+    setMoreError(false);
+    listCommunityNewest({ limit: COMMUNITY_PAGE_SIZE, after: cursor }).then(
+      (page) => {
+        setItems((prev) => {
+          const seen = new Set(prev.map((p) => p.shortCode));
+          return [...prev, ...page.items.filter((p) => !seen.has(p.shortCode))];
+        });
+        setCursor(page.cursor ?? cursor);
+        setHasMore(page.hasMore);
+        setLoadingMore(false);
+      },
+      () => { setMoreError(true); setLoadingMore(false); }
+    );
+  }, [cursor]);
+
+  return (
+    <section aria-label="Newest" data-testid="community-panel" aria-busy={status === "loading" || loadingMore}>
+      <BackToExplore />
+      <h1 className={`mt-1 text-[30px] font-black tracking-tight ${cv.ink}`}>Newest</h1>
+      <p className="text-sm text-muted-foreground">Every Community puzzle, newest listing first.</p>
+      {status === "error" ? (
+        <Notice title="Couldn't load the newest puzzles." role="alert">
+          <button type="button" onClick={() => setAttempt((n) => n + 1)} className={`mt-4 ${pillButton}`}>Retry</button>
+        </Notice>
+      ) : status === "loading" ? (
+        <Skeleton rows />
+      ) : items.length === 0 ? (
+        <Notice title="No Community puzzles yet." />
+      ) : (
+        <>
+          <NewestList items={items} saves={saves} testId="newest-all-list" />
+          <MoreButton hasMore={hasMore} loadingMore={loadingMore} moreError={moreError} onMore={more} what="puzzles" />
+        </>
+      )}
+    </section>
   );
 }
 
@@ -162,12 +291,18 @@ function useUrlQuery(params: URLSearchParams, setParams: ReturnType<typeof useSe
   return { query, setQuery, debounced };
 }
 
-function ExplorePanel({ params, setParams, saves, signedIn }: { params: URLSearchParams; setParams: ReturnType<typeof useSearchParams>[1]; saves: Saves; signedIn: boolean | undefined }) {
+/** Search: Puzzles (title or creator; Newest or Most Played) or Creators (public name or slug). */
+function SearchView({ params, setParams, saves, signedIn }: { params: URLSearchParams; setParams: ReturnType<typeof useSearchParams>[1]; saves: Saves; signedIn: boolean | undefined }) {
   const mode: ExploreMode = params.get("mode") === "creators" ? "creators" : "puzzles";
   const sort: CommunitySort = params.get("sort") === "plays" ? "plays" : "newest";
   const { query, setQuery, debounced } = useUrlQuery(params, setParams);
-  const [counts, setCounts] = useState<Record<string, number>>({});
   const q = debounced.trim();
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    // Arriving from the header's search button: straight into the box.
+    if (params.get("view") === "search") input.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const puzzles = usePaged<CommunityPuzzleListing>(`p|${q}|${sort}`, mode === "puzzles",
     (offset) => listCommunityPuzzles({ query: q, sort, offset, limit: COMMUNITY_PAGE_SIZE }), (p) => p.shortCode);
@@ -182,17 +317,20 @@ function ExplorePanel({ params, setParams, saves, signedIn }: { params: URLSearc
   };
 
   return (
-    <section aria-label="Explore" data-testid="community-panel" aria-busy={list.status === "loading" || list.loadingMore}>
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+    <section aria-label="Search" data-testid="community-panel" aria-busy={list.status === "loading" || list.loadingMore}>
+      <BackToExplore />
+      <h1 className={`mt-1 text-[30px] font-black tracking-tight ${cv.ink}`}>Search</h1>
+      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
         <Segmented label="Search for" options={MODES} value={mode} onChange={(m) => {
           const next = new URLSearchParams(params);
           if (m === "creators") { next.set("mode", "creators"); next.delete("sort"); } else next.delete("mode");
           setParams(next, { replace: true });
-        }} small />
+        }} />
         <form role="search" className="relative min-w-0 flex-1" onSubmit={(e) => e.preventDefault()}>
           <label htmlFor="community-search" className="sr-only">{mode === "puzzles" ? "Search puzzles" : "Search creators"}</label>
           <Search aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
+            ref={input}
             id="community-search"
             type="search"
             value={query}
@@ -200,11 +338,11 @@ function ExplorePanel({ params, setParams, saves, signedIn }: { params: URLSearc
             onChange={(e) => setQuery(e.target.value)}
             placeholder={mode === "puzzles" ? "Search puzzles" : "Search creators"}
             autoComplete="off"
-            className={`h-11 w-full rounded-full border border-input bg-card pl-10 pr-10 text-base text-foreground placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden ${focusRing}`}
+            className={`h-11 w-full rounded-full border border-input bg-card pl-10 pr-10 text-base text-foreground placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden ${cv.focus}`}
           />
           {query && (
             <button type="button" onClick={() => setQuery("")} aria-label="Clear search"
-              className={`absolute right-1 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground ${focusRing}`}>
+              className={`absolute right-1 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground ${cv.focus}`}>
               <X aria-hidden="true" className="h-4 w-4" />
             </button>
           )}
@@ -226,7 +364,7 @@ function ExplorePanel({ params, setParams, saves, signedIn }: { params: URLSearc
           <button type="button" onClick={list.retry} className={`mt-4 ${pillButton}`}>Retry</button>
         </Notice>
       ) : list.status === "loading" && list.items.length === 0 ? (
-        <Skeleton tall={mode === "puzzles"} />
+        <Skeleton />
       ) : list.items.length === 0 ? (
         q ? (
           <Notice title={`No ${mode} match “${q}”.`}>
@@ -240,7 +378,7 @@ function ExplorePanel({ params, setParams, saves, signedIn }: { params: URLSearc
         )
       ) : mode === "puzzles" ? (
         <div className={`transition-opacity ${list.status === "loading" ? "opacity-60" : ""}`}>
-          <PuzzleGrid items={puzzles.items} saves={saves} counts={counts} onCount={(c, n) => setCounts((m) => ({ ...m, [c]: n }))} testId="community-grid" />
+          <CoverGrid items={puzzles.items} saves={saves} testId="community-grid" />
         </div>
       ) : (
         <ul className={`mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 transition-opacity ${list.status === "loading" ? "opacity-60" : ""}`} data-testid="creator-grid">
@@ -257,16 +395,18 @@ function ExplorePanel({ params, setParams, saves, signedIn }: { params: URLSearc
   );
 }
 
+const panelTitle = (text: string) => <h1 className={`mt-5 text-[30px] font-black tracking-tight ${cv.ink}`}>{text}</h1>;
+
 function FollowingPanel({ user, saves }: { user: User | null | undefined; saves: Saves }) {
   const [creators, setCreators] = useState<CommunityCreator[]>([]);
-  const [counts, setCounts] = useState<Record<string, number>>({});
   const feed = usePaged<CommunityPuzzleListing>(`f|${user?.id}`, !!user,
     (offset) => getFollowingFeed({ offset }).then((page) => { if (offset === 0) setCreators(page.creators); return page; }), (p) => p.shortCode);
 
-  if (user === undefined) return <section aria-label="Following" data-testid="community-panel" aria-busy="true"><Skeleton tall /></section>;
+  if (user === undefined) return <section aria-label="Following" data-testid="community-panel" aria-busy="true">{panelTitle("Following")}<Skeleton /></section>;
   if (!user) {
     return (
       <section aria-label="Following" data-testid="community-panel" aria-busy="false">
+        {panelTitle("Following")}
         <Notice title="Follow creators to see their newest puzzles here.">
           <p className="mt-1 text-sm text-muted-foreground">Sign in to follow creators. Explore, search and play stay open to everyone.</p>
           <Link to="/community?mode=creators" className={`mt-4 ${pillButton}`}>Find creators</Link>
@@ -276,24 +416,25 @@ function FollowingPanel({ user, saves }: { user: User | null | undefined; saves:
   }
   return (
     <section aria-label="Following" data-testid="community-panel" aria-busy={feed.status === "loading" || feed.loadingMore}>
+      {panelTitle("Following")}
       {feed.status === "error" ? (
         <Notice title="Couldn't load Following." role="alert">
           <button type="button" onClick={feed.retry} className={`mt-4 ${pillButton}`}>Retry</button>
         </Notice>
       ) : feed.status === "loading" && feed.items.length === 0 ? (
-        <Skeleton tall />
+        <Skeleton />
       ) : (
         <>
           {creators.length > 0 && (
-            <div className="mt-4">
-              <h2 className="text-sm font-bold text-foreground">You follow</h2>
+            <div className="mt-3">
+              <h2 className={`text-sm font-extrabold ${cv.ink}`}>You follow</h2>
               <p className="text-xs text-muted-foreground">Only you can see who you follow.</p>
               <ul className="mt-2 flex flex-wrap gap-2" data-testid="following-creators">
                 {creators.map((c) => (
                   <li key={c.publicSlug}>
-                    <Link to={`/creator/${c.publicSlug}?view=community`} className={`inline-flex h-11 items-center gap-2 rounded-full border border-border bg-card pl-1.5 pr-4 text-sm ${focusRing}`}>
+                    <Link to={`/creator/${c.publicSlug}?view=community`} className={`inline-flex h-11 items-center gap-2 rounded-full bg-violet-50 pl-1.5 pr-4 text-sm dark:bg-white/5 ${cv.focus}`}>
                       <CreatorAvatar name={c.displayName} slug={c.publicSlug} size={32} />
-                      <span className={communityLink}>{c.displayName}</span>
+                      <span className={cv.link}>{c.displayName}</span>
                     </Link>
                   </li>
                 ))}
@@ -313,8 +454,8 @@ function FollowingPanel({ user, saves }: { user: User | null | undefined; saves:
             )
           ) : (
             <>
-              <h2 className="sr-only">Newest from creators you follow</h2>
-              <PuzzleGrid items={feed.items} saves={saves} counts={counts} onCount={(c, n) => setCounts((m) => ({ ...m, [c]: n }))} testId="following-grid" />
+              <SectionHeading id="following-heading">Newest from creators you follow</SectionHeading>
+              <CoverGrid items={feed.items} saves={saves} testId="following-grid" />
               <MoreButton hasMore={feed.hasMore} loadingMore={feed.loadingMore} moreError={feed.moreError} onMore={feed.more} what="puzzles" />
             </>
           )}
@@ -328,7 +469,8 @@ function FavoritesPanel({ user, saves }: { user: User | null | undefined; saves:
   const busy = user === undefined || saves.status === "loading";
   return (
     <section aria-label="Favorites" data-testid="community-panel" aria-busy={busy}>
-      <p className="mt-4 text-sm text-muted-foreground">
+      {panelTitle("Favorites")}
+      <p className="mt-1 text-sm text-muted-foreground">
         {user ? "Only you can see your Favorites." : "Saved on this device only, and only you can see them. Sign in to keep Favorites with your account."}
       </p>
       {saves.status === "error" ? (
@@ -336,13 +478,13 @@ function FavoritesPanel({ user, saves }: { user: User | null | undefined; saves:
           <button type="button" onClick={saves.retry} className={`mt-4 ${pillButton}`}>Retry</button>
         </Notice>
       ) : busy ? (
-        <Skeleton tall />
+        <Skeleton />
       ) : saves.items.length === 0 ? (
         <Notice title="No favorites yet.">
           <p className="mt-1 text-sm text-muted-foreground">Tap the bookmark on any puzzle to save it here.</p>
         </Notice>
       ) : (
-        <PuzzleGrid items={saves.items} saves={saves} counts={{}} onCount={() => {}} testId="favorites-grid" />
+        <CoverGrid items={saves.items} saves={saves} testId="favorites-grid" />
       )}
     </section>
   );
@@ -350,8 +492,13 @@ function FavoritesPanel({ user, saves }: { user: User | null | undefined; saves:
 
 /** /community — Explore, Following and Favorites (preview; see lib/communityFlag.ts). Guests may explore, search and play. */
 export default function CommunityPage() {
+  // A true-white page in light mode, the same theme the game pages use.
+  useGamePageTheme();
   const [params, setParams] = useSearchParams();
   const tab: CommunityTab = params.get("tab") === "following" ? "following" : params.get("tab") === "favorites" ? "favorites" : "explore";
+  // Old search links (?q=, ?mode=creators, ?sort=plays) still open search.
+  const view: ExploreView = params.get("view") === "newest" ? "newest"
+    : params.get("view") === "search" || params.has("q") || params.has("mode") || params.has("sort") ? "search" : "home";
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const saves = useCommunitySaves(user === undefined ? undefined : user?.id ?? null);
 
@@ -365,48 +512,36 @@ export default function CommunityPage() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col items-center pt-2 pb-12">
+    <div className="min-h-screen flex flex-col items-center bg-background pt-1 pb-12">
       <SEO title="Community Puzzles — Rainbow Connect" description="Play puzzles made by other Rainbow players." path="/community" noIndex />
-      <GameHeader user={user ?? null} onSignOut={() => signOutOfRainbow()} simplifiedIcons wideHeader />
-      <div className="w-full max-w-[840px] border-b border-border mb-4" />
+      <CommunityHeader user={user ?? null} />
+      <nav aria-label="Community sections" className="w-full max-w-[840px] px-4">
+        <ul className="flex justify-center gap-2 border-b border-border min-[360px]:gap-6 sm:gap-10">
+          {TABS.map((t) => (
+            <li key={t.value}>
+              <Link
+                to={t.value === "explore" ? "/community" : `/community?tab=${t.value}`}
+                aria-current={tab === t.value ? "page" : undefined}
+                className={`relative flex h-12 items-center px-2 text-base transition-colors rounded-t-md ${cv.focus}
+                  ${tab === t.value
+                    ? `font-black ${cv.ink} after:absolute after:inset-x-0 after:-bottom-px after:h-[3px] after:rounded-full after:bg-violet-600 dark:after:bg-violet-300`
+                    : "font-semibold text-foreground/75 hover:text-foreground"}`}
+              >
+                {t.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
       <main className="w-full max-w-[840px] px-4 flex-1">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <CommunityMotif />
-            <div className="min-w-0">
-              <h1 className="font-tile text-[28px] font-bold leading-tight tracking-tight text-foreground sm:text-3xl">Community Puzzles</h1>
-              <p className="mt-0.5 text-sm text-muted-foreground sm:text-base">Play puzzles made by other Rainbow players.</p>
-            </div>
-          </div>
-          <Link to="/create" className={`inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground transition-transform active:scale-95 hover:opacity-90 ${focusRing}`}>
-            <Plus aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
-            Create A Puzzle
-          </Link>
-        </div>
-
-        <nav aria-label="Community sections" className="mt-5">
-          <ul className="grid grid-cols-3 gap-1 rounded-2xl border border-border bg-secondary/60 p-1 dark:bg-card sm:inline-grid sm:min-w-[420px]">
-            {TABS.map((t) => (
-              <li key={t.value}>
-                <Link
-                  to={t.value === "explore" ? "/community" : `/community?tab=${t.value}`}
-                  aria-current={tab === t.value ? "page" : undefined}
-                  className={`flex h-11 items-center justify-center rounded-xl px-3 text-sm font-extrabold transition-colors ${focusRing}
-                    ${tab === t.value ? "bg-card text-foreground shadow-sm dark:bg-muted" : "text-muted-foreground hover:text-foreground"}`}
-                >
-                  {t.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        {tab === "explore" && <ExplorePanel params={params} setParams={setParams} saves={saves} signedIn={user === undefined ? undefined : !!user} />}
+        {tab === "explore" && view === "home" && <ExploreHome saves={saves} />}
+        {tab === "explore" && view === "newest" && <NewestView saves={saves} />}
+        {tab === "explore" && view === "search" && <SearchView params={params} setParams={setParams} saves={saves} signedIn={user === undefined ? undefined : !!user} />}
         {tab === "following" && <FollowingPanel user={user} saves={saves} />}
         {tab === "favorites" && <FavoritesPanel user={user} saves={saves} />}
 
         <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
-          {saves.note && <span className="rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-lg">{saves.note}</span>}
+          {saves.note && <span className="rounded-full bg-[#2b0a5e] px-4 py-2 text-sm font-bold text-white shadow-lg dark:bg-violet-200 dark:text-[#1e0a45]">{saves.note}</span>}
         </div>
       </main>
       <SiteFooter />

@@ -45,6 +45,7 @@ supabase/.temp/
 !.env.e2e.example
 dist-e2e
 dist-e2e-community
+dist-e2e-flagoff
 e2e/.artifacts/
 e2e/supabase/.temp/
 e2e/supabase/.branches/
