@@ -55,3 +55,7 @@ e2e/supabase/snippets/
 .vercel
 
 .preview-cache/
+dist-showcase
+dist-showcase-build
+dist-showcase-artifact
+dist-showcase.zip
