@@ -33,7 +33,8 @@ async function run(with0003: boolean) {
   const db = new PGlite();
   try {
     const plan = buildSchemaPlan({ includeSupabaseStubs: true, includeReset: false });
-    const pre = plan.filter((x) => !RELEASE.some((r) => x.label.includes(r)) && (with0003 || !x.label.includes("0003_")));
+    // Later, separately released migrations (0011 My Puzzles onward) are not part of this rehearsal.
+    const pre = plan.filter((x) => !RELEASE.some((r) => x.label.includes(r)) && !/\b00(1[1-9]|[2-9]\d)_/.test(x.label) && (with0003 || !x.label.includes("0003_")));
     const release = plan.filter((x) => RELEASE.some((r) => x.label.includes(r)));
     assert.equal(release.length, 7);
     await applySchemaPlan(db, pre);
