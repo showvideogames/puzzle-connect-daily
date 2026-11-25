@@ -83,25 +83,20 @@
     <div id="root">
       <noscript>You need JavaScript enabled to play Rainbow Categories.</noscript>
 
-      <!-- Visual landing — mirrors React's LandingScreen so there's no flash before hydration -->
-      <div style="position:fixed;inset:0;background:linear-gradient(to bottom,#fb923c,#facc15,#4ade80,#60a5fa,#c084fc);display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:48px 24px;font-family:system-ui,-apple-system,sans-serif;overflow-y:auto;">
-        <div></div>
-
-        <div style="max-width:28rem;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;">
-          <img src="/rainbow-categories.png" alt="Rainbow Categories" style="height:96px;width:auto;margin-bottom:16px;" />
-          <h1 style="font-size:1.875rem;font-weight:700;letter-spacing:-0.025em;margin:0;color:#000;">Rainbow Categories</h1>
-          <p style="font-size:1rem;color:rgba(0,0,0,0.8);margin:12px 0 0;line-height:1.625;">
-            Find groups of four hidden words — then spot the secret Rainbow.
-          </p>
-          <div style="margin-top:32px;width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
-            <div style="width:100%;max-width:20rem;padding:14px 24px;border-radius:9999px;background:#000;color:#fff;font-weight:600;font-size:1rem;text-align:center;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1),0 4px 6px -4px rgba(0,0,0,0.1);">Play</div>
+      <!-- Match the Full welcome layout before React loads; these are placeholders, not controls. -->
+      <div aria-hidden="true" style="position:fixed;inset:0;overflow-y:auto;color:#252324;background:radial-gradient(ellipse at 49% 38%,#fffef4a6,transparent 60%),linear-gradient(145deg,#ffb4ca 0%,#ffd2b3 18%,#ffefa5 39%,#bee7c7 60%,#b0def3 79%,#d0b5ee 100%);font-family:system-ui,sans-serif;">
+        <div style="box-sizing:border-box;margin:auto;min-height:100%;max-width:31rem;display:flex;flex-direction:column;justify-content:center;padding:clamp(1.25rem,4dvh,3rem) clamp(1.25rem,5.5vw,2.5rem);text-align:center;">
+          <img src="/rainbow-categories-logo.webp" alt="" width="2000" height="251" style="display:block;width:100%;height:auto;" />
+          <div style="margin:clamp(1rem,3dvh,1.75rem) auto 0;aspect-ratio:1;width:clamp(5.5rem,13dvh,7.5rem);overflow:hidden;border-radius:15%;">
+            <img src="/icons/rainbow-icon-192-0e09e6d1.png" alt="" width="192" height="192" style="display:block;width:100%;height:auto;transform:scale(1.28);" />
           </div>
-        </div>
-
-        <!-- Invisible placeholder reserves space for the puzzle metadata React adds on hydrate -->
-        <div style="text-align:center;color:rgba(0,0,0,0.8);opacity:0;" aria-hidden="true">
-          <p style="font-size:1rem;font-weight:600;margin:0;">Puzzle</p>
-          <p style="font-size:0.875rem;margin:2px 0 0;">January 1, 2026</p>
+          <p style="margin:clamp(1rem,3.25dvh,1.75rem) 0 0;font-size:clamp(1rem,4vw,1.125rem);font-weight:600;line-height:1.625;">Find four groups of four words, then spot the Rainbow.</p>
+          <div style="display:grid;gap:.625rem;margin-top:clamp(1rem,3dvh,1.75rem);font-size:1.125rem;font-weight:800;">
+            <span style="display:grid;place-items:center;min-height:50px;border-radius:999px;color:white;background:#6924d6;">Play</span>
+            <span style="box-sizing:border-box;display:grid;place-items:center;min-height:50px;border:1.5px solid #252324;border-radius:999px;">Sign In</span>
+          </div>
+          <div style="height:20px;margin-top:clamp(.9rem,2.6dvh,1.5rem);"></div>
+          <p style="margin:.625rem 0 0;font-size:.875rem;font-style:italic;color:#615b60;">By Sam West</p>
         </div>
       </div>
 
