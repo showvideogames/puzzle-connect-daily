@@ -1250,7 +1250,7 @@
       "name": "custom_puzzles",
       "rlsEnabled": true,
       "rlsForced": false,
-      "comment": "Player-created puzzles (Phase 2, Full 4x4 only). Immutable after creation. Reachable only through create_custom_puzzle/get_custom_puzzle -- no direct grants to anon/authenticated.",
+      "comment": "Player-created puzzles (Phase 2, Full 4x4 only). Content is immutable after creation; only the creator can rename (rename_custom_puzzle). Reachable only through create_custom_puzzle/get_custom_puzzle and the owner functions -- no direct grants to anon/authenticated.",
       "columns": [
         {
           "name": "id",
@@ -4043,6 +4043,23 @@
       "comment": null
     },
     {
+      "name": "get_my_custom_puzzle_source",
+      "args": "_share_id text",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "My Puzzles, Duplicate & Edit: the caller's own active puzzle's title, designer name, visibility and builder content. Refused for guests, other accounts and hidden puzzles. Read-only."
+    },
+    {
       "name": "get_my_favorites",
       "args": "",
       "returns": "jsonb",
@@ -4496,6 +4513,23 @@
         "service_role"
       ],
       "comment": null
+    },
+    {
+      "name": "rename_custom_puzzle",
+      "args": "_share_id text, _title text",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "My Puzzles: the signed-in creator renames their own active puzzle (owner from rainbow_uid()). Title only, same rule as create (trimmed, 1-100 characters). Links, content, visibility, listing, cover, results, favourites and ratings are unchanged."
     },
     {
       "name": "reset_beta_playtest",

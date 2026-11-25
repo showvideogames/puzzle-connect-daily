@@ -231,6 +231,50 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
       return ok({ owned: true, listed: !unlisted.has(p.key), can_list: isPublic(p), visibility: p.visibility ?? "public" });
     }
     // ── My Puzzles: the Demo Player's own library and owner actions ──
+    case "rename_custom_puzzle": {
+      const p = byShare(a._share_id);
+      const title = typeof a._title === "string" ? a._title.trim() : "";
+      if (!session) return { data: null, error: { message: "sign in to rename your puzzles" } };
+      if (!title) return { data: null, error: { message: "a puzzle needs a title" } };
+      if (title.length > 100) return { data: null, error: { message: "title is too long (max 100 characters)" } };
+      if (!p) return { data: null, error: { message: "puzzle not found" } };
+      if (!mine(p)) return { data: null, error: { message: "only the puzzle's creator can rename it" } };
+      p.title = title;
+      return ok({ title });
+    }
+    case "get_my_custom_puzzle_source": {
+      const p = byShare(a._share_id);
+      if (!session) return { data: null, error: { message: "sign in to copy your puzzles" } };
+      if (!p) return { data: null, error: { message: "puzzle not found" } };
+      if (!mine(p)) return { data: null, error: { message: "only the puzzle's creator can copy it" } };
+      return ok({ title: p.title, creator_name: p.creator.name, visibility: p.visibility ?? "public", content: content(p) });
+    }
+    // The demo's Create (used for Duplicate & Edit copies): an in-memory puzzle,
+    // never listed unless the visitor lists it, owned by the Demo Player.
+    case "create_custom_puzzle": {
+      const c = (a._content ?? {}) as { mode?: string; groups?: { category: string; words: string[] }[]; word_order?: string[] | null; rainbow_herring?: string[] | null; rainbow_category_name?: string | null };
+      const title = typeof a._title === "string" ? a._title.trim() : "";
+      if (!title) return { data: null, error: { message: "a puzzle needs a title" } };
+      if (title.length > 100) return { data: null, error: { message: "title is too long (max 100 characters)" } };
+      if (!Array.isArray(c.groups) || c.groups.length !== 4) return { data: null, error: { message: "a puzzle needs four categories" } };
+      demoCount++;
+      const key = `made${demoCount}`;
+      const now = new Date().toISOString();
+      const made = puzzle({
+        key, title, creator: session ? DEMO_PLAYER : { userId: "fixture-guest", slug: "", name: String(a._creator_name ?? "Guest"), followers: 0 },
+        shortCode: `DemoNew${String(demoCount).padStart(3, "0")}`, mode: c.mode === "rainbow" ? "rainbow" : "classic",
+        groups: c.groups.map((g) => ({ category: g.category, words: g.words })),
+        ...(c.mode === "rainbow" && c.rainbow_herring ? { rainbow: { name: c.rainbow_category_name ?? "", herring: c.rainbow_herring } } : {}),
+        listedAt: now, createdAt: now, plays: 0, favorites: 0, ownedByDemo: !!session, unlisted: true,
+        visibility: a._visibility === "private" ? "private" : "public",
+      });
+      if (Array.isArray(c.word_order) && c.word_order.length === 16) made.wordOrder = c.word_order;
+      PUZZLES.push(made);
+      unlisted.add(key);
+      plays.set(key, 0);
+      likes.set(key, 0);
+      return ok({ puzzle_id: `id-${key}`, share_id: made.shareId, short_code: made.shortCode });
+    }
     case "list_my_custom_puzzles": {
       if (!session) return { data: null, error: { message: "sign in to see your puzzles" } };
       const own = PUZZLES.filter((p) => p.ownedByDemo)

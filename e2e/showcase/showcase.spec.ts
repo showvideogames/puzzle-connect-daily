@@ -243,6 +243,42 @@ test("shelf to play: Featured, Picks and Newest, then a fictional puzzle played 
   await expect(library).toHaveAttribute("aria-busy", "false");
   await mine("Mixtape Memories").getByRole("button", { name: "Unlist Mixtape Memories from Community" }).click();
   await expect(mine("Mixtape Memories").getByTestId("my-puzzle-status")).toHaveText("Link only");
+
+  // Rename keeps the same link.
+  await mine("Mixtape Memories").getByRole("button", { name: "Rename Mixtape Memories" }).click();
+  await page.getByTestId("my-puzzle-rename").getByLabel("New title").fill("Mixtape Memories, Side B");
+  await page.getByTestId("my-puzzle-rename").getByRole("button", { name: "Save title" }).click();
+  await expect(mine("Mixtape Memories, Side B").getByTestId("my-puzzle-result")).toHaveText("Renamed. Its link, results and listing stay the same.");
+  await expect(mine("Mixtape Memories, Side B")).toHaveAttribute("data-short-code", "MixtapeM3m");
+  await page.screenshot({ path: path.join(SHOTS, "showcase-phone-390-renamed.png"), fullPage: false, animations: "disabled" });
+
+  // Duplicate & Edit the Rainbow puzzle: a copy in its own draft, in the real builder.
+  await mine("Lantern Festival").getByRole("button", { name: "Duplicate and edit Lantern Festival" }).click();
+  await expect(page.getByTestId("copy-banner")).toContainText("You're editing a copy.");
+  await expect(page.getByLabel("Puzzle Title")).toHaveValue("Copy of Lantern Festival");
+  await expect(page.getByTestId("category-card-1").getByRole("textbox").nth(0)).toHaveValue("Light Sources");
+  await page.screenshot({ path: path.join(SHOTS, "showcase-phone-390-duplicate-copy.png"), fullPage: false, animations: "disabled" });
+  // A reload starts the demo over, but the copy is still in this browser: resume it from My Puzzles.
+  await page.reload();
+  await expect(panel).toHaveAttribute("aria-busy", "false");
+  await page.getByTestId("showcase-account").click();
+  await page.getByTestId("showcase-my-puzzles").click();
+  await expect(library).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByTestId("unsaved-copies")).toContainText("Copy of Lantern Festival");
+  await page.getByRole("link", { name: "Resume Copy of Lantern Festival" }).click();
+  await expect(page.getByLabel("Puzzle Title")).toHaveValue("Copy of Lantern Festival");
+  await page.getByLabel("Puzzle Title").fill("Lantern Encore");
+  await expect(page.getByRole("checkbox", { name: "List in Community" })).not.toBeChecked();
+  await page.getByRole("button", { name: "Create Game" }).click();
+  await expect(page.getByTestId("created-in-my-puzzles")).toBeVisible();
+  await page.getByTestId("created-in-my-puzzles").getByRole("link", { name: "My Puzzles" }).click();
+  await expect(library).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByTestId("my-puzzles-list").getByRole("heading", { level: 2 }).first()).toHaveText("Lantern Encore");
+  await expect(mine("Lantern Encore").getByTestId("my-puzzle-status")).toHaveText("Link only");
+  await expect(mine("Lantern Festival").getByTestId("my-puzzle-status")).toHaveText("In Community");
+  await expect(page.getByTestId("unsaved-copies")).toHaveCount(0);
+  await page.screenshot({ path: path.join(SHOTS, "showcase-phone-390-copy-created.png"), fullPage: true, animations: "disabled" });
+
   await page.getByTestId("showcase-account").click();
   // A guest gets the sign-in prompt, never the Demo Player's list.
   await expect(page.getByTestId("my-puzzles-guest")).toBeVisible();

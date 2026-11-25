@@ -450,7 +450,9 @@ function CreatorEditor({ store, copySlot = null }: { store?: CreatorDraftStore; 
           </div>
         ) : <OtherCopies />}
         <p className="text-sm mb-4" role="status" aria-label="Draft recovery">{storageError ?? (saved
-          ? "Draft saved in this browser on this device. It will restore automatically when you return."
+          ? (copySlot
+            ? "Draft saved in this browser on this device. Reopen this copy any time from My Puzzles."
+            : "Draft saved in this browser on this device. It will restore automatically when you return.")
           : "One draft is saved automatically in this browser on this device as you edit.")}</p>
         <fieldset disabled={creating} className="min-w-0">
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-8 lg:items-start">
