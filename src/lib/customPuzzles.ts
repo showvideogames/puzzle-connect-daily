@@ -875,3 +875,41 @@ export async function listMyPuzzles(params: { offset?: number; limit?: number } 
     total: typeof r.total === "number" ? r.total : items.length,
   };
 }
+
+// ── My Puzzles: Rename and Duplicate & Edit (migration 0012) ────────────────
+
+/** The same title rule the server applies on create and rename. */
+export const MAX_PUZZLE_TITLE = 100;
+
+/**
+ * Renames the caller's own puzzle (title only). The server checks the owner
+ * and the title rule; links, content, visibility, listing, cover, results,
+ * favorites and ratings are unchanged. Throws with the server's message.
+ */
+export async function renameMyPuzzle(shareId: string, title: string): Promise<string> {
+  const { data, error } = await supabase.rpc("rename_custom_puzzle", { _share_id: shareId, _title: title });
+  if (error) throw error;
+  return (data as { title?: string } | null)?.title ?? title.trim();
+}
+
+export interface MyPuzzleSource {
+  title: string;
+  creatorName: string;
+  visibility: CustomPuzzleVisibility;
+  /** The stored builder content (validate_custom_puzzle_content's shape). */
+  content: Record<string, unknown>;
+}
+
+/** The caller's own puzzle's builder content, for Duplicate & Edit. Refused for anyone else. Throws. */
+export async function getMyPuzzleSource(shareId: string): Promise<MyPuzzleSource> {
+  const { data, error } = await supabase.rpc("get_my_custom_puzzle_source", { _share_id: shareId });
+  if (error) throw error;
+  const r = (data ?? {}) as { title?: unknown; creator_name?: unknown; visibility?: unknown; content?: unknown };
+  if (typeof r.title !== "string" || !r.content || typeof r.content !== "object") throw new Error("Couldn't read this puzzle.");
+  return {
+    title: r.title,
+    creatorName: typeof r.creator_name === "string" ? r.creator_name : "",
+    visibility: r.visibility === "private" ? "private" : "public",
+    content: r.content as Record<string, unknown>,
+  };
+}

@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useGamePageTheme } from "@/hooks/useGamePageTheme";
 import { communityPuzzlesOn } from "@/lib/communityFlag";
 import { cv } from "@/lib/communityStyle";
-import { listMyPuzzles, setCommunityListing, setCustomPuzzleCover, type MyPuzzle } from "@/lib/customPuzzles";
+import { MAX_PUZZLE_TITLE, listMyPuzzles, renameMyPuzzle, setCommunityListing, setCustomPuzzleCover, type MyPuzzle } from "@/lib/customPuzzles";
 import { signInWithPlatform } from "@/lib/platformSignIn";
 import { loadSettings } from "@/lib/settings";
 import type { User } from "@supabase/supabase-js";
@@ -19,7 +19,10 @@ const pill = `inline-flex h-11 shrink-0 items-center justify-center rounded-full
 const quiet = `${pill} border border-border bg-card text-foreground hover:bg-secondary`;
 
 function errorText(err: unknown, fallback: string): string {
-  return err && typeof err === "object" && "message" in err && typeof err.message === "string" && err.message ? err.message : fallback;
+  const m = err && typeof err === "object" && "message" in err && typeof err.message === "string" ? err.message.trim() : "";
+  if (!m) return fallback;
+  // The server's own wording, as a sentence.
+  return `${m[0].toUpperCase()}${m.slice(1)}${/[.!?]$/.test(m) ? "" : "."}`;
 }
 
 function messageFor(p: MyPuzzle, community: boolean): string {
@@ -45,6 +48,10 @@ function PuzzleRow({ puzzle, community, onChange }: { puzzle: MyPuzzle; communit
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(puzzle.title);
+  const [renameBusy, setRenameBusy] = useState(false);
+  const titleInput = useRef<HTMLInputElement>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => () => clearTimeout(copyTimer.current), []);
 
@@ -75,6 +82,25 @@ function PuzzleRow({ puzzle, community, onChange }: { puzzle: MyPuzzle; communit
       setNote({ kind: "error", text: errorText(err, "Couldn't change the listing. Try again.") });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const rename = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const next = titleDraft.trim();
+    if (!next) { setNote({ kind: "error", text: "A puzzle needs a title." }); titleInput.current?.focus(); return; }
+    if (next === puzzle.title) { setRenaming(false); return; }
+    setRenameBusy(true);
+    setNote(null);
+    try {
+      const saved = await renameMyPuzzle(puzzle.shareId, next);
+      onChange({ ...puzzle, title: saved });
+      setRenaming(false);
+      setNote({ kind: "ok", text: "Renamed. Its link, results and listing stay the same." });
+    } catch (err) {
+      setNote({ kind: "error", text: errorText(err, "Couldn't rename it. Try again.") });
+    } finally {
+      setRenameBusy(false);
     }
   };
 
@@ -114,6 +140,15 @@ function PuzzleRow({ puzzle, community, onChange }: { puzzle: MyPuzzle; communit
             <button type="button" onClick={() => void copy()} className={quiet} aria-label={`Copy link to ${puzzle.title}`}>
               {copied ? "Link copied" : "Copy Link"}
             </button>
+            <button
+              type="button"
+              onClick={() => { setTitleDraft(puzzle.title); setNote(null); setRenaming((v) => !v); }}
+              aria-expanded={renaming}
+              className={quiet}
+              aria-label={`Rename ${puzzle.title}`}
+            >
+              Rename
+            </button>
             {community && (
               <button
                 type="button"
@@ -139,6 +174,26 @@ function PuzzleRow({ puzzle, community, onChange }: { puzzle: MyPuzzle; communit
           </>
         )}
       </div>
+      {renaming && (
+        <form onSubmit={(e) => void rename(e)} className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:pl-[162px]" data-testid="my-puzzle-rename">
+          <label className="min-w-0 flex-1 text-sm font-bold text-foreground">
+            New title
+            <input
+              ref={titleInput}
+              autoFocus
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              maxLength={MAX_PUZZLE_TITLE}
+              disabled={renameBusy}
+              className={`mt-1 block h-11 w-full rounded-xl border border-border bg-background px-3 text-base font-normal ${cv.focus}`}
+            />
+          </label>
+          <div className="flex gap-2">
+            <button type="submit" disabled={renameBusy} className={`${pill} ${cv.play}`}>{renameBusy ? "Saving…" : "Save title"}</button>
+            <button type="button" disabled={renameBusy} onClick={() => setRenaming(false)} className={quiet}>Cancel</button>
+          </div>
+        </form>
+      )}
       <p className={`mt-2 text-sm font-semibold empty:mt-0 sm:pl-[162px] ${note?.kind === "error" ? "text-destructive" : "text-foreground"}`} role={note?.kind === "error" ? "alert" : "status"} data-testid="my-puzzle-result">
         {note?.text ?? ""}
       </p>
