@@ -13,6 +13,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import CommunityPage from "@/pages/Community";
 import CustomPuzzle from "@/pages/CustomPuzzle";
 import CreatorProfilePage from "@/pages/CreatorProfile";
+import ShowcaseCreate from "./ShowcaseCreate";
 import { cv } from "@/lib/communityStyle";
 import "@/index.css";
 
@@ -52,6 +53,7 @@ const routes: RouteObject[] = [
   { path: "/p/:shortCode", element: <><PreviewNote /><CustomPuzzle /></> },
   { path: "/custom/:shareId", element: <><PreviewNote /><CustomPuzzle /></> },
   { path: "/creator/:publicSlug", element: <><PreviewNote /><CreatorProfilePage /></> },
+  { path: "/create", element: <><PreviewNote /><ShowcaseCreate /></> },
   { path: "*", element: <NotInShowcase /> },
 ];
 

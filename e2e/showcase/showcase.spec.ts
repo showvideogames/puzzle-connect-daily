@@ -33,8 +33,13 @@ test("shelf to play: Featured, Picks and Newest, then a fictional puzzle played 
   await expect(page.getByTestId("featured-puzzle").getByTestId("card-title")).toHaveText("Pantry Raid");
   expect(await page.getByTestId("picks-grid").getByTestId("card-title").allInnerTexts()).toEqual(["Turn Of The Tides", "Something In The Air", "A Little Offbeat", "The Usual Suspects"]);
   // Newest is by listing time and includes puzzles that were never curated.
-  expect(await page.getByTestId("newest-list").getByTestId("card-title").allInnerTexts()).toEqual(["Night Owls", "Garden Party", "Turn Of The Tides", "Pantry Raid", "Something In The Air", "A Little Offbeat"]);
-  expect(await page.locator("main svg[data-cover]").count()).toBeGreaterThan(8);
+  expect(await page.getByTestId("newest-list").getByTestId("card-title").allInnerTexts()).toEqual(["Night Owls", "Garden Party", "Pantry Raid", "Out of Orbit", "Turn Of The Tides", "Something In The Air"]);
+  // Newest shows each puzzle's stored creator cover (one emoji, one background); Editor's Picks keep the illustrations.
+  const covers = await page.getByTestId("newest-list").locator("[data-cover-kind]").evaluateAll((els) => els.map((e) => [e.getAttribute("data-cover-kind"), e.getAttribute("data-cover-emoji"), e.getAttribute("data-cover-background")]));
+  expect(covers.slice(0, 4)).toEqual([["creator", "1F989", "indigo-stars"], ["creator", "1F438", "lime-checks"], ["creator", "1F37F", "apricot-stripes"], ["creator", "1FA90", "lilac-dots"]]);
+  expect(covers[4][0]).toBe("default");
+  expect(await page.getByTestId("picks-grid").locator("svg[data-cover]").count()).toBe(4);
+  expect(await page.getByTestId("picks-grid").locator("[data-cover-kind]").count()).toBe(0);
   await page.screenshot({ path: path.join(SHOTS, "showcase-phone-390-shelf.png"), fullPage: true, animations: "disabled" });
 
   // Save a pick (this browser only), then play the Featured Puzzle.
@@ -67,11 +72,50 @@ test("shelf to play: Featured, Picks and Newest, then a fictional puzzle played 
   await page.getByRole("navigation", { name: "Community sections" }).getByRole("link", { name: "Favorites" }).click();
   await expect(page.getByTestId("favorites-grid").getByTestId("card-title")).toHaveText(["Turn Of The Tides"]);
 
-  // Desktop width too.
-  await page.setViewportSize({ width: 1280, height: 860 });
+  // Create → pick a cover → publish (demo) → see the card.
   await page.getByRole("navigation", { name: "Community sections" }).getByRole("link", { name: "Explore" }).click();
   await expect(panel).toHaveAttribute("aria-busy", "false");
+  await page.getByRole("link", { name: "Create A Puzzle" }).click();
+  await expect(page.getByRole("heading", { name: "Make A Cover" })).toBeVisible();
+  await page.getByLabel("Puzzle title").fill("Frog Friends");
+  await expect(page.getByTestId("cover-emoji-grid").getByRole("option")).not.toHaveCount(0);
+  await page.getByRole("searchbox", { name: "Search emojis" }).fill("frog");
+  const frog = page.getByRole("option", { name: "frog", exact: true });
+  await frog.click();
+  await expect(frog).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowRight"); // keyboard moves within the grid
+  await expect(page.getByTestId("cover-emoji-grid").locator(":focus")).toHaveCount(1);
+  await page.getByRole("radio", { name: "Lime checks" }).click();
+  await expect(page.getByTestId("cover-selection")).toHaveText("Frog on Lime checks");
+  const preview = page.getByTestId("cover-preview").locator("[data-cover-kind=creator]");
+  await expect(preview).toHaveAttribute("data-cover-emoji", "1F438");
+  await expect(preview).toHaveAttribute("data-cover-background", "lime-checks");
+  await page.getByTestId("cover-picker").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(SHOTS, "showcase-phone-390-make-a-cover.png"), fullPage: true, animations: "disabled" });
+  await page.getByRole("button", { name: "Publish demo" }).click();
+  await expect(panel).toHaveAttribute("aria-busy", "false");
+  expect((await page.getByTestId("newest-list").getByTestId("card-title").allInnerTexts())[0]).toBe("Frog Friends");
+  const card = page.getByTestId("newest-list").getByTestId("community-card").first().locator("[data-cover-kind]");
+  await expect(card).toHaveAttribute("data-cover-emoji", "1F438");
+  await expect(card).toHaveAttribute("data-cover-background", "lime-checks");
+  await page.screenshot({ path: path.join(SHOTS, "showcase-phone-390-published.png"), fullPage: true, animations: "disabled" });
+  // The same stored cover on the puzzle's own page.
+  await page.getByTestId("newest-list").getByRole("link", { name: "Play Frog Friends" }).click();
+  await expect(page.getByRole("heading", { name: "Frog Friends" })).toBeVisible();
+  await expect(page.getByTestId("puzzle-cover").locator("[data-cover-kind]")).toHaveAttribute("data-cover-emoji", "1F438");
+  await expect(page.getByTestId("puzzle-cover").locator("[data-cover-kind]")).toHaveAttribute("data-cover-background", "lime-checks");
+
+  // Desktop width too.
+  await page.setViewportSize({ width: 1280, height: 860 });
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main menu" }).getByRole("link", { name: "Community Puzzles" }).click();
+  await expect(panel).toHaveAttribute("aria-busy", "false");
   await page.screenshot({ path: path.join(SHOTS, "showcase-desktop-1280-shelf.png"), fullPage: true, animations: "disabled" });
+  await page.getByRole("link", { name: "Create A Puzzle" }).click();
+  await page.getByRole("searchbox", { name: "Search emojis" }).fill("owl");
+  await page.getByRole("option", { name: "owl", exact: true }).click();
+  await page.getByRole("radio", { name: "Indigo stars" }).click();
+  await page.screenshot({ path: path.join(SHOTS, "showcase-desktop-1280-make-a-cover.png"), fullPage: false, animations: "disabled" });
 
   expect(outside, "nothing may leave the browser").toEqual([]);
   expect(problems).toEqual([]);

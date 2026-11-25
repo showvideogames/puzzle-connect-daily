@@ -8,7 +8,7 @@
  * Plays and saves last for the visit (saves use the app's normal per-browser
  * storage, as a real guest's do).
  */
-import { CREATORS, CURATION, PUZZLES, type ShowcasePuzzle } from "./fixtures";
+import { CREATORS, CURATION, DEMO_GROUPS, PUZZLES, puzzle, type ShowcasePuzzle } from "./fixtures";
 
 type Result = { data: unknown; error: { message: string; code?: string } | null };
 const ok = (data: unknown): Result => ({ data, error: null });
@@ -34,6 +34,8 @@ function card(p: ShowcasePuzzle) {
     finished_plays: plays.get(p.key) ?? 0,
     favorite_count: p.favorites,
     listed_at: p.listedAt,
+    cover_emoji: p.cover?.emoji ?? null,
+    cover_background: p.cover?.background ?? null,
   };
 }
 
@@ -62,6 +64,8 @@ function full(p: ShowcasePuzzle) {
     creator_slug: p.creator.slug,
     favorite_count: p.favorites,
     favorited_by_me: false,
+    cover_emoji: p.cover?.emoji ?? null,
+    cover_background: p.cover?.background ?? null,
   };
 }
 
@@ -177,6 +181,25 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
     default:
       return unavailable(name);
   }
+}
+
+/**
+ * The showcase's "publish": adds a fictional puzzle by a fictional creator to
+ * this visit's Newest, with the cover the visitor picked. Nothing is stored.
+ */
+let demoCount = 0;
+export function publishDemoPuzzle(title: string, cover: { emoji: string; background: string } | null): string {
+  demoCount++;
+  const code = `DemoPuz${String(demoCount).padStart(3, "0")}`;
+  const you = { userId: "fixture-you", slug: "you-demo-a1b2", name: "You (demo)", followers: 0 };
+  if (!CREATORS.some((c) => c.slug === you.slug)) CREATORS.push(you);
+  PUZZLES.push(puzzle({
+    key: `demo${demoCount}`, title: title.trim().slice(0, 100) || "My Demo Puzzle", creator: CREATORS.find((c) => c.slug === you.slug)!,
+    shortCode: code, mode: "classic", groups: DEMO_GROUPS, listedAt: new Date().toISOString(), plays: 0, favorites: 0,
+    ...(cover ? { cover } : {}),
+  }));
+  plays.set(`demo${demoCount}`, 0);
+  return code;
 }
 
 /** A thenable query builder that answers every table read with no rows. */

@@ -25,6 +25,8 @@ export interface ShowcasePuzzle {
   listedAt: string;
   plays: number;
   favorites: number;
+  /** The creator's cover keys (one emoji, one preset background), or none. */
+  cover?: { emoji: string; background: string };
 }
 
 const wren: ShowcaseCreator = { userId: "fixture-wren", slug: "wren-halloway-k4m2", name: "Wren Halloway", followers: 18 };
@@ -40,7 +42,7 @@ function interleave(groups: { words: string[] }[]): string[] {
   return out;
 }
 
-function puzzle(p: Omit<ShowcasePuzzle, "wordOrder" | "shareId">): ShowcasePuzzle {
+export function puzzle(p: Omit<ShowcasePuzzle, "wordOrder" | "shareId">): ShowcasePuzzle {
   return { ...p, shareId: `showcase${p.shortCode.toLowerCase()}000000000000000000`, wordOrder: interleave(p.groups) };
 }
 
@@ -53,7 +55,8 @@ export const PUZZLES: ShowcasePuzzle[] = [
       { category: "Baking Staples", words: ["FLOUR", "SALT", "SUGAR", "YEAST"] },
       { category: "Often Pickled", words: ["BEET", "CAPER", "GHERKIN", "OLIVE"] },
     ],
-    listedAt: "2026-11-18T10:00:00Z", plays: 42, favorites: 11,
+    listedAt: "2026-11-21T10:00:00Z", plays: 42, favorites: 11,
+    cover: { emoji: "1F37F", background: "apricot-stripes" },
   }),
   puzzle({
     key: "tides", title: "Turn Of The Tides", creator: odie, shortCode: "TidesTrn4x", mode: "classic",
@@ -63,7 +66,7 @@ export const PUZZLES: ShowcasePuzzle[] = [
       { category: "Beach Bag", words: ["BUCKET", "SPADE", "SUNHAT", "TOWEL"] },
       { category: "Moving Water", words: ["RIPPLE", "SURGE", "SWELL", "WAVE"] },
     ],
-    listedAt: "2026-11-20T09:30:00Z", plays: 27, favorites: 6,
+    listedAt: "2026-11-19T09:30:00Z", plays: 27, favorites: 6,
   }),
   puzzle({
     key: "air", title: "Something In The Air", creator: pia, shortCode: "AirSmthg8z", mode: "classic",
@@ -106,6 +109,7 @@ export const PUZZLES: ShowcasePuzzle[] = [
       { category: "Very Dark", words: ["EBONY", "INK", "JET", "ONYX"] },
     ],
     listedAt: "2026-11-24T19:00:00Z", plays: 3, favorites: 1,
+    cover: { emoji: "1F989", background: "indigo-stars" },
   }),
   puzzle({
     key: "garden", title: "Garden Party", creator: pia, shortCode: "GardenPt5r", mode: "classic",
@@ -116,7 +120,27 @@ export const PUZZLES: ShowcasePuzzle[] = [
       { category: "Lawn Games", words: ["BOULES", "CROQUET", "QUOITS", "SKITTLES"] },
     ],
     listedAt: "2026-11-22T14:00:00Z", plays: 0, favorites: 0,
+    cover: { emoji: "1F438", background: "lime-checks" },
   }),
+  puzzle({
+    key: "orbit", title: "Out of Orbit", creator: odie, shortCode: "OrbitOut7k", mode: "classic",
+    groups: [
+      { category: "Planets", words: ["JUPITER", "MARS", "SATURN", "VENUS"] },
+      { category: "Spacecraft", words: ["LANDER", "PROBE", "ROCKET", "SHUTTLE"] },
+      { category: "Constellations", words: ["CYGNUS", "DRACO", "LYRA", "ORION"] },
+      { category: "In Orbit", words: ["DEBRIS", "MOON", "SATELLITE", "STATION"] },
+    ],
+    listedAt: "2026-11-20T12:00:00Z", plays: 12, favorites: 4,
+    cover: { emoji: "1FA90", background: "lilac-dots" },
+  }),
+];
+
+/** The board every showcase demo puzzle uses (the real builder makes you write your own). */
+export const DEMO_GROUPS = [
+  { category: "Colors", words: ["BLUE", "GREEN", "PINK", "RED"] },
+  { category: "Fruit", words: ["APPLE", "KIWI", "PEAR", "PLUM"] },
+  { category: "Weather", words: ["FOG", "HAIL", "RAIN", "SNOW"] },
+  { category: "Shapes", words: ["CIRCLE", "OVAL", "SQUARE", "TRIANGLE"] },
 ];
 
 /** Human-chosen curation, as an admin would set it. */
