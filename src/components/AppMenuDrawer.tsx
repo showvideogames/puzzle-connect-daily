@@ -21,10 +21,10 @@ interface Destination {
 }
 
 const PLAY = [
-  { to: "/", label: "Today's Puzzle", detail: "The full-size daily puzzle.", art: "full", tone: "bg-[#f5effb] dark:bg-[#312640]" },
-  { to: "/archive", label: "Puzzle Archive", detail: "Past full-size puzzles.", art: "archive", tone: "bg-[#fbf5e9] dark:bg-[#352c22]" },
-  { to: "/mini", label: "Rainbow Mini", detail: "A smaller daily.", art: "mini", tone: "bg-[#eff8fa] dark:bg-[#203339]" },
-  { to: "/mini/archive", label: "Mini Archive", detail: "Past mini puzzles.", art: "miniArchive", tone: "bg-[#edf7f1] dark:bg-[#23352d]" },
+  { to: "/", label: "Today's Puzzle", detail: null, art: "full", tone: "bg-[#e7d5f5] dark:bg-[#48345b]" },
+  { to: "/archive", label: "Puzzle Archive", detail: "Past daily puzzles.", art: "archive", tone: "bg-[#f5e3bd] dark:bg-[#4d3a25]" },
+  { to: "/mini", label: "Rainbow Mini", detail: "A smaller daily.", art: "mini", tone: "bg-[#c6e9ec] dark:bg-[#24464c]" },
+  { to: "/mini/archive", label: "Mini Archive", detail: "Past mini puzzles.", art: "miniArchive", tone: "bg-[#cfe9d7] dark:bg-[#2b493a]" },
 ] as const;
 type PlayArt = typeof PLAY[number]["art"];
 
@@ -98,13 +98,10 @@ export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
       >
         <div className="px-4 pt-4 max-[359px]:px-3">
           <div aria-hidden="true" className="mb-3 grid grid-cols-4 gap-px overflow-hidden rounded-full">
-            {["bg-[#eeb574]", "bg-[#e9899e]", "bg-[#8fc3ab]", "bg-[#a28ad1]"].map((tone) => <span key={tone} className={`h-[3px] ${tone}`} />)}
+            {["bg-[#ffc20e]", "bg-[#1fae4b]", "bg-[#1e6ff0]", "bg-[#e8262b]"].map((tone) => <span key={tone} className={`h-[3px] ${tone}`} />)}
           </div>
           <div className="flex items-center justify-between gap-2 pb-3">
-            <div>
-              <p aria-hidden="true" className="mb-0.5 text-[11px] font-extrabold uppercase tracking-[0.11em] text-slate">Rainbow Categories</p>
-              <SheetTitle className="text-[26px] font-extrabold leading-none tracking-tight">Menu</SheetTitle>
-            </div>
+            <SheetTitle className="text-[26px] font-extrabold leading-none tracking-tight">Menu</SheetTitle>
             <SheetClose className={`${headerIconButton} border border-border bg-card`} aria-label="Close menu">
               <X aria-hidden="true" className={headerGlyph} strokeWidth={HEADER_STROKE} />
             </SheetClose>
@@ -122,7 +119,7 @@ export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
                       <MenuArt art={art} />
                       <span className="min-w-0">
                         <span className={`block font-extrabold leading-tight ${wide ? "text-[18px]" : "text-[16px]"}`}>{label}</span>
-                        <span className="mt-0.5 block text-xs font-semibold leading-snug text-foreground/75">{detail}</span>
+                        {detail && <span className="mt-0.5 block text-xs font-semibold leading-snug text-foreground/85">{detail}</span>}
                       </span>
                     </NavLink>
                   </SheetClose>
