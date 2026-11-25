@@ -645,6 +645,16 @@ describe("Edit profile", () => {
     expect(await screen.findByRole("button", { name: "Save changes" })).toBeInTheDocument();
     expect(screen.getByLabelText("Display Name")).toHaveValue("Alex");
   });
+
+  it("My profile links to My Puzzles", async () => {
+    const made = makeApi({});
+    render(
+      <SocialScreens api={made.api} signedIn code={null} tab="friends" onTab={vi.fn()} onNote={vi.fn()} onLeaveLink={vi.fn()} onSignIn={vi.fn()} onNameLater={vi.fn()} guest={<p>guest</p>} waiting={<p>waiting</p>} startEditingProfile />,
+    );
+    const link = await screen.findByTestId("profile-my-puzzles");
+    expect(link).toHaveAttribute("href", "/my-puzzles");
+    expect(link).toHaveTextContent("My Puzzles");
+  });
 });
 
 describe("Blocked", () => {

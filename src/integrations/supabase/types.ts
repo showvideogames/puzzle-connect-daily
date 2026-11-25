@@ -1185,6 +1185,18 @@ export type Database = {
           sessions_claimed: number
         }[]
       }
+      get_my_custom_puzzle_source: {
+        Args: { _share_id: string }
+        Returns: Json
+      }
+      rename_custom_puzzle: {
+        Args: { _share_id: string; _title: string }
+        Returns: Json
+      }
+      list_my_custom_puzzles: {
+        Args: { _limit?: number; _offset?: number }
+        Returns: Json
+      }
       list_community_puzzles: {
         Args: { _limit?: number; _offset?: number; _query?: string; _sort?: string }
         Returns: Json

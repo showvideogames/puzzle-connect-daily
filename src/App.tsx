@@ -41,6 +41,8 @@ const Join = socialBetaOn() ? lazy(() => import("./pages/Join.tsx")) : null;
 // Community Puzzles preview (lib/communityFlag.ts). Off, the route does not
 // exist and the page is not in any chunk a player loads.
 const Community = communityPuzzlesOn() ? lazy(() => import("./pages/Community.tsx")) : null;
+// The signed-in creator's own puzzles (covers and listing need Community on; Open and Copy Link don't).
+const MyPuzzles = lazy(() => import("./pages/MyPuzzles.tsx"));
 // Its private admin curation page, under the same flag.
 const AdminCommunity = communityPuzzlesOn() ? lazy(() => import("./pages/AdminCommunity.tsx")) : null;
 
@@ -81,6 +83,7 @@ const router = createBrowserRouter(createRoutesFromElements(
           <Route path="/custom/:shareId" element={<CustomPuzzle />} />
           <Route path="/creator/:publicSlug" element={<CreatorProfilePage />} />
           <Route path="/favorites" element={<Favorites />} />
+          <Route path="/my-puzzles" element={<Suspense fallback={null}><MyPuzzles /></Suspense>} />
           {Community && (
             <Route path="/community" element={<Suspense fallback={null}><Community /></Suspense>} />
           )}

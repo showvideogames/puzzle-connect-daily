@@ -1,6 +1,6 @@
 import { AccountIcon as PersonIcon } from "./account/AccountIcon";
 import { lazy, Suspense, useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useInRouterContext } from "react-router-dom";
 import { toast } from "sonner";
 import type { User as AuthUser } from "@supabase/supabase-js";
 import { ACCOUNTS_ENABLED, deleteMyAccount, signInWithPlatform } from "@/lib/platformSignIn";
@@ -52,6 +52,9 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
   // and is only a fallback while the account is not known yet.
   const account = useCurrentAccount();
   const useProfileMenu = profileMenu && socialBetaOn();
+  // The account menu also renders outside a router (tests, isolated mounts).
+  const inRouter = useInRouterContext();
+  const myPuzzlesClass = "block w-full text-left px-4 py-2.5 text-sm hover:bg-secondary transition-colors";
 
   // forceOpen opens whichever UI actually applies right now: the sign-in
   // dialog when signed out, the account dropdown when signed in, so an
@@ -160,6 +163,11 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
             </div>
             {!confirmDelete ? (
               <div className="py-1">
+                {inRouter ? (
+                  <Link to="/my-puzzles" onClick={() => setShowDropdown(false)} className={myPuzzlesClass}>My puzzles</Link>
+                ) : (
+                  <a href="/my-puzzles" className={myPuzzlesClass}>My puzzles</a>
+                )}
                 {onEditProfile && (
                   <button
                     onClick={() => { setShowDropdown(false); onEditProfile(); }}

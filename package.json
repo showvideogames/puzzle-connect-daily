@@ -55,7 +55,9 @@
     "covers:emoji": "node scripts/generate-cover-emoji.mjs",
     "e2e:db:covers": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/verify-community-covers.ts",
     "e2e:db:release": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/verify-community-release.ts",
-    "e2e:db:v2": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/verify-community-v2.ts"
+    "e2e:db:v2": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/verify-community-v2.ts",
+    "e2e:db:my-puzzles": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/verify-my-puzzles.ts",
+    "e2e:db:my-puzzles-rename-copy": "tsx --tsconfig e2e/tsconfig.json e2e/scripts/verify-my-puzzles-rename-copy.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

@@ -12,7 +12,7 @@ export const headerIconButton =
 export const headerGlyph = "h-6 w-6";
 export const HEADER_STROKE = 2.25;
 
-export type MenuRowIcon = "community" | "create" | "book" | "friends" | "favorites" | "games" | "profile" | "feedback";
+export type MenuRowIcon = "community" | "create" | "book" | "friends" | "favorites" | "games" | "profile" | "puzzles" | "feedback";
 
 interface Destination {
   to: string;
@@ -111,6 +111,14 @@ export function MenuRowArt({ icon }: { icon: MenuRowIcon }) {
         <rect x="4" y="5" width="24" height="22" rx="5" fill="#c4a9f6" />
         <circle cx="16" cy="12" r="3" fill="#ffe474" />
         <path d="M10 21c0-2.5 2.7-4 6-4s6 1.5 6 4" />
+      </>}
+      {icon === "puzzles" && <>
+        <rect x="8" y="3" width="21" height="21" rx="4" fill="#a8d9ff" />
+        <rect x="3" y="8" width="21" height="21" rx="4" fill="white" />
+        <rect x="7" y="12" width="5.5" height="5.5" rx="1.3" fill="#ffe462" stroke="none" />
+        <rect x="14.5" y="12" width="5.5" height="5.5" rx="1.3" fill="#9fe1a5" stroke="none" />
+        <rect x="7" y="19.5" width="5.5" height="5.5" rx="1.3" fill="#ef9cb7" stroke="none" />
+        <rect x="14.5" y="19.5" width="5.5" height="5.5" rx="1.3" fill="#c4a9f6" stroke="none" />
       </>}
       {icon === "games" && <>
         <rect x="5" y="10" width="22" height="14" rx="6" fill="#a9e4ce" />

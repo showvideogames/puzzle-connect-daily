@@ -53,6 +53,8 @@ describe('header identity and notifications', () => {
     await screen.findByTestId('profile-notification');
     await openMenu(); await act(async () => fireEvent.click(screen.getByRole('menuitem', { name: 'My profile' })));
     expect(screen.getByTestId('location')).toHaveTextContent('/friends:{"editProfile":true}');
+    await openMenu(); await act(async () => fireEvent.click(screen.getByRole('menuitem', { name: 'My puzzles' })));
+    expect(screen.getByTestId('location')).toHaveTextContent('/my-puzzles:null');
     await openMenu(); fireEvent.click(screen.getByRole('menuitem', { name: 'Account options' }));
     expect(account).toHaveBeenCalledOnce();
   });

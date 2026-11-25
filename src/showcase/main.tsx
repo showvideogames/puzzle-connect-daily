@@ -6,7 +6,7 @@
 import { createRoot } from "react-dom/client";
 import { HelmetProvider } from "react-helmet-async";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Link, Navigate, RouterProvider, createHashRouter, createMemoryRouter, type RouteObject } from "react-router-dom";
+import { Link, Navigate, RouterProvider, createHashRouter, createMemoryRouter, useSearchParams, type RouteObject } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -14,6 +14,8 @@ import CommunityPage from "@/pages/Community";
 import CustomPuzzle from "@/pages/CustomPuzzle";
 import CreatorProfilePage from "@/pages/CreatorProfile";
 import ShowcaseCreate from "./ShowcaseCreate";
+import MyPuzzles from "@/pages/MyPuzzles";
+import CreatePuzzle from "@/pages/CreatePuzzle";
 import { setShowcaseSignedIn, showcaseSignedIn } from "./fixtureClient";
 import { useState } from "react";
 import { cv } from "@/lib/communityStyle";
@@ -56,8 +58,22 @@ function PreviewNote() {
           {signedIn ? "Switch to guest" : "Switch to Demo Player"}
         </button>
       </span>
+      {signedIn && (
+        <>
+          {" "}
+          <Link to="/my-puzzles" className="whitespace-nowrap underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded" data-testid="showcase-my-puzzles">
+            My Puzzles
+          </Link>
+        </>
+      )}
     </p>
   );
+}
+
+/** The demo's quick Create, or the real builder for a Duplicate & Edit copy (?draft=). */
+function CreateRoute() {
+  const [params] = useSearchParams();
+  return params.has("draft") ? <CreatePuzzle /> : <ShowcaseCreate />;
 }
 
 const routes: RouteObject[] = [
@@ -66,7 +82,8 @@ const routes: RouteObject[] = [
   { path: "/p/:shortCode", element: <><PreviewNote /><CustomPuzzle /></> },
   { path: "/custom/:shareId", element: <><PreviewNote /><CustomPuzzle /></> },
   { path: "/creator/:publicSlug", element: <><PreviewNote /><CreatorProfilePage /></> },
-  { path: "/create", element: <><PreviewNote /><ShowcaseCreate /></> },
+  { path: "/create", element: <><PreviewNote /><CreateRoute /></> },
+  { path: "/my-puzzles", element: <><PreviewNote /><MyPuzzles /></> },
   { path: "*", element: <NotInShowcase /> },
 ];
 

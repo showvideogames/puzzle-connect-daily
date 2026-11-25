@@ -48,6 +48,20 @@ function BetaSocialRow({ onClose }: { onClose: () => void }) {
   return <SocialRow onClose={onClose} onOpen={() => navigate("/friends", { state: { friendsHome: true } })} />;
 }
 
+/** The signed-in creator's own puzzles (/my-puzzles), beside the profile. */
+function MyPuzzlesRow({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={() => { onClose(); navigate("/my-puzzles"); }}
+      className={`${menuRowClass} bg-[#dceefc] dark:bg-[#263f55]`}
+    >
+      <MenuRowArt icon="puzzles" />
+      My Puzzles
+    </button>
+  );
+}
+
 /** The profile editor that Friends & Groups uses, opened straight away. */
 function BetaEditProfileRow({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
@@ -189,6 +203,7 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                       <BetaSocialRow onClose={onClose} />
                     )}
                     {user && !onEditProfile && socialBetaOn() && <BetaEditProfileRow onClose={onClose} />}
+                    {user && <MyPuzzlesRow onClose={onClose} />}
                     {(user || ACCOUNTS_ENABLED) && (
                     <div className="flex items-center gap-3 px-2 py-1.5">
                       {/* PlayerAuth's own icon button keeps working exactly

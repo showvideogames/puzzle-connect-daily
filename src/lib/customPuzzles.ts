@@ -818,3 +818,98 @@ export async function setCustomPuzzleRating(shareId: string, rating: number): Pr
   if (error) throw error;
   return (data as { rating?: number } | null)?.rating ?? rating;
 }
+
+// ── My Puzzles: the signed-in creator's own library (migration 0011) ───────
+
+export interface MyPuzzle {
+  shareId: string;
+  shortCode: string;
+  title: string;
+  /** The designer name the owner typed (the cover preview's byline). */
+  creatorName: string;
+  mode: CustomPuzzleMode;
+  visibility: CustomPuzzleVisibility;
+  /** Hidden by moderators: its links don't open and it can't be listed. */
+  hidden: boolean;
+  listed: boolean;
+  /** Public and active: the existing listing call would accept it. */
+  canList: boolean;
+  cover: CreatorCover | null;
+  createdAt: string;
+}
+
+export const MY_PUZZLES_PAGE_SIZE = 24;
+
+/**
+ * The caller's own puzzles, newest first. The server finds the owner from the
+ * signed-in Rainbow account; there is no way to ask for anyone else's. Throws
+ * when signed out or on failure.
+ */
+export async function listMyPuzzles(params: { offset?: number; limit?: number } = {}): Promise<{ items: MyPuzzle[]; hasMore: boolean; total: number }> {
+  const { data, error } = await supabase.rpc("list_my_custom_puzzles", {
+    _limit: params.limit ?? MY_PUZZLES_PAGE_SIZE,
+    _offset: params.offset ?? 0,
+  });
+  if (error) throw error;
+  const r = (data ?? {}) as { items?: unknown[]; has_more?: boolean; total?: number };
+  const items = (Array.isArray(r.items) ? r.items : []) as {
+    share_id: string; short_code: string; title: string; creator_name: string; mode: CustomPuzzleMode; visibility: CustomPuzzleVisibility;
+    hidden: boolean; listed: boolean; can_list: boolean; created_at: string;
+    cover_emoji?: string | null; cover_emoji_2?: string | null; cover_emoji_3?: string | null; cover_background?: string | null;
+  }[];
+  return {
+    items: items.map((x) => ({
+      shareId: x.share_id,
+      shortCode: x.short_code,
+      title: x.title,
+      creatorName: x.creator_name ?? "",
+      mode: x.mode === "rainbow" ? "rainbow" : "classic",
+      visibility: x.visibility === "private" ? "private" : "public",
+      hidden: !!x.hidden,
+      listed: !!x.listed,
+      canList: !!x.can_list,
+      cover: parseCover(x.cover_emoji, x.cover_background, x.cover_emoji_2, x.cover_emoji_3),
+      createdAt: x.created_at,
+    })),
+    hasMore: !!r.has_more,
+    total: typeof r.total === "number" ? r.total : items.length,
+  };
+}
+
+// ── My Puzzles: Rename and Duplicate & Edit (migration 0012) ────────────────
+
+/** The same title rule the server applies on create and rename. */
+export const MAX_PUZZLE_TITLE = 100;
+
+/**
+ * Renames the caller's own puzzle (title only). The server checks the owner
+ * and the title rule; links, content, visibility, listing, cover, results,
+ * favorites and ratings are unchanged. Throws with the server's message.
+ */
+export async function renameMyPuzzle(shareId: string, title: string): Promise<string> {
+  const { data, error } = await supabase.rpc("rename_custom_puzzle", { _share_id: shareId, _title: title });
+  if (error) throw error;
+  return (data as { title?: string } | null)?.title ?? title.trim();
+}
+
+export interface MyPuzzleSource {
+  title: string;
+  creatorName: string;
+  visibility: CustomPuzzleVisibility;
+  /** The stored builder content (validate_custom_puzzle_content's shape). */
+  content: Record<string, unknown>;
+}
+
+/** The caller's own puzzle's builder content, for Duplicate & Edit. Refused for anyone else. Throws. */
+export async function getMyPuzzleSource(shareId: string): Promise<MyPuzzleSource> {
+  const { data, error } = await supabase.rpc("get_my_custom_puzzle_source", { _share_id: shareId });
+  if (error) throw error;
+  const r = (data ?? {}) as { title?: unknown; creator_name?: unknown; visibility?: unknown; content?: unknown };
+  if (typeof r.title !== "string" || !r.content || typeof r.content !== "object") throw new Error("Couldn't read this puzzle.");
+  return {
+    title: r.title,
+    creatorName: typeof r.creator_name === "string" ? r.creator_name : "",
+    visibility: r.visibility === "private" ? "private" : "public",
+    content: r.content as Record<string, unknown>,
+  };
+}

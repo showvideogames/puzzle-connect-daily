@@ -41,10 +41,15 @@ interface PuzzleSpec {
   list: boolean;
   plays: number;
   words: string[][];
+  /** Backdated creation time, for an older puzzle (made before covers and Community). */
+  createdAt?: string;
 }
 
 const W = (s: string) => s.split(" ");
 const PUZZLES: PuzzleSpec[] = [
+  // An older puzzle from before covers and Community: never listed, no cover.
+  { key: "music", owner: "wren", title: "Mixtape Memories", visibility: "public", mode: "classic", list: false, plays: 3, createdAt: "2025-03-14T10:00:00Z",
+    words: [W("ALTO BASS SOPRANO TENOR"), W("BALLAD HYMN LULLABY SHANTY"), W("CASSETTE RECORD REEL VINYL"), W("ENCORE GIG SETLIST TOUR")] },
   { key: "offbeat", owner: "wren", title: "A Little Offbeat", visibility: "public", mode: "rainbow", list: true, plays: 12,
     words: [W("BONGO CONGA SNARE TABLA"), W("BREVE CLEF REST STAFF"), W("CHORD RIFF SCALE TRILL"), W("LUTE LYRE OUD SITAR")] },
   { key: "usual", owner: "odie", title: "The Usual Suspects", visibility: "public", mode: "classic", list: true, plays: 31,
@@ -117,6 +122,10 @@ async function main(): Promise<number> {
     });
     if (error) throw new Error(`create_custom_puzzle failed for "${spec.title}": ${error.message}`);
     const row = data as { share_id: string; short_code: string };
+    if (spec.createdAt) {
+      const old = await client(config.apiUrl, config.serviceRoleKey).from("custom_puzzles").update({ created_at: spec.createdAt }).eq("share_id", row.share_id);
+      if (old.error) throw new Error(`backdating failed for "${spec.title}": ${old.error.message}`);
+    }
     if (spec.list) {
       const listed = await c.rpc("set_custom_puzzle_community_listing", { _share_id: row.share_id, _listed: true });
       if (listed.error) throw new Error(`listing failed for "${spec.title}": ${listed.error.message}`);
