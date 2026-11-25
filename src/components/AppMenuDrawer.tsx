@@ -3,7 +3,6 @@ import { NavLink } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import { CircleHelp, Menu, MessageSquareText, SquarePen, UsersRound, X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { MINI_ICONS } from "@/lib/appIcons";
 import { socialBetaOn } from "@/components/social/socialFlag";
 
 /** The header's own 44px target: a 24px glyph in the foreground colour, as in the header concept. */
@@ -42,22 +41,11 @@ const focusClass = "focus-visible:outline-none focus-visible:ring-2 focus-visibl
 const rowClass = `flex min-h-12 w-full items-center gap-3 rounded-xl px-1.5 text-left text-[15px] font-bold leading-tight text-foreground hover:bg-secondary transition-colors aria-[current=page]:bg-secondary ${focusClass}`;
 
 function MenuArt({ art }: { art: PlayArt }) {
-  if (art === "full" || art === "mini") {
-    const mini = art === "mini";
-    return (
-      <span
-        aria-hidden="true"
-        className={`grid shrink-0 place-items-center overflow-hidden ${mini ? "h-12 w-12 -rotate-[8deg] rounded-[10px] bg-[#63bdb5]" : "h-14 w-14 rounded-xl"}`}
-      >
-        {mini ? (
-          <span className="relative block h-10 w-10 overflow-hidden rounded-md">
-            <img src={MINI_ICONS.apple} alt="" width={50} height={50} className="absolute -left-[5px] -top-[5px] h-[50px] w-[50px] max-w-none" />
-          </span>
-        ) : (
-          <img src="/icons/rainbow-icon-192-0e09e6d1.png" alt="" width={56} height={56} className="block h-full w-full" />
-        )}
-      </span>
-    );
+  if (art === "mini") {
+    return <img aria-hidden="true" src="/icons/mini-lagoon-tilted.png" alt="" width={52} height={52} className="block h-[52px] w-[52px] shrink-0" />;
+  }
+  if (art === "full") {
+    return <img aria-hidden="true" src="/icons/rainbow-icon-192-0e09e6d1.png" alt="" width={56} height={56} className="block h-14 w-14 shrink-0 rounded-xl" />;
   }
 
   const mini = art === "miniArchive";
