@@ -210,6 +210,18 @@ reporting in this pass.
 Untouched: share links, creator search, Follow and Following, unlisting,
 private saves, and the creator page.
 
+## Part 4: creator covers and release
+
+Creators can add an optional cover: exactly one emoji (1,898 standard Unicode
+emoji from the pinned `emojibase-data@16.0.3`, normal skin tone, flags and
+single composite sequences; only the 8 Emoji 16.0 additions are left out for
+rendering support) on one of 24 preset backgrounds. It's stored as two keys and
+validated by the server (`0008_community_covers.sql`). It shows on every
+browsing card and on the puzzle page; Featured and Editor's Picks keep their
+illustrated art. Community is now on by default, with `VITE_COMMUNITY_PUZZLES=off`
+as the kill switch. The release order and rollback are in
+`docs/COMMUNITY-PUZZLES-RELEASE.md`.
+
 ## Rollout gates (not met, so the flag stays off in production)
 
 1. **A player report flow for custom puzzles (and creators).** Only the admin hide exists today. Until a report path, an admin queue for it, and a reviewed takedown time exist, `/community` should stay a private preview.

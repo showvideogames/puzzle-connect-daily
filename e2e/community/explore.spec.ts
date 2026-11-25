@@ -90,10 +90,12 @@ test("phone first: real wordmark, white page, Featured, two-column Picks, Newest
   }
   await expect(page.locator("main")).not.toContainText(/(^|\D)0 plays/);
   await expect(page.locator("main")).not.toContainText(/☆|★/);
-  // Covers come from a small reusable set and carry no text at all.
+  // Editorial art (Featured + Editor's Picks) comes from the small illustrated set and carries no text;
+  // since creator covers (0008), every other card shows the puzzle's own cover or the standard one.
   const covers = await page.locator("main svg[data-cover]").evaluateAll((els) => els.map((e) => ({ id: e.getAttribute("data-cover"), text: e.textContent?.trim() ?? "" })));
-  expect(covers.length).toBeGreaterThan(5);
+  expect(covers.length).toBe(5);
   expect(covers.every((c) => c.text === "")).toBe(true);
+  expect(await page.getByTestId("newest-list").locator("[data-cover-kind]").count()).toBeGreaterThan(0);
   // Newest and a reachable See all; Create is a small secondary link.
   await expect(page.getByTestId("newest-section").getByRole("link", { name: "See all newest puzzles" })).toHaveAttribute("href", "/community?view=newest");
   const create = page.getByRole("link", { name: "Create A Puzzle" });

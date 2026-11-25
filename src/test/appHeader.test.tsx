@@ -134,6 +134,7 @@ describe("hamburger drawer", () => {
       ["Rainbow Mini", "/mini"],
       ["Puzzle archive", "/archive"],
       ["Mini archive", "/mini/archive"],
+      ["Community Puzzles", "/community"],
       ["Create a puzzle", "/create"],
       ["How to play", "/how-to-play"],
       ["Friends & Groups", "/friends"],
@@ -174,7 +175,7 @@ describe("hamburger drawer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Menu" }));
     const drawer = await screen.findByRole("dialog", { name: "Menu" });
     expect(within(drawer).queryByRole("link", { name: "Friends & Groups" })).toBeNull();
-    expect(within(drawer).getAllByRole("link")).toHaveLength(6);
+    expect(within(drawer).getAllByRole("link")).toHaveLength(7); // includes Community Puzzles
   });
 
   it("Give feedback closes the drawer and opens the existing feedback dialog", async () => {

@@ -85,6 +85,8 @@ async function appRoutes(flag: string): Promise<string[]> {
 const ROUTES_TODAY = [
   "/",
   "/admin",
+  // Community Puzzles (on by default; VITE_COMMUNITY_PUZZLES=off removes both).
+  "/admin/community",
   "/archive",
   "/archive/:puzzleId",
   "/free/:puzzleId",
@@ -98,6 +100,7 @@ const ROUTES_TODAY = [
   "/custom/:shareId",
   "/creator/:publicSlug",
   "/favorites",
+  "/community",
   "/__fixtures/community",
   "/__fixtures/mini",
   "/__fixtures/lucky-bot",

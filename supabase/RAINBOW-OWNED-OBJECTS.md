@@ -21,11 +21,11 @@ shows up as a diff instead of as a surprise on a blank project.
 
 | Category | Count |
 |---|---|
-| Tables | 24 |
-| Columns | 202 |
-| Constraints | 102 |
-| Indexes | 64 |
-| Functions | 79 |
+| Tables | 25 |
+| Columns | 205 |
+| Constraints | 107 |
+| Indexes | 65 |
+| Functions | 80 |
 | Triggers | 5 |
 | RLS policies | 25 |
 | Enum types | 1 |
@@ -170,6 +170,25 @@ Indexes:
 Policies:
 
 - `Admins can read beta playtests` — SELECT to public; using `has_role(rainbow_uid(), 'admin'::app_role)`
+
+### `community_cover_emoji`
+
+> Allowlist of cover emoji keys (fully-qualified code-point sequences), generated from the pinned emojibase-data release.
+
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
+
+| Column | Type | Null | Default |
+|---|---|---|---|
+| `key` | text | not null |  |
+
+Constraints:
+
+- `community_cover_emoji_key_format` CHECK ((key ~ '^[0-9A-F]{4,6}(-[0-9A-F]{4,6}){0,9}$'::text))
+- `community_cover_emoji_pkey` PRIMARY KEY (key)
+
+Indexes:
+
+- `CREATE UNIQUE INDEX community_cover_emoji_pkey ON public.community_cover_emoji USING btree (key)`
 
 ### `community_curation`
 
@@ -358,10 +377,15 @@ RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNC
 | `short_code` | text | not null |  |
 | `community_listed` | boolean | not null | `false` |
 | `community_listed_at` | timestamp with time zone | null |  |
+| `cover_emoji` | text | null |  |
+| `cover_background` | text | null |  |
 
 Constraints:
 
 - `custom_puzzles_community_requires_public` CHECK (((NOT community_listed) OR (visibility = 'public'::text)))
+- `custom_puzzles_cover_background_check` CHECK (((cover_background IS NULL) OR (cover_background = ANY (ARRAY['lilac'::text, 'butter'::text, 'mint'::text, 'sunflower'::text, 'tangerine'::text, 'coral'::text, 'bubblegum'::text, 'ocean'::text, 'forest'::text, 'charcoal'::text, 'lime-checks'::text, 'apricot-stripes'::text, 'lilac-dots'::text, 'indigo-stars'::text, 'teal-waves'::text, 'pink-waves'::text, 'sky-grid'::text, 'cream-confetti'::text, 'berry-stripes'::text, 'cherry-polka'::text, 'sunset-split'::text, 'peach-rings'::text, 'mint-checks'::text, 'rainbow-bands'::text]))))
+- `custom_puzzles_cover_emoji_fkey` FOREIGN KEY (cover_emoji) REFERENCES community_cover_emoji(key)
+- `custom_puzzles_cover_pair` CHECK ((((cover_emoji IS NULL) AND (cover_background IS NULL)) OR ((cover_emoji IS NOT NULL) AND (cover_background IS NOT NULL))))
 - `custom_puzzles_created_by_fkey` FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL
 - `custom_puzzles_moderation_status_check` CHECK ((moderation_status = ANY (ARRAY['active'::text, 'hidden'::text])))
 - `custom_puzzles_pkey` PRIMARY KEY (id)
@@ -908,6 +932,7 @@ Indexes:
 | `session_capability_ok(_session_id uuid, _device_id text, _device_token text)` | boolean | yes | stable | anon, authenticated, service_role |
 | `set_creator_follow(_slug text, _follow boolean)` | jsonb | yes | volatile | authenticated, service_role |
 | `set_custom_puzzle_community_listing(_share_id text, _listed boolean)` | jsonb | yes | volatile | authenticated, service_role |
+| `set_custom_puzzle_cover(_share_id text, _emoji text, _background text)` | jsonb | yes | volatile | authenticated, service_role |
 | `set_custom_puzzle_favorite(_share_id text, _favorite boolean)` | jsonb | yes | volatile | authenticated, service_role |
 | `skill_score(_won boolean, _mistakes integer, _solve_order jsonb, _found_rainbow boolean, _rainbow_source text, _format text)` | integer | no | immutable | anon, authenticated, service_role |
 | `stamp_no_hint_completion()` | trigger | yes | volatile | service_role |

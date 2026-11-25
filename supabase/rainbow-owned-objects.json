@@ -532,6 +532,52 @@
       }
     },
     {
+      "name": "community_cover_emoji",
+      "rlsEnabled": true,
+      "rlsForced": false,
+      "comment": "Allowlist of cover emoji keys (fully-qualified code-point sequences), generated from the pinned emojibase-data release.",
+      "columns": [
+        {
+          "name": "key",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        }
+      ],
+      "constraints": [
+        {
+          "name": "community_cover_emoji_key_format",
+          "type": "c",
+          "definition": "CHECK ((key ~ '^[0-9A-F]{4,6}(-[0-9A-F]{4,6}){0,9}$'::text))"
+        },
+        {
+          "name": "community_cover_emoji_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (key)"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "community_cover_emoji_pkey",
+          "definition": "CREATE UNIQUE INDEX community_cover_emoji_pkey ON public.community_cover_emoji USING btree (key)"
+        }
+      ],
+      "triggers": [],
+      "policies": [],
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
+    },
+    {
       "name": "community_curation",
       "rlsEnabled": true,
       "rlsForced": false,
@@ -1205,6 +1251,20 @@
           "notNull": false,
           "default": null,
           "comment": null
+        },
+        {
+          "name": "cover_emoji",
+          "type": "text",
+          "notNull": false,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "cover_background",
+          "type": "text",
+          "notNull": false,
+          "default": null,
+          "comment": null
         }
       ],
       "constraints": [
@@ -1212,6 +1272,21 @@
           "name": "custom_puzzles_community_requires_public",
           "type": "c",
           "definition": "CHECK (((NOT community_listed) OR (visibility = 'public'::text)))"
+        },
+        {
+          "name": "custom_puzzles_cover_background_check",
+          "type": "c",
+          "definition": "CHECK (((cover_background IS NULL) OR (cover_background = ANY (ARRAY['lilac'::text, 'butter'::text, 'mint'::text, 'sunflower'::text, 'tangerine'::text, 'coral'::text, 'bubblegum'::text, 'ocean'::text, 'forest'::text, 'charcoal'::text, 'lime-checks'::text, 'apricot-stripes'::text, 'lilac-dots'::text, 'indigo-stars'::text, 'teal-waves'::text, 'pink-waves'::text, 'sky-grid'::text, 'cream-confetti'::text, 'berry-stripes'::text, 'cherry-polka'::text, 'sunset-split'::text, 'peach-rings'::text, 'mint-checks'::text, 'rainbow-bands'::text]))))"
+        },
+        {
+          "name": "custom_puzzles_cover_emoji_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (cover_emoji) REFERENCES community_cover_emoji(key)"
+        },
+        {
+          "name": "custom_puzzles_cover_pair",
+          "type": "c",
+          "definition": "CHECK ((((cover_emoji IS NULL) AND (cover_background IS NULL)) OR ((cover_emoji IS NOT NULL) AND (cover_background IS NOT NULL))))"
         },
         {
           "name": "custom_puzzles_created_by_fkey",
@@ -3276,7 +3351,7 @@
         "authenticated",
         "service_role"
       ],
-      "comment": null
+      "comment": "Admin only. Replaces the whole curation. New additions must be listed in Community; entries already saved may stay while hidden (Explore re-checks on read) and can be removed or replaced."
     },
     {
       "name": "admin_set_custom_puzzle_status",
@@ -4370,6 +4445,23 @@
         "service_role"
       ],
       "comment": "The puzzle's own signed-in creator lists or unlists it in Community. Never changes visibility, links or content."
+    },
+    {
+      "name": "set_custom_puzzle_cover",
+      "args": "_share_id text, _emoji text, _background text",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "The puzzle's own creator sets or removes its cover: one allowlisted emoji key and one preset background key."
     },
     {
       "name": "set_custom_puzzle_favorite",
