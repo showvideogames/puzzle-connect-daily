@@ -1,10 +1,10 @@
 /**
  * The Community release path, rehearsed on disposable in-process PostgreSQL:
- *   1. 0004-0008 apply on a database that has only 0001-0002 (production's
+ *   1. 0004-0010 apply on a database that has only 0001-0002 (production's
  *      recorded ledger), WITHOUT 0003, and on one that has 0003 as well;
  *   2. existing custom puzzles, public, private and anonymous, are unchanged and
  *      none is listed or given a cover;
- *   3. supabase/ops/community-release/rollback-0004-0008.sql restores exactly
+ *   3. supabase/ops/community-release/rollback-0004-0010.sql restores exactly
  *      the pre-release schema (tables, columns, constraints, indexes, function
  *      definitions), keeping the puzzles.
  *
@@ -15,8 +15,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { buildSchemaPlan, applySchemaPlan } from "./lib/schema.ts";
 
-const ROLLBACK = fs.readFileSync(new URL("../../supabase/ops/community-release/rollback-0004-0008.sql", import.meta.url), "utf8");
-const RELEASE = ["0004_", "0005_", "0006_", "0007_", "0008_"];
+const ROLLBACK = fs.readFileSync(new URL("../../supabase/ops/community-release/rollback-0004-0010.sql", import.meta.url), "utf8");
+const RELEASE = ["0004_", "0005_", "0006_", "0007_", "0008_", "0009_", "0010_"];
 
 async function schema(db: PGlite) {
   const q = async (sql: string) => (await db.query<Record<string, string>>(sql)).rows.map((r) => Object.values(r).join(" | ")).sort();
@@ -35,7 +35,7 @@ async function run(with0003: boolean) {
     const plan = buildSchemaPlan({ includeSupabaseStubs: true, includeReset: false });
     const pre = plan.filter((x) => !RELEASE.some((r) => x.label.includes(r)) && (with0003 || !x.label.includes("0003_")));
     const release = plan.filter((x) => RELEASE.some((r) => x.label.includes(r)));
-    assert.equal(release.length, 5);
+    assert.equal(release.length, 7);
     await applySchemaPlan(db, pre);
     // Existing puzzles of every kind, created through the real RPC.
     const words = Array.from({ length: 16 }, (_, i) => `R${String.fromCharCode(65 + i)}X`);
@@ -64,4 +64,4 @@ async function run(with0003: boolean) {
 
 await run(false);
 await run(true);
-console.log("PASS: 0004-0008 apply with and without 0003; existing puzzles unchanged, none listed or covered; allowlist loaded; old links resolve; rollback restores the exact pre-release schema and keeps the puzzles.");
+console.log("PASS: 0004-0010 apply with and without 0003; existing puzzles unchanged, none listed or covered; allowlist loaded; old links resolve; rollback restores the exact pre-release schema and keeps the puzzles.");

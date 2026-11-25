@@ -1,15 +1,15 @@
--- ROLLBACK of the Community Puzzles release (migrations 0004-0008).
+-- ROLLBACK of the Community Puzzles release (migrations 0004-0010).
 --
 -- NOT a migration and never applied automatically. Only for a reviewed,
 -- deliberate database rollback after the frontend is already off (the
 -- VITE_COMMUNITY_PUZZLES=off switch or a revert): the frontend rollback alone
--- is enough for an incident, because 0004-0008 are additive and the old app
+-- is enough for an incident, because 0004-0010 are additive and the old app
 -- never calls them.
 --
--- DATA LOSS: this deletes every Community listing flag, follow, curation entry
--- and cover. Puzzles themselves, their links, plays and favourites are kept.
+-- DATA LOSS: this deletes every Community listing flag, follow, curation entry,
+-- cover and custom-puzzle rating. Puzzles themselves, their links, plays and favourites are kept.
 -- Take a backup first. Run in one transaction, then record it in the ledger:
---   npx supabase migration repair --status reverted 0008 0007 0006 0005 0004
+--   npx supabase migration repair --status reverted 0010 0009 0008 0007 0006 0005 0004
 --
 -- Verified by `npm run e2e:db:release`: it restores exactly the pre-release
 -- schema (every table, column, constraint, index and function definition).
@@ -63,6 +63,12 @@ CREATE OR REPLACE FUNCTION public.get_my_favorites() RETURNS jsonb
     ) q
 $$;
 
+-- 0010 ratings and 0009 multi-emoji covers.
+DROP FUNCTION IF EXISTS public.get_my_custom_puzzle_rating(text);
+DROP FUNCTION IF EXISTS public.set_custom_puzzle_rating(text, integer, text, text);
+DROP TABLE IF EXISTS public.custom_puzzle_ratings;
+DROP FUNCTION IF EXISTS public.set_custom_puzzle_cover_emojis(text, text[], text);
+
 -- 0004-0008 functions.
 DROP FUNCTION IF EXISTS public.set_custom_puzzle_cover(text, text, text);
 DROP FUNCTION IF EXISTS public.admin_set_community_curation(text, text[]);
@@ -87,6 +93,12 @@ DROP TABLE IF EXISTS public.community_curation;
 DROP TABLE IF EXISTS public.creator_follows;
 
 -- 0008 and 0004 columns, constraints and indexes on custom_puzzles.
+ALTER TABLE public.custom_puzzles DROP CONSTRAINT IF EXISTS custom_puzzles_cover_emoji_distinct;
+ALTER TABLE public.custom_puzzles DROP CONSTRAINT IF EXISTS custom_puzzles_cover_emoji_order;
+ALTER TABLE public.custom_puzzles DROP CONSTRAINT IF EXISTS custom_puzzles_cover_emoji_3_fkey;
+ALTER TABLE public.custom_puzzles DROP CONSTRAINT IF EXISTS custom_puzzles_cover_emoji_2_fkey;
+ALTER TABLE public.custom_puzzles DROP COLUMN IF EXISTS cover_emoji_3;
+ALTER TABLE public.custom_puzzles DROP COLUMN IF EXISTS cover_emoji_2;
 ALTER TABLE public.custom_puzzles DROP CONSTRAINT IF EXISTS custom_puzzles_cover_pair;
 ALTER TABLE public.custom_puzzles DROP CONSTRAINT IF EXISTS custom_puzzles_cover_background_check;
 ALTER TABLE public.custom_puzzles DROP CONSTRAINT IF EXISTS custom_puzzles_cover_emoji_fkey;

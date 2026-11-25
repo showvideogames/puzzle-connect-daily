@@ -13,7 +13,8 @@ import { buildSchemaPlan, applySchemaPlan } from "./lib/schema.ts";
 const db = new PGlite();
 type Created = { puzzle_id: string; share_id: string; short_code: string };
 const catalog = JSON.parse(fs.readFileSync(new URL("../../src/lib/coverEmoji.json", import.meta.url), "utf8")) as { emoji: [string, string, number, string][] };
-const BACKGROUNDS = [...fs.readFileSync(new URL("../../src/lib/coverBackgrounds.ts", import.meta.url), "utf8").matchAll(/\{ key: "([a-z-]+)"/g)].map((m) => m[1]);
+/** 0008's own 24 background keys (0009 widens the list; see verify-community-v2.ts). */
+const BACKGROUNDS = ["lilac", "butter", "mint", "sunflower", "tangerine", "coral", "bubblegum", "ocean", "forest", "charcoal", "lime-checks", "apricot-stripes", "lilac-dots", "indigo-stars", "teal-waves", "pink-waves", "sky-grid", "cream-confetti", "berry-stripes", "cherry-polka", "sunset-split", "peach-rings", "mint-checks", "rainbow-bands"];
 
 async function actAs(id: string | null) {
   await db.query("select set_config('request.jwt.claims',$1,false)", [id ? JSON.stringify({ sub: id, role: "authenticated" }) : ""]);
@@ -55,7 +56,7 @@ try {
   await actAs(wren);
   await db.query("select public.set_custom_puzzle_community_listing($1,true)", [old.share_id]);
   const before = (await db.query("select id, share_id, short_code, title, content, visibility, community_listed, community_listed_at from public.custom_puzzles order by id")).rows;
-  await applySchemaPlan(db, plan.slice(at));
+  await applySchemaPlan(db, plan.slice(at, at + 1)); // exactly 0008; later migrations have their own checks
 
   // Additive: nothing existing changes, every existing puzzle has no cover.
   assert.deepEqual((await db.query("select id, share_id, short_code, title, content, visibility, community_listed, community_listed_at from public.custom_puzzles order by id")).rows, before);

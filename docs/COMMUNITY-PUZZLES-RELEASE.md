@@ -131,7 +131,7 @@ set, Community is on.
   through git.
 * **Database:** none needed for an incident. 0004–0008 are additive and the old
   app never calls them. For a deliberate full removal only:
-  `supabase/ops/community-release/rollback-0004-0008.sql`, after a backup. It
+  `supabase/ops/community-release/rollback-0004-0010.sql`, after a backup. It
   deletes listing flags, follows, curation and covers, and keeps puzzles, links,
   plays and favourites. Then record it:
 

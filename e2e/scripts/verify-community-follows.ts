@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { buildSchemaPlan, applySchemaPlan } from "./lib/schema.ts";
 
 const db = new PGlite();
-const CARD_KEYS = ["cover_background", "cover_emoji", "creator_name", "creator_slug", "favorite_count", "finished_plays", "listed_at", "mode", "short_code", "title"];
+const CARD_KEYS = ["cover_background", "cover_emoji", "cover_emoji_2", "cover_emoji_3", "creator_name", "creator_slug", "favorite_count", "finished_plays", "listed_at", "mode", "short_code", "title"];
 const CREATOR_KEYS = ["display_name", "followed_by_me", "follower_count", "is_me", "listed_count", "public_slug"];
 type Created = { puzzle_id: string; share_id: string; short_code: string };
 type Card = Record<string, unknown> & { title: string; short_code: string };

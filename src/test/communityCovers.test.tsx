@@ -25,19 +25,19 @@ describe("cover keys", () => {
   it("accepts one, two or three distinct valid keys, in order, and nothing else", () => {
     expect(parseCover("1F438", "lime-checks")).toEqual({ emojis: ["1F438"], background: "lime-checks" });
     expect(parseCover("1F438", "lime-checks", "1F337")).toEqual({ emojis: ["1F438", "1F337"], background: "lime-checks" });
-    expect(parseCover("1FA90", "lilac-dots", "1F680", "2B50")).toEqual({ emojis: ["1FA90", "1F680", "2B50"], background: "lilac-dots" });
+    expect(parseCover("1FA90", "lilac-dots", "1F680", "2B50-FE0F")).toEqual({ emojis: ["1FA90", "1F680", "2B50-FE0F"], background: "lilac-dots" });
     // Gaps, duplicates, bad keys, missing pieces: no cover at all.
     for (const args of [
       ["1F438", null], [null, "lilac"], ["1F438", "neon"], ["1F438", "url(x)"], [42, "lilac"],
-      [null, "lilac", "1F337"], ["1F438", "lilac", null, "2B50"], [null, "lilac", null, "2B50"],
+      [null, "lilac", "1F337"], ["1F438", "lilac", null, "2B50-FE0F"], [null, "lilac", null, "2B50-FE0F"],
       ["1F438", "lilac", "1F438"], ["1F438", "lilac", "1F337", "1F438"],
       ["1F438", "lilac", "<b>x</b>"], ["1F438", "lilac", "1F337", "javascript:alert(1)"], ["1F438", "lilac", 7],
     ] as unknown[][]) {
       expect(parseCover(...(args as [unknown, unknown, unknown?, unknown?])), JSON.stringify(args)).toBeNull();
     }
     expect(validEmojiList([])).toBeNull();
-    expect(validEmojiList(["1F438", "1F337", "2B50", "1F989"])).toBeNull();
-    expect(validEmojiList(["1F438", "1F337", "2B50"])).toEqual(["1F438", "1F337", "2B50"]);
+    expect(validEmojiList(["1F438", "1F337", "2B50-FE0F", "1F989"])).toBeNull();
+    expect(validEmojiList(["1F438", "1F337", "2B50-FE0F"])).toEqual(["1F438", "1F337", "2B50-FE0F"]);
   });
 
   it("keeps every earlier background key, adds distinct ones, and puts Rainbow first", () => {
@@ -68,10 +68,10 @@ describe("cover keys", () => {
     const art = () => container.firstElementChild!;
     expect(art().getAttribute("data-cover-kind")).toBe("creator");
     expect(art().textContent).toBe("🦉");
-    rerender(<CreatorCoverArt cover={{ emojis: ["1FA90", "1F680", "2B50"], background: "lilac-dots" }} />);
+    rerender(<CreatorCoverArt cover={{ emojis: ["1FA90", "1F680", "2B50-FE0F"], background: "lilac-dots" }} />);
     expect(art().getAttribute("data-cover-count")).toBe("3");
-    expect([...art().querySelectorAll("[data-cover-glyph]")].map((e) => e.textContent)).toEqual(["🪐", "🚀", "⭐"]);
-    for (const bad of [{ emojis: ["<b>hi</b>"], background: "lilac" }, { emojis: [], background: "lilac" }, { emojis: ["1F438", "1F438"], background: "lilac" }, { emojis: ["1F438", "1F337", "2B50", "1F989"], background: "lilac" }]) {
+    expect([...art().querySelectorAll("[data-cover-glyph]")].map((e) => e.textContent)).toEqual(["🪐", "🚀", "⭐️"]);
+    for (const bad of [{ emojis: ["<b>hi</b>"], background: "lilac" }, { emojis: [], background: "lilac" }, { emojis: ["1F438", "1F438"], background: "lilac" }, { emojis: ["1F438", "1F337", "2B50-FE0F", "1F989"], background: "lilac" }]) {
       rerender(<CreatorCoverArt cover={bad} />);
       expect(art().getAttribute("data-cover-kind")).toBe("default");
       expect(container.textContent).toBe("");

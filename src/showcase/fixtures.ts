@@ -131,7 +131,7 @@ export const PUZZLES: ShowcasePuzzle[] = [
       { category: "In Orbit", words: ["DEBRIS", "MOON", "SATELLITE", "STATION"] },
     ],
     listedAt: "2026-11-20T12:00:00Z", plays: 12, favorites: 4,
-    cover: { emojis: ["1FA90", "1F680", "2B50"], background: "lilac-dots" },
+    cover: { emojis: ["1FA90", "1F680", "2B50-FE0F"], background: "lilac-dots" },
   }),
 ];
 
