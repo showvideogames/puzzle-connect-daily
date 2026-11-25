@@ -3,6 +3,7 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId, getDeviceToken } from "@/lib/gameStats";
 import { Puzzle } from "@/lib/types";
+import { todaysLogo } from "@/lib/themes";
 import { FULL_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 
 interface LandingScreenProps {
@@ -56,6 +57,36 @@ export function LandingScreen({ puzzle, user, onPlay, onSignInClick, format = FU
     : formattedDate;
   const showDateSubtitle = !!puzzle?.title?.trim();
   const puzzleReady = !!puzzle;
+
+  if (format.id === FULL_FORMAT.id) {
+    const button = "inline-flex min-h-[50px] w-full items-center justify-center rounded-full px-5 text-lg font-extrabold leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#6924d6] active:scale-[.98]";
+    return (
+      <main
+        className="fixed inset-0 z-10 overflow-y-auto bg-[#D9EFFE] text-[#252324]"
+      >
+        <div className="mx-auto flex min-h-full w-full max-w-[31rem] flex-col justify-center px-[clamp(1.25rem,5.5vw,2.5rem)] py-[clamp(1.25rem,4dvh,3rem)] text-center">
+          <h1 className="w-full">
+            <img src={todaysLogo()} alt="Rainbow Categories" width={2000} height={251} className="block h-auto w-full" />
+          </h1>
+          <div aria-hidden="true" className="mx-auto mt-[clamp(1rem,3dvh,1.75rem)] grid aspect-square w-[clamp(5.5rem,13dvh,7.5rem)] place-items-center overflow-hidden rounded-[15%]">
+            <img src="/icons/rainbow-icon-192-0e09e6d1.png" alt="" width={192} height={192} className="block aspect-square h-auto w-full scale-[1.28]" />
+          </div>
+          <p className="mt-[clamp(1rem,3.25dvh,1.75rem)] text-[clamp(1rem,4vw,1.125rem)] font-semibold leading-relaxed">
+            Find four groups of four. Spot the Rainbow.
+          </p>
+          <div className="mt-[clamp(1rem,3dvh,1.75rem)] grid gap-2.5">
+            <button type="button" onClick={onPlay} disabled={!puzzleReady} className={`${button} bg-[#6924d6] text-white hover:bg-[#561bb6] disabled:cursor-default disabled:opacity-60`}>Play</button>
+            {!user && <button type="button" onClick={onSignInClick} className={`${button} border-[1.5px] border-[#252324] bg-transparent hover:bg-white/25`}>Sign In</button>}
+          </div>
+          <div className="mt-[clamp(.9rem,2.6dvh,1.5rem)] min-h-5 text-sm font-semibold sm:text-base" aria-hidden={!puzzleReady}>
+            {puzzleReady ? (showDateSubtitle ? `${titleText} · ${formattedDate}` : formattedDate) : null}
+          </div>
+          <p className="mt-2.5 text-sm italic text-[#615b60] sm:text-base">By Sam West</p>
+          {streak > 0 && <p className="mt-2 text-sm font-bold">{streak} Win Streak! 🔥</p>}
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div

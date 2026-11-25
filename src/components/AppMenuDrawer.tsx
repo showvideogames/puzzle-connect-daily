@@ -1,7 +1,7 @@
+import "./menu-nunito.css";
 import { useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
-import type { LucideIcon } from "lucide-react";
-import { Calendar, CircleHelp, Grid2x2, Grid3x3, LayoutGrid, Menu, MessageSquareText, SquarePen, UsersRound, X } from "lucide-react";
+import { Menu, UsersRound, X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { socialBetaOn } from "@/components/social/socialFlag";
 import { communityPuzzlesOn } from "@/lib/communityFlag";
@@ -15,38 +15,100 @@ export const HEADER_STROKE = 2.25;
 interface Destination {
   to: string;
   label: string;
-  icon: LucideIcon;
-  /** Router state sent with the link, such as Friends & Groups asking for the Friends home. */
+  icon: "create" | "book" | "friends" | "community";
   state?: unknown;
+  tone: string;
 }
 
-/** Existing pages only. Nothing here is new; it is what the old header and Settings > Menu already reached. */
+const PLAY = [
+  { to: "/", label: "Today's Puzzle", detail: null, art: "full", tone: "bg-[#e8d7ff] dark:bg-[#48345b]" },
+  { to: "/archive", label: "Puzzle Archive", detail: "Past daily puzzles.", art: "archive", tone: "bg-[#fff08c] dark:bg-[#54471e]" },
+  { to: "/mini", label: "Rainbow Mini", detail: "A smaller daily.", art: "mini", tone: "bg-[#b7edf0] dark:bg-[#24464c]" },
+  { to: "/mini/archive", label: "Mini Archive", detail: "Past mini puzzles.", art: "miniArchive", tone: "bg-[#c3f1d3] dark:bg-[#2b493a]" },
+] as const;
+type PlayArt = typeof PLAY[number]["art"];
+
+const COMMUNITY: Destination = {
+  to: "/community", label: "Community Puzzles", icon: "community", tone: "bg-[#dceefc] dark:bg-[#263f55]",
+};
+
 const DESTINATIONS: Destination[] = [
-  { to: "/", label: "Today's puzzle", icon: Grid3x3 },
-  { to: "/mini", label: "Rainbow Mini", icon: Grid2x2 },
-  { to: "/archive", label: "Puzzle archive", icon: Calendar },
-  { to: "/mini/archive", label: "Mini archive", icon: Calendar },
-  { to: "/create", label: "Create a puzzle", icon: SquarePen },
-  { to: "/how-to-play", label: "How to play", icon: CircleHelp },
+  { to: "/create", label: "Create A Puzzle", icon: "create", tone: "bg-[#f0e9fb] dark:bg-[#443458]" },
+  { to: "/how-to-play", label: "How To Play", icon: "book", tone: "bg-[#fff6d7] dark:bg-[#493727]" },
 ];
 
-/** Community Puzzles preview: shown only with the same flag that creates its route. Sits just before Create. */
-const COMMUNITY: Destination = { to: "/community", label: "Community Puzzles", icon: LayoutGrid };
+const FRIENDS: Destination = {
+  to: "/friends", label: "Friends & Groups", icon: "friends", state: { friendsHome: true },
+  tone: "bg-[#ebefff] dark:bg-[#303955]",
+};
 
-const FRIENDS: Destination = { to: "/friends", label: "Friends & Groups", icon: UsersRound, state: { friendsHome: true } };
+const focusClass = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+const rowClass = `flex min-h-[52px] w-full items-center gap-3 rounded-xl px-2.5 text-left text-[22px] max-[359px]:text-[20px] font-black [font-family:'Nunito_Menu','Nunito_Sans_Variable',sans-serif] leading-tight text-foreground hover:brightness-95 dark:hover:brightness-125 transition-[filter] aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/25 ${focusClass}`;
 
-const rowClass =
-  "flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-base font-bold text-foreground hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:bg-secondary";
+function MenuArt({ art }: { art: PlayArt }) {
+  if (art === "mini") {
+    return <img aria-hidden="true" src="/icons/mini-lagoon-tilted.png" alt="" width={74} height={74} className="block h-[74px] w-[74px] shrink-0 max-[359px]:h-[68px] max-[359px]:w-[68px]" />;
+  }
+  if (art === "full") {
+    return <img aria-hidden="true" src="/icons/rainbow-icon-192-0e09e6d1.png" alt="" width={66} height={66} className="block h-16 w-16 shrink-0 rounded-xl" />;
+  }
 
-/**
- * The hamburger and its left-hand drawer. Radix gives it Escape, the focus trap,
- * and focus back on the hamburger when it closes.
- */
+  const mini = art === "miniArchive";
+  return (
+    <svg aria-hidden="true" viewBox="0 0 56 56" width={mini ? 60 : 64} height={mini ? 60 : 64} className="shrink-0">
+      <rect x="7" y="10" width="46" height="43" rx="9" fill={mini ? "#80ced0" : "#c5a5f0"} />
+      <rect x="5" y="7" width="46" height="44" rx="9" fill="white" />
+      <path d="M5 16a9 9 0 0 1 9-9h28a9 9 0 0 1 9 9v6H5z" fill={mini ? "#49c4c3" : "#c689e9"} />
+      <rect x="5" y="7" width="46" height="44" rx="9" stroke="#231d2a" strokeWidth="3.2" fill="none" />
+      <path d="M5 22h46" stroke="#231d2a" strokeWidth="3.2" />
+      {[15, 37].map(x => <rect key={x} x={x} y="2.5" width="4.5" height="12" rx="2.25" stroke="#231d2a" strokeWidth="2.6" fill={mini ? "#49c4c3" : "#c689e9"} />)}
+      {["#f54959", "#ffab34", "#ffc20e", "#1fae4b", "#3776f2", "#a45de8"].map((color, i) => (
+        <rect key={i} x={13 + (i % 3) * 11} y={27 + Math.floor(i / 3) * 10} width="7" height="7" rx="1.8" fill={color} />
+      ))}
+    </svg>
+  );
+}
+
+function RowArt({ icon }: { icon: Destination["icon"] | "feedback" }) {
+  if (icon === "friends") return <UsersRound aria-hidden="true" className="h-6 w-6 text-foreground" strokeWidth={HEADER_STROKE} />;
+  return (
+    <svg aria-hidden="true" viewBox="0 0 32 32" className="h-[35px] w-[35px] shrink-0" fill="none" stroke="#231d2a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      {icon === "community" && <>
+        <rect x="4" y="4" width="10" height="10" rx="2.5" fill="#ffe462" />
+        <rect x="18" y="4" width="10" height="10" rx="2.5" fill="#9fe1a5" />
+        <rect x="4" y="18" width="10" height="10" rx="2.5" fill="#a8d9ff" />
+        <rect x="18" y="18" width="10" height="10" rx="2.5" fill="#ef9cb7" />
+      </>}
+      {icon === "create" && <>
+        <rect x="3" y="7" width="20" height="22" rx="3.5" fill="white" />
+        <path d="M3 18h20M13 7v22" />
+        <path d="m13 22 1.3-5.8L25 5.5l4.3 4.3-10.7 10.7z" fill="#ffd150" />
+        <path d="m23 7.5 2.8-2.8a1.5 1.5 0 0 1 2.1 0l2.2 2.2a1.5 1.5 0 0 1 0 2.1l-2.8 2.8z" fill="#f16e96" />
+      </>}
+      {icon === "book" && <>
+        <path d="M3 9c5-1 9 .5 13 3 4-2.5 8-4 13-3v17c-5-1-9 .2-13 2.5C12 26 8 25 3 26z" fill="#ffe462" />
+        <path d="M5 6c5-1 8.5.5 11 3v17c-3.8-2.5-7.5-3.2-11-2.5z" fill="#d9b7ff" />
+        <path d="M27 6c-5-1-8.5.5-11 3v17c3.8-2.5 7.5-3.2 11-2.5z" fill="#a8e6f4" />
+      </>}
+      {icon === "feedback" && <>
+        <path d="M29 16c0 6-5.6 10-12 10h-4l-6 4 1-6c-2.6-2-4-4.9-4-8 0-6 5.6-10 12.5-10S29 10 29 16z" fill="#ef9cb7" stroke="none" />
+        <path d="M27 14c0 5.7-5.4 9.7-12 9.7h-3.2L5 28l1.1-6.4c-2.4-1.7-3.6-4.4-3.6-7.6 0-5.8 5.5-10 12.3-10S27 8.2 27 14z" fill="white" />
+        {[9.5, 14.7, 19.9].map(x => <circle key={x} cx={x} cy="14" r="1.15" fill="#231d2a" stroke="none" />)}
+      </>}
+    </svg>
+  );
+}
+
+function TileSticker({ compact }: { compact: boolean }) {
+  return <svg aria-hidden="true" viewBox="0 0 48 42" className={`shrink-0 text-foreground ${compact ? "absolute right-2.5 top-3 h-10 w-11 max-[359px]:h-8 max-[359px]:w-9" : "ml-auto h-12 w-[52px] max-[359px]:h-9 max-[359px]:w-10"}`} fill="none">
+    <rect x="22" y="15" width="21" height="21" rx="4" transform="rotate(17 22 15)" fill="currentColor" fillOpacity=".14" stroke="currentColor" strokeWidth="2.3" />
+    <rect x="3" y="10" width="22" height="22" rx="4" transform="rotate(-12 3 10)" className="fill-white dark:fill-background" stroke="currentColor" strokeWidth="2.3" />
+  </svg>;
+}
+
+/** The shared hamburger drawer: Radix handles Escape, focus trap and restore. */
 export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
   const [open, setOpen] = useState(false);
-  // Feedback opens once the drawer has finished closing and Radix has put focus
-  // back on the hamburger (the frame after onCloseAutoFocus), so the feedback
-  // dialog records the hamburger, not <body>, and returns focus there.
   const feedbackNext = useRef(false);
   const base = communityPuzzlesOn()
     ? DESTINATIONS.flatMap((d) => (d.to === "/create" ? [COMMUNITY, d] : [d]))
@@ -62,36 +124,60 @@ export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
       </SheetTrigger>
       <SheetContent
         side="left"
-        className="flex w-[min(20rem,85vw)] flex-col gap-0 bg-card p-0 [&>button:last-child]:hidden"
+        className="flex w-[min(100vw,24rem)] flex-col gap-0 bg-background p-0 text-foreground font-sans sm:max-w-[24rem] [&>button:last-child]:hidden"
         onCloseAutoFocus={() => {
           if (!feedbackNext.current) return;
           feedbackNext.current = false;
           requestAnimationFrame(() => onFeedback());
         }}
       >
-        <div className="flex items-center justify-between border-b border-border py-2 pl-5 pr-2">
-          <SheetTitle className="text-xl font-extrabold">Menu</SheetTitle>
-          <SheetClose className={headerIconButton} aria-label="Close menu">
-            <X aria-hidden="true" className={headerGlyph} strokeWidth={HEADER_STROKE} />
-          </SheetClose>
+        <div className="px-4 pt-4 max-[359px]:px-3">
+          <div aria-hidden="true" className="mb-3 grid grid-cols-4 gap-px overflow-hidden rounded-full">
+            {["bg-[#ffc20e]", "bg-[#1fae4b]", "bg-[#1e6ff0]", "bg-[#e8262b]"].map((tone) => <span key={tone} className={`h-[3px] ${tone}`} />)}
+          </div>
+          <div className="flex items-center justify-between gap-2 pb-3">
+            <SheetTitle className="text-[32px] font-black [font-family:'Nunito_Menu','Nunito_Sans_Variable',sans-serif] leading-none">Menu</SheetTitle>
+            <SheetClose className={`${headerIconButton} border border-foreground/65 bg-card shadow-[2px_2px_0_#ccb5ee] dark:shadow-none`} aria-label="Close menu">
+              <X aria-hidden="true" className={headerGlyph} strokeWidth={HEADER_STROKE} />
+            </SheetClose>
+          </div>
         </div>
         <SheetDescription className="sr-only">Rainbow Categories pages</SheetDescription>
-        <nav aria-label="Main menu" className="min-h-0 flex-1 overflow-y-auto p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-          <ul className="space-y-1">
-            {destinations.map(({ to, label, icon: Icon, state }) => (
+        <nav aria-label="Main menu" className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] max-[359px]:px-3">
+          <ul className="grid grid-cols-2 gap-2.5">
+            {PLAY.map(({ to, label, detail, art, tone }, i) => {
+              const wide = i < 2;
+              return (
+                <li key={to} className={wide ? "col-span-2 min-w-0" : "min-w-0"}>
+                  <SheetClose asChild>
+                    <NavLink to={to} end className={`relative flex h-full text-foreground rounded-[14px] border-[1.5px] border-foreground/80 dark:border-foreground/50 p-3 transition-[filter] hover:brightness-95 dark:hover:brightness-125 active:brightness-90 aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/15 ${wide ? "min-h-[84px] items-center gap-3 max-[359px]:gap-2" : "min-h-[127px] flex-col items-start gap-2 max-[359px]:px-2.5"} ${tone} ${focusClass}`}>
+                      <MenuArt art={art} />
+                      <span className="min-w-0">
+                        <span className={`block font-black [font-family:'Nunito_Menu','Nunito_Sans_Variable',sans-serif] leading-[1.08] ${wide ? "text-[23px] max-[359px]:text-[21px]" : "text-[20px] max-[359px]:text-[18px]"}`}>{label}</span>
+                        {detail && <span className="mt-0.5 block text-[13px] font-bold leading-snug text-foreground/90">{detail}</span>}
+                      </span>
+                      <TileSticker compact={!wide} />
+                    </NavLink>
+                  </SheetClose>
+                </li>
+              );
+            })}
+          </ul>
+          <ul className="mt-3 space-y-1.5 border-t border-border pt-2.5">
+            {destinations.map(({ to, label, icon, state, tone }) => (
               <li key={to}>
                 <SheetClose asChild>
-                  <NavLink to={to} state={state} end className={rowClass}>
-                    <Icon aria-hidden="true" className="h-5 w-5 shrink-0 text-slate" strokeWidth={HEADER_STROKE} />
+                  <NavLink to={to} state={state} end className={`${rowClass} ${tone}`}>
+                    <RowArt icon={icon} />
                     {label}
                   </NavLink>
                 </SheetClose>
               </li>
             ))}
-            <li className="mt-2 border-t border-border pt-2">
-              <button type="button" className={rowClass} onClick={() => { feedbackNext.current = true; setOpen(false); }}>
-                <MessageSquareText aria-hidden="true" className="h-5 w-5 shrink-0 text-slate" strokeWidth={HEADER_STROKE} />
-                Give feedback
+            <li>
+              <button type="button" className={`${rowClass} bg-[#fbdce7] dark:bg-[#492b36]`} onClick={() => { feedbackNext.current = true; setOpen(false); }}>
+                <RowArt icon="feedback" />
+                Send Feedback
               </button>
             </li>
           </ul>
