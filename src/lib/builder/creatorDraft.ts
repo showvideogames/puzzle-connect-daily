@@ -4,6 +4,16 @@ import { getFormat } from "@/lib/puzzleFormat";
 
 export const CREATOR_DRAFT_KEY = "rainbow-creator-draft-v1";
 export const CREATOR_DRAFT_LOCK = "rainbow-creator-draft";
+/**
+ * Duplicate & Edit copies each get their own slot (key and Web Lock) beside
+ * the one main draft, so opening a copy never overwrites an unrelated draft
+ * and each stays recoverable on its own (/create?draft=<slot>).
+ */
+export const COPY_DRAFT_PREFIX = `${CREATOR_DRAFT_KEY}:copy:`;
+const COPY_SLOT = /^[a-z0-9]{8,32}$/;
+export const isCopySlot = (slot: unknown): slot is string => typeof slot === "string" && COPY_SLOT.test(slot);
+export const draftKeyFor = (slot?: string | null) => (slot ? `${COPY_DRAFT_PREFIX}${slot}` : CREATOR_DRAFT_KEY);
+export const draftLockFor = (slot?: string | null) => (slot ? `${CREATOR_DRAFT_LOCK}:copy:${slot}` : CREATOR_DRAFT_LOCK);
 const slot = z.object({ id: z.string().min(1), text: z.string() });
 const schema = z.object({
   version: z.literal(1),
@@ -56,9 +66,9 @@ export class CreatorDraftStore {
   private malformed = false;
   error: string | null = null;
   draft: CreatorDraft | undefined;
-  constructor(private storage: () => Storage) {
+  constructor(private storage: () => Storage, private key: string = CREATOR_DRAFT_KEY) {
     try {
-      this.expected = storage().getItem(CREATOR_DRAFT_KEY);
+      this.expected = storage().getItem(key);
       this.readable = true;
       if (this.expected !== null) this.draft = decodeDraft(this.expected);
     } catch {
@@ -72,12 +82,12 @@ export class CreatorDraftStore {
     try {
       if (!this.readable || (this.malformed && !explicitClear)) return false;
       const storage = this.storage();
-      if (storage.getItem(CREATOR_DRAFT_KEY) !== this.expected) {
+      if (storage.getItem(this.key) !== this.expected) {
         this.error = "The saved draft changed elsewhere. Your edits are not saved. Return to Create in a new tab after closing this one to recover that copy.";
         return false;
       }
-      if (next === null) storage.removeItem(CREATOR_DRAFT_KEY);
-      else storage.setItem(CREATOR_DRAFT_KEY, next);
+      if (next === null) storage.removeItem(this.key);
+      else storage.setItem(this.key, next);
       this.expected = next;
       this.malformed = false;
       this.error = null;
@@ -89,4 +99,36 @@ export class CreatorDraftStore {
   }
   save(draft: CreatorDraft) { return this.change(encodeDraft(draft), false); }
   clear(explicit = true) { return this.change(null, explicit); }
+}
+
+/**
+ * Saves a Duplicate & Edit copy into a brand-new slot of its own, at once, so
+ * the copy is recoverable even if the page is reloaded before any edit. Never
+ * touches the main draft or another copy. Returns the slot.
+ */
+export function saveNewCopyDraft(storage: Storage, draft: CreatorDraft): string {
+  for (let i = 0; i < 5; i++) {
+    const slot = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`.replace(/[^a-z0-9]/g, "").slice(0, 32);
+    if (!isCopySlot(slot) || storage.getItem(draftKeyFor(slot)) !== null) continue;
+    storage.setItem(draftKeyFor(slot), encodeDraft(draft));
+    return slot;
+  }
+  throw new Error("Couldn't save the copy in this browser.");
+}
+
+/** Every Duplicate & Edit copy saved in this browser (newest first). Unreadable ones are left alone. */
+export function listCopyDrafts(storage: Storage): { slot: string; title: string }[] {
+  const out: { slot: string; title: string }[] = [];
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i);
+    if (!key?.startsWith(COPY_DRAFT_PREFIX)) continue;
+    const slot = key.slice(COPY_DRAFT_PREFIX.length);
+    if (!isCopySlot(slot)) continue;
+    try {
+      out.push({ slot, title: decodeDraft(storage.getItem(key) ?? "").title });
+    } catch {
+      // kept unchanged, as the main draft's reader does
+    }
+  }
+  return out.sort((a, b) => b.slot.localeCompare(a.slot));
 }

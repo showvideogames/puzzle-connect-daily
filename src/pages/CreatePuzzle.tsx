@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Link2, Play, Copy, Check } from "lucide-react";
 import { SEO } from "@/components/SEO";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -14,7 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CreatorDraftStore, encodeDraft } from "@/lib/builder/creatorDraft";
+import { CreatorDraftStore, encodeDraft, isCopySlot, listCopyDrafts } from "@/lib/builder/creatorDraft";
 import { useCreatorDraftStore } from "@/hooks/useCreatorDraftStore";
 import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { Button } from "@/components/ui/button";
@@ -56,17 +56,56 @@ const parseWords = (value: string) =>
 
 
 export default function CreatePuzzle() {
-  const recovery = useCreatorDraftStore();
+  // ?draft=<slot> opens a Duplicate & Edit copy in its own slot; without it,
+  // the one main draft opens exactly as before.
+  const [params] = useSearchParams();
+  const requested = params.get("draft");
+  const slot = isCopySlot(requested) ? requested : null;
+  const recovery = useCreatorDraftStore(slot);
+  if (requested !== null && !slot) return <MissingCopy />;
   if (recovery.busy) return <main className="max-w-lg mx-auto p-6 space-y-4">
-    <h1 className="text-xl font-bold">Draft open in another tab</h1>
-    <p>Only one creator tab can edit this device’s draft at a time. Close the other creator tab, then try again.</p>
+    <h1 className="text-xl font-bold">{slot ? "Copy open in another tab" : "Draft open in another tab"}</h1>
+    <p>{slot ? "This copy is already open in another tab. Close that tab, then try again." : "Only one creator tab can edit this device’s draft at a time. Close the other creator tab, then try again."}</p>
     <Button onClick={recovery.retry}>Try again</Button>
   </main>;
   if (!recovery.store && !recovery.unavailable) return <p role="status">Opening your draft…</p>;
-  return <CreatorEditor store={recovery.store} />;
+  if (slot && recovery.store && !recovery.store.draft && !recovery.store.error) return <MissingCopy />;
+  return <CreatorEditor key={slot ?? "main"} store={recovery.store} copySlot={slot} />;
 }
 
-function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
+/** A copy link whose draft isn't in this browser (already created, discarded, or another device). */
+function MissingCopy() {
+  return (
+    <main className="max-w-lg mx-auto p-6 space-y-4" data-testid="copy-missing">
+      <h1 className="text-xl font-bold">This copy isn't on this device</h1>
+      <p>It may already have been created or discarded, or it was made in another browser. Nothing was changed.</p>
+      <div className="flex gap-3">
+        <Button asChild><Link to="/my-puzzles">My Puzzles</Link></Button>
+        <Button asChild variant="outline"><Link to="/create">Create a puzzle</Link></Button>
+      </div>
+    </main>
+  );
+}
+
+/** The main draft's page names any Duplicate & Edit copies saved in this browser, so none is lost. */
+function OtherCopies() {
+  const [copies] = useState(() => {
+    try { return listCopyDrafts(localStorage); } catch { return []; }
+  });
+  if (copies.length === 0) return null;
+  return (
+    <div className="mb-4 rounded-lg border border-border bg-card px-3 py-2 text-sm" data-testid="other-copies">
+      <p className="font-semibold">Unsaved copies in this browser</p>
+      <ul className="mt-1 space-y-1">
+        {copies.map((c) => (
+          <li key={c.slot}><Link to={`/create?draft=${c.slot}`} className="underline underline-offset-2">{c.title.trim() || "Untitled copy"}</Link></li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function CreatorEditor({ store, copySlot = null }: { store?: CreatorDraftStore; copySlot?: string | null }) {
   const navigate = useNavigate();
   const builder = useBuilderForm("full", store?.draft?.builder);
   // Same shared builder as Admin, configured by format. /create only offers
@@ -299,7 +338,9 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
           <AlertDialogDescription>
             {creating
               ? "Stay here until it's created, and you'll get its link to share."
-              : saved && !storageError ? "Your draft is saved in this browser on this device and will return when you open Create. It has not been published." : "Your latest changes are not safely saved in this browser and may be lost if you leave."}
+              : saved && !storageError ? (copySlot
+                ? "This copy is saved in this browser on this device and stays under Unsaved copies in My Puzzles. It has not been published."
+                : "Your draft is saved in this browser on this device and will return when you open Create. It has not been published.") : "Your latest changes are not safely saved in this browser and may be lost if you leave."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -402,6 +443,12 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
       </div>
 
       <main className="max-w-5xl mx-auto px-4 mt-6">
+        {copySlot ? (
+          <div className="mb-4 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm" data-testid="copy-banner">
+            <p className="font-semibold">You're editing a copy.</p>
+            <p className="text-muted-foreground">The original puzzle, its link and its results don't change. This copy has no link of its own until you create it, and it isn't listed in Community unless you choose to.</p>
+          </div>
+        ) : <OtherCopies />}
         <p className="text-sm mb-4" role="status" aria-label="Draft recovery">{storageError ?? (saved
           ? "Draft saved in this browser on this device. It will restore automatically when you return."
           : "One draft is saved automatically in this browser on this device as you edit.")}</p>

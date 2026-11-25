@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { CommunityHeader } from "@/components/community/CommunityHeader";
 import { CreatorCoverArt } from "@/components/community/CreatorCoverArt";
@@ -10,7 +10,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useGamePageTheme } from "@/hooks/useGamePageTheme";
 import { communityPuzzlesOn } from "@/lib/communityFlag";
 import { cv } from "@/lib/communityStyle";
-import { MAX_PUZZLE_TITLE, listMyPuzzles, renameMyPuzzle, setCommunityListing, setCustomPuzzleCover, type MyPuzzle } from "@/lib/customPuzzles";
+import { MAX_PUZZLE_TITLE, getMyPuzzleSource, listMyPuzzles, renameMyPuzzle, setCommunityListing, setCustomPuzzleCover, type MyPuzzle } from "@/lib/customPuzzles";
+import { draftKeyFor, draftLockFor, listCopyDrafts, saveNewCopyDraft } from "@/lib/builder/creatorDraft";
+import { draftFromSource } from "@/lib/builder/copyDraft";
 import { signInWithPlatform } from "@/lib/platformSignIn";
 import { loadSettings } from "@/lib/settings";
 import type { User } from "@supabase/supabase-js";
@@ -51,6 +53,8 @@ function PuzzleRow({ puzzle, community, onChange }: { puzzle: MyPuzzle; communit
   const [renaming, setRenaming] = useState(false);
   const [titleDraft, setTitleDraft] = useState(puzzle.title);
   const [renameBusy, setRenameBusy] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const navigate = useNavigate();
   const titleInput = useRef<HTMLInputElement>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => () => clearTimeout(copyTimer.current), []);
@@ -101,6 +105,22 @@ function PuzzleRow({ puzzle, community, onChange }: { puzzle: MyPuzzle; communit
       setNote({ kind: "error", text: errorText(err, "Couldn't rename it. Try again.") });
     } finally {
       setRenameBusy(false);
+    }
+  };
+
+  // Duplicate & Edit: the owner's own content, through the builder's loader,
+  // into a new draft slot of its own (saved at once), then Create opens it.
+  // The source puzzle isn't changed, and nothing is published.
+  const duplicate = async () => {
+    setCopying(true);
+    setNote(null);
+    try {
+      const source = await getMyPuzzleSource(puzzle.shareId);
+      const slot = saveNewCopyDraft(localStorage, draftFromSource(source));
+      navigate(`/create?draft=${slot}`);
+    } catch (err) {
+      setNote({ kind: "error", text: errorText(err, "Couldn't copy it. Try again.") });
+      setCopying(false);
     }
   };
 
@@ -160,6 +180,15 @@ function PuzzleRow({ puzzle, community, onChange }: { puzzle: MyPuzzle; communit
                 {puzzle.cover ? "Edit cover" : "Add a cover"}
               </button>
             )}
+            <button
+              type="button"
+              disabled={copying}
+              onClick={() => void duplicate()}
+              className={quiet}
+              aria-label={`Duplicate and edit ${puzzle.title}`}
+            >
+              {copying ? "Copying…" : "Duplicate & Edit"}
+            </button>
             {community && puzzle.canList && (
               <button
                 type="button"
@@ -203,6 +232,55 @@ function PuzzleRow({ puzzle, community, onChange }: { puzzle: MyPuzzle; communit
         </div>
       )}
     </li>
+  );
+}
+
+/** Duplicate & Edit copies saved in this browser, each in its own draft slot. */
+function UnsavedCopies() {
+  const [copies, setCopies] = useState(() => { try { return listCopyDrafts(localStorage); } catch { return []; } });
+  const [asking, setAsking] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  if (copies.length === 0 && !note) return null;
+  const discard = async (slot: string) => {
+    setNote("");
+    // Only while no tab is editing it (the same lock Create holds).
+    const done = navigator.locks
+      ? await navigator.locks.request(draftLockFor(slot), { ifAvailable: true }, (lock) => {
+          if (!lock) return false;
+          localStorage.removeItem(draftKeyFor(slot));
+          return true;
+        }).catch(() => false)
+      : false;
+    setAsking(null);
+    if (!done) { setNote("That copy is open in another tab, so it was kept."); return; }
+    setCopies(listCopyDrafts(localStorage));
+    setNote("Copy discarded.");
+  };
+  return (
+    <section aria-labelledby="unsaved-copies-heading" className="mt-5 rounded-2xl border border-border bg-card px-4 py-3" data-testid="unsaved-copies">
+      <h2 id="unsaved-copies-heading" className={`text-base font-black ${cv.ink}`}>Unsaved copies in this browser</h2>
+      <p className="text-sm text-muted-foreground">Drafts from Duplicate & Edit. They aren't published and have no link until you create them.</p>
+      <ul className="mt-2">
+        {copies.map((c) => (
+          <li key={c.slot} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="unsaved-copy">
+            <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">{c.title.trim() || "Untitled copy"}</span>
+            {asking === c.slot ? (
+              <>
+                <span className="text-sm">Discard this copy?</span>
+                <button type="button" onClick={() => void discard(c.slot)} className={quiet}>Discard</button>
+                <button type="button" onClick={() => setAsking(null)} className={quiet}>Keep</button>
+              </>
+            ) : (
+              <>
+                <Link to={`/create?draft=${c.slot}`} className={`${pill} ${cv.play}`} aria-label={`Resume ${c.title}`}>Resume</Link>
+                <button type="button" onClick={() => setAsking(c.slot)} className={quiet} aria-label={`Discard ${c.title}`}>Discard</button>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      {note && <p className="mt-1 text-sm font-semibold" role="status">{note}</p>}
+    </section>
   );
 }
 
@@ -300,6 +378,8 @@ export default function MyPuzzles() {
           </div>
           {user && load.status === "ready" && load.total > 0 && createLink}
         </div>
+
+        {user && <UnsavedCopies />}
 
         {user === undefined ? (
           <p className="py-12 text-center text-muted-foreground" role="status">Loading…</p>

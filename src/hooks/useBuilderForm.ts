@@ -213,6 +213,15 @@ function buildStateFromLoad(input: LoadBuilderInput, currentStyle: BuilderStyle)
   };
 }
 
+/**
+ * The builder's own loader, outside the hook: what load() would make of this
+ * input. Used to open a saved puzzle as a new draft (My Puzzles' Duplicate &
+ * Edit) without a mounted form.
+ */
+export function builderStateFromLoad(input: LoadBuilderInput): BuilderState {
+  return buildStateFromLoad(input, input.style ?? "rainbow");
+}
+
 function blankState(format: PuzzleFormat): BuilderState {
   const groups = defaultGroups(format);
   return {
