@@ -218,7 +218,7 @@ function ExploreHome({ saves, order, onOrder }: { saves: Saves; order: Community
           <Segmented label="Sort puzzles" options={SORTS} value={order} onChange={onOrder} />
         </div>
         {newest.status === "error" ? (
-          <Notice title="Couldn't load the newest puzzles." role="alert">
+          <Notice title={`Couldn't load the ${SORT_TITLES[order].toLowerCase()} puzzles.`} role="alert">
             <button type="button" onClick={newest.retry} className={`mt-4 ${pillButton}`}>Retry</button>
           </Notice>
         ) : newest.status === "loading" && newest.items.length === 0 ? (
@@ -287,7 +287,7 @@ function NewestView({ saves, order, onOrder }: { saves: Saves; order: CommunityS
         <Segmented label="Sort puzzles" options={SORTS} value={order} onChange={onOrder} />
       </div>
       {status === "error" ? (
-        <Notice title="Couldn't load the newest puzzles." role="alert">
+        <Notice title={`Couldn't load the ${SORT_TITLES[order].toLowerCase()} puzzles.`} role="alert">
           <button type="button" onClick={() => setAttempt((n) => n + 1)} className={`mt-4 ${pillButton}`}>Retry</button>
         </Notice>
       ) : status === "loading" ? (

@@ -14,6 +14,8 @@ import CommunityPage from "@/pages/Community";
 import CustomPuzzle from "@/pages/CustomPuzzle";
 import CreatorProfilePage from "@/pages/CreatorProfile";
 import ShowcaseCreate from "./ShowcaseCreate";
+import { setShowcaseSignedIn, showcaseSignedIn } from "./fixtureClient";
+import { useState } from "react";
 import { cv } from "@/lib/communityStyle";
 import "@/index.css";
 
@@ -40,9 +42,20 @@ function NotInShowcase() {
 }
 
 function PreviewNote() {
+  const [signedIn, setSignedIn] = useState(showcaseSignedIn);
+  const toggle = () => {
+    setShowcaseSignedIn(!signedIn);
+    setSignedIn(!signedIn);
+  };
   return (
-    <p className="bg-background pt-2 text-center text-xs font-semibold text-muted-foreground" data-testid="showcase-note">
-      Preview with fictional puzzles. Nothing you do here is saved to Rainbow Categories.
+    <p className="bg-background px-4 pt-2 text-center text-xs font-semibold text-muted-foreground" data-testid="showcase-note">
+      Preview with fictional puzzles. Nothing you do here is saved to Rainbow Categories.{" "}
+      <span className="whitespace-nowrap">
+        {signedIn ? "Playing as the fictional Demo Player." : "Playing as a guest."}{" "}
+        <button type="button" onClick={toggle} className="min-h-6 underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded" data-testid="showcase-account">
+          {signedIn ? "Switch to guest" : "Switch to Demo Player"}
+        </button>
+      </span>
     </p>
   );
 }

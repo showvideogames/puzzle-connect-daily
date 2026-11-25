@@ -110,6 +110,8 @@ test("design review screenshots: desktop, 390px, 320px, dark, menu and keyboard 
   await expect(page.getByRole("button", { name: "Most Played" })).toHaveAttribute("aria-pressed", "true");
   await expect(page).toHaveURL(/sort=plays/);
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Most Liked" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(grid(page).getByRole("link", { name: "The Usual Suspects", exact: true })).toBeFocused();
   await shot(page, "community-desktop-keyboard-focus", false);
 });
@@ -274,7 +276,9 @@ test("another account cannot list or unlist someone else's puzzle", async ({ pag
   await page.goto(`/p/${P.private.shortCode}`);
   await signInAs(page, creds("wren"));
   await expect(page.getByTestId("community-listing-control")).toContainText("Private puzzles can't be listed in Community.");
-  await expect(page.getByTestId("community-listing-control").getByRole("button")).toHaveCount(0);
+  // No list or unlist control (the owner may still add a cover, which isn't listing).
+  await expect(page.getByTestId("community-listing-control").getByRole("button", { name: /list/i })).toHaveCount(0);
+  await expect(page.getByTestId("community-listing-control").getByRole("checkbox")).toHaveCount(0);
 });
 
 async function fillBuilder(page: Page, title: string, words: string[][]) {

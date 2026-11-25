@@ -4,9 +4,11 @@
  * vite.showcase.config.ts aliases the real client module to this file, so the
  * showcase bundle contains no Supabase URL, no key and no network code: every
  * call below is answered in memory from src/showcase/fixtures.ts, with the
- * same response shapes the real RPCs return. Guest only: nobody can sign in.
- * Plays and saves last for the visit (saves use the app's normal per-browser
- * storage, as a real guest's do).
+ * same response shapes the real RPCs return. A visitor starts as a guest
+ * (saves use the app's normal per-browser storage, as a real guest's do) and
+ * can switch to a fictional signed-in "Demo Player" (setShowcaseSignedIn) to
+ * see account-only parts such as the post-game rating. Plays, saves, follows
+ * and ratings last for the visit.
  */
 import { CREATORS, CURATION, DEMO_GROUPS, PUZZLES, puzzle, type ShowcasePuzzle } from "./fixtures";
 
@@ -20,6 +22,26 @@ const likes = new Map(PUZZLES.map((p) => [p.key, p.favorites]));
 const wins = new Map(PUZZLES.map((p) => [p.key, Math.round(p.plays * 0.7)]));
 const guessTotals = new Map(PUZZLES.map((p) => [p.key, Math.round(p.plays * 0.7) * 6]));
 const runs = new Set<string>();
+/** Puzzles this visit has finished (the finish record a rating needs). */
+const finished = new Set<string>();
+
+// ── The fictional signed-in Demo Player (in memory only) ────────────────────
+const DEMO_USER = { id: "fixture-demo-player", aud: "authenticated", role: "authenticated", email: "demo-player@example.invalid", app_metadata: {}, user_metadata: { full_name: "Demo Player" }, created_at: "2026-11-01T00:00:00Z" };
+let session: { user: typeof DEMO_USER; access_token: string; refresh_token: string; token_type: string; expires_in: number; expires_at: number } | null = null;
+const authListeners = new Set<(event: string, s: typeof session) => void>();
+const myFavorites = new Set<string>();
+const myFollows = new Set<string>();
+const myRatings = new Map<string, number>();
+
+export function showcaseSignedIn(): boolean {
+  return session !== null;
+}
+
+/** Switches between the guest and the fictional signed-in Demo Player. */
+export function setShowcaseSignedIn(on: boolean): void {
+  session = on ? { user: DEMO_USER, access_token: "showcase-only", refresh_token: "showcase-only", token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400 } : null;
+  for (const fn of authListeners) fn(on ? "SIGNED_IN" : "SIGNED_OUT", session);
+}
 
 const byCode = (code: unknown) => PUZZLES.find((p) => p.shortCode === code);
 const byShare = (id: unknown) => PUZZLES.find((p) => p.shareId === id);
@@ -67,7 +89,7 @@ function full(p: ShowcasePuzzle) {
     content: content(p),
     creator_slug: p.creator.slug,
     favorite_count: likes.get(p.key) ?? 0,
-    favorited_by_me: false,
+    favorited_by_me: session !== null && myFavorites.has(p.key),
     cover_emoji: p.cover?.emojis[0] ?? null,
     cover_emoji_2: p.cover?.emojis[1] ?? null,
     cover_emoji_3: p.cover?.emojis[2] ?? null,
@@ -80,8 +102,8 @@ function creatorJson(c: (typeof CREATORS)[number]) {
     display_name: c.name,
     public_slug: c.slug,
     listed_count: listed().filter((p) => p.creator === c).length,
-    follower_count: c.followers,
-    followed_by_me: false,
+    follower_count: c.followers + (session !== null && myFollows.has(c.slug) ? 1 : 0),
+    followed_by_me: session !== null && myFollows.has(c.slug),
     is_me: false,
   };
 }
@@ -163,6 +185,7 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
       const run = String(a._run_id ?? "");
       if (!p || runs.has(run)) return ok(false);
       runs.add(run);
+      finished.add(p.key);
       plays.set(p.key, (plays.get(p.key) ?? 0) + 1);
       if (a._won) {
         wins.set(p.key, (wins.get(p.key) ?? 0) + 1);
@@ -187,7 +210,45 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
     case "get_own_personal_stats_history":
       return ok([]);
     case "get_my_favorites":
-      return ok([]);
+      return ok(session ? PUZZLES.filter((p) => myFavorites.has(p.key)).map(card) : []);
+    // ── Signed-in Demo Player only ──
+    case "has_role":
+      return ok(false);
+    case "get_my_custom_puzzle_listing":
+      return ok({ owned: false });
+    case "set_custom_puzzle_favorite": {
+      const p = byShare(a._share_id);
+      if (!session || !p) return unavailable("Saving to an account");
+      const had = myFavorites.has(p.key);
+      if (a._favorite && !had) { myFavorites.add(p.key); likes.set(p.key, (likes.get(p.key) ?? 0) + 1); }
+      if (!a._favorite && had) { myFavorites.delete(p.key); likes.set(p.key, Math.max(0, (likes.get(p.key) ?? 0) - 1)); }
+      return ok({ favorited: myFavorites.has(p.key), favorite_count: likes.get(p.key) ?? 0 });
+    }
+    case "set_creator_follow": {
+      const c = CREATORS.find((x) => x.slug === a._slug);
+      if (!session || !c) return unavailable("Following");
+      if (a._follow) myFollows.add(c.slug); else myFollows.delete(c.slug);
+      return ok({ following: myFollows.has(c.slug), follower_count: c.followers + (myFollows.has(c.slug) ? 1 : 0) });
+    }
+    case "get_following_feed": {
+      const mine = newestFirst(listed().filter((p) => session && myFollows.has(p.creator.slug)));
+      const pg = page(mine, a._limit, a._offset);
+      return ok({ ...pg, items: pg.items.map(card), creators: session ? CREATORS.filter((c) => myFollows.has(c.slug)).map(creatorJson) : [] });
+    }
+    case "get_my_custom_puzzle_rating": {
+      const p = byShare(a._share_id);
+      return ok({ rating: (p && session && myRatings.get(p.key)) || null, can_rate: !!(p && session) });
+    }
+    case "set_custom_puzzle_rating": {
+      const p = byShare(a._share_id);
+      const r = a._rating;
+      if (!session) return { data: null, error: { message: "sign in to rate puzzles" } };
+      if (typeof r !== "number" || !Number.isInteger(r) || r < 1 || r > 5) return { data: null, error: { message: "a rating is a whole number from 1 to 5" } };
+      if (!p) return { data: null, error: { message: "puzzle not found" } };
+      if (!finished.has(p.key)) return { data: null, error: { message: "finish the puzzle to rate it" } };
+      myRatings.set(p.key, r);
+      return ok({ rating: r });
+    }
     default:
       return unavailable(name);
   }
@@ -227,21 +288,24 @@ function emptyQuery(): unknown {
   return builder;
 }
 
-const noSession = { data: { session: null }, error: null };
+const currentSession = () => ({ data: { session }, error: null });
 
 export const supabase = {
   rpc: (name: string, args?: Record<string, unknown>) => Promise.resolve(rpc(name, args)),
   from: () => emptyQuery(),
   storage: { from: () => ({ getPublicUrl: () => ({ data: { publicUrl: "" } }), list: () => Promise.resolve({ data: [], error: null }) }) },
   auth: {
-    getSession: () => Promise.resolve(noSession),
-    getUser: () => Promise.resolve({ data: { user: null }, error: null }),
-    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-    signOut: () => Promise.resolve({ error: null }),
-    refreshSession: () => Promise.resolve(noSession),
+    getSession: () => Promise.resolve(currentSession()),
+    getUser: () => Promise.resolve({ data: { user: session?.user ?? null }, error: null }),
+    onAuthStateChange: (fn: (event: string, s: typeof session) => void) => {
+      authListeners.add(fn);
+      return { data: { subscription: { unsubscribe: () => { authListeners.delete(fn); } } } };
+    },
+    signOut: () => { setShowcaseSignedIn(false); return Promise.resolve({ error: null }); },
+    refreshSession: () => Promise.resolve(currentSession()),
     exchangeCodeForSession: () => Promise.resolve({ data: { session: null }, error: { message: "Signing in isn't part of this showcase" } }),
     signInWithOAuth: () => Promise.resolve({ data: null, error: { message: "Signing in isn't part of this showcase" } }),
-    setSession: () => Promise.resolve(noSession),
+    setSession: () => Promise.resolve(currentSession()),
   },
   channel: () => ({ on: () => ({ subscribe: () => ({}) }), subscribe: () => ({}), unsubscribe: () => {} }),
   removeChannel: () => {},

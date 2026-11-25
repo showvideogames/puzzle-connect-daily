@@ -222,6 +222,40 @@ illustrated art. Community is now on by default, with `VITE_COMMUNITY_PUZZLES=of
 as the kill switch. The release order and rollback are in
 `docs/COMMUNITY-PUZZLES-RELEASE.md`.
 
+## Part 5: covers v2, sorting and ratings
+
+* **Covers v2** (`0009_community_covers_multi_and_likes.sql`): one to three
+  distinct emoji, in the creator's order (one large; two side by side; three
+  tight, sized so they never overlap on the smallest card), on one of 35
+  presets in three groups (Rainbow & gradients, Solids, Patterns). Rainbow,
+  now curved arcs in six colours, comes first and keeps its key
+  `rainbow-bands`. Every earlier key and one-emoji cover still works; the
+  legacy one-emoji call clears emoji 2 and 3. The picker has a tray to remove
+  and reorder; the preview is the same component as the cards.
+* **Sort:** Newest (default), Most Played (finished plays) and Most Liked
+  (signed-in favourites; guest saves never count, and nobody sees who saved)
+  on Explore's browse section, See all and puzzle search. The server orders
+  the whole listed pool or search before paging, with ties broken by newest
+  listing then short code. Featured and Editor's Picks stay in editorial order.
+* **Rating** (`0010_custom_puzzle_ratings.sql`): an optional "Rate this
+  puzzle" row (five 44px star buttons, "Saved/Updated: n of 5") on a custom
+  puzzle's Results screen after a win or a played-out loss. Signed-in
+  non-authors only, one editable rating each; the server checks the account,
+  the finish record for this browser's device credential, the author and an
+  integer 1–5. No totals, no rater identities, no rating on Daily or cards.
+  Guests play as before and aren't offered sign-in to rate, because signing
+  in can retire the guest device credential, so the finish wouldn't
+  reliably carry over.
+* **Demo:** the private showcase shows all three. Its in-memory client has a
+  fictional "Demo Player" switch (in the preview note) for the signed-in parts.
+
+Checks: `npm run e2e:db:v2` (all 1,898 keys in batches of three, all 35
+backgrounds, every array size, Most Played and Most Liked ranking differently,
+deterministic paging, hidden/private excluded, ratings), `npm run
+e2e:db:release` (0004–0010 with and without 0003, exact rollback),
+`e2e/community/covers.spec.ts` (create 1 → 2 → 3, the Newest thumbnail at
+390px, rate and edit) and `npm run showcase:check`.
+
 ## Rollout gates (not met, so the flag stays off in production)
 
 1. **A player report flow for custom puzzles (and creators).** Only the admin hide exists today. Until a report path, an admin queue for it, and a reviewed takedown time exist, `/community` should stay a private preview.

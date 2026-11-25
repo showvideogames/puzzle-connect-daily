@@ -55,7 +55,7 @@ export const PUZZLES: ShowcasePuzzle[] = [
       { category: "Baking Staples", words: ["FLOUR", "SALT", "SUGAR", "YEAST"] },
       { category: "Often Pickled", words: ["BEET", "CAPER", "GHERKIN", "OLIVE"] },
     ],
-    listedAt: "2026-11-21T10:00:00Z", plays: 42, favorites: 11,
+    listedAt: "2026-11-21T10:00:00Z", plays: 42, favorites: 31,
     cover: { emojis: ["1F37F"], background: "apricot-stripes" },
   }),
   puzzle({
