@@ -128,19 +128,11 @@ describe("hamburger drawer", () => {
     const trigger = screen.getByRole("button", { name: "Menu" });
     fireEvent.click(trigger);
     const drawer = await screen.findByRole("dialog", { name: "Menu" });
-    const links = within(drawer).getAllByRole("link").map((link) => [link.textContent, link.getAttribute("href")]);
-    expect(links).toEqual([
-      ["Today's puzzle", "/"],
-      ["Rainbow Mini", "/mini"],
-      ["Puzzle archive", "/archive"],
-      ["Mini archive", "/mini/archive"],
-      ["Community Puzzles", "/community"],
-      ["Create a puzzle", "/create"],
-      ["How to play", "/how-to-play"],
-      ["Friends & Groups", "/friends"],
-    ]);
+    const links = within(drawer).getAllByRole("link").map((link) => link.getAttribute("href"));
+    expect(links).toEqual(["/", "/archive", "/mini", "/mini/archive", "/community", "/create", "/how-to-play", "/favorites", "/friends"]);
+    expect(within(drawer).getByRole("link", {name: /^Mini Archive/})).toBeInTheDocument();
     expect(within(drawer).getByRole("link", { name: "Friends & Groups" })).toHaveAttribute("aria-current", "page");
-    expect(within(drawer).getByRole("button", { name: "Give feedback" })).toBeInTheDocument();
+    expect(within(drawer).getByRole("button", { name: "Send Feedback" })).toBeInTheDocument();
     const close = within(drawer).getByRole("button", { name: "Close menu" });
     expect(close.className).toContain("h-11");
 
@@ -169,19 +161,27 @@ describe("hamburger drawer", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("keeps Favorites out of a signed-out drawer", async () => {
+    session = null;
+    renderHeader();
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    const drawer = await screen.findByRole("dialog", { name: "Menu" });
+    expect(within(drawer).queryByRole("link", { name: "Favorites" })).toBeNull();
+  });
+
   it("hides Friends & Groups outside the beta", async () => {
     vi.stubEnv("VITE_SHARED_SOCIAL", "off");
     renderHeader();
     fireEvent.click(screen.getByRole("button", { name: "Menu" }));
     const drawer = await screen.findByRole("dialog", { name: "Menu" });
     expect(within(drawer).queryByRole("link", { name: "Friends & Groups" })).toBeNull();
-    expect(within(drawer).getAllByRole("link")).toHaveLength(7); // includes Community Puzzles
+    expect(within(drawer).getAllByRole("link")).toHaveLength(8);
   });
 
   it("Give feedback closes the drawer and opens the existing feedback dialog", async () => {
     renderHeader();
     fireEvent.click(screen.getByRole("button", { name: "Menu" }));
-    fireEvent.click(within(await screen.findByRole("dialog", { name: "Menu" })).getByRole("button", { name: "Give feedback" }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "Menu" })).getByRole("button", { name: "Send Feedback" }));
     await screen.findByRole("dialog", { name: "Feedback" });
     expect(screen.queryByRole("dialog", { name: "Menu" })).toBeNull();
   });
@@ -190,7 +190,7 @@ describe("hamburger drawer", () => {
     renderHeader();
     const trigger = screen.getByRole("button", { name: "Menu" });
     fireEvent.click(trigger);
-    fireEvent.click(within(await screen.findByRole("dialog", { name: "Menu" })).getByRole("button", { name: "Give feedback" }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "Menu" })).getByRole("button", { name: "Send Feedback" }));
     const feedback = await screen.findByRole("dialog", { name: "Feedback" });
     await waitFor(() => expect(feedback.contains(document.activeElement)).toBe(true));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });

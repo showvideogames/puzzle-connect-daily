@@ -14,7 +14,7 @@ here puts fixture data in production.
   * `0008` creator covers: one emoji key (an allowlist of 1,898 keys from
     the pinned `emojibase-data@16.0.3`) plus one of 24 preset backgrounds,
     owner-only;
-  * `0009` covers with one to three distinct emoji (ordered, no gaps) and 35
+  * `0009` covers with one to three distinct emoji (ordered, no gaps) and 72
     preset backgrounds (all 24 earlier keys kept; Rainbow is the curved
     arcs), plus the Most Liked sort (signed-in favourites only, whole pool
     ordered on the server before paging);

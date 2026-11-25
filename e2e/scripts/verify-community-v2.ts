@@ -1,5 +1,5 @@
 /**
- * 0009 (1-3 emoji covers, 35 backgrounds, Most Liked) and 0010 (custom puzzle
+ * 0009 (1-3 emoji covers, 72 backgrounds, Most Liked) and 0010 (custom puzzle
  * ratings) on disposable in-process PostgreSQL. Fictional data only.
  *
  *   npm run e2e:db:v2
@@ -104,7 +104,7 @@ try {
     await setCover(wren, p, batch, BACKGROUNDS[(i / 3) % BACKGROUNDS.length]);
   }
   for (const bg of BACKGROUNDS) await setCover(wren, p, ["1F438"], bg);
-  assert.equal(BACKGROUNDS.length, 35);
+  assert.equal(BACKGROUNDS.length, 72);
   // Remove.
   assert.deepEqual(coverOf(await setCover(wren, p, null, null) as Record<string, unknown>), [null, null, null, null]);
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Check, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
-import { COVER_BACKGROUNDS, backgroundStyle } from "@/lib/coverBackgrounds";
+import { COVER_BACKGROUNDS, backgroundStyle, type CoverBackground } from "@/lib/coverBackgrounds";
 import { MAX_COVER_EMOJI, emojiFromKey, type CreatorCover } from "@/lib/creatorCover";
 import { cv } from "@/lib/communityStyle";
 import { CreatorCoverArt, EMOJI_FONT } from "./CreatorCoverArt";
@@ -15,10 +15,11 @@ export const draftToCover = (d: CoverDraft): CreatorCover | null =>
   d.emojis.length >= 1 && d.emojis.length <= MAX_COVER_EMOJI && d.background ? { emojis: [...d.emojis], background: d.background } : null;
 export const coverToDraft = (c: CreatorCover | null | undefined): CoverDraft => ({ emojis: c ? [...c.emojis] : [], background: c?.background ?? null });
 
-const BACKGROUND_GROUPS: { key: "rainbow" | "solid" | "pattern"; label: string }[] = [
+const BACKGROUND_GROUPS: { key: CoverBackground["group"]; label: string }[] = [
   { key: "rainbow", label: "Rainbow & gradients" },
   { key: "solid", label: "Solids" },
   { key: "pattern", label: "Patterns" },
+  { key: "motif", label: "Little Illustrations" },
 ];
 /** Backgrounds in picker order (grouped), for one arrow-key path through all of them. */
 const ORDERED_BACKGROUNDS = BACKGROUND_GROUPS.flatMap((g) => COVER_BACKGROUNDS.filter((b) => b.group === g.key));
@@ -258,7 +259,7 @@ export function CoverPicker({ value, onChange, title, creatorName, onSave, savin
         )}
 
         <h3 id="cover-bg-heading" className={`mt-4 text-base font-extrabold ${cv.ink}`}>Background</h3>
-        <div ref={bgRef} role="radiogroup" aria-labelledby="cover-bg-heading" onKeyDown={bgKeys} data-testid="cover-backgrounds">
+        <div ref={bgRef} role="radiogroup" aria-labelledby="cover-bg-heading" onKeyDown={bgKeys} data-testid="cover-backgrounds" className="max-h-72 overflow-y-auto overscroll-contain p-1 [scrollbar-width:thin]">
           {BACKGROUND_GROUPS.map((g) => (
             <div key={g.key} className="mt-2">
               <p className="mb-1 text-xs font-bold text-muted-foreground" aria-hidden="true">{g.label}</p>

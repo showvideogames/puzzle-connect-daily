@@ -3,12 +3,12 @@ import { useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Switch } from "@/components/ui/switch";
 import { GameSettings } from "@/lib/settings";
-import { Link, useNavigate } from "react-router-dom";
-import { BookOpen, Archive as ArchiveIcon, Gamepad2, Grid2x2, PlusCircle, Star, UserPen, Users, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { X } from "lucide-react";
+import { MenuRowArt, menuRowClass } from "./AppMenuDrawer";
 import { PlayerAuth } from "./PlayerAuth";
 import { socialBetaOn } from "@/components/social/socialFlag";
 import { ACCOUNTS_ENABLED } from "@/lib/platformSignIn";
-import { FULL_FORMAT, MINI_FORMAT, type PuzzleFormat } from "@/lib/puzzleFormat";
 import type { User as AuthUser } from "@supabase/supabase-js";
 
 interface SettingsModalProps {
@@ -17,24 +17,11 @@ interface SettingsModalProps {
   settings: GameSettings;
   onSettingsChange: (settings: GameSettings) => void;
   onOpenFeedback?: () => void;
-  // Daily-homepage-only: shows a "Menu" section (How to Play / Puzzle Archive
-  // / Account) since the homepage header drops those icons down to just 3.
-  // Left undefined/false everywhere else so archive's Settings modal is
-  // unchanged.
+  /** Show gameplay help and account shortcuts, not the global navigation. */
   showMenuLinks?: boolean;
-  /** Adds "Create a Puzzle" to the Menu section — for a page whose header no longer carries the Create pill. */
-  showCreateLink?: boolean;
   onHowToPlayClick?: () => void;
   user?: AuthUser | null;
   onSignOut?: () => void;
-  /**
-   * Which game the page showing this modal belongs to.
-   *
-   * Governs two things in the Menu section: the archive link points at THIS
-   * format's archive, and the cross-link offers the OTHER game. Defaults to
-   * Full, so every existing call site keeps its current behaviour.
-   */
-  format?: PuzzleFormat;
   /** Passed to the account menu, which then offers "Edit profile". */
   onEditProfile?: () => void;
   /** Adds "All games" to the Menu section, for the game picker. */
@@ -47,10 +34,9 @@ function SocialRow({ onClose, onOpen }: { onClose: () => void; onOpen: () => voi
   return (
     <button
       onClick={() => { onClose(); onOpen(); }}
-      className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
-        hover:bg-secondary transition-colors active:scale-95"
+      className={`${menuRowClass} bg-[#ebefff] dark:bg-[#303955]`}
     >
-      <Users className="w-4 h-4 text-slate" />
+      <MenuRowArt icon="friends" />
       Friends &amp; Groups
     </button>
   );
@@ -68,21 +54,17 @@ function BetaEditProfileRow({ onClose }: { onClose: () => void }) {
   return (
     <button
       onClick={() => { onClose(); navigate("/friends", { state: { editProfile: true } }); }}
-      className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
-        hover:bg-secondary transition-colors active:scale-95"
+      className={`${menuRowClass} bg-[#ebefff] dark:bg-[#303955]`}
     >
-      <UserPen className="w-4 h-4 text-slate" />
-      Edit profile
+      <MenuRowArt icon="profile" />
+      Edit Profile
     </button>
   );
 }
 
-export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback, showMenuLinks = false, showCreateLink = false, onHowToPlayClick, user = null, onSignOut, format = FULL_FORMAT, onEditProfile, onOpenGames, onOpenSocial }: SettingsModalProps) {
-  const isMini = format.id === MINI_FORMAT.id;
+export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpenFeedback, showMenuLinks = false, onHowToPlayClick, user = null, onSignOut, onEditProfile, onOpenGames, onOpenSocial }: SettingsModalProps) {
   // Drives PlayerAuth's forceOpen below, so the "Sign In"/"Account" TEXT
-  // (not just PlayerAuth's own icon button) opens the sign-in modal or
-  // account dropdown — matching How to Play/Puzzle Archive above it, which
-  // are both clickable across their full row. forceOpen already knows how
+  // (not just PlayerAuth's icon) opens its sign-in modal or dropdown. forceOpen already knows how
   // to open the right one for either auth state (see PlayerAuth.tsx).
   const [authOpen, setAuthOpen] = useState(false);
   const items = [
@@ -182,63 +164,23 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
             <div className="min-h-0 overflow-y-auto px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
               <div className="space-y-4">
                 {showMenuLinks && (
-                  <div className="space-y-1 pb-4 border-b border-border">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate px-1 pb-1">Menu</p>
-                    <button
-                      onClick={() => { onClose(); onHowToPlayClick?.(); }}
-                      className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
-                        hover:bg-secondary transition-colors active:scale-95"
+                  <div className="space-y-1.5 pb-4 border-b border-border">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate px-1 pb-1">Shortcuts</p>
+                    {onHowToPlayClick && <button
+                      type="button"
+                      onClick={() => { onClose(); onHowToPlayClick(); }}
+                      className={`${menuRowClass} bg-[#fff6d7] dark:bg-[#493727]`}
                     >
-                      <BookOpen className="w-4 h-4 text-slate" />
-                      How to Play
-                    </button>
-                    {showCreateLink && (
-                      <Link
-                        to="/create"
-                        onClick={onClose}
-                        className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
-                          hover:bg-secondary transition-colors active:scale-95"
-                      >
-                        <PlusCircle className="w-4 h-4 text-slate" />
-                        Create a Puzzle
-                      </Link>
-                    )}
-                    {/* THIS game's archive. On a Mini page it is the Mini
-                        archive, and it says so, so the two are never
-                        ambiguous when both games are one tap apart. */}
-                    <Link
-                      to={format.archivePath}
-                      onClick={onClose}
-                      className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
-                        hover:bg-secondary transition-colors active:scale-95"
-                    >
-                      <ArchiveIcon className="w-4 h-4 text-slate" />
-                      {isMini ? `${format.name} Archive` : "Puzzle Archive"}
-                    </Link>
-                    {/* The cross-link to the sibling game — the one
-                        discoverable route into Mini, since the mobile header
-                        has no room for another control and the homepage is
-                        deliberately not being given a promotion. Always
-                        offers the game you are NOT currently playing. */}
-                    <Link
-                      to={isMini ? FULL_FORMAT.dailyPath : MINI_FORMAT.dailyPath}
-                      onClick={onClose}
-                      className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
-                        hover:bg-secondary transition-colors active:scale-95"
-                    >
-                      <Grid2x2 className="w-4 h-4 text-slate" />
-                      {isMini
-                        ? `Rainbow Categories ${FULL_FORMAT.sizeLabel}`
-                        : `${MINI_FORMAT.name} Categories ${MINI_FORMAT.sizeLabel}`}
-                    </Link>
+                      <MenuRowArt icon="book" />
+                      How To Play
+                    </button>}
                     {onOpenGames && (
                       <button
                         onClick={() => { onClose(); onOpenGames(); }}
-                        className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
-                          hover:bg-secondary transition-colors active:scale-95"
+                        className={`${menuRowClass} bg-[#d7f3e7] dark:bg-[#2b493a]`}
                       >
-                        <Gamepad2 className="w-4 h-4 text-slate" />
-                        All games
+                        <MenuRowArt icon="games" />
+                        All Games
                       </button>
                     )}
                     {onOpenSocial ? (
@@ -247,17 +189,6 @@ export function SettingsModal({ open, onClose, settings, onSettingsChange, onOpe
                       <BetaSocialRow onClose={onClose} />
                     )}
                     {user && !onEditProfile && socialBetaOn() && <BetaEditProfileRow onClose={onClose} />}
-                    {user && (
-                      <Link
-                        to="/favorites"
-                        onClick={onClose}
-                        className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm font-medium
-                          hover:bg-secondary transition-colors active:scale-95"
-                      >
-                        <Star className="w-4 h-4 text-slate" />
-                        Favorites
-                      </Link>
-                    )}
                     {(user || ACCOUNTS_ENABLED) && (
                     <div className="flex items-center gap-3 px-2 py-1.5">
                       {/* PlayerAuth's own icon button keeps working exactly
