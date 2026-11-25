@@ -28,7 +28,7 @@ function SlotRow({ slot, label, actions }: { slot: Slot; label: string; actions:
         <p className="font-bold break-words">{slot.title}</p>
         <p className="text-sm text-muted-foreground">by {slot.creatorName} · /p/{slot.shortCode}</p>
         {slot.shown === false && (
-          <p className="mt-1 text-sm font-semibold text-destructive">Not shown on Explore: {slot.hiddenReason ?? "not eligible"}. Replace or remove it before saving.</p>
+          <p className="mt-1 text-sm font-semibold text-destructive">Not shown on Explore: {slot.hiddenReason ?? "not eligible"}. It can stay saved and returns here if it's listed again, or you can remove or replace it.</p>
         )}
       </div>
       <div className="flex flex-wrap gap-2">{actions}</div>
@@ -103,7 +103,7 @@ export default function AdminCommunity() {
       <main className="mx-auto max-w-3xl px-4">
         <h1 className="mt-6 text-2xl font-black">Community curation</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Admin only. Choose one Featured Puzzle and up to {MAX_PICKS} Editor's Picks by hand. Only puzzles their creators listed in Community can be chosen, and Explore hides any that stop being listed.{" "}
+          Admin only. Choose one Featured Puzzle and up to {MAX_PICKS} Editor's Picks by hand. Only puzzles their creators listed in Community can be added. Explore hides any that stop being listed; those can stay saved while you edit the rest.{" "}
           <Link to="/community" className="font-semibold text-violet-700 underline underline-offset-2 dark:text-violet-300">View Explore</Link>
         </p>
 

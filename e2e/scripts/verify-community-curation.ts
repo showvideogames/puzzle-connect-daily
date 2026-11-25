@@ -128,8 +128,23 @@ try {
   // Re-listing brings it back where the admin put it.
   await list(wren, pantry);
   assert.equal((await explore()).featured?.title, "Pantry Raid");
-  // Unlisted curated rows can't be re-saved as is; the admin replaces or removes them.
-  await rejects(curate(admin, pantry, [tides]), /only puzzles listed in Community/);
+  // 0007: a saved Pick that is now unlisted (Tides) doesn't block other edits. It may
+  // stay, in any position, and Explore keeps hiding it…
+  await curate(admin, pantry, [usual, tides, offbeat, air]); // reorder the others around it
+  ex = await explore();
+  assert.equal(ex.featured?.title, "Pantry Raid");
+  assert.deepEqual(titles(ex.picks), ["The Usual Suspects", "A Little Offbeat", "Something In The Air"]);
+  const kept = await call<{ title: string; position: number; shown: boolean; hidden_reason: string | null }[]>(admin, "public.admin_get_community_curation()");
+  assert.deepEqual(kept.filter((r) => !r.shown).map((r) => [r.title, r.position, r.hidden_reason]), [["Turn Of The Tides", 1, "unlisted by its creator"]]);
+  // …but a NEW addition must still be in Community right now, and unknown codes are refused.
+  await rejects(curate(admin, pantry, [usual, tides, offbeat, linkOnly]), /only puzzles listed in Community can be added/);
+  await rejects(curate(admin, secret, [usual, tides]), /only puzzles listed in Community can be added/);
+  await rejects(call(admin, "public.admin_set_community_curation($1,$2)", [null, ["NoSuchCode1"]]), /puzzle not found/);
+  // If its creator lists it again, it comes back exactly where the admin left it.
+  await list(odie, tides);
+  assert.deepEqual(titles((await explore()).picks), ["The Usual Suspects", "Turn Of The Tides", "A Little Offbeat", "Something In The Air"]);
+  await list(odie, tides, false);
+  // Explicit removal and replacement still work.
   await curate(admin, air, [offbeat]); // replace
   ex = await explore();
   assert.equal(ex.featured?.title, "Something In The Air");
@@ -209,7 +224,7 @@ try {
 
   console.log(
     "PASS: additive, admin-only curation (one Featured, ≤6 ordered Picks, no duplicate, only puzzles in Community), re-checked on read (unlist/hide vanish, no empty shell), " +
-      "replace/remove, Newest by first listing time independent of curation, new listings first, no re-list bump, keyset paging stable across inserts/unlists, grants."
+      "saved-but-unlisted entries kept without blocking other edits while new additions must be listed, replace/remove, Newest by first listing time independent of curation, new listings first, no re-list bump, keyset paging stable across inserts/unlists, grants."
   );
 } finally {
   await db.close();
