@@ -1,3 +1,4 @@
+import "./menu-fredoka.css";
 import { useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Menu, UsersRound, X } from "lucide-react";
@@ -37,24 +38,25 @@ const FRIENDS: Destination = {
 };
 
 const focusClass = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
-const rowClass = `flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left text-[15px] font-bold leading-tight text-foreground hover:brightness-95 dark:hover:brightness-125 transition-[filter] aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/25 ${focusClass}`;
+const rowClass = `flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left text-[18px] font-bold [font-family:'Fredoka_Menu',ui-rounded,sans-serif] leading-tight text-foreground hover:brightness-95 dark:hover:brightness-125 transition-[filter] aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/25 ${focusClass}`;
 
 function MenuArt({ art }: { art: PlayArt }) {
   if (art === "mini") {
-    return <img aria-hidden="true" src="/icons/mini-lagoon-tilted.png" alt="" width={52} height={52} className="block h-[52px] w-[52px] shrink-0" />;
+    return <img aria-hidden="true" src="/icons/mini-lagoon-tilted.png" alt="" width={62} height={62} className="block h-[60px] w-[60px] shrink-0" />;
   }
   if (art === "full") {
-    return <img aria-hidden="true" src="/icons/rainbow-icon-192-0e09e6d1.png" alt="" width={56} height={56} className="block h-14 w-14 shrink-0 rounded-xl" />;
+    return <img aria-hidden="true" src="/icons/rainbow-icon-192-0e09e6d1.png" alt="" width={66} height={66} className="block h-16 w-16 shrink-0 rounded-xl" />;
   }
 
   const mini = art === "miniArchive";
   return (
-    <svg aria-hidden="true" viewBox="0 0 56 56" width={mini ? 48 : 56} height={mini ? 48 : 56} className="shrink-0">
+    <svg aria-hidden="true" viewBox="0 0 56 56" width={mini ? 60 : 64} height={mini ? 60 : 64} className="shrink-0">
       <rect x="7" y="10" width="46" height="43" rx="9" fill={mini ? "#80ced0" : "#c5a5f0"} />
       <rect x="5" y="7" width="46" height="44" rx="9" fill="white" />
       <path d="M5 16a9 9 0 0 1 9-9h28a9 9 0 0 1 9 9v6H5z" fill={mini ? "#49c4c3" : "#c689e9"} />
-      <rect x="5" y="7" width="46" height="44" rx="9" stroke="#231d2a" strokeWidth="2.6" fill="none" />
-      <path d="M5 22h46M17 4v9m22-9v9" stroke="#231d2a" strokeWidth="3" strokeLinecap="round" />
+      <rect x="5" y="7" width="46" height="44" rx="9" stroke="#231d2a" strokeWidth="3.2" fill="none" />
+      <path d="M5 22h46" stroke="#231d2a" strokeWidth="3.2" />
+      {[15, 37].map(x => <rect key={x} x={x} y="2.5" width="4.5" height="12" rx="2.25" stroke="#231d2a" strokeWidth="2.6" fill={mini ? "#49c4c3" : "#c689e9"} />)}
       {["#f54959", "#ffab34", "#ffc20e", "#1fae4b", "#3776f2", "#a45de8"].map((color, i) => (
         <rect key={i} x={13 + (i % 3) * 11} y={27 + Math.floor(i / 3) * 10} width="7" height="7" rx="1.8" fill={color} />
       ))}
@@ -65,7 +67,7 @@ function MenuArt({ art }: { art: PlayArt }) {
 function RowArt({ icon }: { icon: Destination["icon"] | "feedback" }) {
   if (icon === "friends") return <UsersRound aria-hidden="true" className="h-6 w-6 text-foreground" strokeWidth={HEADER_STROKE} />;
   return (
-    <svg aria-hidden="true" viewBox="0 0 32 32" className="h-[30px] w-[30px] shrink-0" fill="none" stroke="#231d2a" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <svg aria-hidden="true" viewBox="0 0 32 32" className="h-[35px] w-[35px] shrink-0" fill="none" stroke="#231d2a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       {icon === "create" && <>
         <rect x="3" y="7" width="20" height="22" rx="3.5" fill="white" />
         <path d="M3 18h20M13 7v22" />
@@ -86,10 +88,10 @@ function RowArt({ icon }: { icon: Destination["icon"] | "feedback" }) {
   );
 }
 
-function TileSticker() {
-  return <svg aria-hidden="true" viewBox="0 0 48 42" className="ml-auto hidden h-9 w-10 shrink-0 text-foreground/90 min-[360px]:block" fill="none">
-    <rect x="22" y="15" width="21" height="21" rx="4" transform="rotate(17 22 15)" fill="currentColor" fillOpacity=".08" stroke="currentColor" strokeWidth="1.6" />
-    <rect x="3" y="10" width="22" height="22" rx="4" transform="rotate(-12 3 10)" className="fill-background" stroke="currentColor" strokeWidth="1.6" />
+function TileSticker({ compact }: { compact: boolean }) {
+  return <svg aria-hidden="true" viewBox="0 0 48 42" className={`shrink-0 text-foreground ${compact ? "absolute right-2.5 top-3 h-8 w-9 max-[359px]:h-7 max-[359px]:w-8" : "ml-auto h-10 w-11 max-[359px]:h-8 max-[359px]:w-9"}`} fill="none">
+    <rect x="22" y="15" width="21" height="21" rx="4" transform="rotate(17 22 15)" fill="currentColor" fillOpacity=".14" stroke="currentColor" strokeWidth="2.3" />
+    <rect x="3" y="10" width="22" height="22" rx="4" transform="rotate(-12 3 10)" className="fill-white dark:fill-background" stroke="currentColor" strokeWidth="2.3" />
   </svg>;
 }
 
@@ -120,7 +122,7 @@ export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
             {["bg-[#ffc20e]", "bg-[#1fae4b]", "bg-[#1e6ff0]", "bg-[#e8262b]"].map((tone) => <span key={tone} className={`h-[3px] ${tone}`} />)}
           </div>
           <div className="flex items-center justify-between gap-2 pb-3">
-            <SheetTitle className="text-[26px] font-extrabold leading-none tracking-tight">Menu</SheetTitle>
+            <SheetTitle className="text-[32px] font-bold [font-family:'Fredoka_Menu',ui-rounded,sans-serif] leading-none">Menu</SheetTitle>
             <SheetClose className={`${headerIconButton} border border-foreground/65 bg-card shadow-[2px_2px_0_#ccb5ee] dark:shadow-none`} aria-label="Close menu">
               <X aria-hidden="true" className={headerGlyph} strokeWidth={HEADER_STROKE} />
             </SheetClose>
@@ -134,13 +136,13 @@ export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
               return (
                 <li key={to} className={wide ? "col-span-2 min-w-0" : "min-w-0"}>
                   <SheetClose asChild>
-                    <NavLink to={to} end className={`flex h-full text-foreground rounded-[14px] border border-foreground/65 dark:border-foreground/45 p-3 transition-[filter] hover:brightness-95 dark:hover:brightness-125 active:brightness-90 aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/20 ${wide ? "min-h-[74px] items-center gap-3" : "min-h-[109px] flex-col items-start gap-2 max-[359px]:px-2.5"} ${tone} ${focusClass}`}>
+                    <NavLink to={to} end className={`relative flex h-full text-foreground rounded-[14px] border-[1.5px] border-foreground/80 dark:border-foreground/50 p-3 transition-[filter] hover:brightness-95 dark:hover:brightness-125 active:brightness-90 aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/15 ${wide ? "min-h-[84px] items-center gap-3 max-[359px]:gap-2" : "min-h-[117px] flex-col items-start gap-2 max-[359px]:px-2.5"} ${tone} ${focusClass}`}>
                       <MenuArt art={art} />
                       <span className="min-w-0">
-                        <span className={`block font-extrabold leading-tight ${wide ? "text-[18px]" : "text-[16px]"}`}>{label}</span>
-                        {detail && <span className="mt-0.5 block text-xs font-semibold leading-snug text-foreground/85">{detail}</span>}
+                        <span className={`block font-bold [font-family:'Fredoka_Menu',ui-rounded,sans-serif] leading-[1.08] ${wide ? "text-[23px] max-[359px]:text-[21px]" : "text-[20px] max-[359px]:text-[18px]"}`}>{label}</span>
+                        {detail && <span className="mt-0.5 block text-[13px] font-bold leading-snug text-foreground/90">{detail}</span>}
                       </span>
-                      {wide && <TileSticker />}
+                      <TileSticker compact={!wide} />
                     </NavLink>
                   </SheetClose>
                 </li>
