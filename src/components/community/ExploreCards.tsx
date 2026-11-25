@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { Bookmark } from "lucide-react";
 import { PuzzleCover } from "./PuzzleCover";
+import { CreatorCoverArt } from "./CreatorCoverArt";
+import type { CreatorCover } from "@/lib/creatorCover";
 import { coverFor, coverTone } from "@/lib/puzzleCovers";
 import type { CustomPuzzleMode } from "@/lib/customPuzzles";
 import { cv } from "@/lib/communityStyle";
@@ -12,7 +14,17 @@ export interface ExploreCard {
   creatorName: string;
   creatorSlug: string | null;
   finishedPlays?: number;
+  /** The creator's own cover (one emoji, one background), or none. */
+  cover?: CreatorCover | null;
 }
+
+/**
+ * Which art a card shows. "creator": the puzzle's own stored cover (or the
+ * neutral default), on every card players browse. "editorial": the
+ * hand-illustrated scenes, only where an admin placed the puzzle (Featured,
+ * Editor's Picks). Creators never choose editorial art.
+ */
+export type CardArt = "creator" | "editorial";
 
 export interface BookmarkState {
   saved: boolean;
@@ -61,10 +73,12 @@ function PlayLink({ card, label = "Play", size = "md" }: { card: ExploreCard; la
 }
 
 /** The cover is a pointer shortcut to the same puzzle; keyboards use the title or Play. */
-function CoverLink({ card, className }: { card: ExploreCard; className: string }) {
+function CoverLink({ card, className, art = "creator" }: { card: ExploreCard; className: string; art?: CardArt }) {
   return (
     <Link to={playPath(card.shortCode)} tabIndex={-1} aria-hidden="true" className={`block overflow-hidden ${className}`}>
-      <PuzzleCover cover={coverFor(card.shortCode)} className="h-full w-full" />
+      {art === "editorial"
+        ? <PuzzleCover cover={coverFor(card.shortCode)} className="h-full w-full" />
+        : <CreatorCoverArt cover={card.cover} className="h-full w-full" />}
     </Link>
   );
 }
@@ -97,17 +111,17 @@ export function FeaturedCard({ card, bookmark }: { card: ExploreCard; bookmark?:
             {bookmark && <BookmarkButton title={card.title} bookmark={bookmark} />}
           </div>
         </div>
-        <CoverLink card={card} className="h-full min-h-[168px]" />
+        <CoverLink card={card} art="editorial" className="h-full min-h-[168px]" />
       </div>
     </section>
   );
 }
 
 /** A shelf cover card (Editor's Picks, Following, Favorites, search). */
-export function CoverCard({ card, bookmark }: { card: ExploreCard; bookmark?: BookmarkState }) {
+export function CoverCard({ card, bookmark, art = "creator" }: { card: ExploreCard; bookmark?: BookmarkState; art?: CardArt }) {
   return (
     <li className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card" data-testid="community-card">
-      <CoverLink card={card} className="aspect-[16/10] w-full max-[359px]:aspect-[2/1]" />
+      <CoverLink card={card} art={art} className="aspect-[16/10] w-full max-[359px]:aspect-[2/1]" />
       <div className="flex flex-1 flex-col gap-0.5 p-3 pt-2.5">
         <div className="flex items-start justify-between gap-1">
           <TitleLink card={card} className="pt-2 text-[17px]" />

@@ -324,6 +324,12 @@ export type Database = {
           },
         ]
       }
+      community_cover_emoji: {
+        Row: { key: string }
+        Insert: { key: string }
+        Update: { key?: string }
+        Relationships: []
+      }
       community_curation: {
         Row: { custom_puzzle_id: string; position: number; set_at: string; set_by: string | null; slot: string }
         Insert: { custom_puzzle_id: string; position: number; set_at?: string; set_by?: string | null; slot: string }
@@ -339,6 +345,8 @@ export type Database = {
       custom_puzzles: {
         Row: {
           community_listed: boolean
+          cover_background: string | null
+          cover_emoji: string | null
           community_listed_at: string | null
           content: Json
           created_at: string
@@ -353,6 +361,8 @@ export type Database = {
         }
         Insert: {
           community_listed?: boolean
+          cover_background?: string | null
+          cover_emoji?: string | null
           community_listed_at?: string | null
           content: Json
           created_at?: string
@@ -367,6 +377,8 @@ export type Database = {
         }
         Update: {
           community_listed?: boolean
+          cover_background?: string | null
+          cover_emoji?: string | null
           community_listed_at?: string | null
           content?: Json
           created_at?: string
@@ -921,6 +933,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      set_custom_puzzle_cover: {
+        Args: { _background: string | null; _emoji: string | null; _share_id: string }
+        Returns: Json
+      }
       admin_get_community_curation: { Args: never; Returns: Json }
       admin_set_community_curation: {
         Args: { _featured: string | null; _picks: string[] }

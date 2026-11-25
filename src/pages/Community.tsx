@@ -6,7 +6,7 @@ import { SEO } from "@/components/SEO";
 import { CommunityHeader } from "@/components/community/CommunityHeader";
 import { CommunityCreatorCard } from "@/components/community/CommunityCreatorCard";
 import { CreatorAvatar } from "@/components/community/CreatorAvatar";
-import { CoverCard, FeaturedCard, NewestRow, type ExploreCard } from "@/components/community/ExploreCards";
+import { CoverCard, FeaturedCard, NewestRow, type CardArt, type ExploreCard } from "@/components/community/ExploreCards";
 import { cv } from "@/lib/communityStyle";
 import { useCommunitySaves, type SavedCard } from "@/hooks/useCommunitySaves";
 import { useGamePageTheme } from "@/hooks/useGamePageTheme";
@@ -111,12 +111,12 @@ interface Saves {
   toggle: (card: SavedCard) => Promise<number | null>;
 }
 const bookmarkFor = (saves: Saves, p: SavedCard) => ({ saved: saves.saved.has(p.shortCode), onToggle: () => { void saves.toggle(p); } });
-const asCard = (p: SavedCard): ExploreCard => ({ title: p.title, shortCode: p.shortCode, mode: p.mode, creatorName: p.creatorName, creatorSlug: p.creatorSlug, finishedPlays: p.finishedPlays });
+const asCard = (p: SavedCard): ExploreCard => ({ title: p.title, shortCode: p.shortCode, mode: p.mode, creatorName: p.creatorName, creatorSlug: p.creatorSlug, finishedPlays: p.finishedPlays, cover: p.cover ?? null });
 
-function CoverGrid({ items, saves, testId, className = coverGrid }: { items: SavedCard[]; saves: Saves; testId: string; className?: string }) {
+function CoverGrid({ items, saves, testId, className = coverGrid, art = "creator" }: { items: SavedCard[]; saves: Saves; testId: string; className?: string; art?: CardArt }) {
   return (
     <ul className={className} data-testid={testId}>
-      {items.map((p) => <CoverCard key={p.shortCode} card={asCard(p)} bookmark={bookmarkFor(saves, p)} />)}
+      {items.map((p) => <CoverCard key={p.shortCode} card={asCard(p)} bookmark={bookmarkFor(saves, p)} art={art} />)}
     </ul>
   );
 }
@@ -186,7 +186,7 @@ function ExploreHome({ saves }: { saves: Saves }) {
       {picks.length > 0 && (
         <section aria-labelledby="picks-heading" data-testid="editors-picks">
           <SectionHeading id="picks-heading">Editor's Picks</SectionHeading>
-          <CoverGrid items={picks} saves={saves} testId="picks-grid" className={`mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 ${PICK_COLUMNS[picks.length]}`} />
+          <CoverGrid items={picks} saves={saves} testId="picks-grid" art="editorial" className={`mt-3 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 ${PICK_COLUMNS[picks.length]}`} />
         </section>
       )}
 

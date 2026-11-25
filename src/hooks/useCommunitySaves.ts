@@ -44,7 +44,7 @@ export function useCommunitySaves(userId: string | null | undefined) {
     const load: Promise<SavedCard[]> = userId
       ? getMyFavorites().then((rows) => rows.map((f) => ({
           title: f.title, creatorName: f.creatorName, creatorSlug: f.creatorSlug, mode: f.mode,
-          shortCode: f.shortCode, favoriteCount: f.favoriteCount,
+          shortCode: f.shortCode, favoriteCount: f.favoriteCount, cover: f.cover ?? null,
         })))
       : getCustomPuzzleCards(listLocalFavorites());
     load.then(

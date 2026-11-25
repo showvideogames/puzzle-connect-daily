@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Puzzle, PuzzleGroup } from "./types";
 import { ensureDeviceIdentity } from "./gameStats";
 import { getFormat, type Difficulty, type PuzzleFormatId } from "./puzzleFormat";
+import { parseCover, type CreatorCover } from "./creatorCover";
 
 export type CustomPuzzleMode = "classic" | "rainbow";
 export type CustomPuzzleVisibility = "public" | "private";
@@ -116,6 +117,8 @@ export interface CustomPlayablePuzzle {
   favoriteCount: number;
   /** Whether the CURRENT signed-in account has favorited it (false for guests). */
   favoritedByMe: boolean;
+  /** Its creator cover, or null for none (Community preview; absent before 0008). */
+  cover: CreatorCover | null;
 }
 
 interface CustomPuzzleRow {
@@ -125,6 +128,8 @@ interface CustomPuzzleRow {
   creator_slug?: string | null;
   favorite_count?: number;
   favorited_by_me?: boolean;
+  cover_emoji?: string | null;
+  cover_background?: string | null;
   title: string;
   creator_name: string;
   visibility: CustomPuzzleVisibility;
@@ -205,6 +210,7 @@ function toPlayable(data: unknown): CustomPlayablePuzzle | null {
     creatorSlug: row.creator_slug ?? null,
     favoriteCount: row.favorite_count ?? 0,
     favoritedByMe: row.favorited_by_me ?? false,
+    cover: parseCover(row.cover_emoji, row.cover_background),
   };
 }
 
@@ -273,6 +279,7 @@ export interface FavoritePuzzleCard {
   mode: CustomPuzzleMode;
   shortCode: string;
   favoriteCount: number;
+  cover?: CreatorCover | null;
 }
 
 export async function getMyFavorites(): Promise<FavoritePuzzleCard[]> {
@@ -286,6 +293,8 @@ export async function getMyFavorites(): Promise<FavoritePuzzleCard[]> {
       mode: CustomPuzzleMode;
       short_code: string;
       favorite_count: number;
+      cover_emoji?: string | null;
+      cover_background?: string | null;
     }[]
   ).map((r) => ({
     title: r.title,
@@ -294,6 +303,7 @@ export async function getMyFavorites(): Promise<FavoritePuzzleCard[]> {
     mode: r.mode,
     shortCode: r.short_code,
     favoriteCount: r.favorite_count ?? 0,
+    cover: parseCover(r.cover_emoji, r.cover_background),
   }));
 }
 
@@ -451,6 +461,8 @@ export interface CommunityPuzzleListing {
   shortCode: string;
   finishedPlays: number;
   favoriteCount: number;
+  /** The creator's cover, or null for none. */
+  cover?: CreatorCover | null;
 }
 
 export interface CommunityPage {
@@ -483,6 +495,8 @@ export async function listCommunityPuzzles(params: {
       short_code: string;
       finished_plays: number;
       favorite_count: number;
+      cover_emoji?: string | null;
+      cover_background?: string | null;
     }[];
     has_more?: boolean;
   };
@@ -495,6 +509,7 @@ export async function listCommunityPuzzles(params: {
       shortCode: p.short_code,
       finishedPlays: p.finished_plays ?? 0,
       favoriteCount: p.favorite_count ?? 0,
+      cover: parseCover(p.cover_emoji, p.cover_background),
     })),
     hasMore: !!r.has_more,
   };
@@ -537,6 +552,8 @@ type CardRow = {
   short_code: string;
   finished_plays: number;
   favorite_count: number;
+  cover_emoji?: string | null;
+  cover_background?: string | null;
 };
 
 function mapCard(p: CardRow): CommunityPuzzleListing {
@@ -548,6 +565,7 @@ function mapCard(p: CardRow): CommunityPuzzleListing {
     shortCode: p.short_code,
     finishedPlays: p.finished_plays ?? 0,
     favoriteCount: p.favorite_count ?? 0,
+    cover: parseCover(p.cover_emoji, p.cover_background),
   };
 }
 
@@ -733,4 +751,22 @@ export async function adminSetCuration(featured: string | null, picks: string[])
   const { error } = await supabase.rpc("admin_set_community_curation", { _featured: featured, _picks: picks });
   if (error) throw error;
   return adminGetCuration();
+}
+
+// ── Community part 4: creator covers (one emoji + one preset background) ────
+
+/**
+ * Sets (or, with null, removes) a puzzle's cover. Only its signed-in creator
+ * may; the server accepts only an allowlisted emoji key and a preset
+ * background key. Throws with the server's message.
+ */
+export async function setCustomPuzzleCover(shareId: string, cover: CreatorCover | null): Promise<CreatorCover | null> {
+  const { data, error } = await supabase.rpc("set_custom_puzzle_cover", {
+    _share_id: shareId,
+    _emoji: cover?.emoji ?? null,
+    _background: cover?.background ?? null,
+  });
+  if (error) throw error;
+  const r = (data ?? {}) as { cover_emoji?: string | null; cover_background?: string | null };
+  return parseCover(r.cover_emoji, r.cover_background);
 }
