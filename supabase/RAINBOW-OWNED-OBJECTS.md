@@ -24,8 +24,8 @@ shows up as a diff instead of as a surprise on a blank project.
 | Tables | 26 |
 | Columns | 212 |
 | Constraints | 115 |
-| Indexes | 66 |
-| Functions | 83 |
+| Indexes | 67 |
+| Functions | 84 |
 | Triggers | 5 |
 | RLS policies | 25 |
 | Enum types | 1 |
@@ -428,6 +428,7 @@ Indexes:
 
 - `CREATE INDEX custom_puzzles_community_feed_idx ON public.custom_puzzles USING btree (community_listed_at DESC, short_code) WHERE (community_listed AND (visibility = 'public'::text) AND (moderation_status = 'active'::text) AND (created_by IS NOT NULL))`
 - `CREATE INDEX custom_puzzles_created_by_idx ON public.custom_puzzles USING btree (created_by) WHERE (created_by IS NOT NULL)`
+- `CREATE INDEX custom_puzzles_owner_newest_idx ON public.custom_puzzles USING btree (created_by, created_at DESC, short_code) WHERE (created_by IS NOT NULL)`
 - `CREATE UNIQUE INDEX custom_puzzles_pkey ON public.custom_puzzles USING btree (id)`
 - `CREATE INDEX custom_puzzles_public_by_creator_idx ON public.custom_puzzles USING btree (created_by, created_at DESC) WHERE ((visibility = 'public'::text) AND (moderation_status = 'active'::text) AND (created_by IS NOT NULL))`
 - `CREATE INDEX custom_puzzles_share_id_idx ON public.custom_puzzles USING btree (share_id)`
@@ -947,6 +948,7 @@ Indexes:
 | `import_guest_history(_device_id text, _device_token text)` | TABLE(outcome text, sessions_claimed integer) | yes | volatile | authenticated, service_role |
 | `list_community_newest(_limit integer, _before_listed_at timestamp with time zone, _before_short_code text)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `list_community_puzzles(_query text, _sort text, _limit integer, _offset integer)` | jsonb | yes | stable | anon, authenticated, service_role |
+| `list_my_custom_puzzles(_limit integer, _offset integer)` | jsonb | yes | stable | authenticated, service_role |
 | `luck_eligible_paths(_puzzle_id text)` | TABLE(session_id uuid, user_id uuid, device_id text, path jsonb) | yes | stable | service_role |
 | `my_account()` | TABLE(user_id uuid, global_user_id text, email text, created_at timestamp with time zone) | yes | stable | authenticated, service_role |
 | `no_hint_history_for_owner(_device_id text, _device_token text, _format text)` | TABLE(completion_order text, qualified boolean) | yes | stable | none of the client roles |

@@ -367,6 +367,11 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
               <Play className="w-4 h-4 mr-1" /> Play Now
             </Button>
           </div>
+          {signedIn && (
+            <p className="text-xs text-muted-foreground" data-testid="created-in-my-puzzles">
+              It's saved in <Link to="/my-puzzles" className="font-semibold text-foreground underline underline-offset-2">My Puzzles</Link>, so you don't need to keep the link.
+            </p>
+          )}
         </div>
         <SiteFooter />
       </div>
@@ -389,6 +394,11 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
           <Link2 className="w-5 h-5 text-primary" />
           <h1 className="text-lg font-bold">Create a Puzzle</h1>
         </div>
+        {signedIn && (
+          <Link to="/my-puzzles" className="inline-flex min-h-11 items-center rounded-full px-3 text-sm font-semibold underline underline-offset-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="create-my-puzzles">
+            My Puzzles
+          </Link>
+        )}
       </div>
 
       <main className="max-w-5xl mx-auto px-4 mt-6">

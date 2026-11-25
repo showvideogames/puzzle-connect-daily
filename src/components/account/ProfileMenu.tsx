@@ -1,4 +1,4 @@
-import { UserRound, UsersRound, Settings } from "lucide-react";
+import { UserRound, UsersRound, Settings, Shapes } from "lucide-react";
 import type { SharedProfile } from "@/lib/sharedProfile";
 import { AccountIcon } from "./AccountIcon";
 import {
@@ -12,13 +12,15 @@ interface ProfileMenuProps {
   /** Null means still loading or unavailable, never an invented zero. */
   pendingCount: number | null;
   onProfile: () => void;
+  /** Adds "My puzzles" (the creator's own library). Without it the menu is unchanged. */
+  onMyPuzzles?: () => void;
   onFriends: () => void;
   onAccount: () => void;
   onOpenChange?: (open: boolean) => void;
 }
 
 /** Presentational only: the session owner supplies identity and pending requests. */
-export function ProfileMenu({ signedIn = false, profile, pendingCount, onProfile, onFriends, onAccount, onOpenChange }: ProfileMenuProps) {
+export function ProfileMenu({ signedIn = false, profile, pendingCount, onProfile, onMyPuzzles, onFriends, onAccount, onOpenChange }: ProfileMenuProps) {
   const count = pendingCount !== null && Number.isFinite(pendingCount) ? Math.max(0, Math.floor(pendingCount)) : 0;
   const notice = count > 0 ? `${count} pending ${count === 1 ? "notification" : "notifications"}` : "";
   return (
@@ -39,6 +41,11 @@ export function ProfileMenu({ signedIn = false, profile, pendingCount, onProfile
         <DropdownMenuItem onSelect={onProfile} className="min-h-11 gap-3 rounded-lg px-3">
           <UserRound aria-hidden="true" className="h-5 w-5" />My profile
         </DropdownMenuItem>
+        {onMyPuzzles && (
+          <DropdownMenuItem onSelect={onMyPuzzles} className="min-h-11 gap-3 rounded-lg px-3">
+            <Shapes aria-hidden="true" className="h-5 w-5" />My puzzles
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={onFriends} className="min-h-11 gap-3 rounded-lg px-3">
           <UsersRound aria-hidden="true" className="h-5 w-5" />Friends &amp; Groups
           {count > 0 && <span aria-label={notice} className="ml-auto rounded-full bg-yellow-400 px-2 py-0.5 text-xs font-bold text-slate-950">{count > 99 ? "99+" : count}</span>}

@@ -100,6 +100,8 @@ const ROUTES_TODAY = [
   "/custom/:shareId",
   "/creator/:publicSlug",
   "/favorites",
+  // My Puzzles: the signed-in creator's own library.
+  "/my-puzzles",
   "/community",
   "/__fixtures/community",
   "/__fixtures/mini",

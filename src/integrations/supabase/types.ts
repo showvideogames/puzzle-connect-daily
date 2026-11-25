@@ -1185,6 +1185,10 @@ export type Database = {
           sessions_claimed: number
         }[]
       }
+      list_my_custom_puzzles: {
+        Args: { _limit?: number; _offset?: number }
+        Returns: Json
+      }
       list_community_puzzles: {
         Args: { _limit?: number; _offset?: number; _query?: string; _sort?: string }
         Returns: Json

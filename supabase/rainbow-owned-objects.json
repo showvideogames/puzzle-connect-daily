@@ -1447,6 +1447,10 @@
           "definition": "CREATE INDEX custom_puzzles_created_by_idx ON public.custom_puzzles USING btree (created_by) WHERE (created_by IS NOT NULL)"
         },
         {
+          "name": "custom_puzzles_owner_newest_idx",
+          "definition": "CREATE INDEX custom_puzzles_owner_newest_idx ON public.custom_puzzles USING btree (created_by, created_at DESC, short_code) WHERE (created_by IS NOT NULL)"
+        },
+        {
           "name": "custom_puzzles_pkey",
           "definition": "CREATE UNIQUE INDEX custom_puzzles_pkey ON public.custom_puzzles USING btree (id)"
         },
@@ -4286,6 +4290,23 @@
         "service_role"
       ],
       "comment": "Community Puzzles feed: only puzzles their signed-in creator explicitly listed, that are Public, active and still account-owned. Bounded (<=48 per page, offset <=2000, query <=60 chars, literal substring). Card fields only: never content, ids, share_id, created_by or account data."
+    },
+    {
+      "name": "list_my_custom_puzzles",
+      "args": "_limit integer, _offset integer",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "My Puzzles: the signed-in caller's own custom puzzles (owner from rainbow_uid(), no id parameter), newest first, bounded (<=48 per page, offset <=10000). Library fields only: never content, internal id, created_by or account data. Read-only."
     },
     {
       "name": "luck_eligible_paths",

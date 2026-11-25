@@ -65,7 +65,7 @@ async function schema() {
   };
 }
 const ROWS = "select id, share_id, short_code, title, visibility, created_by, moderation_status, community_listed, community_listed_at, cover_emoji, cover_emoji_2, cover_emoji_3, cover_background, created_at from public.custom_puzzles order by id";
-const FIELDS = ["can_list", "cover_background", "cover_emoji", "cover_emoji_2", "cover_emoji_3", "created_at", "hidden", "listed", "mode", "share_id", "short_code", "title", "visibility"];
+const FIELDS = ["can_list", "cover_background", "cover_emoji", "cover_emoji_2", "cover_emoji_3", "created_at", "creator_name", "hidden", "listed", "mode", "share_id", "short_code", "title", "visibility"];
 
 try {
   const plan = buildSchemaPlan({ includeSupabaseStubs: true, includeReset: false });
@@ -107,7 +107,7 @@ try {
   assert.equal(lib.has_more, false);
   for (const i of lib.items) assert.deepEqual(Object.keys(i).sort(), FIELDS, "library fields only");
   const json = JSON.stringify(lib);
-  for (const leak of ["Secret Category", "Secret Rainbow", "M1QA", "Fictional Designer", wren, odie, music.puzzle_id, "word", "group", "created_by", "creator", "content"]) {
+  for (const leak of ["Secret Category", "Secret Rainbow", "M1QA", wren, odie, music.puzzle_id, "word", "group", "created_by", "content", "user_id", "slug"]) {
     assert.ok(!json.includes(leak), `no ${leak} in the library payload`);
   }
   const by = (t: string) => lib.items.find((i) => i.title === t)!;
@@ -174,7 +174,7 @@ try {
   assert.deepEqual(await schema(), before, "rollback restores the pre-0011 schema exactly");
   assert.deepEqual((await db.query(ROWS)).rows, kept);
 
-  console.log("PASS: 0011 additive and reversible; owner-only from rainbow_uid (other account, fresh account, guest, auth-only user and anon role get nothing of anyone's); older/no-cover, link-only, listed, private and hidden own puzzles, never guest-made; newest first with short-code ties; library fields only (no content, designer or account data); bounded deterministic paging; reading changes nothing.");
+  console.log("PASS: 0011 additive and reversible; owner-only from rainbow_uid (other account, fresh account, guest, auth-only user and anon role get nothing of anyone's); older/no-cover, link-only, listed, private and hidden own puzzles, never guest-made; newest first with short-code ties; library fields only (no content or account data); bounded deterministic paging; reading changes nothing.");
 } finally {
   await db.close();
 }

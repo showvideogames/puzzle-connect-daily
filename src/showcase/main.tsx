@@ -14,6 +14,7 @@ import CommunityPage from "@/pages/Community";
 import CustomPuzzle from "@/pages/CustomPuzzle";
 import CreatorProfilePage from "@/pages/CreatorProfile";
 import ShowcaseCreate from "./ShowcaseCreate";
+import MyPuzzles from "@/pages/MyPuzzles";
 import { setShowcaseSignedIn, showcaseSignedIn } from "./fixtureClient";
 import { useState } from "react";
 import { cv } from "@/lib/communityStyle";
@@ -56,6 +57,14 @@ function PreviewNote() {
           {signedIn ? "Switch to guest" : "Switch to Demo Player"}
         </button>
       </span>
+      {signedIn && (
+        <>
+          {" "}
+          <Link to="/my-puzzles" className="whitespace-nowrap underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded" data-testid="showcase-my-puzzles">
+            My Puzzles
+          </Link>
+        </>
+      )}
     </p>
   );
 }
@@ -67,6 +76,7 @@ const routes: RouteObject[] = [
   { path: "/custom/:shareId", element: <><PreviewNote /><CustomPuzzle /></> },
   { path: "/creator/:publicSlug", element: <><PreviewNote /><CreatorProfilePage /></> },
   { path: "/create", element: <><PreviewNote /><ShowcaseCreate /></> },
+  { path: "/my-puzzles", element: <><PreviewNote /><MyPuzzles /></> },
   { path: "*", element: <NotInShowcase /> },
 ];
 

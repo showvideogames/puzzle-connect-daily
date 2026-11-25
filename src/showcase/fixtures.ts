@@ -27,6 +27,15 @@ export interface ShowcasePuzzle {
   favorites: number;
   /** The creator's cover keys (one emoji, one preset background), or none. */
   cover?: { emojis: string[]; background: string };
+  /** Made by the fictional signed-in Demo Player (shown in their My Puzzles). */
+  ownedByDemo?: boolean;
+  visibility?: "public" | "private";
+  /** Not listed in Community (a link-only or private puzzle). */
+  unlisted?: boolean;
+  /** When it was made, if not when it was listed. */
+  createdAt?: string;
+  /** Set once the visitor first lists it in this visit. */
+  listedAtSet?: boolean;
 }
 
 const wren: ShowcaseCreator = { userId: "fixture-wren", slug: "wren-halloway-k4m2", name: "Wren Halloway", followers: 18 };
@@ -132,6 +141,44 @@ export const PUZZLES: ShowcasePuzzle[] = [
     ],
     listedAt: "2026-11-20T12:00:00Z", plays: 12, favorites: 4,
     cover: { emojis: ["1FA90", "1F680", "2B50-FE0F"], background: "lilac-dots" },
+  }),
+];
+
+/** The fictional Demo Player's own puzzles: what My Puzzles shows them. */
+export const DEMO_PLAYER: ShowcaseCreator = { userId: "fixture-demo-player", slug: "demo-player-d3m0", name: "Demo Player", followers: 2 };
+export const DEMO_OWNED: ShowcasePuzzle[] = [
+  // An older puzzle from before covers and Community: link only, no cover.
+  puzzle({
+    key: "mixtape", title: "Mixtape Memories", creator: DEMO_PLAYER, shortCode: "MixtapeM3m", mode: "classic",
+    groups: [
+      { category: "Voice Parts", words: ["ALTO", "BASS", "SOPRANO", "TENOR"] },
+      { category: "Songs", words: ["BALLAD", "HYMN", "LULLABY", "SHANTY"] },
+      { category: "Formats", words: ["CASSETTE", "RECORD", "REEL", "VINYL"] },
+      { category: "On The Road", words: ["ENCORE", "GIG", "SETLIST", "TOUR"] },
+    ],
+    listedAt: "2025-03-14T10:00:00Z", createdAt: "2025-03-14T10:00:00Z", plays: 3, favorites: 0, ownedByDemo: true, unlisted: true,
+  }),
+  puzzle({
+    key: "lanterns", title: "Lantern Festival", creator: DEMO_PLAYER, shortCode: "LanternF7s", mode: "rainbow",
+    groups: [
+      { category: "Light Sources", words: ["CANDLE", "LAMP", "LANTERN", "TORCH"] },
+      { category: "Paper Crafts", words: ["CRANE", "FAN", "KITE", "STAR"] },
+      { category: "Night Sounds", words: ["CRICKET", "HOOT", "RUSTLE", "WHISPER"] },
+      { category: "Sweet Treats", words: ["MOCHI", "NOUGAT", "TAFFY", "TOFFEE"] },
+    ],
+    rainbow: { name: "Things that glow", herring: ["LANTERN", "STAR", "CRICKET", "TOFFEE"] },
+    listedAt: "2026-11-15T18:00:00Z", createdAt: "2026-11-15T17:30:00Z", plays: 9, favorites: 2, ownedByDemo: true,
+    cover: { emojis: ["1F3EE"], background: "dusk-gradient" },
+  }),
+  puzzle({
+    key: "swap", title: "Secret Santa Swap", creator: DEMO_PLAYER, shortCode: "SantaSwp4q", mode: "classic",
+    groups: [
+      { category: "Wrapping", words: ["BOW", "PAPER", "RIBBON", "TAPE"] },
+      { category: "Stocking Fillers", words: ["CANDY", "SOCKS", "TOY", "YOYO"] },
+      { category: "Reindeer", words: ["COMET", "CUPID", "DANCER", "VIXEN"] },
+      { category: "Winter Drinks", words: ["CIDER", "COCOA", "EGGNOG", "PUNCH"] },
+    ],
+    listedAt: "2026-11-23T09:00:00Z", createdAt: "2026-11-23T09:00:00Z", plays: 4, favorites: 0, ownedByDemo: true, unlisted: true, visibility: "private",
   }),
 ];
 

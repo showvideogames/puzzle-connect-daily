@@ -12,11 +12,12 @@
 -- (created_by is null) belong to no account and never appear.
 --
 -- Each row carries only what the library shows and what the existing owner
--- actions need: title, Classic/Rainbow, the share codes for Open / Copy Link
+-- actions need: title, the designer name the owner typed (the cover
+-- preview's byline), Classic/Rainbow, the share codes for Open / Copy Link
 -- and for the existing cover and listing calls, visibility, whether it is
 -- hidden, listed and listable, the cover keys and the creation time. Never
--- content (categories, words, hints, answers), the internal id, created_by,
--- the designer name or any account field.
+-- content (categories, words, hints, answers), the internal id, created_by
+-- or any account field.
 --
 -- Reading changes nothing: listing, visibility and covers still change only
 -- through set_custom_puzzle_community_listing and set_custom_puzzle_cover_emojis.
@@ -51,6 +52,7 @@ begin
                'share_id',         cp.share_id,
                'short_code',       cp.short_code,
                'title',            cp.title,
+               'creator_name',     cp.creator_name,
                'mode',             cp.content ->> 'mode',
                'visibility',       cp.visibility,
                'hidden',           cp.moderation_status <> 'active',

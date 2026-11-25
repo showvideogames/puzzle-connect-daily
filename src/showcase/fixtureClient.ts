@@ -10,7 +10,13 @@
  * see account-only parts such as the post-game rating. Plays, saves, follows
  * and ratings last for the visit.
  */
-import { CREATORS, CURATION, DEMO_GROUPS, PUZZLES, puzzle, type ShowcasePuzzle } from "./fixtures";
+import { CREATORS, CURATION, DEMO_GROUPS, DEMO_OWNED, DEMO_PLAYER, PUZZLES, puzzle, type ShowcasePuzzle } from "./fixtures";
+import { validEmojiList } from "@/lib/creatorCover";
+import { COVER_BACKGROUND_KEYS } from "@/lib/coverBackgrounds";
+
+// The Demo Player's own puzzles join the visit's puzzles (only the listed one shows in Community).
+PUZZLES.push(...DEMO_OWNED);
+CREATORS.push(DEMO_PLAYER);
 
 type Result = { data: unknown; error: { message: string; code?: string } | null };
 const ok = (data: unknown): Result => ({ data, error: null });
@@ -45,7 +51,11 @@ export function setShowcaseSignedIn(on: boolean): void {
 
 const byCode = (code: unknown) => PUZZLES.find((p) => p.shortCode === code);
 const byShare = (id: unknown) => PUZZLES.find((p) => p.shareId === id);
-const listed = () => PUZZLES; // every showcase puzzle is listed in Community
+/** Not in Community this visit: link-only and private puzzles (owners can list and unlist theirs). */
+const unlisted = new Set(PUZZLES.filter((p) => p.unlisted || p.visibility === "private").map((p) => p.key));
+const listed = () => PUZZLES.filter((p) => !unlisted.has(p.key));
+const mine = (p: ShowcasePuzzle | undefined) => !!(p && session && p.ownedByDemo);
+const isPublic = (p: ShowcasePuzzle) => p.visibility !== "private";
 const newestFirst = (list: ShowcasePuzzle[]) => [...list].sort((a, b) => b.listedAt.localeCompare(a.listedAt) || a.shortCode.localeCompare(b.shortCode));
 
 function card(p: ShowcasePuzzle) {
@@ -85,7 +95,7 @@ function full(p: ShowcasePuzzle) {
     short_code: p.shortCode,
     title: p.title,
     creator_name: p.creator.name,
-    visibility: "public",
+    visibility: p.visibility ?? "public",
     content: content(p),
     creator_slug: p.creator.slug,
     favorite_count: likes.get(p.key) ?? 0,
@@ -156,7 +166,7 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
     case "get_creator_profile": {
       const c = CREATORS.find((x) => x.slug === a._slug);
       if (!c) return ok(null);
-      const mine = newestFirst(PUZZLES.filter((p) => p.creator === c));
+      const mine = newestFirst(PUZZLES.filter((p) => p.creator === c && isPublic(p)));
       return ok({
         display_name: c.name, public_slug: c.slug, puzzle_count: mine.length,
         total_plays: mine.reduce((n, p) => n + (plays.get(p.key) ?? 0), 0),
@@ -214,8 +224,56 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
     // ── Signed-in Demo Player only ──
     case "has_role":
       return ok(false);
-    case "get_my_custom_puzzle_listing":
-      return ok({ owned: false });
+    case "get_my_custom_puzzle_listing": {
+      const p = byShare(a._share_id);
+      if (!p) return ok(null);
+      if (!mine(p)) return ok({ owned: false });
+      return ok({ owned: true, listed: !unlisted.has(p.key), can_list: isPublic(p), visibility: p.visibility ?? "public" });
+    }
+    // ── My Puzzles: the Demo Player's own library and owner actions ──
+    case "list_my_custom_puzzles": {
+      if (!session) return { data: null, error: { message: "sign in to see your puzzles" } };
+      const own = PUZZLES.filter((p) => p.ownedByDemo)
+        .sort((x, y) => (y.createdAt ?? y.listedAt).localeCompare(x.createdAt ?? x.listedAt) || x.shortCode.localeCompare(y.shortCode));
+      const pg = page(own, a._limit, a._offset);
+      return ok({
+        ...pg,
+        total: own.length,
+        items: pg.items.map((p) => ({
+          share_id: p.shareId, short_code: p.shortCode, title: p.title, creator_name: p.creator.name, mode: p.mode,
+          visibility: p.visibility ?? "public", hidden: false, listed: !unlisted.has(p.key), can_list: isPublic(p),
+          cover_emoji: p.cover?.emojis[0] ?? null, cover_emoji_2: p.cover?.emojis[1] ?? null, cover_emoji_3: p.cover?.emojis[2] ?? null,
+          cover_background: p.cover?.background ?? null, created_at: p.createdAt ?? p.listedAt,
+        })),
+      });
+    }
+    case "set_custom_puzzle_community_listing": {
+      const p = byShare(a._share_id);
+      if (!session) return { data: null, error: { message: "sign in to list a puzzle in Community" } };
+      if (!p) return { data: null, error: { message: "puzzle not found" } };
+      if (!mine(p)) return { data: null, error: { message: "only the puzzle's creator can change its Community listing" } };
+      if (a._listed && !isPublic(p)) return { data: null, error: { message: "private puzzles cannot be listed in Community" } };
+      if (a._listed) {
+        // First listing time is kept, as on the server: re-listing never bumps Newest.
+        if (p.unlisted && unlisted.has(p.key) && !p.listedAtSet) { p.listedAt = new Date().toISOString(); p.listedAtSet = true; }
+        unlisted.delete(p.key);
+      } else unlisted.add(p.key);
+      return ok({ listed: !!a._listed });
+    }
+    case "set_custom_puzzle_cover_emojis": {
+      const p = byShare(a._share_id);
+      if (!session) return { data: null, error: { message: "sign in to set a cover" } };
+      if (!p) return { data: null, error: { message: "puzzle not found" } };
+      if (!mine(p)) return { data: null, error: { message: "only the puzzle's creator can change its cover" } };
+      if (a._emojis == null) {
+        delete p.cover;
+      } else {
+        const emojis = Array.isArray(a._emojis) ? validEmojiList(a._emojis) : null;
+        if (!emojis || typeof a._background !== "string" || !COVER_BACKGROUND_KEYS.includes(a._background)) return { data: null, error: { message: "that cover isn't available" } };
+        p.cover = { emojis, background: a._background };
+      }
+      return ok({ cover_emoji: p.cover?.emojis[0] ?? null, cover_emoji_2: p.cover?.emojis[1] ?? null, cover_emoji_3: p.cover?.emojis[2] ?? null, cover_background: p.cover?.background ?? null });
+    }
     case "set_custom_puzzle_favorite": {
       const p = byShare(a._share_id);
       if (!session || !p) return unavailable("Saving to an account");
@@ -266,7 +324,7 @@ export function publishDemoPuzzle(title: string, cover: { emojis: string[]; back
   if (!CREATORS.some((c) => c.slug === you.slug)) CREATORS.push(you);
   PUZZLES.push(puzzle({
     key: `demo${demoCount}`, title: title.trim().slice(0, 100) || "My Demo Puzzle", creator: CREATORS.find((c) => c.slug === you.slug)!,
-    shortCode: code, mode: "classic", groups: DEMO_GROUPS, listedAt: new Date().toISOString(), plays: 0, favorites: 0,
+    shortCode: code, mode: "classic", groups: DEMO_GROUPS, listedAt: new Date().toISOString(), plays: 0, favorites: 0, ownedByDemo: true,
     ...(cover ? { cover } : {}),
   }));
   plays.set(`demo${demoCount}`, 0);
