@@ -94,7 +94,7 @@ describe("game header", () => {
     expect(calls.onStatsClick).toHaveBeenCalledOnce();
     expect(calls.onSettingsClick).toHaveBeenCalledOnce();
     expect(header().querySelector(".lucide-book-open, .lucide-archive")).toBeNull();
-    expect(within(header()).queryByRole("link", { name: "Create a puzzle" })).toBeNull();
+    expect(within(header()).queryByRole("link", { name: "Create A Puzzle" })).toBeNull();
   });
 
   it("gives a signed-out player no profile control, and leaves the calendar showing at every width", () => {
@@ -150,9 +150,9 @@ describe("game header", () => {
     menu.focus();
     fireEvent.click(menu);
     const drawer = await screen.findByRole("dialog", { name: "Menu" });
-    expect(within(drawer).getByRole("link", { name: "How to play" })).toHaveAttribute("href", "/how-to-play");
-    expect(within(drawer).getByRole("link", { name: "Create a puzzle" })).toHaveAttribute("href", "/create");
-    fireEvent.click(within(drawer).getByRole("button", { name: "Give feedback" }));
+    expect(within(drawer).getByRole("link", { name: "How To Play" })).toHaveAttribute("href", "/how-to-play");
+    expect(within(drawer).getByRole("link", { name: "Create A Puzzle" })).toHaveAttribute("href", "/create");
+    fireEvent.click(within(drawer).getByRole("button", { name: "Send Feedback" }));
     const feedback = await screen.findByRole("dialog", { name: "Feedback" });
     fireEvent.keyDown(feedback, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Feedback" })).toBeNull());

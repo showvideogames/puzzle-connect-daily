@@ -21,11 +21,11 @@ shows up as a diff instead of as a surprise on a blank project.
 
 | Category | Count |
 |---|---|
-| Tables | 22 |
-| Columns | 192 |
-| Constraints | 92 |
-| Indexes | 57 |
-| Functions | 63 |
+| Tables | 26 |
+| Columns | 212 |
+| Constraints | 115 |
+| Indexes | 66 |
+| Functions | 83 |
 | Triggers | 5 |
 | RLS policies | 25 |
 | Enum types | 1 |
@@ -171,6 +171,78 @@ Policies:
 
 - `Admins can read beta playtests` — SELECT to public; using `has_role(rainbow_uid(), 'admin'::app_role)`
 
+### `community_cover_emoji`
+
+> Allowlist of cover emoji keys (fully-qualified code-point sequences), generated from the pinned emojibase-data release.
+
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
+
+| Column | Type | Null | Default |
+|---|---|---|---|
+| `key` | text | not null |  |
+
+Constraints:
+
+- `community_cover_emoji_key_format` CHECK ((key ~ '^[0-9A-F]{4,6}(-[0-9A-F]{4,6}){0,9}$'::text))
+- `community_cover_emoji_pkey` PRIMARY KEY (key)
+
+Indexes:
+
+- `CREATE UNIQUE INDEX community_cover_emoji_pkey ON public.community_cover_emoji USING btree (key)`
+
+### `community_curation`
+
+> Admin-chosen Featured Puzzle (one) and ordered Editor's Picks (up to six) for Community Explore. Public reads re-check eligibility every time.
+
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
+
+| Column | Type | Null | Default |
+|---|---|---|---|
+| `custom_puzzle_id` | uuid | not null |  |
+| `slot` | text | not null |  |
+| `position` | smallint | not null |  |
+| `set_by` | uuid | null |  |
+| `set_at` | timestamp with time zone | not null | `now()` |
+
+Constraints:
+
+- `community_curation_custom_puzzle_id_fkey` FOREIGN KEY (custom_puzzle_id) REFERENCES custom_puzzles(id) ON DELETE CASCADE
+- `community_curation_pkey` PRIMARY KEY (custom_puzzle_id)
+- `community_curation_position_check` CHECK ((((slot = 'featured'::text) AND ("position" = 0)) OR ((slot = 'pick'::text) AND ("position" >= 0) AND ("position" <= 5))))
+- `community_curation_set_by_fkey` FOREIGN KEY (set_by) REFERENCES auth.users(id) ON DELETE SET NULL
+- `community_curation_slot_check` CHECK ((slot = ANY (ARRAY['featured'::text, 'pick'::text])))
+
+Indexes:
+
+- `CREATE UNIQUE INDEX community_curation_one_featured ON public.community_curation USING btree (slot) WHERE (slot = 'featured'::text)`
+- `CREATE UNIQUE INDEX community_curation_pick_position ON public.community_curation USING btree ("position") WHERE (slot = 'pick'::text)`
+- `CREATE UNIQUE INDEX community_curation_pkey ON public.community_curation USING btree (custom_puzzle_id)`
+
+### `creator_follows`
+
+> One-way follows of a creator by a Rainbow account. Readable only through the follower's own get_following_feed; others see an aggregate count.
+
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
+
+| Column | Type | Null | Default |
+|---|---|---|---|
+| `follower_id` | uuid | not null |  |
+| `creator_id` | uuid | not null |  |
+| `created_at` | timestamp with time zone | not null | `now()` |
+
+Constraints:
+
+- `creator_follows_creator_id_fkey` FOREIGN KEY (creator_id) REFERENCES creator_profiles(user_id) ON DELETE CASCADE
+- `creator_follows_follower_id_fkey` FOREIGN KEY (follower_id) REFERENCES auth.users(id) ON DELETE CASCADE
+- `creator_follows_not_self` CHECK ((follower_id <> creator_id))
+- `creator_follows_pkey` PRIMARY KEY (follower_id, creator_id)
+
+Indexes:
+
+- `CREATE INDEX creator_follows_creator_idx ON public.creator_follows USING btree (creator_id)`
+- `CREATE INDEX creator_follows_follower_idx ON public.creator_follows USING btree (follower_id, created_at DESC)`
+- `CREATE UNIQUE INDEX creator_follows_pkey ON public.creator_follows USING btree (follower_id, creator_id)`
+
 ### `creator_profiles`
 
 > Public creator identity for signed-in custom-puzzle authors: slug + the display name they already published. Created lazily by create_custom_puzzle. Read only through get_creator_profile.
@@ -218,6 +290,31 @@ Indexes:
 
 - `CREATE UNIQUE INDEX custom_puzzle_favorites_pkey ON public.custom_puzzle_favorites USING btree (custom_puzzle_id, user_id)`
 - `CREATE INDEX custom_puzzle_favorites_user_idx ON public.custom_puzzle_favorites USING btree (user_id, created_at DESC)`
+
+### `custom_puzzle_ratings`
+
+> Optional 1-5 star ratings of custom puzzles by signed-in, non-author players who finished them. Private: no aggregate or rater identity is exposed.
+
+RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE
+
+| Column | Type | Null | Default |
+|---|---|---|---|
+| `custom_puzzle_id` | uuid | not null |  |
+| `user_id` | uuid | not null |  |
+| `rating` | smallint | not null |  |
+| `created_at` | timestamp with time zone | not null | `now()` |
+| `updated_at` | timestamp with time zone | not null | `now()` |
+
+Constraints:
+
+- `custom_puzzle_ratings_custom_puzzle_id_fkey` FOREIGN KEY (custom_puzzle_id) REFERENCES custom_puzzles(id) ON DELETE CASCADE
+- `custom_puzzle_ratings_pkey` PRIMARY KEY (custom_puzzle_id, user_id)
+- `custom_puzzle_ratings_rating_check` CHECK (((rating >= 1) AND (rating <= 5)))
+- `custom_puzzle_ratings_user_id_fkey` FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+
+Indexes:
+
+- `CREATE UNIQUE INDEX custom_puzzle_ratings_pkey ON public.custom_puzzle_ratings USING btree (custom_puzzle_id, user_id)`
 
 ### `custom_puzzle_results`
 
@@ -303,9 +400,23 @@ RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNC
 | `content` | jsonb | not null |  |
 | `created_at` | timestamp with time zone | not null | `now()` |
 | `short_code` | text | not null |  |
+| `community_listed` | boolean | not null | `false` |
+| `community_listed_at` | timestamp with time zone | null |  |
+| `cover_emoji` | text | null |  |
+| `cover_background` | text | null |  |
+| `cover_emoji_2` | text | null |  |
+| `cover_emoji_3` | text | null |  |
 
 Constraints:
 
+- `custom_puzzles_community_requires_public` CHECK (((NOT community_listed) OR (visibility = 'public'::text)))
+- `custom_puzzles_cover_background_check` CHECK (((cover_background IS NULL) OR (cover_background = ANY (ARRAY['rainbow-bands'::text, 'pastel-rainbow'::text, 'dusk-gradient'::text, 'ocean-gradient'::text, 'retro-sunburst'::text, 'sunset-split'::text, 'lilac'::text, 'butter'::text, 'mint'::text, 'sunflower'::text, 'tangerine'::text, 'coral'::text, 'bubblegum'::text, 'ocean'::text, 'forest'::text, 'charcoal'::text, 'lime-checks'::text, 'apricot-stripes'::text, 'lilac-dots'::text, 'indigo-stars'::text, 'teal-waves'::text, 'pink-waves'::text, 'sky-grid'::text, 'cream-confetti'::text, 'berry-stripes'::text, 'cherry-polka'::text, 'peach-rings'::text, 'mint-checks'::text, 'terrazzo'::text, 'sparkles'::text, 'ripples'::text, 'bold-checker'::text, 'candy-stripes'::text, 'polka-pop'::text, 'mint-zigzag'::text, 'peach-sorbet'::text, 'northern-lights'::text, 'rosey-dawn'::text, 'pool-party'::text, 'blue-hour'::text, 'lemon-lime'::text, 'plum-velvet'::text, 'watermelon-split'::text, 'frost-blue'::text, 'tomato'::text, 'tart-cherry'::text, 'evergreen'::text, 'deep-navy'::text, 'periwinkle'::text, 'marigold'::text, 'warm-sand'::text, 'oat-paper'::text, 'picnic-gingham'::text, 'blueberry-gingham'::text, 'school-paper'::text, 'graph-paper'::text, 'navy-pinstripe'::text, 'citrus-dots'::text, 'purple-disco'::text, 'caramel-weave'::text, 'seaglass-scales'::text, 'retro-mosaic'::text, 'moonlit'::text, 'snowfall'::text, 'daisy-field'::text, 'sugar-hearts'::text, 'daydream-clouds'::text, 'desert-dunes'::text, 'botanical-stems'::text, 'arcade-pixels'::text, 'retro-orbits'::text, 'little-lightning'::text]))))
+- `custom_puzzles_cover_emoji_2_fkey` FOREIGN KEY (cover_emoji_2) REFERENCES community_cover_emoji(key)
+- `custom_puzzles_cover_emoji_3_fkey` FOREIGN KEY (cover_emoji_3) REFERENCES community_cover_emoji(key)
+- `custom_puzzles_cover_emoji_distinct` CHECK ((((cover_emoji_2 IS NULL) OR (cover_emoji_2 <> cover_emoji)) AND ((cover_emoji_3 IS NULL) OR ((cover_emoji_3 <> cover_emoji) AND (cover_emoji_3 <> cover_emoji_2)))))
+- `custom_puzzles_cover_emoji_fkey` FOREIGN KEY (cover_emoji) REFERENCES community_cover_emoji(key)
+- `custom_puzzles_cover_emoji_order` CHECK ((((cover_emoji_2 IS NULL) OR (cover_emoji IS NOT NULL)) AND ((cover_emoji_3 IS NULL) OR (cover_emoji_2 IS NOT NULL))))
+- `custom_puzzles_cover_pair` CHECK ((((cover_emoji IS NULL) AND (cover_background IS NULL)) OR ((cover_emoji IS NOT NULL) AND (cover_background IS NOT NULL))))
 - `custom_puzzles_created_by_fkey` FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL
 - `custom_puzzles_moderation_status_check` CHECK ((moderation_status = ANY (ARRAY['active'::text, 'hidden'::text])))
 - `custom_puzzles_pkey` PRIMARY KEY (id)
@@ -315,6 +426,7 @@ Constraints:
 
 Indexes:
 
+- `CREATE INDEX custom_puzzles_community_feed_idx ON public.custom_puzzles USING btree (community_listed_at DESC, short_code) WHERE (community_listed AND (visibility = 'public'::text) AND (moderation_status = 'active'::text) AND (created_by IS NOT NULL))`
 - `CREATE INDEX custom_puzzles_created_by_idx ON public.custom_puzzles USING btree (created_by) WHERE (created_by IS NOT NULL)`
 - `CREATE UNIQUE INDEX custom_puzzles_pkey ON public.custom_puzzles USING btree (id)`
 - `CREATE INDEX custom_puzzles_public_by_creator_idx ON public.custom_puzzles USING btree (created_by, created_at DESC) WHERE ((visibility = 'public'::text) AND (moderation_status = 'active'::text) AND (created_by IS NOT NULL))`
@@ -785,16 +897,22 @@ Indexes:
 |---|---|---|---|---|
 | `account_email(_user_id uuid)` | text | yes | stable | service_role |
 | `admin_find_account(_email text)` | TABLE(user_id uuid, email text) | yes | stable | authenticated, service_role |
+| `admin_get_community_curation()` | jsonb | yes | stable | authenticated, service_role |
 | `admin_save_puzzle(_puzzle_id uuid, _metadata jsonb, _content jsonb)` | jsonb | yes | volatile | authenticated, service_role |
+| `admin_set_community_curation(_featured text, _picks text[])` | jsonb | yes | volatile | authenticated, service_role |
 | `admin_set_custom_puzzle_status(_puzzle_id uuid, _status text)` | boolean | yes | volatile | authenticated, service_role |
+| `community_creator_json(_c creator_profiles)` | jsonb | yes | stable | service_role |
 | `complete_beta_playtest(_playtest_id uuid, _device_id text, _device_token text, _won boolean, _mistakes integer, _hints_used boolean)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `create_custom_puzzle(_creator_name text, _title text, _visibility text, _content jsonb)` | jsonb | yes | volatile | anon, authenticated, service_role |
 | `create_device_identity()` | TABLE(device_id text, device_token text) | yes | volatile | anon, authenticated, service_role |
 | `create_game_session(_puzzle_id text, _device_id text, _device_token text, _entry_context text, _active_time_seconds integer, _mistakes integer, _puzzle_version_id uuid)` | uuid | yes | volatile | anon, authenticated, service_role |
 | `custom_creator_new_slug(_name text)` | text | no | volatile | service_role |
 | `custom_ensure_creator_profile(_uid uuid, _name text)` | void | yes | volatile | service_role |
+| `custom_puzzle_card_json(_p custom_puzzles)` | jsonb | yes | stable | service_role |
+| `custom_puzzle_in_community(_p custom_puzzles)` | boolean | no | stable | service_role |
 | `custom_puzzle_new_short_code()` | text | no | volatile | service_role |
 | `custom_puzzle_public_json(_p custom_puzzles)` | jsonb | yes | stable | service_role |
+| `custom_puzzle_share_id(_short_code text)` | text | yes | stable | anon, authenticated, service_role |
 | `custom_random_string(_alphabet text, _len integer)` | text | no | volatile | service_role |
 | `decline_guest_history(_device_id text, _device_token text)` | TABLE(outcome text) | yes | volatile | authenticated, service_role |
 | `delete_local_account(_user_id uuid)` | void | yes | volatile | service_role |
@@ -804,11 +922,17 @@ Indexes:
 | `finalize_game_session(_session_id uuid, _device_id text, _device_token text, _won boolean, _mistakes integer, _active_time_seconds integer, _found_rainbow boolean, _rainbow_solve_index smallint, _solve_order jsonb, _hints_used boolean, _share_grid text, _skip_streak boolean, _local_date text)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `game_sessions_sync_status()` | trigger | yes | volatile | anon, authenticated, service_role |
 | `get_archive_puzzles()` | TABLE(id uuid, date date, title text) | yes | stable | anon, authenticated, service_role |
+| `get_community_explore()` | jsonb | yes | stable | anon, authenticated, service_role |
+| `get_creator_community(_slug text)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_creator_profile(_slug text, _sort text)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_custom_puzzle(_share_id text)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_custom_puzzle_by_short_code(_short_code text)` | jsonb | yes | stable | anon, authenticated, service_role |
+| `get_custom_puzzle_cards(_share_ids text[])` | jsonb | yes | stable | anon, authenticated, service_role |
 | `get_custom_puzzle_stats(_share_id text)` | jsonb | yes | stable | anon, authenticated, service_role |
+| `get_following_feed(_limit integer, _offset integer)` | jsonb | yes | stable | authenticated, service_role |
 | `get_luck_report(_puzzle_id uuid, _device_id text, _device_token text)` | json | yes | stable | anon, authenticated, service_role |
+| `get_my_custom_puzzle_listing(_share_id text)` | jsonb | yes | stable | authenticated, service_role |
+| `get_my_custom_puzzle_rating(_share_id text)` | jsonb | yes | stable | authenticated, service_role |
 | `get_my_favorites()` | jsonb | yes | stable | authenticated, service_role |
 | `get_own_completed_sessions(_device_id text, _device_token text, _format text)` | TABLE(puzzle_id text, won boolean, mistakes integer, found_rainbow boolean, solve_order jsonb, hints_used boolean, rainbow_solve_index smallint, rainbow_source text, bonus_rainbow_attempted boolean, status text) | yes | stable | anon, authenticated, service_role |
 | `get_own_no_hint_streak(_device_id text, _device_token text, _format text)` | TABLE(best integer, tracked integer, unknown integer) | yes | stable | anon, authenticated, service_role |
@@ -821,6 +945,8 @@ Indexes:
 | `has_official_result(_puzzle_id text, _device_id text, _device_token text)` | boolean | yes | stable | anon, authenticated, service_role |
 | `has_role(_user_id uuid, _role app_role)` | boolean | yes | stable | anon, authenticated, service_role |
 | `import_guest_history(_device_id text, _device_token text)` | TABLE(outcome text, sessions_claimed integer) | yes | volatile | authenticated, service_role |
+| `list_community_newest(_limit integer, _before_listed_at timestamp with time zone, _before_short_code text)` | jsonb | yes | stable | anon, authenticated, service_role |
+| `list_community_puzzles(_query text, _sort text, _limit integer, _offset integer)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `luck_eligible_paths(_puzzle_id text)` | TABLE(session_id uuid, user_id uuid, device_id text, path jsonb) | yes | stable | service_role |
 | `my_account()` | TABLE(user_id uuid, global_user_id text, email text, created_at timestamp with time zone) | yes | stable | authenticated, service_role |
 | `no_hint_history_for_owner(_device_id text, _device_token text, _format text)` | TABLE(completion_order text, qualified boolean) | yes | stable | none of the client roles |
@@ -834,8 +960,14 @@ Indexes:
 | `record_streak(_user_id uuid, _device_id text, _won boolean, _local_date text, _format text)` | void | yes | volatile | service_role |
 | `reset_beta_playtest(_puzzle_id uuid, _device_id text, _device_token text)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `resolve_device_import(_device_id text, _device_token text)` | TABLE(outcome text, games_played integer, current_streak integer, longest_streak integer) | yes | stable | authenticated, service_role |
+| `search_community_creators(_query text, _limit integer, _offset integer)` | jsonb | yes | stable | anon, authenticated, service_role |
 | `session_capability_ok(_session_id uuid, _device_id text, _device_token text)` | boolean | yes | stable | anon, authenticated, service_role |
+| `set_creator_follow(_slug text, _follow boolean)` | jsonb | yes | volatile | authenticated, service_role |
+| `set_custom_puzzle_community_listing(_share_id text, _listed boolean)` | jsonb | yes | volatile | authenticated, service_role |
+| `set_custom_puzzle_cover(_share_id text, _emoji text, _background text)` | jsonb | yes | volatile | authenticated, service_role |
+| `set_custom_puzzle_cover_emojis(_share_id text, _emojis text[], _background text)` | jsonb | yes | volatile | authenticated, service_role |
 | `set_custom_puzzle_favorite(_share_id text, _favorite boolean)` | jsonb | yes | volatile | authenticated, service_role |
+| `set_custom_puzzle_rating(_share_id text, _rating integer, _device_id text, _device_token text)` | jsonb | yes | volatile | authenticated, service_role |
 | `skill_score(_won boolean, _mistakes integer, _solve_order jsonb, _found_rainbow boolean, _rainbow_source text, _format text)` | integer | no | immutable | anon, authenticated, service_role |
 | `stamp_no_hint_completion()` | trigger | yes | volatile | service_role |
 | `start_beta_playtest(_puzzle_id uuid, _puzzle_version_id uuid, _device_id text, _device_token text)` | uuid | yes | volatile | anon, authenticated, service_role |

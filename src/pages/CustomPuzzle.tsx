@@ -22,6 +22,10 @@ import {
   type CustomPlayablePuzzle,
 } from "@/lib/customPuzzles";
 import { useCustomFavorite } from "@/hooks/useCustomFavorite";
+import { CommunityListingControl } from "@/components/CommunityListingControl";
+import { CreatorCoverArt } from "@/components/community/CreatorCoverArt";
+import type { CreatorCover } from "@/lib/creatorCover";
+import { communityPuzzlesOn } from "@/lib/communityFlag";
 import { loadSettings, saveSettings, GameSettings } from "@/lib/settings";
 import { trackEvent } from "@/lib/analytics";
 import { clearProgress } from "@/lib/gameProgress";
@@ -60,6 +64,9 @@ export default function CustomPuzzle() {
   // Bumped by Replay to remount the board into a clean run.
   const [runKey, setRunKey] = useState(0);
   const puzzle = loaded?.puzzle ?? null;
+  // Community preview: the creator's stored cover, shown above the title.
+  const [coverOverride, setCoverOverride] = useState<CreatorCover | null | undefined>(undefined);
+  const cover = coverOverride !== undefined ? coverOverride : loaded?.cover ?? null;
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", settings.darkMode);
@@ -150,6 +157,11 @@ export default function CustomPuzzle() {
       />
       <div className="w-full max-w-[840px] border-b border-border mb-1 md:mb-3" />
 
+      {communityPuzzlesOn() && puzzle && !error && cover && (
+        <div className="w-full max-w-[840px] px-4 mt-1" data-testid="puzzle-cover">
+          <CreatorCoverArt cover={cover} className="h-16 w-full rounded-2xl sm:h-20" emojiSize="clamp(36px, 11vw, 52px)" />
+        </div>
+      )}
       {puzzle && !error ? (
         <CustomPuzzleHeader
           title={puzzle.title?.trim() || "Custom Puzzle"}
@@ -204,6 +216,9 @@ export default function CustomPuzzle() {
         />
       )}
 
+      {communityPuzzlesOn() && puzzle && !error && !loading && (
+        <CommunityListingControl shareId={puzzle.id} userId={user?.id ?? null} title={puzzle.title?.trim() || "Custom Puzzle"} creatorName={puzzle.designerName} cover={cover} onCoverChange={setCoverOverride} />
+      )}
       {puzzle && !error && !loading && <CustomPuzzleCta supportUrl={getSupportUrl()} />}
 
       <StatsModal open={activeModal === "stats"} onClose={() => setActiveModal(null)} />
@@ -215,7 +230,6 @@ export default function CustomPuzzle() {
         onSettingsChange={handleSettingsChange}
         onOpenFeedback={() => setActiveModal("feedback")}
         showMenuLinks
-        showCreateLink
         onHowToPlayClick={() => setActiveModal("help")}
         user={user ?? null}
         onSignOut={() => signOutOfRainbow()}

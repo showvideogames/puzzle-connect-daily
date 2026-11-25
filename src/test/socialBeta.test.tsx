@@ -85,6 +85,8 @@ async function appRoutes(flag: string): Promise<string[]> {
 const ROUTES_TODAY = [
   "/",
   "/admin",
+  // Community Puzzles (on by default; VITE_COMMUNITY_PUZZLES=off removes both).
+  "/admin/community",
   "/archive",
   "/archive/:puzzleId",
   "/free/:puzzleId",
@@ -98,6 +100,7 @@ const ROUTES_TODAY = [
   "/custom/:shareId",
   "/creator/:publicSlug",
   "/favorites",
+  "/community",
   "/__fixtures/community",
   "/__fixtures/mini",
   "/__fixtures/lucky-bot",
@@ -173,18 +176,18 @@ describe("beta", () => {
   it("offers Edit profile to someone signed in, which opens the editor on /friends", () => {
     vi.stubEnv("VITE_SHARED_SOCIAL", "beta");
     render(menu({ user: { id: "u1", email: null } }));
-    fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit Profile" }));
     expect(screen.getByTestId("where")).toHaveTextContent("/friends");
   });
 
   it("offers no Edit profile to a guest, or with the flag off", () => {
     vi.stubEnv("VITE_SHARED_SOCIAL", "beta");
     const { unmount } = render(menu());
-    expect(screen.queryByRole("button", { name: "Edit profile" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit Profile" })).toBeNull();
     unmount();
     vi.stubEnv("VITE_SHARED_SOCIAL", "");
     render(menu({ user: { id: "u1", email: null } }));
-    expect(screen.queryByRole("button", { name: "Edit profile" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit Profile" })).toBeNull();
   });
 
   it("still lets a page choose where the row goes", () => {

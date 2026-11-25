@@ -323,14 +323,12 @@ export default function ArchivePuzzle({ format = FULL_FORMAT }: ArchivePuzzlePag
       <StatsModal open={activeModal === "stats"} onClose={() => setActiveModal(null)} format={format} />
       <TutorialModal format={format} open={activeModal === "help"} onClose={() => setActiveModal(null)} />
       <SettingsModal
-        format={format}
         open={activeModal === "settings"}
         onClose={() => setActiveModal(null)}
         settings={settings}
         onSettingsChange={handleSettingsChange}
         onOpenFeedback={() => setActiveModal("feedback")}
         showMenuLinks
-        showCreateLink
         onHowToPlayClick={() => setActiveModal("help")}
         user={user ?? null}
         onSignOut={() => signOutOfRainbow()}

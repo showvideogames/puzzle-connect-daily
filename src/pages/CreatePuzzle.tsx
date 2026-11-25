@@ -1,5 +1,5 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Link2, Play, Copy, Check } from "lucide-react";
 import { SEO } from "@/components/SEO";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -29,7 +29,11 @@ import { StartingBoardArranger } from "@/components/builder/StartingBoardArrange
 import { RainbowPanel } from "@/components/builder/RainbowPanel";
 import { EmojiCodesModal } from "@/components/EmojiCodesModal";
 import { normalizeWord } from "@/lib/builder/wordNormalization";
-import { createCustomPuzzle, type CustomPuzzleVisibility } from "@/lib/customPuzzles";
+import { createCustomPuzzle, setCommunityListing, setCustomPuzzleCover, type CustomPuzzleVisibility } from "@/lib/customPuzzles";
+import { CoverPicker, NO_COVER, draftToCover, type CoverDraft } from "@/components/community/CoverPicker";
+import { CreatorCoverArt } from "@/components/community/CreatorCoverArt";
+import { communityPuzzlesOn } from "@/lib/communityFlag";
+import { supabase } from "@/integrations/supabase/client";
 import { FormatSelector } from "@/components/builder/FormatSelector";
 import { categoryColorLabels, difficultyLabels } from "@/lib/puzzleFormat";
 
@@ -84,6 +88,22 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ shareId: string; shortCode: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
+  // Community Puzzles preview. An explicit choice on every puzzle: never
+  // inferred from Public, never restored from a draft, off by default.
+  const community = communityPuzzlesOn();
+  const [listInCommunity, setListInCommunity] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+  const [listing, setListing] = useState<{ listed: boolean; error?: string } | null>(null);
+  // Optional creator cover: one emoji + one preset background, saved after create.
+  const [coverDraft, setCoverDraft] = useState<CoverDraft>(NO_COVER);
+  const [coverOutcome, setCoverOutcome] = useState<{ saved: boolean; error?: string } | null>(null);
+  useEffect(() => {
+    if (!community) return;
+    supabase.auth.getSession().then(({ data: { session } }) => setSignedIn(!!session?.user));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => setSignedIn(!!session?.user));
+    return () => subscription.unsubscribe();
+  }, [community]);
+  const canListInCommunity = community && signedIn && visibility === "public";
 
   const draft = useMemo(() => ({ title: puzzleTitle, designer: designerName, visibility, builder: builder.snapshot }),
     [puzzleTitle, designerName, visibility, builder.snapshot]);
@@ -151,6 +171,8 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
     setDesignerName("");
     setPuzzleTitle("");
     setVisibility("public");
+    setListInCommunity(false);
+    setCoverDraft(NO_COVER);
     setError(null);
     builder.reset();
   }
@@ -195,6 +217,30 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
         },
       });
       if (store) setStorageError(store.clear(false) ? null : store.error);
+      // Listing is a second, owner-checked call. If it fails the puzzle still
+      // exists, unlisted (the safe side), and the result says so.
+      if (canListInCommunity && listInCommunity) {
+        try {
+          setListing({ listed: await setCommunityListing(shareId, true) });
+        } catch (err: unknown) {
+          setListing({ listed: false, error: err && typeof err === "object" && "message" in err && typeof err.message === "string" ? err.message : "Please try again." });
+        }
+      } else {
+        setListing(community && visibility === "public" ? { listed: false } : null);
+      }
+      // The cover is its own owner-checked call too; if it fails, the puzzle
+      // simply keeps the standard cover and the result says so.
+      const chosenCover = draftToCover(coverDraft);
+      if (community && signedIn && chosenCover) {
+        try {
+          await setCustomPuzzleCover(shareId, chosenCover);
+          setCoverOutcome({ saved: true });
+        } catch (err: unknown) {
+          setCoverOutcome({ saved: false, error: err && typeof err === "object" && "message" in err && typeof err.message === "string" ? err.message : "Please try again." });
+        }
+      } else {
+        setCoverOutcome(null);
+      }
       setResult({ shareId, shortCode });
     } catch (err: unknown) {
       console.error("createCustomPuzzle failed:", err);
@@ -289,6 +335,25 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
           </p>
           {visibility === "private" && (
             <p className="text-xs text-muted-foreground">Only people with this link can access this puzzle.</p>
+          )}
+          {coverOutcome?.saved && draftToCover(coverDraft) && (
+            <CreatorCoverArt cover={draftToCover(coverDraft)} className="mx-auto aspect-[16/7] w-full max-w-sm rounded-2xl" emojiScale={0.24} />
+          )}
+          {coverOutcome && (
+            <p className="text-xs text-muted-foreground" data-testid="cover-result">
+              {coverOutcome.saved ? "Cover saved." : `Couldn't save the cover: ${coverOutcome.error} It has the standard cover for now.`}
+            </p>
+          )}
+          {listing && (
+            <p className="text-xs text-muted-foreground" data-testid="community-listing-result">
+              {listing.listed ? (
+                <>Listed in <Link to="/community" className="font-semibold text-foreground underline underline-offset-2">Community Puzzles</Link>. You can unlist it from the puzzle's page.</>
+              ) : listing.error ? (
+                <>Couldn't list it in Community: {listing.error} You can try again from the puzzle's page.</>
+              ) : (
+                <>Not listed in Community. Only people with the link can find it.</>
+              )}
+            </p>
           )}
           <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs break-all text-muted-foreground">
             {shareUrl}
@@ -392,6 +457,29 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
                     : "Public puzzles have a shareable link."}
                 </p>
               </div>
+              {community && (
+                <div className="max-w-[260px]">
+                  <span className="text-xs font-medium text-slate block mb-1">Community</span>
+                  <label className={`flex min-h-9 items-center gap-2 ${canListInCommunity ? "cursor-pointer" : "cursor-not-allowed opacity-70"}`}>
+                    <input
+                      type="checkbox"
+                      checked={canListInCommunity && listInCommunity}
+                      disabled={!canListInCommunity}
+                      onChange={(e) => setListInCommunity(e.target.checked)}
+                      aria-describedby="community-list-help"
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    <span className="text-sm font-semibold text-ink">List in Community</span>
+                  </label>
+                  <p id="community-list-help" className="text-[11px] text-muted-foreground mt-1">
+                    {visibility === "private"
+                      ? "Private puzzles are never listed in Community."
+                      : !signedIn
+                        ? "Sign in to list your puzzle in Community Puzzles. Anyone can still play it from its link."
+                        : "Lets other players find it on Community Puzzles. You can unlist it later; its link keeps working."}
+                  </p>
+                </div>
+              )}
             </div>
 
             <label className="flex items-center gap-2 cursor-pointer">
@@ -473,6 +561,17 @@ function CreatorEditor({ store }: { store?: CreatorDraftStore }) {
               <br />
               Type a code like <code className="text-[11px]">:caveman:</code> in an answer.
             </p>
+
+            {community && (
+              <CoverPicker
+                value={coverDraft}
+                onChange={setCoverDraft}
+                title={puzzleTitle}
+                creatorName={designerName}
+                disabled={!signedIn}
+                note={signedIn ? undefined : "Sign in to give your puzzle a cover. Without one it gets the standard Rainbow cover."}
+              />
+            )}
 
             {error && (
               <p className="text-sm text-destructive font-medium" role="alert">{error}</p>

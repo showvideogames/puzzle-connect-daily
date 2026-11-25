@@ -1,8 +1,9 @@
 import "./menu-nunito.css";
 import { useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { Menu, UsersRound, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { communityPuzzlesOn } from "@/lib/communityFlag";
 import { socialBetaOn } from "@/components/social/socialFlag";
 
 /** The header's own 44px target: a 24px glyph in the foreground colour, as in the header concept. */
@@ -11,10 +12,12 @@ export const headerIconButton =
 export const headerGlyph = "h-6 w-6";
 export const HEADER_STROKE = 2.25;
 
+export type MenuRowIcon = "community" | "create" | "book" | "friends" | "favorites" | "games" | "profile" | "feedback";
+
 interface Destination {
   to: string;
   label: string;
-  icon: "create" | "book" | "friends";
+  icon: MenuRowIcon;
   state?: unknown;
   tone: string;
 }
@@ -27,6 +30,11 @@ const PLAY = [
 ] as const;
 type PlayArt = typeof PLAY[number]["art"];
 
+const COMMUNITY: Destination = {
+  to: "/community", label: "Community Puzzles", icon: "community",
+  tone: "bg-[#dceefc] dark:bg-[#263f55]",
+};
+
 const DESTINATIONS: Destination[] = [
   { to: "/create", label: "Create A Puzzle", icon: "create", tone: "bg-[#f0e9fb] dark:bg-[#443458]" },
   { to: "/how-to-play", label: "How To Play", icon: "book", tone: "bg-[#fff6d7] dark:bg-[#493727]" },
@@ -37,8 +45,13 @@ const FRIENDS: Destination = {
   tone: "bg-[#ebefff] dark:bg-[#303955]",
 };
 
+const FAVORITES: Destination = {
+  to: "/favorites", label: "Favorites", icon: "favorites",
+  tone: "bg-[#ffedbd] dark:bg-[#514227]",
+};
+
 const focusClass = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
-const rowClass = `flex min-h-[52px] w-full items-center gap-3 rounded-xl px-2.5 text-left text-[22px] max-[359px]:text-[20px] font-black [font-family:'Nunito_Menu','Nunito_Sans_Variable',sans-serif] leading-tight text-foreground hover:brightness-95 dark:hover:brightness-125 transition-[filter] aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/25 ${focusClass}`;
+export const menuRowClass = `flex min-h-[52px] w-full items-center gap-3 rounded-xl px-2.5 text-left text-[22px] max-[359px]:text-[20px] font-black [font-family:'Nunito_Menu','Nunito_Sans_Variable',sans-serif] leading-tight text-foreground hover:brightness-95 dark:hover:brightness-125 transition-[filter] aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-foreground/25 ${focusClass}`;
 
 function MenuArt({ art }: { art: PlayArt }) {
   if (art === "mini") {
@@ -64,10 +77,15 @@ function MenuArt({ art }: { art: PlayArt }) {
   );
 }
 
-function RowArt({ icon }: { icon: Destination["icon"] | "feedback" }) {
-  if (icon === "friends") return <UsersRound aria-hidden="true" className="h-6 w-6 text-foreground" strokeWidth={HEADER_STROKE} />;
+export function MenuRowArt({ icon }: { icon: MenuRowIcon }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 32 32" className="h-[35px] w-[35px] shrink-0" fill="none" stroke="#231d2a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      {icon === "community" && <>
+        <rect x="4" y="4" width="10" height="10" rx="2.5" fill="#ffe462" />
+        <rect x="18" y="4" width="10" height="10" rx="2.5" fill="#9fe1a5" />
+        <rect x="4" y="18" width="10" height="10" rx="2.5" fill="#a8d9ff" />
+        <rect x="18" y="18" width="10" height="10" rx="2.5" fill="#ef9cb7" />
+      </>}
       {icon === "create" && <>
         <rect x="3" y="7" width="20" height="22" rx="3.5" fill="white" />
         <path d="M3 18h20M13 7v22" />
@@ -78,6 +96,25 @@ function RowArt({ icon }: { icon: Destination["icon"] | "feedback" }) {
         <path d="M3 9c5-1 9 .5 13 3 4-2.5 8-4 13-3v17c-5-1-9 .2-13 2.5C12 26 8 25 3 26z" fill="#ffe462" />
         <path d="M5 6c5-1 8.5.5 11 3v17c-3.8-2.5-7.5-3.2-11-2.5z" fill="#d9b7ff" />
         <path d="M27 6c-5-1-8.5.5-11 3v17c3.8-2.5 7.5-3.2 11-2.5z" fill="#a8e6f4" />
+      </>}
+      {icon === "favorites" && <>
+        <path d="m17 5 3.8 7.6 8.3 1.2-6 5.8 1.4 8.1-7.5-3.8-7.5 3.8 1.4-8.1-6-5.8 8.3-1.2z" fill="#ec9c56" stroke="none" />
+        <path d="m15 3 3.8 7.6 8.3 1.2-6 5.8 1.4 8.1-7.5-3.8-7.5 3.8 1.4-8.1-6-5.8 8.3-1.2z" fill="#ffe474" />
+      </>}
+      {icon === "friends" && <>
+        <circle cx="22.5" cy="10" r="4.5" fill="#b9a7fc" />
+        <path d="M20 16h5a4 4 0 0 1 4 4v5h-9z" fill="#b9a7fc" />
+        <circle cx="12" cy="10" r="5" fill="#fde381" />
+        <path d="M9 16h6a5 5 0 0 1 5 5v5H4v-5a5 5 0 0 1 5-5z" fill="#8edbdf" />
+      </>}
+      {icon === "profile" && <>
+        <rect x="4" y="5" width="24" height="22" rx="5" fill="#c4a9f6" />
+        <circle cx="16" cy="12" r="3" fill="#ffe474" />
+        <path d="M10 21c0-2.5 2.7-4 6-4s6 1.5 6 4" />
+      </>}
+      {icon === "games" && <>
+        <rect x="5" y="10" width="22" height="14" rx="6" fill="#a9e4ce" />
+        <path d="M9 17h6m-3-3v6m8-4h.1m3 3h.1" />
       </>}
       {icon === "feedback" && <>
         <path d="M29 16c0 6-5.6 10-12 10h-4l-6 4 1-6c-2.6-2-4-4.9-4-8 0-6 5.6-10 12.5-10S29 10 29 16z" fill="#ef9cb7" stroke="none" />
@@ -96,10 +133,10 @@ function TileSticker({ compact }: { compact: boolean }) {
 }
 
 /** The shared hamburger drawer: Radix handles Escape, focus trap and restore. */
-export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
+export function AppMenuDrawer({ onFeedback, signedIn = false }: { onFeedback: () => void; signedIn?: boolean }) {
   const [open, setOpen] = useState(false);
   const feedbackNext = useRef(false);
-  const destinations = socialBetaOn() ? [...DESTINATIONS, FRIENDS] : DESTINATIONS;
+  const destinations = [...(communityPuzzlesOn() ? [COMMUNITY] : []), ...DESTINATIONS, ...(signedIn ? [FAVORITES] : []), ...(socialBetaOn() ? [FRIENDS] : [])];
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -153,16 +190,16 @@ export function AppMenuDrawer({ onFeedback }: { onFeedback: () => void }) {
             {destinations.map(({ to, label, icon, state, tone }) => (
               <li key={to}>
                 <SheetClose asChild>
-                  <NavLink to={to} state={state} end className={`${rowClass} ${tone}`}>
-                    <RowArt icon={icon} />
+                  <NavLink to={to} state={state} end className={`${menuRowClass} ${tone}`}>
+                    <MenuRowArt icon={icon} />
                     {label}
                   </NavLink>
                 </SheetClose>
               </li>
             ))}
             <li>
-              <button type="button" className={`${rowClass} bg-[#fbdce7] dark:bg-[#492b36]`} onClick={() => { feedbackNext.current = true; setOpen(false); }}>
-                <RowArt icon="feedback" />
+              <button type="button" className={`${menuRowClass} bg-[#fbdce7] dark:bg-[#492b36]`} onClick={() => { feedbackNext.current = true; setOpen(false); }}>
+                <MenuRowArt icon="feedback" />
                 Send Feedback
               </button>
             </li>

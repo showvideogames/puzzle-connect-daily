@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Puzzle, PuzzleGroup } from "./types";
 import { ensureDeviceIdentity } from "./gameStats";
 import { getFormat, type Difficulty, type PuzzleFormatId } from "./puzzleFormat";
+import { parseCover, type CreatorCover } from "./creatorCover";
 
 export type CustomPuzzleMode = "classic" | "rainbow";
 export type CustomPuzzleVisibility = "public" | "private";
@@ -116,6 +117,8 @@ export interface CustomPlayablePuzzle {
   favoriteCount: number;
   /** Whether the CURRENT signed-in account has favorited it (false for guests). */
   favoritedByMe: boolean;
+  /** Its creator cover, or null for none (Community preview; absent before 0008). */
+  cover: CreatorCover | null;
 }
 
 interface CustomPuzzleRow {
@@ -125,6 +128,10 @@ interface CustomPuzzleRow {
   creator_slug?: string | null;
   favorite_count?: number;
   favorited_by_me?: boolean;
+  cover_emoji?: string | null;
+  cover_emoji_2?: string | null;
+  cover_emoji_3?: string | null;
+  cover_background?: string | null;
   title: string;
   creator_name: string;
   visibility: CustomPuzzleVisibility;
@@ -205,6 +212,7 @@ function toPlayable(data: unknown): CustomPlayablePuzzle | null {
     creatorSlug: row.creator_slug ?? null,
     favoriteCount: row.favorite_count ?? 0,
     favoritedByMe: row.favorited_by_me ?? false,
+    cover: parseCover(row.cover_emoji, row.cover_background, row.cover_emoji_2, row.cover_emoji_3),
   };
 }
 
@@ -273,6 +281,7 @@ export interface FavoritePuzzleCard {
   mode: CustomPuzzleMode;
   shortCode: string;
   favoriteCount: number;
+  cover?: CreatorCover | null;
 }
 
 export async function getMyFavorites(): Promise<FavoritePuzzleCard[]> {
@@ -286,6 +295,10 @@ export async function getMyFavorites(): Promise<FavoritePuzzleCard[]> {
       mode: CustomPuzzleMode;
       short_code: string;
       favorite_count: number;
+      cover_emoji?: string | null;
+      cover_emoji_2?: string | null;
+      cover_emoji_3?: string | null;
+      cover_background?: string | null;
     }[]
   ).map((r) => ({
     title: r.title,
@@ -294,6 +307,7 @@ export async function getMyFavorites(): Promise<FavoritePuzzleCard[]> {
     mode: r.mode,
     shortCode: r.short_code,
     favoriteCount: r.favorite_count ?? 0,
+    cover: parseCover(r.cover_emoji, r.cover_background, r.cover_emoji_2, r.cover_emoji_3),
   }));
 }
 
@@ -436,4 +450,371 @@ export async function getCustomPuzzleStats(shareId: string): Promise<CustomPuzzl
       "8+": dist["8+"] ?? 0,
     },
   };
+}
+
+// ── Community Puzzles (preview; see lib/communityFlag.ts) ──────────────────
+
+/** Newest (first listing time), Most Played (finished plays), Most Liked (signed-in favourites only). */
+export type CommunitySort = "newest" | "plays" | "likes";
+
+/** One card in the Community feed. Card fields only: the server never sends content, ids or account data. */
+export interface CommunityPuzzleListing {
+  title: string;
+  creatorName: string;
+  creatorSlug: string | null;
+  mode: CustomPuzzleMode;
+  shortCode: string;
+  finishedPlays: number;
+  favoriteCount: number;
+  /** The creator's cover, or null for none. */
+  cover?: CreatorCover | null;
+}
+
+export interface CommunityPage {
+  items: CommunityPuzzleListing[];
+  hasMore: boolean;
+}
+
+export const COMMUNITY_PAGE_SIZE = 24;
+
+/** Throws on failure so the page can offer Retry rather than showing an empty feed. */
+export async function listCommunityPuzzles(params: {
+  query?: string;
+  sort?: CommunitySort;
+  offset?: number;
+  limit?: number;
+}): Promise<CommunityPage> {
+  const { data, error } = await supabase.rpc("list_community_puzzles", {
+    _query: params.query?.trim() || undefined,
+    _sort: params.sort ?? "newest",
+    _limit: params.limit ?? COMMUNITY_PAGE_SIZE,
+    _offset: params.offset ?? 0,
+  });
+  if (error) throw error;
+  const r = (data ?? {}) as {
+    items?: {
+      title: string;
+      creator_name: string;
+      creator_slug: string | null;
+      mode: CustomPuzzleMode;
+      short_code: string;
+      finished_plays: number;
+      favorite_count: number;
+      cover_emoji?: string | null;
+      cover_emoji_2?: string | null;
+      cover_emoji_3?: string | null;
+      cover_background?: string | null;
+    }[];
+    has_more?: boolean;
+  };
+  return {
+    items: (r.items ?? []).map((p) => ({
+      title: p.title,
+      creatorName: p.creator_name,
+      creatorSlug: p.creator_slug ?? null,
+      mode: p.mode,
+      shortCode: p.short_code,
+      finishedPlays: p.finished_plays ?? 0,
+      favoriteCount: p.favorite_count ?? 0,
+      cover: parseCover(p.cover_emoji, p.cover_background, p.cover_emoji_2, p.cover_emoji_3),
+    })),
+    hasMore: !!r.has_more,
+  };
+}
+
+export interface CommunityListingState {
+  /** True only when the signed-in caller created this puzzle. */
+  owned: boolean;
+  listed: boolean;
+  /** Public and not hidden by moderation. */
+  canList: boolean;
+}
+
+/** The caller's own puzzle's Community state; null for a guest, an error, or someone else's puzzle. */
+export async function getMyCommunityListing(shareId: string): Promise<CommunityListingState | null> {
+  const { data, error } = await supabase.rpc("get_my_custom_puzzle_listing", { _share_id: shareId });
+  if (error || !data) return null;
+  const r = data as { owned?: boolean; listed?: boolean; can_list?: boolean };
+  if (!r.owned) return null;
+  return { owned: true, listed: !!r.listed, canList: !!r.can_list };
+}
+
+/** Sets (not toggles) the listing. Ownership and eligibility are enforced server-side; throws with the server's message. */
+export async function setCommunityListing(shareId: string, listed: boolean): Promise<boolean> {
+  const { data, error } = await supabase.rpc("set_custom_puzzle_community_listing", { _share_id: shareId, _listed: listed });
+  if (error) throw error;
+  return !!(data as { listed?: boolean } | null)?.listed;
+}
+
+// ── Community part 2: creators, Follow, Following, bookmark lookups ────────
+// Saving still goes through the existing Favorites contracts above: an
+// account's set_custom_puzzle_favorite / get_my_favorites, and a guest's
+// device-only `custom-favorite:<shareId>` flags. Nothing here stores a save.
+
+type CardRow = {
+  title: string;
+  creator_name: string;
+  creator_slug: string | null;
+  mode: CustomPuzzleMode;
+  short_code: string;
+  finished_plays: number;
+  favorite_count: number;
+  cover_emoji?: string | null;
+  cover_emoji_2?: string | null;
+  cover_emoji_3?: string | null;
+  cover_background?: string | null;
+};
+
+function mapCard(p: CardRow): CommunityPuzzleListing {
+  return {
+    title: p.title,
+    creatorName: p.creator_name,
+    creatorSlug: p.creator_slug ?? null,
+    mode: p.mode,
+    shortCode: p.short_code,
+    finishedPlays: p.finished_plays ?? 0,
+    favoriteCount: p.favorite_count ?? 0,
+    cover: parseCover(p.cover_emoji, p.cover_background, p.cover_emoji_2, p.cover_emoji_3),
+  };
+}
+
+/** A creator as Community shows them: public identity and aggregate counts only. */
+export interface CommunityCreator {
+  displayName: string;
+  publicSlug: string;
+  /** Puzzles in Community right now. */
+  listedCount: number;
+  followerCount: number;
+  /** Whether the CURRENT account follows them (false for guests). */
+  followedByMe: boolean;
+  isMe: boolean;
+}
+
+type CreatorRow = {
+  display_name: string;
+  public_slug: string;
+  listed_count: number;
+  follower_count: number;
+  followed_by_me: boolean;
+  is_me: boolean;
+};
+
+function mapCreator(c: CreatorRow): CommunityCreator {
+  return {
+    displayName: c.display_name,
+    publicSlug: c.public_slug,
+    listedCount: c.listed_count ?? 0,
+    followerCount: c.follower_count ?? 0,
+    followedByMe: !!c.followed_by_me,
+    isMe: !!c.is_me,
+  };
+}
+
+/** Creators with at least one puzzle in Community, by public name or slug. Throws on failure. */
+export async function searchCommunityCreators(params: { query?: string; offset?: number; limit?: number }): Promise<{ items: CommunityCreator[]; hasMore: boolean }> {
+  const { data, error } = await supabase.rpc("search_community_creators", {
+    _query: params.query?.trim() || undefined,
+    _limit: params.limit ?? COMMUNITY_PAGE_SIZE,
+    _offset: params.offset ?? 0,
+  });
+  if (error) throw error;
+  const r = (data ?? {}) as { items?: CreatorRow[]; has_more?: boolean };
+  return { items: (r.items ?? []).map(mapCreator), hasMore: !!r.has_more };
+}
+
+export interface CreatorCommunity extends CommunityCreator {
+  puzzles: CommunityPuzzleListing[];
+}
+
+/** The Community side of a creator page; null when the slug is unknown or the call fails. */
+export async function getCreatorCommunity(slug: string): Promise<CreatorCommunity | null> {
+  const { data, error } = await supabase.rpc("get_creator_community", { _slug: slug });
+  if (error || !data) return null;
+  const r = data as CreatorRow & { puzzles?: CardRow[] };
+  return { ...mapCreator(r), puzzles: (r.puzzles ?? []).map(mapCard) };
+}
+
+/** Sets (not toggles) a one-way follow. Throws with the server's message. */
+export async function setCreatorFollow(slug: string, follow: boolean): Promise<{ following: boolean; followerCount: number }> {
+  const { data, error } = await supabase.rpc("set_creator_follow", { _slug: slug, _follow: follow });
+  if (error) throw error;
+  const r = (data ?? {}) as { following?: boolean; follower_count?: number };
+  return { following: !!r.following, followerCount: r.follower_count ?? 0 };
+}
+
+export interface FollowingFeed {
+  items: CommunityPuzzleListing[];
+  hasMore: boolean;
+  /** Who the caller follows. Private to the caller. */
+  creators: CommunityCreator[];
+}
+
+/** The signed-in account's Following. Throws on failure (including for guests). */
+export async function getFollowingFeed(params: { offset?: number; limit?: number } = {}): Promise<FollowingFeed> {
+  const { data, error } = await supabase.rpc("get_following_feed", {
+    _limit: params.limit ?? COMMUNITY_PAGE_SIZE,
+    _offset: params.offset ?? 0,
+  });
+  if (error) throw error;
+  const r = (data ?? {}) as { items?: CardRow[]; has_more?: boolean; creators?: CreatorRow[] };
+  return { items: (r.items ?? []).map(mapCard), hasMore: !!r.has_more, creators: (r.creators ?? []).map(mapCreator) };
+}
+
+/** Share ids of every puzzle this browser saved as a guest (the existing device-only flags). */
+export function listLocalFavorites(): string[] {
+  const ids: string[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(LOCAL_FAVORITE_PREFIX) && localStorage.getItem(key) === "1") ids.push(key.slice(LOCAL_FAVORITE_PREFIX.length));
+    }
+  } catch {
+    // storage blocked: nothing saved on this device
+  }
+  return ids;
+}
+
+/** Card fields for share ids this browser already holds (guest bookmarks). Throws on failure. */
+export async function getCustomPuzzleCards(shareIds: string[]): Promise<(CommunityPuzzleListing & { shareId: string })[]> {
+  if (shareIds.length === 0) return [];
+  const { data, error } = await supabase.rpc("get_custom_puzzle_cards", { _share_ids: shareIds.slice(0, 200) });
+  if (error) throw error;
+  // share_id is our own input echoed back by the server, to pair each save with its card.
+  const rows = (Array.isArray(data) ? data : []) as unknown as (CardRow & { share_id: string })[];
+  return rows.map((r) => ({ ...mapCard(r), shareId: r.share_id }));
+}
+
+const shareIdCache = new Map<string, string>();
+
+/** The permanent share id the Favorites contracts key on, for a card's short code. */
+export async function resolveShareId(shortCode: string): Promise<string | null> {
+  const cached = shareIdCache.get(shortCode);
+  if (cached) return cached;
+  const { data, error } = await supabase.rpc("custom_puzzle_share_id", { _short_code: shortCode });
+  if (error || typeof data !== "string" || !data) return null;
+  shareIdCache.set(shortCode, data);
+  return data;
+}
+
+// ── Community part 3: curated Explore, keyset Newest, admin curation ────────
+
+export interface CommunityExplore {
+  /** Admin-chosen, and only while it is in Community right now; null otherwise. */
+  featured: CommunityPuzzleListing | null;
+  picks: CommunityPuzzleListing[];
+}
+
+/** The curated shelf. Throws on failure so the page can fall back to Newest alone. */
+export async function getCommunityExplore(): Promise<CommunityExplore> {
+  const { data, error } = await supabase.rpc("get_community_explore");
+  if (error) throw error;
+  const r = (data ?? {}) as { featured?: CardRow | null; picks?: CardRow[] };
+  return { featured: r.featured ? mapCard(r.featured) : null, picks: (r.picks ?? []).map(mapCard) };
+}
+
+/** Where the next Newest page starts: the last item's first-listing time and short code. */
+export interface NewestCursor {
+  listedAt: string;
+  shortCode: string;
+}
+
+/**
+ * Every puzzle in Community by first listing time, newest first. Keyset-paged,
+ * so listings that change between pages never repeat or skip the rest.
+ */
+export async function listCommunityNewest(params: { limit?: number; after?: NewestCursor | null } = {}): Promise<{ items: CommunityPuzzleListing[]; hasMore: boolean; cursor: NewestCursor | null }> {
+  const { data, error } = await supabase.rpc("list_community_newest", {
+    _limit: params.limit ?? COMMUNITY_PAGE_SIZE,
+    _before_listed_at: params.after?.listedAt,
+    _before_short_code: params.after?.shortCode,
+  });
+  if (error) throw error;
+  const r = (data ?? {}) as { items?: (CardRow & { listed_at: string })[]; has_more?: boolean };
+  const rows = r.items ?? [];
+  const last = rows[rows.length - 1];
+  return { items: rows.map(mapCard), hasMore: !!r.has_more, cursor: last ? { listedAt: last.listed_at, shortCode: last.short_code } : null };
+}
+
+export interface CurationEntry {
+  slot: "featured" | "pick";
+  position: number;
+  shortCode: string;
+  title: string;
+  creatorName: string;
+  /** Whether Explore is showing it right now. */
+  shown: boolean;
+  hiddenReason: string | null;
+}
+
+/** Admin only (enforced by the server). Throws with the server's message. */
+export async function adminGetCuration(): Promise<CurationEntry[]> {
+  const { data, error } = await supabase.rpc("admin_get_community_curation");
+  if (error) throw error;
+  return ((Array.isArray(data) ? data : []) as unknown as {
+    slot: "featured" | "pick"; position: number; short_code: string; title: string; creator_name: string; shown: boolean; hidden_reason: string | null;
+  }[]).map((r) => ({ slot: r.slot, position: r.position, shortCode: r.short_code, title: r.title, creatorName: r.creator_name, shown: r.shown, hiddenReason: r.hidden_reason }));
+}
+
+/** Replaces the whole curation: one Featured (or none) and up to six ordered Picks. Admin only. */
+export async function adminSetCuration(featured: string | null, picks: string[]): Promise<CurationEntry[]> {
+  const { error } = await supabase.rpc("admin_set_community_curation", { _featured: featured, _picks: picks });
+  if (error) throw error;
+  return adminGetCuration();
+}
+
+// ── Community part 4: creator covers (one emoji + one preset background) ────
+
+/**
+ * Sets (or, with null, removes) a puzzle's cover: one to three emoji keys and
+ * one preset background. Only its signed-in creator may; the server accepts
+ * only allowlisted keys, 1-3 distinct emoji, and preset backgrounds. Throws
+ * with the server's message.
+ */
+export async function setCustomPuzzleCover(shareId: string, cover: CreatorCover | null): Promise<CreatorCover | null> {
+  const { data, error } = await supabase.rpc("set_custom_puzzle_cover_emojis", {
+    _share_id: shareId,
+    _emojis: cover?.emojis ?? null,
+    _background: cover?.background ?? null,
+  });
+  if (error) throw error;
+  const r = (data ?? {}) as { cover_emoji?: string | null; cover_emoji_2?: string | null; cover_emoji_3?: string | null; cover_background?: string | null };
+  return parseCover(r.cover_emoji, r.cover_background, r.cover_emoji_2, r.cover_emoji_3);
+}
+
+// ── Optional 1-5 star rating, after finishing (migration 0010) ──────────────
+
+export interface MyCustomPuzzleRating {
+  /** The caller's own saved rating, or null. Never anyone else's. */
+  rating: number | null;
+  /** Signed in, not the puzzle's author, puzzle active. */
+  canRate: boolean;
+}
+
+/** The signed-in player's own rating of a puzzle and whether they may rate it. Null on any failure (the row simply isn't shown). */
+export async function getMyCustomPuzzleRating(shareId: string): Promise<MyCustomPuzzleRating | null> {
+  const { data, error } = await supabase.rpc("get_my_custom_puzzle_rating", { _share_id: shareId });
+  if (error || !data || typeof data !== "object") return null;
+  const r = data as { rating?: unknown; can_rate?: unknown };
+  const rating = typeof r.rating === "number" && Number.isInteger(r.rating) && r.rating >= 1 && r.rating <= 5 ? r.rating : null;
+  return { rating, canRate: r.can_rate === true };
+}
+
+/**
+ * Saves (or replaces) the signed-in player's 1-5 rating. The server also
+ * checks this browser finished the puzzle (its finish record for this
+ * device credential) and that the player isn't its author. Throws with the
+ * server's message.
+ */
+export async function setCustomPuzzleRating(shareId: string, rating: number): Promise<number> {
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw new Error("a rating is a whole number from 1 to 5");
+  const identity = await ensureDeviceIdentity();
+  if (!identity) throw new Error("finish the puzzle to rate it");
+  const { data, error } = await supabase.rpc("set_custom_puzzle_rating", {
+    _share_id: shareId,
+    _rating: rating,
+    _device_id: identity.deviceId,
+    _device_token: identity.deviceToken,
+  });
+  if (error) throw error;
+  return (data as { rating?: number } | null)?.rating ?? rating;
 }

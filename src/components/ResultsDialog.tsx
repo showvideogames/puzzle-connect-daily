@@ -1,5 +1,5 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Suspense, lazy, useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Check, Share2, X } from "lucide-react";
 import { ResultGrid, type ResultRow } from "./ResultGrid";
 import { StreakCelebration } from "./StreakCelebration";
@@ -75,6 +75,8 @@ interface ResultsDialogProps {
   /** This game's own outcome, for the player's own row before the server has one. */
   solved: boolean;
   mistakes: number;
+  /** Custom puzzles only: the optional "Rate this puzzle" row, under Share. */
+  rating?: ReactNode;
 }
 
 /**
@@ -107,6 +109,7 @@ export function ResultsDialog({
   puzzleId,
   solved,
   mistakes,
+  rating = null,
 }: ResultsDialogProps) {
   const [stats, setStats] = useState<GameStats | null>(null);
   const shareRef = useRef<HTMLButtonElement>(null);
@@ -242,6 +245,8 @@ export function ResultsDialog({
                 {copied ? "Copied!" : "Share Score"}
               </button>
               )}
+
+              {rating}
 
               {spotTheme && (
                 // A size container, so the prompt's text scales with the

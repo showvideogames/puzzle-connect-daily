@@ -324,8 +324,32 @@ export type Database = {
           },
         ]
       }
+      community_cover_emoji: {
+        Row: { key: string }
+        Insert: { key: string }
+        Update: { key?: string }
+        Relationships: []
+      }
+      community_curation: {
+        Row: { custom_puzzle_id: string; position: number; set_at: string; set_by: string | null; slot: string }
+        Insert: { custom_puzzle_id: string; position: number; set_at?: string; set_by?: string | null; slot: string }
+        Update: { custom_puzzle_id?: string; position?: number; set_at?: string; set_by?: string | null; slot?: string }
+        Relationships: []
+      }
+      creator_follows: {
+        Row: { created_at: string; creator_id: string; follower_id: string }
+        Insert: { created_at?: string; creator_id: string; follower_id: string }
+        Update: { created_at?: string; creator_id?: string; follower_id?: string }
+        Relationships: []
+      }
       custom_puzzles: {
         Row: {
+          community_listed: boolean
+          cover_background: string | null
+          cover_emoji: string | null
+          cover_emoji_2: string | null
+          cover_emoji_3: string | null
+          community_listed_at: string | null
           content: Json
           created_at: string
           created_by: string | null
@@ -338,6 +362,12 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          community_listed?: boolean
+          cover_background?: string | null
+          cover_emoji?: string | null
+          cover_emoji_2?: string | null
+          cover_emoji_3?: string | null
+          community_listed_at?: string | null
           content: Json
           created_at?: string
           created_by?: string | null
@@ -350,6 +380,12 @@ export type Database = {
           visibility: string
         }
         Update: {
+          community_listed?: boolean
+          cover_background?: string | null
+          cover_emoji?: string | null
+          cover_emoji_2?: string | null
+          cover_emoji_3?: string | null
+          community_listed_at?: string | null
           content?: Json
           created_at?: string
           created_by?: string | null
@@ -903,6 +939,48 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      set_custom_puzzle_rating: {
+        Args: {
+          _device_id: string
+          _device_token: string
+          _rating: number
+          _share_id: string
+        }
+        Returns: Json
+      }
+      set_custom_puzzle_cover_emojis: {
+        Args: { _background: string | null; _emojis: string[] | null; _share_id: string }
+        Returns: Json
+      }
+      set_custom_puzzle_cover: {
+        Args: { _background: string | null; _emoji: string | null; _share_id: string }
+        Returns: Json
+      }
+      admin_get_community_curation: { Args: never; Returns: Json }
+      admin_set_community_curation: {
+        Args: { _featured: string | null; _picks: string[] }
+        Returns: Json
+      }
+      get_community_explore: { Args: never; Returns: Json }
+      list_community_newest: {
+        Args: { _before_listed_at?: string; _before_short_code?: string; _limit?: number }
+        Returns: Json
+      }
+      get_creator_community: { Args: { _slug: string }; Returns: Json }
+      get_custom_puzzle_cards: { Args: { _share_ids: string[] }; Returns: Json }
+      get_following_feed: {
+        Args: { _limit?: number; _offset?: number }
+        Returns: Json
+      }
+      search_community_creators: {
+        Args: { _limit?: number; _offset?: number; _query?: string }
+        Returns: Json
+      }
+      set_creator_follow: {
+        Args: { _follow: boolean; _slug: string }
+        Returns: Json
+      }
+      custom_puzzle_share_id: { Args: { _short_code: string }; Returns: string }
       account_email: { Args: { _user_id: string }; Returns: string }
       admin_find_account: {
         Args: { _email: string }
@@ -1030,6 +1108,14 @@ export type Database = {
         Returns: Json
       }
       get_custom_puzzle_stats: { Args: { _share_id: string }; Returns: Json }
+      get_my_custom_puzzle_listing: {
+        Args: { _share_id: string }
+        Returns: Json
+      }
+      get_my_custom_puzzle_rating: {
+        Args: { _share_id: string }
+        Returns: Json
+      }
       get_luck_report: {
         Args: {
           _device_id?: string
@@ -1098,6 +1184,10 @@ export type Database = {
           outcome: string
           sessions_claimed: number
         }[]
+      }
+      list_community_puzzles: {
+        Args: { _limit?: number; _offset?: number; _query?: string; _sort?: string }
+        Returns: Json
       }
       luck_eligible_paths: {
         Args: { _puzzle_id: string }
@@ -1183,6 +1273,10 @@ export type Database = {
       session_capability_ok: {
         Args: { _device_id: string; _device_token: string; _session_id: string }
         Returns: boolean
+      }
+      set_custom_puzzle_community_listing: {
+        Args: { _listed: boolean; _share_id: string }
+        Returns: Json
       }
       set_custom_puzzle_favorite: {
         Args: { _favorite: boolean; _share_id: string }

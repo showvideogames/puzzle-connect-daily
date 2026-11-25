@@ -873,7 +873,7 @@ describe("the Settings menu", () => {
 
   it("is unchanged unless a page offers the new entries", () => {
     render(modal());
-    expect(screen.queryByRole("button", { name: "All games" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "All Games" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Friends & Groups" })).toBeNull();
   });
 
@@ -881,7 +881,7 @@ describe("the Settings menu", () => {
     const onOpenGames = vi.fn();
     const onOpenSocial = vi.fn();
     render(modal({ onOpenGames, onOpenSocial }));
-    fireEvent.click(screen.getByRole("button", { name: "All games" }));
+    fireEvent.click(screen.getByRole("button", { name: "All Games" }));
     fireEvent.click(screen.getByRole("button", { name: "Friends & Groups" }));
     expect(onOpenGames).toHaveBeenCalledTimes(1);
     expect(onOpenSocial).toHaveBeenCalledTimes(1);

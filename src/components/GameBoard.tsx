@@ -16,6 +16,8 @@ import { PuzzleRating } from "./PuzzleRating";
 import { LuckyBot } from "./LuckyBot";
 import { ResultCellKind, ResultRow } from "./ResultGrid";
 import { ResultsDialog } from "./ResultsDialog";
+import { CustomPuzzleRating } from "./results/CustomPuzzleRating";
+import { communityPuzzlesOn } from "@/lib/communityFlag";
 import { SpotRainbowPrompt } from "./SpotRainbowPrompt";
 import { PuzzleModeBadge } from "./PuzzleModeBadge";
 import { X, TrendingUp, Eraser, MousePointer2, History, ChevronDown, RotateCcw } from "lucide-react";
@@ -2290,6 +2292,10 @@ function GameBoardView({ puzzle, settings, user = null, clearColorsTrigger = 0, 
           puzzleId={puzzle.id}
           solved={state.isWon}
           mistakes={state.mistakes}
+          // Custom puzzles: an optional 1-5 rating, only once the game is over
+          // (won, or lost by playing to the end) and only for a signed-in
+          // player; the row itself hides for the author.
+          rating={customMode && state.isComplete && user && communityPuzzlesOn() ? <CustomPuzzleRating shareId={puzzle.id} /> : null}
         />
 
       {rainbowHerring && (

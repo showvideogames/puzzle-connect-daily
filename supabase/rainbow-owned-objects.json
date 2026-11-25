@@ -532,6 +532,227 @@
       }
     },
     {
+      "name": "community_cover_emoji",
+      "rlsEnabled": true,
+      "rlsForced": false,
+      "comment": "Allowlist of cover emoji keys (fully-qualified code-point sequences), generated from the pinned emojibase-data release.",
+      "columns": [
+        {
+          "name": "key",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        }
+      ],
+      "constraints": [
+        {
+          "name": "community_cover_emoji_key_format",
+          "type": "c",
+          "definition": "CHECK ((key ~ '^[0-9A-F]{4,6}(-[0-9A-F]{4,6}){0,9}$'::text))"
+        },
+        {
+          "name": "community_cover_emoji_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (key)"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "community_cover_emoji_pkey",
+          "definition": "CREATE UNIQUE INDEX community_cover_emoji_pkey ON public.community_cover_emoji USING btree (key)"
+        }
+      ],
+      "triggers": [],
+      "policies": [],
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "community_curation",
+      "rlsEnabled": true,
+      "rlsForced": false,
+      "comment": "Admin-chosen Featured Puzzle (one) and ordered Editor's Picks (up to six) for Community Explore. Public reads re-check eligibility every time.",
+      "columns": [
+        {
+          "name": "custom_puzzle_id",
+          "type": "uuid",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "slot",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "position",
+          "type": "smallint",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "set_by",
+          "type": "uuid",
+          "notNull": false,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "set_at",
+          "type": "timestamp with time zone",
+          "notNull": true,
+          "default": "now()",
+          "comment": null
+        }
+      ],
+      "constraints": [
+        {
+          "name": "community_curation_custom_puzzle_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (custom_puzzle_id) REFERENCES custom_puzzles(id) ON DELETE CASCADE"
+        },
+        {
+          "name": "community_curation_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (custom_puzzle_id)"
+        },
+        {
+          "name": "community_curation_position_check",
+          "type": "c",
+          "definition": "CHECK ((((slot = 'featured'::text) AND (\"position\" = 0)) OR ((slot = 'pick'::text) AND (\"position\" >= 0) AND (\"position\" <= 5))))"
+        },
+        {
+          "name": "community_curation_set_by_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (set_by) REFERENCES auth.users(id) ON DELETE SET NULL"
+        },
+        {
+          "name": "community_curation_slot_check",
+          "type": "c",
+          "definition": "CHECK ((slot = ANY (ARRAY['featured'::text, 'pick'::text])))"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "community_curation_one_featured",
+          "definition": "CREATE UNIQUE INDEX community_curation_one_featured ON public.community_curation USING btree (slot) WHERE (slot = 'featured'::text)"
+        },
+        {
+          "name": "community_curation_pick_position",
+          "definition": "CREATE UNIQUE INDEX community_curation_pick_position ON public.community_curation USING btree (\"position\") WHERE (slot = 'pick'::text)"
+        },
+        {
+          "name": "community_curation_pkey",
+          "definition": "CREATE UNIQUE INDEX community_curation_pkey ON public.community_curation USING btree (custom_puzzle_id)"
+        }
+      ],
+      "triggers": [],
+      "policies": [],
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "creator_follows",
+      "rlsEnabled": true,
+      "rlsForced": false,
+      "comment": "One-way follows of a creator by a Rainbow account. Readable only through the follower's own get_following_feed; others see an aggregate count.",
+      "columns": [
+        {
+          "name": "follower_id",
+          "type": "uuid",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "creator_id",
+          "type": "uuid",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "notNull": true,
+          "default": "now()",
+          "comment": null
+        }
+      ],
+      "constraints": [
+        {
+          "name": "creator_follows_creator_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (creator_id) REFERENCES creator_profiles(user_id) ON DELETE CASCADE"
+        },
+        {
+          "name": "creator_follows_follower_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (follower_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+        },
+        {
+          "name": "creator_follows_not_self",
+          "type": "c",
+          "definition": "CHECK ((follower_id <> creator_id))"
+        },
+        {
+          "name": "creator_follows_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (follower_id, creator_id)"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "creator_follows_creator_idx",
+          "definition": "CREATE INDEX creator_follows_creator_idx ON public.creator_follows USING btree (creator_id)"
+        },
+        {
+          "name": "creator_follows_follower_idx",
+          "definition": "CREATE INDEX creator_follows_follower_idx ON public.creator_follows USING btree (follower_id, created_at DESC)"
+        },
+        {
+          "name": "creator_follows_pkey",
+          "definition": "CREATE UNIQUE INDEX creator_follows_pkey ON public.creator_follows USING btree (follower_id, creator_id)"
+        }
+      ],
+      "triggers": [],
+      "policies": [],
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
+    },
+    {
       "name": "creator_profiles",
       "rlsEnabled": true,
       "rlsForced": false,
@@ -665,6 +886,90 @@
         {
           "name": "custom_puzzle_favorites_user_idx",
           "definition": "CREATE INDEX custom_puzzle_favorites_user_idx ON public.custom_puzzle_favorites USING btree (user_id, created_at DESC)"
+        }
+      ],
+      "triggers": [],
+      "policies": [],
+      "grants": {
+        "service_role": [
+          "DELETE",
+          "INSERT",
+          "REFERENCES",
+          "SELECT",
+          "TRIGGER",
+          "TRUNCATE",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "custom_puzzle_ratings",
+      "rlsEnabled": true,
+      "rlsForced": false,
+      "comment": "Optional 1-5 star ratings of custom puzzles by signed-in, non-author players who finished them. Private: no aggregate or rater identity is exposed.",
+      "columns": [
+        {
+          "name": "custom_puzzle_id",
+          "type": "uuid",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "rating",
+          "type": "smallint",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "notNull": true,
+          "default": "now()",
+          "comment": null
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "notNull": true,
+          "default": "now()",
+          "comment": null
+        }
+      ],
+      "constraints": [
+        {
+          "name": "custom_puzzle_ratings_custom_puzzle_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (custom_puzzle_id) REFERENCES custom_puzzles(id) ON DELETE CASCADE"
+        },
+        {
+          "name": "custom_puzzle_ratings_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (custom_puzzle_id, user_id)"
+        },
+        {
+          "name": "custom_puzzle_ratings_rating_check",
+          "type": "c",
+          "definition": "CHECK (((rating >= 1) AND (rating <= 5)))"
+        },
+        {
+          "name": "custom_puzzle_ratings_user_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "custom_puzzle_ratings_pkey",
+          "definition": "CREATE UNIQUE INDEX custom_puzzle_ratings_pkey ON public.custom_puzzle_ratings USING btree (custom_puzzle_id, user_id)"
         }
       ],
       "triggers": [],
@@ -1016,9 +1321,91 @@
           "notNull": true,
           "default": null,
           "comment": "Permanent random URL-safe code for /p/:shortCode. Case-sensitive, unique. Possession is the access mechanism for a Private puzzle, exactly like share_id."
+        },
+        {
+          "name": "community_listed",
+          "type": "boolean",
+          "notNull": true,
+          "default": "false",
+          "comment": null
+        },
+        {
+          "name": "community_listed_at",
+          "type": "timestamp with time zone",
+          "notNull": false,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "cover_emoji",
+          "type": "text",
+          "notNull": false,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "cover_background",
+          "type": "text",
+          "notNull": false,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "cover_emoji_2",
+          "type": "text",
+          "notNull": false,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "cover_emoji_3",
+          "type": "text",
+          "notNull": false,
+          "default": null,
+          "comment": null
         }
       ],
       "constraints": [
+        {
+          "name": "custom_puzzles_community_requires_public",
+          "type": "c",
+          "definition": "CHECK (((NOT community_listed) OR (visibility = 'public'::text)))"
+        },
+        {
+          "name": "custom_puzzles_cover_background_check",
+          "type": "c",
+          "definition": "CHECK (((cover_background IS NULL) OR (cover_background = ANY (ARRAY['rainbow-bands'::text, 'pastel-rainbow'::text, 'dusk-gradient'::text, 'ocean-gradient'::text, 'retro-sunburst'::text, 'sunset-split'::text, 'lilac'::text, 'butter'::text, 'mint'::text, 'sunflower'::text, 'tangerine'::text, 'coral'::text, 'bubblegum'::text, 'ocean'::text, 'forest'::text, 'charcoal'::text, 'lime-checks'::text, 'apricot-stripes'::text, 'lilac-dots'::text, 'indigo-stars'::text, 'teal-waves'::text, 'pink-waves'::text, 'sky-grid'::text, 'cream-confetti'::text, 'berry-stripes'::text, 'cherry-polka'::text, 'peach-rings'::text, 'mint-checks'::text, 'terrazzo'::text, 'sparkles'::text, 'ripples'::text, 'bold-checker'::text, 'candy-stripes'::text, 'polka-pop'::text, 'mint-zigzag'::text, 'peach-sorbet'::text, 'northern-lights'::text, 'rosey-dawn'::text, 'pool-party'::text, 'blue-hour'::text, 'lemon-lime'::text, 'plum-velvet'::text, 'watermelon-split'::text, 'frost-blue'::text, 'tomato'::text, 'tart-cherry'::text, 'evergreen'::text, 'deep-navy'::text, 'periwinkle'::text, 'marigold'::text, 'warm-sand'::text, 'oat-paper'::text, 'picnic-gingham'::text, 'blueberry-gingham'::text, 'school-paper'::text, 'graph-paper'::text, 'navy-pinstripe'::text, 'citrus-dots'::text, 'purple-disco'::text, 'caramel-weave'::text, 'seaglass-scales'::text, 'retro-mosaic'::text, 'moonlit'::text, 'snowfall'::text, 'daisy-field'::text, 'sugar-hearts'::text, 'daydream-clouds'::text, 'desert-dunes'::text, 'botanical-stems'::text, 'arcade-pixels'::text, 'retro-orbits'::text, 'little-lightning'::text]))))"
+        },
+        {
+          "name": "custom_puzzles_cover_emoji_2_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (cover_emoji_2) REFERENCES community_cover_emoji(key)"
+        },
+        {
+          "name": "custom_puzzles_cover_emoji_3_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (cover_emoji_3) REFERENCES community_cover_emoji(key)"
+        },
+        {
+          "name": "custom_puzzles_cover_emoji_distinct",
+          "type": "c",
+          "definition": "CHECK ((((cover_emoji_2 IS NULL) OR (cover_emoji_2 <> cover_emoji)) AND ((cover_emoji_3 IS NULL) OR ((cover_emoji_3 <> cover_emoji) AND (cover_emoji_3 <> cover_emoji_2)))))"
+        },
+        {
+          "name": "custom_puzzles_cover_emoji_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (cover_emoji) REFERENCES community_cover_emoji(key)"
+        },
+        {
+          "name": "custom_puzzles_cover_emoji_order",
+          "type": "c",
+          "definition": "CHECK ((((cover_emoji_2 IS NULL) OR (cover_emoji IS NOT NULL)) AND ((cover_emoji_3 IS NULL) OR (cover_emoji_2 IS NOT NULL))))"
+        },
+        {
+          "name": "custom_puzzles_cover_pair",
+          "type": "c",
+          "definition": "CHECK ((((cover_emoji IS NULL) AND (cover_background IS NULL)) OR ((cover_emoji IS NOT NULL) AND (cover_background IS NOT NULL))))"
+        },
         {
           "name": "custom_puzzles_created_by_fkey",
           "type": "f",
@@ -1051,6 +1438,10 @@
         }
       ],
       "indexes": [
+        {
+          "name": "custom_puzzles_community_feed_idx",
+          "definition": "CREATE INDEX custom_puzzles_community_feed_idx ON public.custom_puzzles USING btree (community_listed_at DESC, short_code) WHERE (community_listed AND (visibility = 'public'::text) AND (moderation_status = 'active'::text) AND (created_by IS NOT NULL))"
+        },
         {
           "name": "custom_puzzles_created_by_idx",
           "definition": "CREATE INDEX custom_puzzles_created_by_idx ON public.custom_puzzles USING btree (created_by) WHERE (created_by IS NOT NULL)"
@@ -3030,6 +3421,23 @@
       "comment": "Admin-only lookup of a Rainbow ACCOUNT by email (for granting archive access). Searches accounts, not the project's whole auth user pool."
     },
     {
+      "name": "admin_get_community_curation",
+      "args": "",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
       "name": "admin_save_puzzle",
       "args": "_puzzle_id uuid, _metadata jsonb, _content jsonb",
       "returns": "jsonb",
@@ -3047,6 +3455,23 @@
       "comment": "Atomically creates or updates a puzzle, including its Draft/Beta/Published status. Creates and promotes a new immutable version only when canonical gameplay content actually changed; metadata-only saves (status, designer_name) and no-op saves create none. Admin role required, checked inside the function."
     },
     {
+      "name": "admin_set_community_curation",
+      "args": "_featured text, _picks text[]",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "Admin only. Replaces the whole curation. New additions must be listed in Community; entries already saved may stay while hidden (Explore re-checks on read) and can be removed or replaced."
+    },
+    {
       "name": "admin_set_custom_puzzle_status",
       "args": "_puzzle_id uuid, _status text",
       "returns": "boolean",
@@ -3062,6 +3487,22 @@
         "service_role"
       ],
       "comment": "Admin-only moderation switch for a custom puzzle. No UI in this phase -- exists so a follow-up moderation dashboard needs no schema change."
+    },
+    {
+      "name": "community_creator_json",
+      "args": "_c creator_profiles",
+      "returns": "jsonb",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "service_role"
+      ],
+      "comment": null
     },
     {
       "name": "complete_beta_playtest",
@@ -3168,6 +3609,38 @@
       "comment": null
     },
     {
+      "name": "custom_puzzle_card_json",
+      "args": "_p custom_puzzles",
+      "returns": "jsonb",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
+      "name": "custom_puzzle_in_community",
+      "args": "_p custom_puzzles",
+      "returns": "boolean",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": false,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
       "name": "custom_puzzle_new_short_code",
       "args": "",
       "returns": "text",
@@ -3195,6 +3668,24 @@
         "search_path=public"
       ],
       "executableBy": [
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
+      "name": "custom_puzzle_share_id",
+      "args": "_short_code text",
+      "returns": "text",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
         "service_role"
       ],
       "comment": null
@@ -3353,6 +3844,42 @@
       "comment": null
     },
     {
+      "name": "get_community_explore",
+      "args": "",
+      "returns": "jsonb",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "Featured Puzzle and Editor's Picks for Explore: only puzzles in Community right now, card fields only."
+    },
+    {
+      "name": "get_creator_community",
+      "args": "_slug text",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
       "name": "get_creator_profile",
       "args": "_slug text, _sort text",
       "returns": "jsonb",
@@ -3407,6 +3934,24 @@
       "comment": "Fetches one custom puzzle by short_code (Public and Private alike; the code is the access mechanism). Same shape as get_custom_puzzle. Null if unknown or hidden by moderation."
     },
     {
+      "name": "get_custom_puzzle_cards",
+      "args": "_share_ids text[]",
+      "returns": "jsonb",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
       "name": "get_custom_puzzle_stats",
       "args": "_share_id text",
       "returns": "jsonb",
@@ -3425,6 +3970,23 @@
       "comment": "Aggregate completed-play stats for one custom puzzle (by share_id, so Private stats require possessing the link): completed plays, wins, losses, average guesses over wins, and the fixed 4/5/6/7/8+ distribution. Never returns anything row-level."
     },
     {
+      "name": "get_following_feed",
+      "args": "_limit integer, _offset integer",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "The caller's followed creators and their puzzles currently in Community, newest listing first."
+    },
+    {
       "name": "get_luck_report",
       "args": "_puzzle_id uuid, _device_id text, _device_token text",
       "returns": "json",
@@ -3441,6 +4003,40 @@
         "service_role"
       ],
       "comment": "Lucky Bot Luck numbers for the caller's own first official attempt at a Full puzzle: eligible player count, how many took the same exact guess path, and the puzzle's ceiling. Counts only; never exposes another player's path or session."
+    },
+    {
+      "name": "get_my_custom_puzzle_listing",
+      "args": "_share_id text",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "For the caller's own puzzle: its Community listing state. Anyone else gets {owned:false}."
+    },
+    {
+      "name": "get_my_custom_puzzle_rating",
+      "args": "_share_id text",
+      "returns": "jsonb",
+      "language": "sql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": null
     },
     {
       "name": "get_my_favorites",
@@ -3654,6 +4250,42 @@
         "service_role"
       ],
       "comment": null
+    },
+    {
+      "name": "list_community_newest",
+      "args": "_limit integer, _before_listed_at timestamp with time zone, _before_short_code text",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "Every puzzle in Community, by first listing time newest first, keyset-paged. No editorial or popularity filtering."
+    },
+    {
+      "name": "list_community_puzzles",
+      "args": "_query text, _sort text, _limit integer, _offset integer",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "Community Puzzles feed: only puzzles their signed-in creator explicitly listed, that are Public, active and still account-owned. Bounded (<=48 per page, offset <=2000, query <=60 chars, literal substring). Card fields only: never content, ids, share_id, created_by or account data."
     },
     {
       "name": "luck_eligible_paths",
@@ -3880,6 +4512,24 @@
       "comment": "Asked on every signed-in load: does THIS device still owe the one-time import decision? unauthenticated | no_guest_history | already_decided | credential_invalid | import_available (+ counts). Never writes."
     },
     {
+      "name": "search_community_creators",
+      "args": "_query text, _limit integer, _offset integer",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "Creators with at least one puzzle currently in Community, by public name or slug. Aggregate counts only."
+    },
+    {
       "name": "session_capability_ok",
       "args": "_session_id uuid, _device_id text, _device_token text",
       "returns": "boolean",
@@ -3898,8 +4548,93 @@
       "comment": null
     },
     {
+      "name": "set_creator_follow",
+      "args": "_slug text, _follow boolean",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
+      "name": "set_custom_puzzle_community_listing",
+      "args": "_share_id text, _listed boolean",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "The puzzle's own signed-in creator lists or unlists it in Community. Never changes visibility, links or content."
+    },
+    {
+      "name": "set_custom_puzzle_cover",
+      "args": "_share_id text, _emoji text, _background text",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "The puzzle's own creator sets or removes its cover: one allowlisted emoji key and one preset background key."
+    },
+    {
+      "name": "set_custom_puzzle_cover_emojis",
+      "args": "_share_id text, _emojis text[], _background text",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "The puzzle's own creator sets or removes its cover: one to three distinct allowlisted emoji keys and one preset background."
+    },
+    {
       "name": "set_custom_puzzle_favorite",
       "args": "_share_id text, _favorite boolean",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
+      "name": "set_custom_puzzle_rating",
+      "args": "_share_id text, _rating integer, _device_id text, _device_token text",
       "returns": "jsonb",
       "language": "plpgsql",
       "kind": "function",

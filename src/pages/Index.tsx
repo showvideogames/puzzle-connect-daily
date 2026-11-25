@@ -358,7 +358,6 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
         onClose={handleTutorialClose}
       />
       <SettingsModal
-        format={format}
         open={activeModal === "settings"}
         onClose={closeModal}
         settings={settings}
@@ -366,7 +365,6 @@ export default function Index({ format = FULL_FORMAT }: IndexProps = {}) {
         onOpenFeedback={() => setActiveModal("feedback")}
         showMenuLinks
         onHowToPlayClick={() => openModal("help")}
-        showCreateLink
         user={user}
         onSignOut={handleSignOut}
       />

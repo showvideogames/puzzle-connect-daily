@@ -44,6 +44,8 @@ supabase/.temp/
 # documents the shape and carries no keys at all.
 !.env.e2e.example
 dist-e2e
+dist-e2e-community
+dist-e2e-flagoff
 e2e/.artifacts/
 e2e/supabase/.temp/
 e2e/supabase/.branches/
@@ -53,3 +55,7 @@ e2e/supabase/snippets/
 .vercel
 
 .preview-cache/
+dist-showcase
+dist-showcase-build
+dist-showcase-artifact
+dist-showcase.zip
