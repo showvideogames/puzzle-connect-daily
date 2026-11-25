@@ -5,11 +5,17 @@ import { resolveCover, type CreatorCover } from "@/lib/creatorCover";
 export const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif';
 
 /**
- * A puzzle's creator cover: its one emoji, centred and large, on its one
- * preset background. With no cover (every puzzle made before covers, or a
- * creator who skipped the step) it draws the neutral default: Rainbow tiles on
- * a soft ground. Never any text: the title always sits outside the art.
- * Decorative (aria-hidden); the title and credit beside it carry the meaning.
+ * Each emoji's size relative to a single emoji, so two sit side by side and
+ * three fit in a tight row without touching, down to the smallest thumbnail.
+ */
+const SCALE_BY_COUNT = [1, 0.7, 0.56];
+
+/**
+ * A puzzle's creator cover: its one to three emoji, centred, on its preset
+ * background. One is large; two are balanced side by side; three sit in a
+ * tight row. With no cover (older puzzles, or a creator who skipped it) it
+ * draws the neutral default: Rainbow tiles on a soft ground. Never any text:
+ * the title always sits outside the art. Decorative (aria-hidden).
  */
 export function CreatorCoverArt({ cover, className = "", emojiScale = 0.42, emojiSize }: { cover: CreatorCover | null | undefined; className?: string; emojiScale?: number; emojiSize?: string }) {
   const resolved = resolveCover(cover);
@@ -24,17 +30,25 @@ export function CreatorCoverArt({ cover, className = "", emojiScale = 0.42, emoj
       </div>
     );
   }
+  const n = resolved.chars.length;
+  const factor = SCALE_BY_COUNT[n - 1];
+  const size = emojiSize ? `calc(${emojiSize} * ${factor})` : `${Math.round(emojiScale * factor * 1000) / 10}cqw`;
   return (
     <div
       aria-hidden="true"
       data-cover-kind="creator"
-      data-cover-emoji={cover!.emoji}
+      data-cover-emoji={cover!.emojis.join(" ")}
+      data-cover-count={n}
       data-cover-background={cover!.background}
       className={`flex items-center justify-center [container-type:inline-size] ${className}`}
       style={backgroundStyle(resolved.bg)}
     >
-      <span className="select-none leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.18)]" style={{ fontFamily: EMOJI_FONT, fontSize: emojiSize ?? `${Math.round(emojiScale * 100)}cqw` }}>
-        {resolved.char}
+      <span className="flex items-center justify-center" style={{ gap: `calc(${size} * 0.12)` }}>
+        {resolved.chars.map((c, i) => (
+          <span key={i} data-cover-glyph className="select-none leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.18)]" style={{ fontFamily: EMOJI_FONT, fontSize: size }}>
+            {c}
+          </span>
+        ))}
       </span>
     </div>
   );

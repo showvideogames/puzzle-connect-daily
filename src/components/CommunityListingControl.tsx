@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getMyCommunityListing, setCommunityListing, setCustomPuzzleCover, type CommunityListingState } from "@/lib/customPuzzles";
-import { CoverPicker, draftToCover, type CoverDraft } from "@/components/community/CoverPicker";
+import { CoverPicker, coverToDraft, draftToCover, type CoverDraft } from "@/components/community/CoverPicker";
 import type { CreatorCover } from "@/lib/creatorCover";
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -22,7 +22,7 @@ export function CommunityListingControl({ shareId, userId, title, creatorName, c
 }) {
   const [state, setState] = useState<CommunityListingState | null>(null);
   const [editingCover, setEditingCover] = useState(false);
-  const [draft, setDraft] = useState<CoverDraft>({ emoji: cover?.emoji ?? null, background: cover?.background ?? null });
+  const [draft, setDraft] = useState<CoverDraft>(coverToDraft(cover));
   const [coverSaving, setCoverSaving] = useState(false);
   const [coverMessage, setCoverMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -72,7 +72,7 @@ export function CommunityListingControl({ shareId, userId, title, creatorName, c
         {onCoverChange && (
           <button
             type="button"
-            onClick={() => { setDraft({ emoji: cover?.emoji ?? null, background: cover?.background ?? null }); setCoverMessage(null); setEditingCover((v) => !v); }}
+            onClick={() => { setDraft(coverToDraft(cover)); setCoverMessage(null); setEditingCover((v) => !v); }}
             aria-expanded={editingCover}
             className={`inline-flex h-11 shrink-0 items-center justify-center rounded-full border border-border bg-card px-5 text-sm font-bold text-foreground hover:bg-secondary ${focusRing}`}
           >

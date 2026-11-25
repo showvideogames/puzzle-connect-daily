@@ -26,7 +26,7 @@ export interface ShowcasePuzzle {
   plays: number;
   favorites: number;
   /** The creator's cover keys (one emoji, one preset background), or none. */
-  cover?: { emoji: string; background: string };
+  cover?: { emojis: string[]; background: string };
 }
 
 const wren: ShowcaseCreator = { userId: "fixture-wren", slug: "wren-halloway-k4m2", name: "Wren Halloway", followers: 18 };
@@ -56,7 +56,7 @@ export const PUZZLES: ShowcasePuzzle[] = [
       { category: "Often Pickled", words: ["BEET", "CAPER", "GHERKIN", "OLIVE"] },
     ],
     listedAt: "2026-11-21T10:00:00Z", plays: 42, favorites: 11,
-    cover: { emoji: "1F37F", background: "apricot-stripes" },
+    cover: { emojis: ["1F37F"], background: "apricot-stripes" },
   }),
   puzzle({
     key: "tides", title: "Turn Of The Tides", creator: odie, shortCode: "TidesTrn4x", mode: "classic",
@@ -109,7 +109,7 @@ export const PUZZLES: ShowcasePuzzle[] = [
       { category: "Very Dark", words: ["EBONY", "INK", "JET", "ONYX"] },
     ],
     listedAt: "2026-11-24T19:00:00Z", plays: 3, favorites: 1,
-    cover: { emoji: "1F989", background: "indigo-stars" },
+    cover: { emojis: ["1F989"], background: "indigo-stars" },
   }),
   puzzle({
     key: "garden", title: "Garden Party", creator: pia, shortCode: "GardenPt5r", mode: "classic",
@@ -120,7 +120,7 @@ export const PUZZLES: ShowcasePuzzle[] = [
       { category: "Lawn Games", words: ["BOULES", "CROQUET", "QUOITS", "SKITTLES"] },
     ],
     listedAt: "2026-11-22T14:00:00Z", plays: 0, favorites: 0,
-    cover: { emoji: "1F438", background: "lime-checks" },
+    cover: { emojis: ["1F438", "1F337"], background: "lime-checks" },
   }),
   puzzle({
     key: "orbit", title: "Out of Orbit", creator: odie, shortCode: "OrbitOut7k", mode: "classic",
@@ -131,7 +131,7 @@ export const PUZZLES: ShowcasePuzzle[] = [
       { category: "In Orbit", words: ["DEBRIS", "MOON", "SATELLITE", "STATION"] },
     ],
     listedAt: "2026-11-20T12:00:00Z", plays: 12, favorites: 4,
-    cover: { emoji: "1FA90", background: "lilac-dots" },
+    cover: { emojis: ["1FA90", "1F680", "2B50"], background: "lilac-dots" },
   }),
 ];
 

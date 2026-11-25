@@ -34,7 +34,9 @@ function card(p: ShowcasePuzzle) {
     finished_plays: plays.get(p.key) ?? 0,
     favorite_count: p.favorites,
     listed_at: p.listedAt,
-    cover_emoji: p.cover?.emoji ?? null,
+    cover_emoji: p.cover?.emojis[0] ?? null,
+    cover_emoji_2: p.cover?.emojis[1] ?? null,
+    cover_emoji_3: p.cover?.emojis[2] ?? null,
     cover_background: p.cover?.background ?? null,
   };
 }
@@ -64,7 +66,9 @@ function full(p: ShowcasePuzzle) {
     creator_slug: p.creator.slug,
     favorite_count: p.favorites,
     favorited_by_me: false,
-    cover_emoji: p.cover?.emoji ?? null,
+    cover_emoji: p.cover?.emojis[0] ?? null,
+    cover_emoji_2: p.cover?.emojis[1] ?? null,
+    cover_emoji_3: p.cover?.emojis[2] ?? null,
     cover_background: p.cover?.background ?? null,
   };
 }
@@ -188,7 +192,7 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
  * this visit's Newest, with the cover the visitor picked. Nothing is stored.
  */
 let demoCount = 0;
-export function publishDemoPuzzle(title: string, cover: { emoji: string; background: string } | null): string {
+export function publishDemoPuzzle(title: string, cover: { emojis: string[]; background: string } | null): string {
   demoCount++;
   const code = `DemoPuz${String(demoCount).padStart(3, "0")}`;
   const you = { userId: "fixture-you", slug: "you-demo-a1b2", name: "You (demo)", followers: 0 };

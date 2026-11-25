@@ -347,6 +347,8 @@ export type Database = {
           community_listed: boolean
           cover_background: string | null
           cover_emoji: string | null
+          cover_emoji_2: string | null
+          cover_emoji_3: string | null
           community_listed_at: string | null
           content: Json
           created_at: string
@@ -363,6 +365,8 @@ export type Database = {
           community_listed?: boolean
           cover_background?: string | null
           cover_emoji?: string | null
+          cover_emoji_2?: string | null
+          cover_emoji_3?: string | null
           community_listed_at?: string | null
           content: Json
           created_at?: string
@@ -379,6 +383,8 @@ export type Database = {
           community_listed?: boolean
           cover_background?: string | null
           cover_emoji?: string | null
+          cover_emoji_2?: string | null
+          cover_emoji_3?: string | null
           community_listed_at?: string | null
           content?: Json
           created_at?: string
@@ -933,6 +939,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      set_custom_puzzle_cover_emojis: {
+        Args: { _background: string | null; _emojis: string[] | null; _share_id: string }
+        Returns: Json
+      }
       set_custom_puzzle_cover: {
         Args: { _background: string | null; _emoji: string | null; _share_id: string }
         Returns: Json

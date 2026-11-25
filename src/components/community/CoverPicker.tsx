@@ -1,17 +1,27 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Check, Search, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { COVER_BACKGROUNDS, backgroundStyle } from "@/lib/coverBackgrounds";
-import { emojiFromKey, type CreatorCover } from "@/lib/creatorCover";
+import { MAX_COVER_EMOJI, emojiFromKey, type CreatorCover } from "@/lib/creatorCover";
 import { cv } from "@/lib/communityStyle";
 import { CreatorCoverArt, EMOJI_FONT } from "./CreatorCoverArt";
 
-/** One emoji and one background; either may still be unpicked while editing. */
+/** One to three emoji (in order) and one background; either may still be unpicked while editing. */
 export interface CoverDraft {
-  emoji: string | null;
+  emojis: string[];
   background: string | null;
 }
-export const NO_COVER: CoverDraft = { emoji: null, background: null };
-export const draftToCover = (d: CoverDraft): CreatorCover | null => (d.emoji && d.background ? { emoji: d.emoji, background: d.background } : null);
+export const NO_COVER: CoverDraft = { emojis: [], background: null };
+export const draftToCover = (d: CoverDraft): CreatorCover | null =>
+  d.emojis.length >= 1 && d.emojis.length <= MAX_COVER_EMOJI && d.background ? { emojis: [...d.emojis], background: d.background } : null;
+export const coverToDraft = (c: CreatorCover | null | undefined): CoverDraft => ({ emojis: c ? [...c.emojis] : [], background: c?.background ?? null });
+
+const BACKGROUND_GROUPS: { key: "rainbow" | "solid" | "pattern"; label: string }[] = [
+  { key: "rainbow", label: "Rainbow & gradients" },
+  { key: "solid", label: "Solids" },
+  { key: "pattern", label: "Patterns" },
+];
+/** Backgrounds in picker order (grouped), for one arrow-key path through all of them. */
+const ORDERED_BACKGROUNDS = BACKGROUND_GROUPS.flatMap((g) => COVER_BACKGROUNDS.filter((b) => b.group === g.key));
 /** The background a first emoji lands on, so a cover is complete as soon as one is picked. */
 export const DEFAULT_BACKGROUND = "lilac";
 
@@ -35,7 +45,8 @@ function useRovingGrid(count: number, active: number, setActive: (i: number) => 
   return (e: KeyboardEvent) => {
     const el = container.current;
     if (!el || count === 0) return;
-    const cols = Math.max(1, getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length);
+    const gridEl = el.querySelector<HTMLElement>("[data-bg-grid]") ?? el;
+    const cols = Math.max(1, getComputedStyle(gridEl).gridTemplateColumns.split(" ").filter(Boolean).length);
     const next = { ArrowRight: active + 1, ArrowLeft: active - 1, ArrowDown: active + cols, ArrowUp: active - cols, Home: 0, End: count - 1 }[e.key];
     if (next === undefined) return;
     e.preventDefault();
@@ -59,8 +70,8 @@ interface CoverPickerProps {
 }
 
 /**
- * "Make A Cover" (Community preview): exactly one emoji from the generated
- * Unicode catalog and one of 24 preset backgrounds, with a live preview.
+ * "Make A Cover" (Community): one to three emoji from the generated Unicode
+ * catalog and one preset background, with a live preview of the same art.
  * Selections are keys only; there is no text field that reaches the cover,
  * no upload and no paste. The search box only filters the list.
  */
@@ -70,7 +81,8 @@ export function CoverPicker({ value, onChange, title, creatorName, onSave, savin
   const [group, setGroup] = useState(0);
   const [query, setQuery] = useState("");
   const [activeEmoji, setActiveEmoji] = useState(0);
-  const [activeBg, setActiveBg] = useState(() => Math.max(0, COVER_BACKGROUNDS.findIndex((b) => b.key === value.background)));
+  const [activeBg, setActiveBg] = useState(() => Math.max(0, ORDERED_BACKGROUNDS.findIndex((b) => b.key === value.background)));
+  const [limitNote, setLimitNote] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
   const bgRef = useRef<HTMLDivElement>(null);
 
@@ -88,16 +100,28 @@ export function CoverPicker({ value, onChange, title, creatorName, onSave, savin
     return catalog.emoji.filter((e) => words.every((w) => e.words.includes(w)));
   }, [catalog, group, q]);
   useEffect(() => {
-    const i = shown.findIndex((e) => e.key === value.emoji);
+    const i = shown.findIndex((e) => value.emojis.includes(e.key));
     setActiveEmoji(i >= 0 ? i : 0);
-  }, [shown, value.emoji]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown]);
 
-  const selected = catalog?.emoji.find((e) => e.key === value.emoji) ?? null;
+  const labelOf = (key: string) => catalog?.emoji.find((e) => e.key === key)?.label ?? "emoji";
   const selectedBg = COVER_BACKGROUNDS.find((b) => b.key === value.background) ?? null;
   const cover = draftToCover(value);
   const emojiKeys = useRovingGrid(shown.length, activeEmoji, setActiveEmoji, gridRef);
-  const bgKeys = useRovingGrid(COVER_BACKGROUNDS.length, activeBg, setActiveBg, bgRef);
-  const pickEmoji = (key: string) => onChange({ emoji: key, background: value.background ?? DEFAULT_BACKGROUND });
+  const bgKeys = useRovingGrid(ORDERED_BACKGROUNDS.length, activeBg, setActiveBg, bgRef);
+  // Tapping an emoji adds it (up to three) or, if it's already in, takes it out.
+  const pickEmoji = (key: string) => {
+    if (value.emojis.includes(key)) { setLimitNote(false); onChange({ ...value, emojis: value.emojis.filter((k) => k !== key) }); return; }
+    if (value.emojis.length >= MAX_COVER_EMOJI) { setLimitNote(true); return; }
+    setLimitNote(false);
+    onChange({ emojis: [...value.emojis, key], background: value.background ?? DEFAULT_BACKGROUND });
+  };
+  const moveEmoji = (i: number, d: -1 | 1) => {
+    const next = [...value.emojis];
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    onChange({ ...value, emojis: next });
+  };
   const pickBackground = (key: string) => onChange({ ...value, background: key });
 
   return (
@@ -106,11 +130,11 @@ export function CoverPicker({ value, onChange, title, creatorName, onSave, savin
         <h2 id="cover-heading" className={`text-[24px] font-black tracking-tight ${cv.ink}`}>Make A Cover</h2>
         <span className="text-xs font-semibold text-muted-foreground">Optional</span>
       </div>
-      <p className="text-sm text-muted-foreground">{note ?? "One emoji on one background. Skip it and your puzzle gets the standard Rainbow cover."}</p>
+      <p className="text-sm text-muted-foreground">{note ?? "Up to three emoji on one background. Skip it and your puzzle gets the standard Rainbow cover."}</p>
 
       {/* Live preview: the art, then the card it becomes, title outside the art. */}
       <div className="mt-3 overflow-hidden rounded-2xl border border-border" data-testid="cover-preview">
-        {value.background && !value.emoji && selectedBg
+        {value.background && value.emojis.length === 0 && selectedBg
           ? <div aria-hidden="true" className="aspect-[16/7] w-full" style={backgroundStyle(selectedBg)} />
           : <CreatorCoverArt cover={cover} className="aspect-[16/7] w-full" emojiScale={0.24} />}
       </div>
@@ -122,8 +146,38 @@ export function CoverPicker({ value, onChange, title, creatorName, onSave, savin
         </div>
       </div>
       <p className="mt-2 min-h-5 text-sm font-semibold text-foreground" aria-live="polite" data-testid="cover-selection">
-        {cover && selected && selectedBg ? `${selected.label[0].toUpperCase()}${selected.label.slice(1)} on ${selectedBg.label}` : value.emoji ? "Pick a background" : "No cover yet"}
+        {cover && selectedBg
+          ? `${value.emojis.map(labelOf).join(", ").replace(/^./, (c) => c.toUpperCase())} on ${selectedBg.label}`
+          : value.emojis.length ? "Pick a background" : "No cover yet"}
       </p>
+
+      {/* The chosen emoji, in cover order: remove or move each one. */}
+      <div className="mt-1" data-testid="cover-chosen">
+        <p className="text-xs font-bold text-muted-foreground" aria-live="polite">Your emoji · {value.emojis.length} of {MAX_COVER_EMOJI}</p>
+        {value.emojis.length > 0 && (
+          <ol className="mt-1.5 flex flex-wrap gap-2">
+            {value.emojis.map((k, i) => (
+              <li key={k} className="inline-flex items-center gap-0.5 rounded-full border border-border bg-background py-0.5 pl-2 pr-0.5" data-testid="cover-chip">
+                <span aria-hidden="true" className="text-[22px] leading-none" style={{ fontFamily: EMOJI_FONT }}>{emojiFromKey(k)}</span>
+                {value.emojis.length > 1 && (
+                  <>
+                    <button type="button" disabled={disabled || i === 0} onClick={() => moveEmoji(i, -1)} aria-label={`Move ${labelOf(k)} left`} className={`grid h-9 w-9 place-items-center rounded-full text-foreground hover:bg-secondary disabled:opacity-30 ${cv.focus}`}>
+                      <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+                    </button>
+                    <button type="button" disabled={disabled || i === value.emojis.length - 1} onClick={() => moveEmoji(i, 1)} aria-label={`Move ${labelOf(k)} right`} className={`grid h-9 w-9 place-items-center rounded-full text-foreground hover:bg-secondary disabled:opacity-30 ${cv.focus}`}>
+                      <ChevronRight aria-hidden="true" className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
+                <button type="button" disabled={disabled} onClick={() => pickEmoji(k)} aria-label={`Remove ${labelOf(k)}`} className={`grid h-9 w-9 place-items-center rounded-full text-foreground hover:bg-secondary ${cv.focus}`}>
+                  <X aria-hidden="true" className="h-4 w-4" />
+                </button>
+              </li>
+            ))}
+          </ol>
+        )}
+        {limitNote && <p className="mt-1 text-xs font-semibold text-foreground" role="status">Up to three emoji. Remove one to add another.</p>}
+      </div>
 
       <fieldset disabled={disabled} className="min-w-0">
         <div className="relative mt-2">
@@ -171,13 +225,14 @@ export function CoverPicker({ value, onChange, title, creatorName, onSave, savin
               <div
                 ref={gridRef}
                 role="listbox"
+                aria-multiselectable="true"
                 aria-label={q ? "Matching emojis" : `${catalog.groups[group]} emojis`}
                 onKeyDown={emojiKeys}
                 className="mt-3 grid max-h-[248px] grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1.5 overflow-y-auto overscroll-contain p-1"
                 data-testid="cover-emoji-grid"
               >
                 {shown.map((e, i) => {
-                  const on = e.key === value.emoji;
+                  const on = value.emojis.includes(e.key);
                   return (
                     <button
                       key={e.key}
@@ -203,31 +258,39 @@ export function CoverPicker({ value, onChange, title, creatorName, onSave, savin
         )}
 
         <h3 id="cover-bg-heading" className={`mt-4 text-base font-extrabold ${cv.ink}`}>Background</h3>
-        <div ref={bgRef} role="radiogroup" aria-labelledby="cover-bg-heading" onKeyDown={bgKeys} className="mt-2 grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-2" data-testid="cover-backgrounds">
-          {COVER_BACKGROUNDS.map((b, i) => {
-            const on = b.key === value.background;
-            return (
-              <button
-                key={b.key}
-                type="button"
-                role="radio"
-                data-cell
-                aria-checked={on}
-                aria-label={b.label}
-                title={b.label}
-                tabIndex={i === activeBg ? 0 : -1}
-                onClick={() => { setActiveBg(i); pickBackground(b.key); }}
-                className={`relative h-12 rounded-xl border border-black/10 transition-transform active:scale-95 ${cv.focus} ${on ? "ring-2 ring-violet-500 ring-offset-2 ring-offset-card dark:ring-violet-300" : ""}`}
-                style={backgroundStyle(b)}
-              >
-                {on && (
-                  <span aria-hidden="true" className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-violet-700 text-white shadow dark:bg-violet-300 dark:text-[#1e0a45]">
-                    <Check className="h-3 w-3" strokeWidth={3.5} />
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <div ref={bgRef} role="radiogroup" aria-labelledby="cover-bg-heading" onKeyDown={bgKeys} data-testid="cover-backgrounds">
+          {BACKGROUND_GROUPS.map((g) => (
+            <div key={g.key} className="mt-2">
+              <p className="mb-1 text-xs font-bold text-muted-foreground" aria-hidden="true">{g.label}</p>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-2" data-bg-grid>
+                {ORDERED_BACKGROUNDS.map((b, i) => {
+                  if (b.group !== g.key) return null;
+                  const on = b.key === value.background;
+                  return (
+                    <button
+                      key={b.key}
+                      type="button"
+                      role="radio"
+                      data-cell
+                      aria-checked={on}
+                      aria-label={b.label}
+                      title={b.label}
+                      tabIndex={i === activeBg ? 0 : -1}
+                      onClick={() => { setActiveBg(i); pickBackground(b.key); }}
+                      className={`relative h-12 rounded-xl border border-black/10 transition-transform active:scale-95 ${cv.focus} ${on ? "ring-2 ring-violet-500 ring-offset-2 ring-offset-card dark:ring-violet-300" : ""}`}
+                      style={backgroundStyle(b)}
+                    >
+                      {on && (
+                        <span aria-hidden="true" className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-violet-700 text-white shadow dark:bg-violet-300 dark:text-[#1e0a45]">
+                          <Check className="h-3 w-3" strokeWidth={3.5} />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </fieldset>
 
@@ -237,7 +300,7 @@ export function CoverPicker({ value, onChange, title, creatorName, onSave, savin
             {saving ? "Saving…" : "Save Cover"}
           </button>
         )}
-        {(value.emoji || value.background) && (
+        {(value.emojis.length > 0 || value.background) && (
           <button type="button" onClick={() => onChange(NO_COVER)} disabled={disabled} className={`inline-flex h-11 items-center justify-center gap-1 self-center rounded-full px-4 text-sm ${cv.link} ${cv.focus}`}>
             <X aria-hidden="true" className="h-4 w-4" /> Use the standard cover
           </button>
