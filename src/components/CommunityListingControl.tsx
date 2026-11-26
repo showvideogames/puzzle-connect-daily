@@ -107,7 +107,7 @@ export function CommunityListingControl({ shareId, userId, title, creatorName, c
               try {
                 const saved = await setCustomPuzzleCover(shareId, draftToCover(draft));
                 onCoverChange(saved);
-                setCoverMessage({ kind: "ok", text: saved ? "Cover saved. It shows on your puzzle's card and page." : "Cover removed. Your puzzle uses the standard cover." });
+                setCoverMessage({ kind: "ok", text: saved ? "Cover saved. It shows on your Community card." : "Cover removed. Your puzzle uses the standard cover." });
                 setEditingCover(false);
               } catch (err: unknown) {
                 setCoverMessage({ kind: "error", text: err && typeof err === "object" && "message" in err && typeof err.message === "string" ? err.message : "Couldn't save. Try again." });

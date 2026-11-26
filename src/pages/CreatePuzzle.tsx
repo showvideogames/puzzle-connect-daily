@@ -33,6 +33,7 @@ import { normalizeWord } from "@/lib/builder/wordNormalization";
 import { createCustomPuzzle, setCommunityListing, setCustomPuzzleCover, type CustomPuzzleVisibility } from "@/lib/customPuzzles";
 import { CoverPicker, NO_COVER, draftToCover, type CoverDraft } from "@/components/community/CoverPicker";
 import { CreatorCoverArt } from "@/components/community/CreatorCoverArt";
+import { COMMUNITY_THUMBNAIL } from "@/components/community/communityThumbnail";
 import { communityPuzzlesOn } from "@/lib/communityFlag";
 import { supabase } from "@/integrations/supabase/client";
 import { FormatSelector } from "@/components/builder/FormatSelector";
@@ -402,7 +403,7 @@ function CreatorEditor({ store, copySlot = null, owner, isCurrent }: {
             <p className="text-xs text-muted-foreground">Only people with this link can access this puzzle.</p>
           )}
           {coverOutcome?.saved && draftToCover(coverDraft) && (
-            <CreatorCoverArt cover={draftToCover(coverDraft)} className="mx-auto aspect-[16/7] w-full max-w-sm rounded-2xl" emojiScale={0.24} />
+            <div className={`mx-auto ${COMMUNITY_THUMBNAIL}`}><CreatorCoverArt cover={draftToCover(coverDraft)} className="h-full w-full" /></div>
           )}
           {coverOutcome && (
             <p className="text-xs text-muted-foreground" data-testid="cover-result">

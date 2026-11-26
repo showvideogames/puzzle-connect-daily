@@ -4,6 +4,7 @@ import { COVER_BACKGROUNDS, backgroundStyle, type CoverBackground } from "@/lib/
 import { MAX_COVER_EMOJI, emojiFromKey, type CreatorCover } from "@/lib/creatorCover";
 import { cv } from "@/lib/communityStyle";
 import { CreatorCoverArt, EMOJI_FONT } from "./CreatorCoverArt";
+import { COMMUNITY_THUMBNAIL } from "./communityThumbnail";
 
 /** One to three emoji (in order) and one background; either may still be unpicked while editing. */
 export interface CoverDraft {
@@ -133,14 +134,13 @@ export function CoverPicker({ value, onChange, title, creatorName, onSave, savin
       </div>
       <p className="text-sm text-muted-foreground">{note ?? "Up to three emoji on one background. Skip it and your puzzle gets the standard Rainbow cover."}</p>
 
-      {/* Live preview: the art, then the card it becomes, title outside the art. */}
-      <div className="mt-3 overflow-hidden rounded-2xl border border-border" data-testid="cover-preview">
-        {value.background && value.emojis.length === 0 && selectedBg
-          ? <div aria-hidden="true" className="aspect-[16/7] w-full" style={backgroundStyle(selectedBg)} />
-          : <CreatorCoverArt cover={cover} className="aspect-[16/7] w-full" emojiScale={0.24} />}
-      </div>
-      <div className="mt-2 flex items-center gap-3 rounded-xl bg-secondary/60 p-2 dark:bg-white/5" aria-label="Card preview" role="group">
-        <CreatorCoverArt cover={cover} className="h-[52px] w-[76px] shrink-0 rounded-lg" />
+      <p id="community-cover-preview-label" className="mt-3 text-xs font-bold text-muted-foreground">Community preview</p>
+      <div className="mt-1 flex items-center gap-3 rounded-xl bg-secondary/60 p-2 dark:bg-white/5" aria-labelledby="community-cover-preview-label" role="group" data-testid="cover-preview">
+        <div className={COMMUNITY_THUMBNAIL}>
+          {value.background && value.emojis.length === 0 && selectedBg
+            ? <div aria-hidden="true" className="h-full w-full" style={backgroundStyle(selectedBg)} />
+            : <CreatorCoverArt cover={cover} className="h-full w-full" />}
+        </div>
         <div className="min-w-0">
           <p className={`truncate text-base font-extrabold ${cv.ink}`}>{title.trim() || "Your puzzle title"}</p>
           <p className="truncate text-sm text-muted-foreground">by <span className="font-semibold text-violet-700 dark:text-violet-300">{creatorName.trim() || "you"}</span></p>

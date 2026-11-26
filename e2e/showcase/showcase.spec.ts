@@ -164,6 +164,7 @@ test("shelf to play: Featured, Picks and Newest, then a fictional puzzle played 
   await page.getByRole("option", { name: "tulip", exact: true }).click();
   await expect(preview).toHaveAttribute("data-cover-emoji", "1F438 2B50-FE0F 1F337");
   expect(await glyphsFit(preview)).toBe(3);
+  const previewBounds = await preview.boundingBox();
   await page.getByTestId("cover-picker").scrollIntoViewIfNeeded();
   await page.screenshot({ path: path.join(SHOTS, "showcase-phone-390-make-a-cover.png"), fullPage: true, animations: "disabled" });
   await page.getByRole("button", { name: "Publish demo" }).click();
@@ -174,12 +175,12 @@ test("shelf to play: Featured, Picks and Newest, then a fictional puzzle played 
   await expect(card).toHaveAttribute("data-cover-emoji", "1F438 2B50-FE0F 1F337");
   await expect(card).toHaveAttribute("data-cover-background", "lime-checks");
   expect(await glyphsFit(card)).toBe(3);
+  const cardBounds = await card.boundingBox();
+  expect([previewBounds?.width, previewBounds?.height]).toEqual([cardBounds?.width, cardBounds?.height]);
   await page.screenshot({ path: path.join(SHOTS, "showcase-phone-390-published.png"), fullPage: true, animations: "disabled" });
-  // The same stored cover on the puzzle's own page.
   await page.getByTestId("newest-list").getByRole("link", { name: "Play Frog Friends" }).click();
   await expect(page.getByRole("heading", { name: "Frog Friends" })).toBeVisible();
-  await expect(page.getByTestId("puzzle-cover").locator("[data-cover-kind]")).toHaveAttribute("data-cover-emoji", "1F438 2B50-FE0F 1F337");
-  await expect(page.getByTestId("puzzle-cover").locator("[data-cover-kind]")).toHaveAttribute("data-cover-background", "lime-checks");
+  await expect(page.getByTestId("puzzle-cover")).toHaveCount(0);
 
   // Signed in (the fictional Demo Player): finish a puzzle, rate it, then change the rating.
   await page.getByTestId("showcase-account").click();
