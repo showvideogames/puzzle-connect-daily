@@ -338,6 +338,7 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
       const raw = typeof a._name === "string" ? a._name : "";
       const clean = raw.replace(/\s+/g, " ").trim();
       const next = () => (demoName.renamedAt ? new Date(demoName.renamedAt + COOLDOWN_MS).toISOString() : null);
+      // eslint-disable-next-line no-control-regex -- refuses control characters, as the server does
       if (!clean || clean.length > 60 || /[@\u0000-\u001f]/.test(raw)) return ok({ outcome: "invalid" });
       if (clean === demoName.name) return ok({ outcome: "unchanged", chosen: true, display_name: demoName.name, next_change_at: next() });
       if (demoName.renamedAt && demoName.renamedAt + COOLDOWN_MS > Date.now()) return ok({ outcome: "cooldown", chosen: true, display_name: demoName.name, next_change_at: next() });

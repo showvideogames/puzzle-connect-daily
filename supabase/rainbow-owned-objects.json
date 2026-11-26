@@ -1418,6 +1418,13 @@
           "notNull": false,
           "default": null,
           "comment": null
+        },
+        {
+          "name": "cover_emoji_sizes",
+          "type": "smallint[]",
+          "notNull": false,
+          "default": null,
+          "comment": null
         }
       ],
       "constraints": [
@@ -1455,6 +1462,11 @@
           "name": "custom_puzzles_cover_emoji_order",
           "type": "c",
           "definition": "CHECK ((((cover_emoji_2 IS NULL) OR (cover_emoji IS NOT NULL)) AND ((cover_emoji_3 IS NULL) OR (cover_emoji_2 IS NOT NULL))))"
+        },
+        {
+          "name": "custom_puzzles_cover_emoji_sizes",
+          "type": "c",
+          "definition": "CHECK (((cover_emoji_sizes IS NULL) OR ((cover_emoji IS NOT NULL) AND (array_ndims(cover_emoji_sizes) = 1) AND (cardinality(cover_emoji_sizes) =\nCASE\n    WHEN (cover_emoji_3 IS NOT NULL) THEN 3\n    WHEN (cover_emoji_2 IS NOT NULL) THEN 2\n    ELSE 1\nEND) AND (array_position(cover_emoji_sizes, NULL::smallint) IS NULL) AND (50 <= ALL (cover_emoji_sizes)) AND (250 >= ALL (cover_emoji_sizes)))))"
         },
         {
           "name": "custom_puzzles_cover_pair",
@@ -3463,6 +3475,23 @@
       "comment": "The account's CURRENT email: the custom:platform identity's address (which GoTrue refreshes on every sign-in), falling back to auth.users.email (which GoTrue sets once, at creation, and never refreshes). The only place Rainbow reads an email from; accounts.global_user_id is the identity key."
     },
     {
+      "name": "admin_ensure_puzzle_creator_profile",
+      "args": "_short_code text",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "Admin only, one puzzle: gives that listed puzzle's actual owner a creator page if they have none. Never matches by name; changes no puzzle."
+    },
+    {
       "name": "admin_find_account",
       "args": "_email text",
       "returns": "TABLE(user_id uuid, email text)",
@@ -3668,6 +3697,22 @@
       "comment": null
     },
     {
+      "name": "custom_ensure_listed_owner_profile",
+      "args": "_uid uuid, _fallback text",
+      "returns": "text",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "service_role"
+      ],
+      "comment": null
+    },
+    {
       "name": "custom_puzzle_card_json",
       "args": "_p custom_puzzles",
       "returns": "jsonb",
@@ -3847,6 +3892,23 @@
         "service_role"
       ],
       "comment": "Called by the client after every sign-in. Creates the caller's accounts row from their custom:platform identity (or bumps last_seen_at) and returns it with outcome ok. Answers not_platform_linked (no account row) for an auth user with no such identity, which the client treats as \"not a Rainbow account\": local sign-out, stay a guest. Never raises."
+    },
+    {
+      "name": "ensure_my_creator_profile",
+      "args": "",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "The signed-in owner: if they have a puzzle in Community but no creator page, creates it (stable slug; chosen public name, else their listed byline). Returns their slug or null. Changes nothing else."
     },
     {
       "name": "finalize_game_session",
@@ -4740,6 +4802,23 @@
         "service_role"
       ],
       "comment": "The puzzle's own creator sets or removes its cover: one to three distinct allowlisted emoji keys and one preset background."
+    },
+    {
+      "name": "set_custom_puzzle_cover_sized",
+      "args": "_share_id text, _emojis text[], _background text, _sizes integer[]",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated",
+        "service_role"
+      ],
+      "comment": "The puzzle's own creator sets or removes its cover: 1-3 distinct allowlisted emoji, one preset background and, per emoji, a whole-number size from 50 to 250 percent (null = standard)."
     },
     {
       "name": "set_custom_puzzle_favorite",

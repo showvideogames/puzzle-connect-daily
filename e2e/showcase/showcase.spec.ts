@@ -164,6 +164,11 @@ test("shelf to play: Featured, Picks and Newest, then a fictional puzzle played 
   await page.getByRole("option", { name: "tulip", exact: true }).click();
   await expect(preview).toHaveAttribute("data-cover-emoji", "1F438 2B50-FE0F 1F337");
   expect(await glyphsFit(preview)).toBe(3);
+  // Each emoji has its own Size slider; neighbours keep theirs.
+  await expect(preview).toHaveAttribute("data-cover-sizes", "100 100 100");
+  await page.getByRole("slider", { name: "Frog size" }).fill("200");
+  await page.getByRole("slider", { name: "Tulip size" }).fill("60");
+  await expect(preview).toHaveAttribute("data-cover-sizes", "200 100 60");
   await page.getByTestId("cover-picker").scrollIntoViewIfNeeded();
   await page.screenshot({ path: path.join(SHOTS, "showcase-phone-390-make-a-cover.png"), fullPage: true, animations: "disabled" });
   await page.getByRole("button", { name: "Publish demo" }).click();
@@ -173,13 +178,15 @@ test("shelf to play: Featured, Picks and Newest, then a fictional puzzle played 
   const card = page.getByTestId("newest-list").getByTestId("community-card").first().locator("[data-cover-kind]");
   await expect(card).toHaveAttribute("data-cover-emoji", "1F438 2B50-FE0F 1F337");
   await expect(card).toHaveAttribute("data-cover-background", "lime-checks");
-  expect(await glyphsFit(card)).toBe(3);
+  await expect(card).toHaveAttribute("data-cover-sizes", "200 100 60");
+  expect(await card.evaluate((e) => getComputedStyle(e).overflow)).toBe("hidden");
   await page.screenshot({ path: path.join(SHOTS, "showcase-phone-390-published.png"), fullPage: true, animations: "disabled" });
   // The same stored cover on the puzzle's own page.
   await page.getByTestId("newest-list").getByRole("link", { name: "Play Frog Friends" }).click();
   await expect(page.getByRole("heading", { name: "Frog Friends" })).toBeVisible();
   await expect(page.getByTestId("puzzle-cover").locator("[data-cover-kind]")).toHaveAttribute("data-cover-emoji", "1F438 2B50-FE0F 1F337");
   await expect(page.getByTestId("puzzle-cover").locator("[data-cover-kind]")).toHaveAttribute("data-cover-background", "lime-checks");
+  await expect(page.getByTestId("puzzle-cover").locator("[data-cover-kind]")).toHaveAttribute("data-cover-sizes", "200 100 60");
 
   // Signed in (the fictional Demo Player): finish a puzzle, rate it, then change the rating.
   await page.getByTestId("showcase-account").click();
@@ -222,6 +229,14 @@ test("shelf to play: Featured, Picks and Newest, then a fictional puzzle played 
   await expect(mine("Mixtape Memories").getByTestId("my-puzzle-status")).toHaveText("Link only");
   await expect(library).not.toContainText("Pantry Raid");
   await page.screenshot({ path: path.join(SHOTS, "showcase-phone-390-my-puzzles.png"), fullPage: true, animations: "disabled" });
+  // Public name: the first rename is immediate and starts the 30-day wait.
+  const publicName = page.getByRole("textbox", { name: "Public name" });
+  await expect(publicName).toHaveValue("Demo Player");
+  await publicName.fill("Demo Pal");
+  await page.getByRole("button", { name: "Save name" }).click();
+  await expect(page.getByText("Public name saved.")).toBeVisible();
+  await expect(page.locator("#public-name-limit")).toContainText("You can change it again on");
+  await expect(publicName).toHaveAttribute("readonly", "");
   // The older music puzzle gets a cover and goes into Community, then back out.
   await mine("Mixtape Memories").getByRole("button", { name: "Add a cover for Mixtape Memories" }).click();
   await page.getByTestId("cover-picker").getByRole("searchbox", { name: "Search emojis" }).fill("headphone");

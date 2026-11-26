@@ -160,7 +160,8 @@ describe("custom puzzle header: type badge and byline", () => {
 
   it("a signed-in creator's name links to their profile; an anonymous designer is plain text", () => {
     const { unmount } = renderHeader({ designerName: "Sam West", creatorSlug: "sam-west-k7m2" });
-    expect(screen.getByRole("link", { name: "Sam West" })).toHaveAttribute("href", "/creator/sam-west-k7m2");
+    // With Community on (the default) the byline opens the creator's Community shelf.
+    expect(screen.getByRole("link", { name: "Sam West" })).toHaveAttribute("href", "/creator/sam-west-k7m2?view=community");
     unmount();
 
     renderHeader({ designerName: "Anon Designer", creatorSlug: null });

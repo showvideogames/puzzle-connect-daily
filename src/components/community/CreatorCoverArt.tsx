@@ -34,7 +34,10 @@ export function CreatorCoverArt({ cover, className = "", emojiScale = 0.42, emoj
   }
   const n = resolved.chars.length;
   const factor = SCALE_BY_COUNT[n - 1];
-  const size = emojiSize ? `calc(${emojiSize} * ${factor})` : `${Math.round(emojiScale * factor * 1000) / 10}cqw`;
+  // One flat calc() per glyph (base size × count factor × that emoji's own size).
+  const base = emojiSize ? `${emojiSize} * ${factor}` : `${Math.round(emojiScale * factor * 1000) / 10}cqw`;
+  const size = emojiSize ? `calc(${base})` : base;
+  const glyphSize = (scale: number) => (scale === 1 ? size : `calc(${base} * ${scale})`);
   return (
     <div
       aria-hidden="true"
@@ -50,7 +53,7 @@ export function CreatorCoverArt({ cover, className = "", emojiScale = 0.42, emoj
     >
       <span className="flex shrink-0 items-center justify-center whitespace-nowrap" style={{ gap: `calc(${size} * 0.12)` }}>
         {resolved.chars.map((c, i) => (
-          <span key={i} data-cover-glyph className="shrink-0 select-none leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.18)]" style={{ fontFamily: EMOJI_FONT, fontSize: resolved.scales[i] === 1 ? size : `calc(${size} * ${resolved.scales[i]})` }}>
+          <span key={i} data-cover-glyph className="shrink-0 select-none leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.18)]" style={{ fontFamily: EMOJI_FONT, fontSize: glyphSize(resolved.scales[i]) }}>
             {c}
           </span>
         ))}

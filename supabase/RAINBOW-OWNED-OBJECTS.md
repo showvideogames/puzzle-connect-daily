@@ -22,10 +22,10 @@ shows up as a diff instead of as a surprise on a blank project.
 | Category | Count |
 |---|---|
 | Tables | 27 |
-| Columns | 215 |
-| Constraints | 118 |
+| Columns | 216 |
+| Constraints | 119 |
 | Indexes | 68 |
-| Functions | 88 |
+| Functions | 92 |
 | Triggers | 5 |
 | RLS policies | 25 |
 | Enum types | 1 |
@@ -426,6 +426,7 @@ RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNC
 | `cover_background` | text | null |  |
 | `cover_emoji_2` | text | null |  |
 | `cover_emoji_3` | text | null |  |
+| `cover_emoji_sizes` | smallint[] | null |  |
 
 Constraints:
 
@@ -436,6 +437,12 @@ Constraints:
 - `custom_puzzles_cover_emoji_distinct` CHECK ((((cover_emoji_2 IS NULL) OR (cover_emoji_2 <> cover_emoji)) AND ((cover_emoji_3 IS NULL) OR ((cover_emoji_3 <> cover_emoji) AND (cover_emoji_3 <> cover_emoji_2)))))
 - `custom_puzzles_cover_emoji_fkey` FOREIGN KEY (cover_emoji) REFERENCES community_cover_emoji(key)
 - `custom_puzzles_cover_emoji_order` CHECK ((((cover_emoji_2 IS NULL) OR (cover_emoji IS NOT NULL)) AND ((cover_emoji_3 IS NULL) OR (cover_emoji_2 IS NOT NULL))))
+- `custom_puzzles_cover_emoji_sizes` CHECK (((cover_emoji_sizes IS NULL) OR ((cover_emoji IS NOT NULL) AND (array_ndims(cover_emoji_sizes) = 1) AND (cardinality(cover_emoji_sizes) =
+CASE
+    WHEN (cover_emoji_3 IS NOT NULL) THEN 3
+    WHEN (cover_emoji_2 IS NOT NULL) THEN 2
+    ELSE 1
+END) AND (array_position(cover_emoji_sizes, NULL::smallint) IS NULL) AND (50 <= ALL (cover_emoji_sizes)) AND (250 >= ALL (cover_emoji_sizes)))))
 - `custom_puzzles_cover_pair` CHECK ((((cover_emoji IS NULL) AND (cover_background IS NULL)) OR ((cover_emoji IS NOT NULL) AND (cover_background IS NOT NULL))))
 - `custom_puzzles_created_by_fkey` FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL
 - `custom_puzzles_moderation_status_check` CHECK ((moderation_status = ANY (ARRAY['active'::text, 'hidden'::text])))
@@ -917,6 +924,7 @@ Indexes:
 | Function | Returns | Definer | Volatility | Executable by |
 |---|---|---|---|---|
 | `account_email(_user_id uuid)` | text | yes | stable | service_role |
+| `admin_ensure_puzzle_creator_profile(_short_code text)` | jsonb | yes | volatile | authenticated, service_role |
 | `admin_find_account(_email text)` | TABLE(user_id uuid, email text) | yes | stable | authenticated, service_role |
 | `admin_get_community_curation()` | jsonb | yes | stable | authenticated, service_role |
 | `admin_save_puzzle(_puzzle_id uuid, _metadata jsonb, _content jsonb)` | jsonb | yes | volatile | authenticated, service_role |
@@ -929,6 +937,7 @@ Indexes:
 | `create_game_session(_puzzle_id text, _device_id text, _device_token text, _entry_context text, _active_time_seconds integer, _mistakes integer, _puzzle_version_id uuid)` | uuid | yes | volatile | anon, authenticated, service_role |
 | `custom_creator_new_slug(_name text)` | text | no | volatile | service_role |
 | `custom_ensure_creator_profile(_uid uuid, _name text)` | void | yes | volatile | service_role |
+| `custom_ensure_listed_owner_profile(_uid uuid, _fallback text)` | text | yes | volatile | service_role |
 | `custom_puzzle_card_json(_p custom_puzzles)` | jsonb | yes | stable | service_role |
 | `custom_puzzle_in_community(_p custom_puzzles)` | boolean | no | stable | service_role |
 | `custom_puzzle_new_short_code()` | text | no | volatile | service_role |
@@ -940,6 +949,7 @@ Indexes:
 | `delete_my_account()` | boolean | yes | volatile | authenticated, service_role |
 | `device_has_importable_history(_device_id text)` | boolean | yes | stable | service_role |
 | `ensure_account()` | TABLE(outcome text, user_id uuid, global_user_id text, email text, created_at timestamp with time zone) | yes | volatile | authenticated, service_role |
+| `ensure_my_creator_profile()` | jsonb | yes | volatile | authenticated, service_role |
 | `finalize_game_session(_session_id uuid, _device_id text, _device_token text, _won boolean, _mistakes integer, _active_time_seconds integer, _found_rainbow boolean, _rainbow_solve_index smallint, _solve_order jsonb, _hints_used boolean, _share_grid text, _skip_streak boolean, _local_date text)` | boolean | yes | volatile | anon, authenticated, service_role |
 | `game_sessions_sync_status()` | trigger | yes | volatile | anon, authenticated, service_role |
 | `get_archive_puzzles()` | TABLE(id uuid, date date, title text) | yes | stable | anon, authenticated, service_role |
@@ -991,6 +1001,7 @@ Indexes:
 | `set_custom_puzzle_community_listing(_share_id text, _listed boolean)` | jsonb | yes | volatile | authenticated, service_role |
 | `set_custom_puzzle_cover(_share_id text, _emoji text, _background text)` | jsonb | yes | volatile | authenticated, service_role |
 | `set_custom_puzzle_cover_emojis(_share_id text, _emojis text[], _background text)` | jsonb | yes | volatile | authenticated, service_role |
+| `set_custom_puzzle_cover_sized(_share_id text, _emojis text[], _background text, _sizes integer[])` | jsonb | yes | volatile | authenticated, service_role |
 | `set_custom_puzzle_favorite(_share_id text, _favorite boolean)` | jsonb | yes | volatile | authenticated, service_role |
 | `set_custom_puzzle_rating(_share_id text, _rating integer, _device_id text, _device_token text)` | jsonb | yes | volatile | authenticated, service_role |
 | `set_my_creator_name(_name text)` | jsonb | yes | volatile | authenticated |

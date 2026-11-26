@@ -78,3 +78,35 @@ describe("cover keys", () => {
     }
   });
 });
+
+describe("per-emoji sizes", () => {
+  it("reads sizes slot for slot; anything malformed or mismatched is the standard size", async () => {
+    const { COVER_SIZE_MAX, COVER_SIZE_MIN } = await import("@/lib/creatorCover");
+    expect([COVER_SIZE_MIN, COVER_SIZE_MAX]).toEqual([50, 250]);
+    expect(parseCover("1F438", "lime-checks", "1F337", null, [50, 250])).toEqual({ emojis: ["1F438", "1F337"], background: "lime-checks", sizes: [50, 250] });
+    // Older covers (no sizes) and all-standard sizes read the same: no sizes.
+    expect(parseCover("1F438", "lime-checks")).toEqual({ emojis: ["1F438"], background: "lime-checks" });
+    expect(parseCover("1F438", "lime-checks", "1F337", null, [100, 100])).toEqual({ emojis: ["1F438", "1F337"], background: "lime-checks" });
+    for (const bad of [[49, 100], [100, 251], [100], [100, 100, 100], [100, null], [100.5, 100], ["150", 100], "150", { 0: 150 }]) {
+      expect(parseCover("1F438", "lime-checks", "1F337", null, bad), JSON.stringify(bad)).toEqual({ emojis: ["1F438", "1F337"], background: "lime-checks" });
+    }
+  });
+
+  it("draws each emoji at its own size, independently, and crops inside the art", () => {
+    const { container } = render(<CreatorCoverArt cover={{ emojis: ["1FA90", "1F680", "2B50-FE0F"], background: "lilac-dots", sizes: [50, 250, 100] }} emojiSize="40px" />);
+    const art = container.firstElementChild as HTMLElement;
+    expect(art.getAttribute("data-cover-sizes")).toBe("50 250 100");
+    expect(art.className).toContain("overflow-hidden");
+    const sizes = [...art.querySelectorAll<HTMLElement>("[data-cover-glyph]")].map((g) => g.style.fontSize);
+    expect(sizes).toEqual(["calc(40px * 0.56 * 0.5)", "calc(40px * 0.56 * 2.5)", "calc(40px * 0.56)"]);
+  });
+
+  it("keeps each size with its emoji in the picker's draft", async () => {
+    const { coverToDraft, draftToCover, draftSizes } = await import("@/components/community/CoverPicker");
+    const draft = coverToDraft({ emojis: ["1F438", "1F337"], background: "lime-checks", sizes: [60, 200] });
+    expect(draftSizes(draft)).toEqual([60, 200]);
+    expect(draftToCover(draft)).toEqual({ emojis: ["1F438", "1F337"], background: "lime-checks", sizes: [60, 200] });
+    expect(draftSizes(coverToDraft({ emojis: ["1F438"], background: "lime-checks" }))).toEqual([100]);
+    expect(draftToCover({ emojis: ["1F438", "1F337"], background: "lime-checks", sizes: [100, 100] })).toEqual({ emojis: ["1F438", "1F337"], background: "lime-checks" });
+  });
+});
