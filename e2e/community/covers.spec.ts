@@ -90,7 +90,7 @@ test("signed in: create with a cover, see it on Newest and the puzzle page, edit
   await expect(page.getByTestId("cover-result")).toHaveText("Cover saved.");
   await expect(page.getByTestId("community-listing-result")).toContainText("Listed in Community Puzzles.");
 
-  // Public: top of Newest with the same stored cover, and on its own page.
+  // Public: top of Newest has the stored cover; the play page keeps the grid high.
   await page.goto("/community");
   await expect(page.getByTestId("community-panel")).toHaveAttribute("aria-busy", "false", { timeout: 30_000 });
   const row = page.getByTestId("newest-list").getByTestId("community-card").first();
@@ -104,7 +104,7 @@ test("signed in: create with a cover, see it on Newest and the puzzle page, edit
   await shot(page, "explore-phone-390-with-covers");
   await row.getByRole("link", { name: "Play Garden Frogs" }).click();
   await expect(page.getByRole("heading", { name: "Garden Frogs" })).toBeVisible({ timeout: 30_000 });
-  await expect(coverOf(page.getByTestId("puzzle-cover"))).toHaveAttribute("data-cover-emoji", "1F438");
+  await expect(page.getByTestId("puzzle-cover")).toHaveCount(0);
 
   // The owner changes it with Save Cover.
   await page.getByRole("button", { name: "Edit cover" }).click();
@@ -113,23 +113,22 @@ test("signed in: create with a cover, see it on Newest and the puzzle page, edit
   await edit.getByRole("option", { name: "popcorn", exact: true }).click();
   await edit.getByRole("radio", { name: "Apricot stripes" }).click();
   await edit.getByRole("button", { name: "Save Cover" }).click();
-  await expect(page.getByText("Cover saved. It shows on your puzzle's card and page.")).toBeVisible();
-  // Adding popcorn keeps the frog: two emoji now.
-  await expect(coverOf(page.getByTestId("puzzle-cover"))).toHaveAttribute("data-cover-emoji", "1F438 1F37F");
+  await expect(page.getByText("Cover saved. It shows on your Community card.")).toBeVisible();
+  // The editor reads the saved cover after reload.
   await page.reload();
-  await expect(coverOf(page.getByTestId("puzzle-cover"))).toHaveAttribute("data-cover-background", "apricot-stripes", { timeout: 30_000 });
 
   // A third, saved and read back from the server.
   for (const [name, expected] of [["star", "1F438 1F37F 2B50-FE0F"]] as const) {
     await page.getByRole("button", { name: "Edit cover" }).click();
     const more = page.getByTestId("cover-picker");
+    await expect(coverOf(more.getByTestId("cover-preview"))).toHaveAttribute("data-cover-emoji", "1F438 1F37F");
+    await expect(coverOf(more.getByTestId("cover-preview"))).toHaveAttribute("data-cover-background", "apricot-stripes");
     await more.getByRole("searchbox", { name: "Search emojis" }).fill(name);
     await more.getByRole("option", { name, exact: true }).click();
     await expect(coverOf(more.getByTestId("cover-preview"))).toHaveAttribute("data-cover-emoji", expected);
     await more.getByRole("button", { name: "Save Cover" }).click();
-    await expect(page.getByText("Cover saved. It shows on your puzzle's card and page.")).toBeVisible();
-    await page.reload();
-    await expect(coverOf(page.getByTestId("puzzle-cover"))).toHaveAttribute("data-cover-emoji", expected, { timeout: 30_000 });
+    await expect(page.getByText("Cover saved. It shows on your Community card.")).toBeVisible();
+    await expect(page.getByTestId("puzzle-cover")).toHaveCount(0);
   }
   await page.goto("/community");
   await expect(page.getByTestId("community-panel")).toHaveAttribute("aria-busy", "false", { timeout: 30_000 });

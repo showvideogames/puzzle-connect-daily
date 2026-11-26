@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Bookmark } from "lucide-react";
 import { PuzzleCover } from "./PuzzleCover";
 import { CreatorCoverArt } from "./CreatorCoverArt";
+import { COMMUNITY_THUMBNAIL } from "./communityThumbnail";
 import type { CreatorCover } from "@/lib/creatorCover";
 import { coverFor, coverTone } from "@/lib/puzzleCovers";
 import type { CustomPuzzleMode } from "@/lib/customPuzzles";
@@ -144,7 +145,7 @@ export function CoverCard({ card, bookmark, art = "creator", rowOnDesktop = fals
 export function NewestRow({ card, bookmark }: { card: ExploreCard; bookmark?: BookmarkState }) {
   return (
     <li className="flex min-w-0 items-center gap-3 py-3" data-testid="community-card">
-      <CoverLink card={card} className="h-[58px] w-[84px] shrink-0 rounded-xl min-[380px]:h-[64px] min-[380px]:w-[96px] sm:h-[84px] sm:w-[150px]" />
+      <CoverLink card={card} className={COMMUNITY_THUMBNAIL} />
       <div className="min-w-0 flex-1">
         <TitleLink card={card} className="block text-base sm:text-[17px]" />
         <Byline name={card.creatorName} slug={card.creatorSlug} />
