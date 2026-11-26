@@ -948,6 +948,10 @@ export type Database = {
         }
         Returns: Json
       }
+      set_custom_puzzle_cover_sized: {
+        Args: { _background: string | null; _emojis: string[] | null; _share_id: string; _sizes: number[] | null }
+        Returns: Json
+      }
       set_custom_puzzle_cover_emojis: {
         Args: { _background: string | null; _emojis: string[] | null; _share_id: string }
         Returns: Json

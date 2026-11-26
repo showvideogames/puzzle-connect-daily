@@ -15,7 +15,9 @@ const SCALE_BY_COUNT = [1, 0.7, 0.56];
  * background. One is large; two are balanced side by side; three sit in a
  * tight row. With no cover (older puzzles, or a creator who skipped it) it
  * draws the neutral default: Rainbow tiles on a soft ground. Never any text:
- * the title always sits outside the art. Decorative (aria-hidden).
+ * the title always sits outside the art. Decorative (aria-hidden). Each emoji
+ * can have its own size (cover.sizes); whatever doesn't fit is cropped by the
+ * art's own edges.
  */
 export function CreatorCoverArt({ cover, className = "", emojiScale = 0.42, emojiSize }: { cover: CreatorCover | null | undefined; className?: string; emojiScale?: number; emojiSize?: string }) {
   const resolved = resolveCover(cover);
@@ -32,7 +34,10 @@ export function CreatorCoverArt({ cover, className = "", emojiScale = 0.42, emoj
   }
   const n = resolved.chars.length;
   const factor = SCALE_BY_COUNT[n - 1];
-  const size = emojiSize ? `calc(${emojiSize} * ${factor})` : `${Math.round(emojiScale * factor * 1000) / 10}cqw`;
+  // One flat calc() per glyph (base size × count factor × that emoji's own size).
+  const base = emojiSize ? `${emojiSize} * ${factor}` : `${Math.round(emojiScale * factor * 1000) / 10}cqw`;
+  const size = emojiSize ? `calc(${base})` : base;
+  const glyphSize = (scale: number) => (scale === 1 ? size : `calc(${base} * ${scale})`);
   return (
     <div
       aria-hidden="true"
@@ -40,12 +45,15 @@ export function CreatorCoverArt({ cover, className = "", emojiScale = 0.42, emoj
       data-cover-emoji={cover!.emojis.join(" ")}
       data-cover-count={n}
       data-cover-background={cover!.background}
-      className={`flex items-center justify-center [container-type:inline-size] ${className}`}
+      data-cover-sizes={resolved.scales.map((x) => Math.round(x * 100)).join(" ")}
+      // overflow-hidden + paint containment: a large emoji is cropped by the
+      // art itself, never drawn over the title, card or buttons around it.
+      className={`flex items-center justify-center overflow-hidden [contain:paint] [container-type:inline-size] ${className}`}
       style={backgroundStyle(resolved.bg)}
     >
-      <span className="flex items-center justify-center" style={{ gap: `calc(${size} * 0.12)` }}>
+      <span className="flex shrink-0 items-center justify-center whitespace-nowrap" style={{ gap: `calc(${size} * 0.12)` }}>
         {resolved.chars.map((c, i) => (
-          <span key={i} data-cover-glyph className="select-none leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.18)]" style={{ fontFamily: EMOJI_FONT, fontSize: size }}>
+          <span key={i} data-cover-glyph className="shrink-0 select-none leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.18)]" style={{ fontFamily: EMOJI_FONT, fontSize: glyphSize(resolved.scales[i]) }}>
             {c}
           </span>
         ))}

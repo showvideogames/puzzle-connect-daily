@@ -1370,6 +1370,13 @@
           "notNull": false,
           "default": null,
           "comment": null
+        },
+        {
+          "name": "cover_emoji_sizes",
+          "type": "smallint[]",
+          "notNull": false,
+          "default": null,
+          "comment": null
         }
       ],
       "constraints": [
@@ -1407,6 +1414,11 @@
           "name": "custom_puzzles_cover_emoji_order",
           "type": "c",
           "definition": "CHECK ((((cover_emoji_2 IS NULL) OR (cover_emoji IS NOT NULL)) AND ((cover_emoji_3 IS NULL) OR (cover_emoji_2 IS NOT NULL))))"
+        },
+        {
+          "name": "custom_puzzles_cover_emoji_sizes",
+          "type": "c",
+          "definition": "CHECK (((cover_emoji_sizes IS NULL) OR ((cover_emoji IS NOT NULL) AND (array_ndims(cover_emoji_sizes) = 1) AND (cardinality(cover_emoji_sizes) =\nCASE\n    WHEN (cover_emoji_3 IS NOT NULL) THEN 3\n    WHEN (cover_emoji_2 IS NOT NULL) THEN 2\n    ELSE 1\nEND) AND (array_position(cover_emoji_sizes, NULL::smallint) IS NULL) AND (50 <= ALL (cover_emoji_sizes)) AND (250 >= ALL (cover_emoji_sizes)))))"
         },
         {
           "name": "custom_puzzles_cover_pair",
@@ -4676,6 +4688,22 @@
         "service_role"
       ],
       "comment": "The puzzle's own creator sets or removes its cover: one to three distinct allowlisted emoji keys and one preset background."
+    },
+    {
+      "name": "set_custom_puzzle_cover_sized",
+      "args": "_share_id text, _emojis text[], _background text, _sizes integer[]",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public"
+      ],
+      "executableBy": [
+        "authenticated"
+      ],
+      "comment": "The puzzle's own creator sets or removes its cover: 1-3 distinct allowlisted emoji, one preset background and, per emoji, a whole-number size from 50 to 250 percent (null = standard)."
     },
     {
       "name": "set_custom_puzzle_favorite",

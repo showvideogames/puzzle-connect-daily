@@ -133,7 +133,7 @@ interface CustomPuzzleRow {
   cover_emoji?: string | null;
   cover_emoji_2?: string | null;
   cover_emoji_3?: string | null;
-  cover_background?: string | null;
+  cover_sizes?: unknown; cover_background?: string | null;
   title: string;
   creator_name: string;
   visibility: CustomPuzzleVisibility;
@@ -214,7 +214,7 @@ function toPlayable(data: unknown): CustomPlayablePuzzle | null {
     creatorSlug: row.creator_slug ?? null,
     favoriteCount: row.favorite_count ?? 0,
     favoritedByMe: row.favorited_by_me ?? false,
-    cover: parseCover(row.cover_emoji, row.cover_background, row.cover_emoji_2, row.cover_emoji_3),
+    cover: parseCover(row.cover_emoji, row.cover_background, row.cover_emoji_2, row.cover_emoji_3, row.cover_sizes),
   };
 }
 
@@ -300,7 +300,7 @@ export async function getMyFavorites(): Promise<FavoritePuzzleCard[]> {
       cover_emoji?: string | null;
       cover_emoji_2?: string | null;
       cover_emoji_3?: string | null;
-      cover_background?: string | null;
+      cover_sizes?: unknown; cover_background?: string | null;
     }[]
   ).map((r) => ({
     title: r.title,
@@ -309,7 +309,7 @@ export async function getMyFavorites(): Promise<FavoritePuzzleCard[]> {
     mode: r.mode,
     shortCode: r.short_code,
     favoriteCount: r.favorite_count ?? 0,
-    cover: parseCover(r.cover_emoji, r.cover_background, r.cover_emoji_2, r.cover_emoji_3),
+    cover: parseCover(r.cover_emoji, r.cover_background, r.cover_emoji_2, r.cover_emoji_3, r.cover_sizes),
   }));
 }
 
@@ -505,7 +505,7 @@ export async function listCommunityPuzzles(params: {
       cover_emoji?: string | null;
       cover_emoji_2?: string | null;
       cover_emoji_3?: string | null;
-      cover_background?: string | null;
+      cover_sizes?: unknown; cover_background?: string | null;
     }[];
     has_more?: boolean;
   };
@@ -518,7 +518,7 @@ export async function listCommunityPuzzles(params: {
       shortCode: p.short_code,
       finishedPlays: p.finished_plays ?? 0,
       favoriteCount: p.favorite_count ?? 0,
-      cover: parseCover(p.cover_emoji, p.cover_background, p.cover_emoji_2, p.cover_emoji_3),
+      cover: parseCover(p.cover_emoji, p.cover_background, p.cover_emoji_2, p.cover_emoji_3, p.cover_sizes),
     })),
     hasMore: !!r.has_more,
   };
@@ -564,7 +564,7 @@ type CardRow = {
   cover_emoji?: string | null;
   cover_emoji_2?: string | null;
   cover_emoji_3?: string | null;
-  cover_background?: string | null;
+  cover_sizes?: unknown; cover_background?: string | null;
 };
 
 function mapCard(p: CardRow): CommunityPuzzleListing {
@@ -576,7 +576,7 @@ function mapCard(p: CardRow): CommunityPuzzleListing {
     shortCode: p.short_code,
     finishedPlays: p.finished_plays ?? 0,
     favoriteCount: p.favorite_count ?? 0,
-    cover: parseCover(p.cover_emoji, p.cover_background, p.cover_emoji_2, p.cover_emoji_3),
+    cover: parseCover(p.cover_emoji, p.cover_background, p.cover_emoji_2, p.cover_emoji_3, p.cover_sizes),
   };
 }
 
@@ -773,14 +773,15 @@ export async function adminSetCuration(featured: string | null, picks: string[])
  * with the server's message.
  */
 export async function setCustomPuzzleCover(shareId: string, cover: CreatorCover | null): Promise<CreatorCover | null> {
-  const { data, error } = await supabase.rpc("set_custom_puzzle_cover_emojis", {
+  const { data, error } = await supabase.rpc("set_custom_puzzle_cover_sized", {
     _share_id: shareId,
     _emojis: cover?.emojis ?? null,
+    _sizes: cover?.sizes ?? null,
     _background: cover?.background ?? null,
   });
   if (error) throw error;
-  const r = (data ?? {}) as { cover_emoji?: string | null; cover_emoji_2?: string | null; cover_emoji_3?: string | null; cover_background?: string | null };
-  return parseCover(r.cover_emoji, r.cover_background, r.cover_emoji_2, r.cover_emoji_3);
+  const r = (data ?? {}) as { cover_emoji?: string | null; cover_emoji_2?: string | null; cover_emoji_3?: string | null; cover_sizes?: unknown; cover_background?: string | null };
+  return parseCover(r.cover_emoji, r.cover_background, r.cover_emoji_2, r.cover_emoji_3, r.cover_sizes);
 }
 
 // ── Optional 1-5 star rating, after finishing (migration 0010) ──────────────
@@ -857,7 +858,7 @@ export async function listMyPuzzles(params: { offset?: number; limit?: number } 
   const items = (Array.isArray(r.items) ? r.items : []) as {
     share_id: string; short_code: string; title: string; creator_name: string; mode: CustomPuzzleMode; visibility: CustomPuzzleVisibility;
     hidden: boolean; listed: boolean; can_list: boolean; created_at: string;
-    cover_emoji?: string | null; cover_emoji_2?: string | null; cover_emoji_3?: string | null; cover_background?: string | null;
+    cover_emoji?: string | null; cover_emoji_2?: string | null; cover_emoji_3?: string | null; cover_sizes?: unknown; cover_background?: string | null;
   }[];
   return {
     items: items.map((x) => ({
@@ -870,7 +871,7 @@ export async function listMyPuzzles(params: { offset?: number; limit?: number } 
       hidden: !!x.hidden,
       listed: !!x.listed,
       canList: !!x.can_list,
-      cover: parseCover(x.cover_emoji, x.cover_background, x.cover_emoji_2, x.cover_emoji_3),
+      cover: parseCover(x.cover_emoji, x.cover_background, x.cover_emoji_2, x.cover_emoji_3, x.cover_sizes),
       createdAt: x.created_at,
     })),
     hasMore: !!r.has_more,
