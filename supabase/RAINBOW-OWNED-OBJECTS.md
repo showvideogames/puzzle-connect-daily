@@ -22,10 +22,10 @@ shows up as a diff instead of as a surprise on a blank project.
 | Category | Count |
 |---|---|
 | Tables | 26 |
-| Columns | 213 |
-| Constraints | 115 |
+| Columns | 214 |
+| Constraints | 116 |
 | Indexes | 67 |
-| Functions | 86 |
+| Functions | 87 |
 | Triggers | 5 |
 | RLS policies | 25 |
 | Enum types | 1 |
@@ -407,6 +407,7 @@ RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNC
 | `cover_background` | text | null |  |
 | `cover_emoji_2` | text | null |  |
 | `cover_emoji_3` | text | null |  |
+| `cover_emoji_sizes` | smallint[] | null |  |
 
 Constraints:
 
@@ -417,6 +418,12 @@ Constraints:
 - `custom_puzzles_cover_emoji_distinct` CHECK ((((cover_emoji_2 IS NULL) OR (cover_emoji_2 <> cover_emoji)) AND ((cover_emoji_3 IS NULL) OR ((cover_emoji_3 <> cover_emoji) AND (cover_emoji_3 <> cover_emoji_2)))))
 - `custom_puzzles_cover_emoji_fkey` FOREIGN KEY (cover_emoji) REFERENCES community_cover_emoji(key)
 - `custom_puzzles_cover_emoji_order` CHECK ((((cover_emoji_2 IS NULL) OR (cover_emoji IS NOT NULL)) AND ((cover_emoji_3 IS NULL) OR (cover_emoji_2 IS NOT NULL))))
+- `custom_puzzles_cover_emoji_sizes` CHECK (((cover_emoji_sizes IS NULL) OR ((cover_emoji IS NOT NULL) AND (array_ndims(cover_emoji_sizes) = 1) AND (cardinality(cover_emoji_sizes) =
+CASE
+    WHEN (cover_emoji_3 IS NOT NULL) THEN 3
+    WHEN (cover_emoji_2 IS NOT NULL) THEN 2
+    ELSE 1
+END) AND (array_position(cover_emoji_sizes, NULL::smallint) IS NULL) AND (50 <= ALL (cover_emoji_sizes)) AND (250 >= ALL (cover_emoji_sizes)))))
 - `custom_puzzles_cover_pair` CHECK ((((cover_emoji IS NULL) AND (cover_background IS NULL)) OR ((cover_emoji IS NOT NULL) AND (cover_background IS NOT NULL))))
 - `custom_puzzles_created_by_fkey` FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL
 - `custom_puzzles_moderation_status_check` CHECK ((moderation_status = ANY (ARRAY['active'::text, 'hidden'::text])))
@@ -971,6 +978,7 @@ Indexes:
 | `set_custom_puzzle_community_listing(_share_id text, _listed boolean)` | jsonb | yes | volatile | authenticated, service_role |
 | `set_custom_puzzle_cover(_share_id text, _emoji text, _background text)` | jsonb | yes | volatile | authenticated, service_role |
 | `set_custom_puzzle_cover_emojis(_share_id text, _emojis text[], _background text)` | jsonb | yes | volatile | authenticated, service_role |
+| `set_custom_puzzle_cover_sized(_share_id text, _emojis text[], _background text, _sizes integer[])` | jsonb | yes | volatile | authenticated |
 | `set_custom_puzzle_favorite(_share_id text, _favorite boolean)` | jsonb | yes | volatile | authenticated, service_role |
 | `set_custom_puzzle_rating(_share_id text, _rating integer, _device_id text, _device_token text)` | jsonb | yes | volatile | authenticated, service_role |
 | `skill_score(_won boolean, _mistakes integer, _solve_order jsonb, _found_rainbow boolean, _rainbow_source text, _format text)` | integer | no | immutable | anon, authenticated, service_role |

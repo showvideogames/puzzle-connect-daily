@@ -1,20 +1,36 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Check, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { COVER_BACKGROUNDS, backgroundStyle, type CoverBackground } from "@/lib/coverBackgrounds";
-import { MAX_COVER_EMOJI, emojiFromKey, type CreatorCover } from "@/lib/creatorCover";
+import { COVER_SIZE_DEFAULT, COVER_SIZE_MAX, COVER_SIZE_MIN, COVER_SIZE_STEP, MAX_COVER_EMOJI, emojiFromKey, validSizes, type CreatorCover } from "@/lib/creatorCover";
 import { cv } from "@/lib/communityStyle";
 import { CreatorCoverArt, EMOJI_FONT } from "./CreatorCoverArt";
 import { COMMUNITY_THUMBNAIL } from "./communityThumbnail";
 
-/** One to three emoji (in order) and one background; either may still be unpicked while editing. */
+/**
+ * One to three emoji (in order), each with its own size, and one background;
+ * either may still be unpicked while editing. sizes runs slot for slot with
+ * emojis (absent or short: standard size).
+ */
 export interface CoverDraft {
   emojis: string[];
   background: string | null;
+  sizes?: number[];
 }
-export const NO_COVER: CoverDraft = { emojis: [], background: null };
-export const draftToCover = (d: CoverDraft): CreatorCover | null =>
-  d.emojis.length >= 1 && d.emojis.length <= MAX_COVER_EMOJI && d.background ? { emojis: [...d.emojis], background: d.background } : null;
-export const coverToDraft = (c: CreatorCover | null | undefined): CoverDraft => ({ emojis: c ? [...c.emojis] : [], background: c?.background ?? null });
+export const NO_COVER: CoverDraft = { emojis: [], background: null, sizes: [] };
+/** The draft's sizes, one per emoji, standard where unset. */
+export const draftSizes = (d: CoverDraft): number[] => d.emojis.map((_, i) => d.sizes?.[i] ?? COVER_SIZE_DEFAULT);
+export const draftToCover = (d: CoverDraft): CreatorCover | null => {
+  if (d.emojis.length < 1 || d.emojis.length > MAX_COVER_EMOJI || !d.background) return null;
+  const sizes = validSizes(draftSizes(d), d.emojis.length);
+  return sizes && sizes.some((v) => v !== COVER_SIZE_DEFAULT)
+    ? { emojis: [...d.emojis], background: d.background, sizes }
+    : { emojis: [...d.emojis], background: d.background };
+};
+export const coverToDraft = (c: CreatorCover | null | undefined): CoverDraft => ({
+  emojis: c ? [...c.emojis] : [],
+  background: c?.background ?? null,
+  sizes: c ? c.emojis.map((_, i) => c.sizes?.[i] ?? COVER_SIZE_DEFAULT) : [],
+});
 
 const BACKGROUND_GROUPS: { key: CoverBackground["group"]; label: string }[] = [
   { key: "rainbow", label: "Rainbow & gradients" },
@@ -113,16 +129,29 @@ export function CoverPicker({ value, onChange, title, creatorName, onSave, savin
   const emojiKeys = useRovingGrid(shown.length, activeEmoji, setActiveEmoji, gridRef);
   const bgKeys = useRovingGrid(ORDERED_BACKGROUNDS.length, activeBg, setActiveBg, bgRef);
   // Tapping an emoji adds it (up to three) or, if it's already in, takes it out.
+  // Sizes travel with their emoji: removing, adding and moving keep each one's own.
+  const sizes = draftSizes(value);
   const pickEmoji = (key: string) => {
-    if (value.emojis.includes(key)) { setLimitNote(false); onChange({ ...value, emojis: value.emojis.filter((k) => k !== key) }); return; }
+    const at = value.emojis.indexOf(key);
+    if (at >= 0) {
+      setLimitNote(false);
+      onChange({ ...value, emojis: value.emojis.filter((k) => k !== key), sizes: sizes.filter((_, i) => i !== at) });
+      return;
+    }
     if (value.emojis.length >= MAX_COVER_EMOJI) { setLimitNote(true); return; }
     setLimitNote(false);
-    onChange({ emojis: [...value.emojis, key], background: value.background ?? DEFAULT_BACKGROUND });
+    onChange({ emojis: [...value.emojis, key], background: value.background ?? DEFAULT_BACKGROUND, sizes: [...sizes, COVER_SIZE_DEFAULT] });
   };
   const moveEmoji = (i: number, d: -1 | 1) => {
     const next = [...value.emojis];
+    const nextSizes = [...sizes];
     [next[i], next[i + d]] = [next[i + d], next[i]];
-    onChange({ ...value, emojis: next });
+    [nextSizes[i], nextSizes[i + d]] = [nextSizes[i + d], nextSizes[i]];
+    onChange({ ...value, emojis: next, sizes: nextSizes });
+  };
+  const resize = (i: number, v: number) => {
+    const clamped = Math.min(COVER_SIZE_MAX, Math.max(COVER_SIZE_MIN, Math.round(v / COVER_SIZE_STEP) * COVER_SIZE_STEP));
+    onChange({ ...value, sizes: sizes.map((x, j) => (j === i ? clamped : x)) });
   };
   const pickBackground = (key: string) => onChange({ ...value, background: key });
 
@@ -154,12 +183,28 @@ export function CoverPicker({ value, onChange, title, creatorName, onSave, savin
 
       {/* The chosen emoji, in cover order: remove or move each one. */}
       <div className="mt-1" data-testid="cover-chosen">
-        <p className="text-xs font-bold text-muted-foreground" aria-live="polite">Your emoji · {value.emojis.length} of {MAX_COVER_EMOJI}</p>
+        <p className="text-xs font-bold text-muted-foreground" aria-live="polite">Your emoji · {value.emojis.length} of {MAX_COVER_EMOJI}{value.emojis.length > 0 ? " · drag to size each one" : ""}</p>
         {value.emojis.length > 0 && (
-          <ol className="mt-1.5 flex flex-wrap gap-2">
+          <ol className="mt-1.5 flex flex-col gap-2">
             {value.emojis.map((k, i) => (
-              <li key={k} className="inline-flex items-center gap-0.5 rounded-full border border-border bg-background py-0.5 pl-2 pr-0.5" data-testid="cover-chip">
+              <li key={k} className="flex min-w-0 items-center gap-1 rounded-2xl border border-border bg-background py-0.5 pl-2 pr-0.5" data-testid="cover-chip">
                 <span aria-hidden="true" className="text-[22px] leading-none" style={{ fontFamily: EMOJI_FONT }}>{emojiFromKey(k)}</span>
+                {/* Size: a native slider (mouse, touch, arrows, Page Up/Down, Home/End) with its own name. */}
+                <label className="flex min-w-0 flex-1 items-center gap-2 pl-1" data-testid="cover-size">
+                  <span className="sr-only">{`${labelOf(k).replace(/^./, (c) => c.toUpperCase())} size`}</span>
+                  <input
+                    type="range"
+                    min={COVER_SIZE_MIN}
+                    max={COVER_SIZE_MAX}
+                    step={COVER_SIZE_STEP}
+                    value={sizes[i]}
+                    disabled={disabled}
+                    onChange={(e) => resize(i, Number(e.target.value))}
+                    aria-valuetext={`${sizes[i]} percent`}
+                    className={`h-11 min-w-0 flex-1 cursor-pointer accent-violet-700 dark:accent-violet-300 ${cv.focus}`}
+                  />
+                  <output aria-hidden="true" className="w-11 shrink-0 text-right text-xs font-bold tabular-nums text-muted-foreground">{sizes[i]}%</output>
+                </label>
                 {value.emojis.length > 1 && (
                   <>
                     <button type="button" disabled={disabled || i === 0} onClick={() => moveEmoji(i, -1)} aria-label={`Move ${labelOf(k)} left`} className={`grid h-9 w-9 place-items-center rounded-full text-foreground hover:bg-secondary disabled:opacity-30 ${cv.focus}`}>
