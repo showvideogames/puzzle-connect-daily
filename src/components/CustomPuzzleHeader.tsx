@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { communityPuzzlesOn } from "@/lib/communityFlag";
 import { BarChart3, ChevronLeft } from "lucide-react";
 import { PuzzleModeBadge } from "@/components/PuzzleModeBadge";
 import { FavoriteButton } from "@/components/FavoriteButton";
@@ -58,7 +59,9 @@ export function CustomPuzzleHeader({ title, designerName, creatorSlug, isRainbow
           by{" "}
           {creatorSlug ? (
             <Link
-              to={`/creator/${creatorSlug}`}
+              // With Community on, the byline opens the creator's Community shelf
+              // (listed puzzles only), as Community cards do.
+              to={communityPuzzlesOn() ? `/creator/${creatorSlug}?view=community` : `/creator/${creatorSlug}`}
               className="font-semibold text-foreground underline underline-offset-2 hover:text-primary
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
             >

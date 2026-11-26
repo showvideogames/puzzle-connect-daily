@@ -26,7 +26,9 @@ export interface ShowcasePuzzle {
   plays: number;
   favorites: number;
   /** The creator's cover keys (one emoji, one preset background), or none. */
-  cover?: { emojis: string[]; background: string };
+  cover?: { emojis: string[]; background: string; sizes?: number[] };
+  /** The byline saved on the puzzle, when it differs from the creator's current public name. */
+  byline?: string;
   /** Made by the fictional signed-in Demo Player (shown in their My Puzzles). */
   ownedByDemo?: boolean;
   visibility?: "public" | "private";

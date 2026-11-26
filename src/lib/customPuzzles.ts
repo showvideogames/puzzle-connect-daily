@@ -130,7 +130,7 @@ interface CustomPuzzleRow {
   favorited_by_me?: boolean;
   cover_emoji?: string | null;
   cover_emoji_2?: string | null;
-  cover_emoji_3?: string | null;
+  cover_emoji_3?: string | null; cover_sizes?: unknown;
   cover_background?: string | null;
   title: string;
   creator_name: string;
@@ -212,7 +212,7 @@ function toPlayable(data: unknown): CustomPlayablePuzzle | null {
     creatorSlug: row.creator_slug ?? null,
     favoriteCount: row.favorite_count ?? 0,
     favoritedByMe: row.favorited_by_me ?? false,
-    cover: parseCover(row.cover_emoji, row.cover_background, row.cover_emoji_2, row.cover_emoji_3),
+    cover: parseCover(row.cover_emoji, row.cover_background, row.cover_emoji_2, row.cover_emoji_3, row.cover_sizes),
   };
 }
 
@@ -297,7 +297,7 @@ export async function getMyFavorites(): Promise<FavoritePuzzleCard[]> {
       favorite_count: number;
       cover_emoji?: string | null;
       cover_emoji_2?: string | null;
-      cover_emoji_3?: string | null;
+      cover_emoji_3?: string | null; cover_sizes?: unknown;
       cover_background?: string | null;
     }[]
   ).map((r) => ({
@@ -307,7 +307,7 @@ export async function getMyFavorites(): Promise<FavoritePuzzleCard[]> {
     mode: r.mode,
     shortCode: r.short_code,
     favoriteCount: r.favorite_count ?? 0,
-    cover: parseCover(r.cover_emoji, r.cover_background, r.cover_emoji_2, r.cover_emoji_3),
+    cover: parseCover(r.cover_emoji, r.cover_background, r.cover_emoji_2, r.cover_emoji_3, r.cover_sizes),
   }));
 }
 
@@ -502,7 +502,7 @@ export async function listCommunityPuzzles(params: {
       favorite_count: number;
       cover_emoji?: string | null;
       cover_emoji_2?: string | null;
-      cover_emoji_3?: string | null;
+      cover_emoji_3?: string | null; cover_sizes?: unknown;
       cover_background?: string | null;
     }[];
     has_more?: boolean;
@@ -516,7 +516,7 @@ export async function listCommunityPuzzles(params: {
       shortCode: p.short_code,
       finishedPlays: p.finished_plays ?? 0,
       favoriteCount: p.favorite_count ?? 0,
-      cover: parseCover(p.cover_emoji, p.cover_background, p.cover_emoji_2, p.cover_emoji_3),
+      cover: parseCover(p.cover_emoji, p.cover_background, p.cover_emoji_2, p.cover_emoji_3, p.cover_sizes),
     })),
     hasMore: !!r.has_more,
   };
@@ -561,7 +561,7 @@ type CardRow = {
   favorite_count: number;
   cover_emoji?: string | null;
   cover_emoji_2?: string | null;
-  cover_emoji_3?: string | null;
+  cover_emoji_3?: string | null; cover_sizes?: unknown;
   cover_background?: string | null;
 };
 
@@ -574,7 +574,7 @@ function mapCard(p: CardRow): CommunityPuzzleListing {
     shortCode: p.short_code,
     finishedPlays: p.finished_plays ?? 0,
     favoriteCount: p.favorite_count ?? 0,
-    cover: parseCover(p.cover_emoji, p.cover_background, p.cover_emoji_2, p.cover_emoji_3),
+    cover: parseCover(p.cover_emoji, p.cover_background, p.cover_emoji_2, p.cover_emoji_3, p.cover_sizes),
   };
 }
 
@@ -771,14 +771,16 @@ export async function adminSetCuration(featured: string | null, picks: string[])
  * with the server's message.
  */
 export async function setCustomPuzzleCover(shareId: string, cover: CreatorCover | null): Promise<CreatorCover | null> {
-  const { data, error } = await supabase.rpc("set_custom_puzzle_cover_emojis", {
+  const { data, error } = await supabase.rpc("set_custom_puzzle_cover_sized", {
     _share_id: shareId,
     _emojis: cover?.emojis ?? null,
     _background: cover?.background ?? null,
+    // Per-emoji sizes, slot for slot; null = all standard (0014).
+    _sizes: cover?.sizes ?? null,
   });
   if (error) throw error;
-  const r = (data ?? {}) as { cover_emoji?: string | null; cover_emoji_2?: string | null; cover_emoji_3?: string | null; cover_background?: string | null };
-  return parseCover(r.cover_emoji, r.cover_background, r.cover_emoji_2, r.cover_emoji_3);
+  const r = (data ?? {}) as { cover_emoji?: string | null; cover_emoji_2?: string | null; cover_emoji_3?: string | null; cover_sizes?: unknown; cover_background?: string | null };
+  return parseCover(r.cover_emoji, r.cover_background, r.cover_emoji_2, r.cover_emoji_3, r.cover_sizes);
 }
 
 // ── Optional 1-5 star rating, after finishing (migration 0010) ──────────────
@@ -855,7 +857,7 @@ export async function listMyPuzzles(params: { offset?: number; limit?: number } 
   const items = (Array.isArray(r.items) ? r.items : []) as {
     share_id: string; short_code: string; title: string; creator_name: string; mode: CustomPuzzleMode; visibility: CustomPuzzleVisibility;
     hidden: boolean; listed: boolean; can_list: boolean; created_at: string;
-    cover_emoji?: string | null; cover_emoji_2?: string | null; cover_emoji_3?: string | null; cover_background?: string | null;
+    cover_emoji?: string | null; cover_emoji_2?: string | null; cover_emoji_3?: string | null; cover_sizes?: unknown; cover_background?: string | null;
   }[];
   return {
     items: items.map((x) => ({
@@ -868,7 +870,7 @@ export async function listMyPuzzles(params: { offset?: number; limit?: number } 
       hidden: !!x.hidden,
       listed: !!x.listed,
       canList: !!x.can_list,
-      cover: parseCover(x.cover_emoji, x.cover_background, x.cover_emoji_2, x.cover_emoji_3),
+      cover: parseCover(x.cover_emoji, x.cover_background, x.cover_emoji_2, x.cover_emoji_3, x.cover_sizes),
       createdAt: x.created_at,
     })),
     hasMore: !!r.has_more,
@@ -912,4 +914,22 @@ export async function getMyPuzzleSource(shareId: string): Promise<MyPuzzleSource
     visibility: r.visibility === "private" ? "private" : "public",
     content: r.content as Record<string, unknown>,
   };
+}
+
+// ── A creator page for a listed puzzle's owner who has none (migration 0015) ─
+
+/**
+ * The signed-in owner: if they have a puzzle in Community but no creator page
+ * (an older puzzle reassigned to their account), the server makes it, with a
+ * stable slug. Best-effort; returns their slug or null.
+ */
+export async function ensureMyCreatorProfile(): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.rpc("ensure_my_creator_profile");
+    if (error) return null;
+    const slug = (data as { public_slug?: unknown } | null)?.public_slug;
+    return typeof slug === "string" ? slug : null;
+  } catch {
+    return null;
+  }
 }
