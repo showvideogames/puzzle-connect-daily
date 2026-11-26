@@ -96,13 +96,15 @@ function contentPayload(content: CustomPuzzleContentInput) {
 }
 
 /** Throws on failure (the caller — the /create page — needs the real message to show near the right field). */
-export async function createCustomPuzzle(input: CreateCustomPuzzleInput): Promise<CreateCustomPuzzleResult> {
-  const { data, error } = await supabase.rpc("create_custom_puzzle", {
+export async function createCustomPuzzle(input: CreateCustomPuzzleInput, copyOwnerToken?: string): Promise<CreateCustomPuzzleResult> {
+  const request = supabase.rpc("create_custom_puzzle", {
     _creator_name: input.creatorName,
     _title: input.title,
     _visibility: input.visibility,
     _content: contentPayload(input.content),
   });
+  if (copyOwnerToken) request.setHeader("Authorization", `Bearer ${copyOwnerToken}`);
+  const { data, error } = await request;
   if (error) throw error;
   const row = (data ?? {}) as { puzzle_id?: string; share_id?: string; short_code?: string };
   if (!row.puzzle_id || !row.share_id) throw new Error("Puzzle was not created.");
@@ -901,8 +903,10 @@ export interface MyPuzzleSource {
 }
 
 /** The caller's own puzzle's builder content, for Duplicate & Edit. Refused for anyone else. Throws. */
-export async function getMyPuzzleSource(shareId: string): Promise<MyPuzzleSource> {
-  const { data, error } = await supabase.rpc("get_my_custom_puzzle_source", { _share_id: shareId });
+export async function getMyPuzzleSource(shareId: string, copyOwnerToken?: string): Promise<MyPuzzleSource> {
+  const request = supabase.rpc("get_my_custom_puzzle_source", { _share_id: shareId });
+  if (copyOwnerToken) request.setHeader("Authorization", `Bearer ${copyOwnerToken}`);
+  const { data, error } = await request;
   if (error) throw error;
   const r = (data ?? {}) as { title?: unknown; creator_name?: unknown; visibility?: unknown; content?: unknown };
   if (typeof r.title !== "string" || !r.content || typeof r.content !== "object") throw new Error("Couldn't read this puzzle.");

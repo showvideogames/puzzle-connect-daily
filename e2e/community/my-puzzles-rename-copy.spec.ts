@@ -33,7 +33,6 @@ const SHOTS = path.resolve(E2E_DIR, "..", "evidence", "my-puzzles");
 fs.mkdirSync(SHOTS, { recursive: true });
 const shot = (page: Page, name: string, fullPage = false) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage, animations: "disabled" });
 const MAIN_KEY = "rainbow-creator-draft-v1";
-const COPY_PREFIX = `${MAIN_KEY}:copy:`;
 
 async function rpc(token: string, fn: string, body: unknown) {
   const r = await fetch(`${config.apiUrl}/rest/v1/rpc/${fn}`, {
@@ -53,10 +52,14 @@ async function openMine(page: Page) {
 }
 type Draft = { title: string; visibility: string; builder: { style: string; groups: { category: string; answers: { id: string; text: string }[] }[]; wordOrderIds: string[]; rainbowWordOrderIds: string[] } };
 async function drafts(page: Page): Promise<{ main: Draft | null; copies: Record<string, Draft> }> {
-  const all = await page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter((k) => k.startsWith("rainbow-creator-draft-v1")).map((k) => [k, localStorage.getItem(k)!])));
-  const copies: Record<string, Draft> = {};
-  for (const [k, v] of Object.entries(all)) if (k.startsWith(COPY_PREFIX)) copies[k.slice(COPY_PREFIX.length)] = JSON.parse(v);
-  return { main: all[MAIN_KEY] ? JSON.parse(all[MAIN_KEY]) : null, copies };
+  return page.evaluate((mainKey) => {
+    const owner = JSON.parse(localStorage.getItem("rc-auth") ?? "null")?.user?.id;
+    const prefix = `${mainKey}:copy:owner:${owner}:`;
+    const copies = Object.fromEntries(Object.keys(localStorage).filter(k => owner && k.startsWith(prefix))
+      .map(k => [k.slice(prefix.length), JSON.parse(localStorage.getItem(k)!)]));
+    const main = localStorage.getItem(mainKey);
+    return { main: main ? JSON.parse(main) : null, copies };
+  }, MAIN_KEY);
 }
 const textsOf = (d: Draft, ids: string[]) => ids.map((id) => d.builder.groups.flatMap((g) => g.answers).find((a) => a.id === id)?.text);
 
