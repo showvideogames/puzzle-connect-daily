@@ -785,6 +785,13 @@
           "notNull": true,
           "default": "now()",
           "comment": null
+        },
+        {
+          "name": "community_only",
+          "type": "boolean",
+          "notNull": true,
+          "default": "false",
+          "comment": null
         }
       ],
       "constraints": [
