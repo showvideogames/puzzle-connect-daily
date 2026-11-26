@@ -22,7 +22,7 @@ shows up as a diff instead of as a surprise on a blank project.
 | Category | Count |
 |---|---|
 | Tables | 26 |
-| Columns | 212 |
+| Columns | 213 |
 | Constraints | 115 |
 | Indexes | 67 |
 | Functions | 86 |
@@ -255,6 +255,7 @@ RLS: enabled. Grants: service_role=DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNC
 | `public_slug` | text | not null |  |
 | `display_name` | text | not null |  |
 | `created_at` | timestamp with time zone | not null | `now()` |
+| `community_only` | boolean | not null | `false` |
 
 Constraints:
 
