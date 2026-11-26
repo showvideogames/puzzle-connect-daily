@@ -11,6 +11,8 @@ import {
 } from "@/lib/builder/creatorDraft";
 import type { MyPuzzleSource } from "@/lib/customPuzzles";
 
+const OWNER = "00000000-0000-4000-8000-000000000001";
+const DIFFERENT_OWNER = "00000000-0000-4000-8000-000000000002";
 const BOARD = [["ALTO", "BASS", "SOPRANO", "TENOR"], ["BALLAD", "HYMN", "LULLABY", "SHANTY"], ["CASSETTE", "RECORD", "REEL", "VINYL"], ["ENCORE", "GIG", "SETLIST", "TOUR"]];
 const ORDER = BOARD.flat().reverse();
 const source = (over: Partial<MyPuzzleSource> = {}, content: Record<string, unknown> = {}): MyPuzzleSource => ({
@@ -84,21 +86,55 @@ describe("copy slots", () => {
     expect(main.save(partial)).toBe(true);
     const mainRaw = storage.getItem(CREATOR_DRAFT_KEY);
 
-    const a = saveNewCopyDraft(storage, draftFromSource(source()));
-    const b = saveNewCopyDraft(storage, draftFromSource(source({ title: "Private Parlour Games", visibility: "private" })));
+    const a = saveNewCopyDraft(storage, draftFromSource(source()), OWNER);
+    const b = saveNewCopyDraft(storage, draftFromSource(source({ title: "Private Parlour Games", visibility: "private" })), OWNER);
     expect(isCopySlot(a) && isCopySlot(b) && a !== b).toBe(true);
     expect(storage.getItem(CREATOR_DRAFT_KEY)).toBe(mainRaw);
 
     // Reopened fresh, as after a reload with no edits.
     expect(new CreatorDraftStore(() => storage).draft?.title).toBe("Unrelated Partial Draft");
-    expect(new CreatorDraftStore(() => storage, draftKeyFor(a)).draft?.title).toBe("Copy of Mixtape Memories");
-    expect(new CreatorDraftStore(() => storage, draftKeyFor(b)).draft?.visibility).toBe("private");
-    expect(listCopyDrafts(storage).map((c) => c.title).sort()).toEqual(["Copy of Mixtape Memories", "Copy of Private Parlour Games"]);
+    expect(new CreatorDraftStore(() => storage, draftKeyFor(a, OWNER)).draft?.title).toBe("Copy of Mixtape Memories");
+    expect(new CreatorDraftStore(() => storage, draftKeyFor(b, OWNER)).draft?.visibility).toBe("private");
+    expect(listCopyDrafts(storage, OWNER).map((c) => c.title).sort()).toEqual(["Copy of Mixtape Memories", "Copy of Private Parlour Games"]);
 
     // Creating (clearing) one copy leaves the main draft and the other copy.
-    expect(new CreatorDraftStore(() => storage, draftKeyFor(a)).clear(false)).toBe(true);
+    expect(new CreatorDraftStore(() => storage, draftKeyFor(a, OWNER)).clear(false)).toBe(true);
     expect(storage.getItem(CREATOR_DRAFT_KEY)).toBe(mainRaw);
-    expect(listCopyDrafts(storage).map((c) => c.slot)).toEqual([b]);
+    expect(listCopyDrafts(storage, OWNER).map((c) => c.slot)).toEqual([b]);
+  });
+
+  it("partitions drafts by account and preserves unbound historical bytes", () => {
+    const storage = memoryStorage();
+    const unrelated = draftFromSource(source({ title: "Separate draft" }));
+    const guest = new CreatorDraftStore(() => storage);
+    expect(guest.save(unrelated)).toBe(true);
+    const oldKey = `${CREATOR_DRAFT_KEY}:copy:historicalslot`;
+    storage.setItem(oldKey, encodeDraft(unrelated));
+
+    const privateCopy = saveNewCopyDraft(storage, draftFromSource(source({ visibility: "private" })), OWNER);
+    const otherCopy = saveNewCopyDraft(storage, draftFromSource(source({ title: "Other player" })), DIFFERENT_OWNER);
+    expect(listCopyDrafts(storage, OWNER).map(({ slot }) => slot)).toEqual([privateCopy]);
+    expect(listCopyDrafts(storage, DIFFERENT_OWNER).map(({ slot }) => slot)).toEqual([otherCopy]);
+    expect(new CreatorDraftStore(() => storage, draftKeyFor(privateCopy, DIFFERENT_OWNER)).draft).toBeUndefined();
+    expect(() => draftKeyFor(privateCopy)).toThrow();
+    expect(() => draftKeyFor(privateCopy, "bad-owner")).toThrow();
+    expect(storage.getItem(oldKey)).toBe(encodeDraft(unrelated));
+    expect(new CreatorDraftStore(() => storage).draft?.title).toBe(unrelated.title);
+  });
+
+  it("guards an already opened store when the originating account changes", () => {
+    const storage = memoryStorage();
+    let active = OWNER;
+    const original = draftFromSource(source({ visibility: "private" }));
+    const slot = saveNewCopyDraft(storage, original, OWNER);
+    const key = draftKeyFor(slot, OWNER);
+    const opened = new CreatorDraftStore(() => storage, key, () => active === OWNER);
+    expect(opened.draft?.title).toBe(original.title);
+    active = DIFFERENT_OWNER;
+    expect(opened.save({ ...original, title: "Not saved" })).toBe(false);
+    expect(opened.clear()).toBe(false);
+    expect(new CreatorDraftStore(() => storage, key, () => false).draft).toBeUndefined();
+    expect(new CreatorDraftStore(() => storage, key).draft?.title).toBe(original.title);
   });
 
   it("only accepts well-formed slot names", () => {

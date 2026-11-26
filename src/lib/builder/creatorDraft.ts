@@ -12,8 +12,17 @@ export const CREATOR_DRAFT_LOCK = "rainbow-creator-draft";
 export const COPY_DRAFT_PREFIX = `${CREATOR_DRAFT_KEY}:copy:`;
 const COPY_SLOT = /^[a-z0-9]{8,32}$/;
 export const isCopySlot = (slot: unknown): slot is string => typeof slot === "string" && COPY_SLOT.test(slot);
-export const draftKeyFor = (slot?: string | null) => (slot ? `${COPY_DRAFT_PREFIX}${slot}` : CREATOR_DRAFT_KEY);
-export const draftLockFor = (slot?: string | null) => (slot ? `${CREATOR_DRAFT_LOCK}:copy:${slot}` : CREATOR_DRAFT_LOCK);
+const ownCopyPrefix = (owner: string) => {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(owner)) throw new Error("Sign in to open your copy.");
+  return `${COPY_DRAFT_PREFIX}owner:${owner}:`;
+};
+export function draftKeyFor(slot?: string | null, owner?: string | null) {
+  if (!slot) return CREATOR_DRAFT_KEY;
+  if (!isCopySlot(slot) || !owner) throw new Error("Sign in to open your copy.");
+  return ownCopyPrefix(owner) + slot;
+}
+export const draftLockFor = (slot?: string | null, owner?: string | null) =>
+  slot ? draftKeyFor(slot, owner) : CREATOR_DRAFT_LOCK;
 const slot = z.object({ id: z.string().min(1), text: z.string() });
 const schema = z.object({
   version: z.literal(1),
@@ -66,8 +75,9 @@ export class CreatorDraftStore {
   private malformed = false;
   error: string | null = null;
   draft: CreatorDraft | undefined;
-  constructor(private storage: () => Storage, private key: string = CREATOR_DRAFT_KEY) {
+  constructor(private storage: () => Storage, private key: string = CREATOR_DRAFT_KEY, private allowed: () => boolean = () => true) {
     try {
+      if (!this.allowed()) throw new Error("Account changed.");
       this.expected = storage().getItem(key);
       this.readable = true;
       if (this.expected !== null) this.draft = decodeDraft(this.expected);
@@ -80,7 +90,7 @@ export class CreatorDraftStore {
   }
   private change(next: string | null, explicitClear: boolean): boolean {
     try {
-      if (!this.readable || (this.malformed && !explicitClear)) return false;
+      if (!this.allowed() || !this.readable || (this.malformed && !explicitClear)) return false;
       const storage = this.storage();
       if (storage.getItem(this.key) !== this.expected) {
         this.error = "The saved draft changed elsewhere. Your edits are not saved. Return to Create in a new tab after closing this one to recover that copy.";
@@ -106,23 +116,24 @@ export class CreatorDraftStore {
  * the copy is recoverable even if the page is reloaded before any edit. Never
  * touches the main draft or another copy. Returns the slot.
  */
-export function saveNewCopyDraft(storage: Storage, draft: CreatorDraft): string {
+export function saveNewCopyDraft(storage: Storage, draft: CreatorDraft, owner: string): string {
   for (let i = 0; i < 5; i++) {
     const slot = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`.replace(/[^a-z0-9]/g, "").slice(0, 32);
-    if (!isCopySlot(slot) || storage.getItem(draftKeyFor(slot)) !== null) continue;
-    storage.setItem(draftKeyFor(slot), encodeDraft(draft));
+    if (!isCopySlot(slot) || storage.getItem(draftKeyFor(slot, owner)) !== null) continue;
+    storage.setItem(draftKeyFor(slot, owner), encodeDraft(draft));
     return slot;
   }
   throw new Error("Couldn't save the copy in this browser.");
 }
 
-/** Every Duplicate & Edit copy saved in this browser (newest first). Unreadable ones are left alone. */
-export function listCopyDrafts(storage: Storage): { slot: string; title: string }[] {
+/** Only this owner’s copies. Legacy unbound bytes are left untouched and hidden. */
+export function listCopyDrafts(storage: Storage, owner: string): { slot: string; title: string }[] {
   const out: { slot: string; title: string }[] = [];
+  const prefix = ownCopyPrefix(owner);
   for (let i = 0; i < storage.length; i++) {
     const key = storage.key(i);
-    if (!key?.startsWith(COPY_DRAFT_PREFIX)) continue;
-    const slot = key.slice(COPY_DRAFT_PREFIX.length);
+    if (!key?.startsWith(prefix)) continue;
+    const slot = key.slice(prefix.length);
     if (!isCopySlot(slot)) continue;
     try {
       out.push({ slot, title: decodeDraft(storage.getItem(key) ?? "").title });

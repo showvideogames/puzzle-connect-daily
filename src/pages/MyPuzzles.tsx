@@ -7,6 +7,7 @@ import { CoverPicker, coverToDraft, draftToCover, type CoverDraft } from "@/comp
 import { SiteFooter } from "@/components/SiteFooter";
 import { SEO } from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
+import { useCopyAccount } from "@/hooks/useCopyAccount";
 import { useGamePageTheme } from "@/hooks/useGamePageTheme";
 import { communityPuzzlesOn } from "@/lib/communityFlag";
 import { cv } from "@/lib/communityStyle";
@@ -43,7 +44,10 @@ function statusOf(p: MyPuzzle): { label: string; tone: string } {
 
 const dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
 
-function PuzzleRow({ puzzle, community, onChange }: { puzzle: MyPuzzle; community: boolean; onChange: (next: MyPuzzle) => void }) {
+function PuzzleRow({ puzzle, community, onChange, owner, isCurrent }: {
+  puzzle: MyPuzzle; community: boolean; onChange: (next: MyPuzzle) => void;
+  owner: string; isCurrent: (id: string) => boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<CoverDraft>(coverToDraft(puzzle.cover));
   const [saving, setSaving] = useState(false);
@@ -115,8 +119,11 @@ function PuzzleRow({ puzzle, community, onChange }: { puzzle: MyPuzzle; communit
     setCopying(true);
     setNote(null);
     try {
-      const source = await getMyPuzzleSource(puzzle.shareId);
-      const slot = saveNewCopyDraft(localStorage, draftFromSource(source));
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!isCurrent(owner) || session?.user.id !== owner || !session.access_token) return;
+      const source = await getMyPuzzleSource(puzzle.shareId, session.access_token);
+      if (!isCurrent(owner)) return;
+      const slot = saveNewCopyDraft(localStorage, draftFromSource(source), owner);
       navigate(`/create?draft=${slot}`);
     } catch (err) {
       setNote({ kind: "error", text: errorText(err, "Couldn't copy it. Try again.") });
@@ -236,8 +243,8 @@ function PuzzleRow({ puzzle, community, onChange }: { puzzle: MyPuzzle; communit
 }
 
 /** Duplicate & Edit copies saved in this browser, each in its own draft slot. */
-function UnsavedCopies() {
-  const [copies, setCopies] = useState(() => { try { return listCopyDrafts(localStorage); } catch { return []; } });
+function UnsavedCopies({ owner, isCurrent }: { owner: string; isCurrent: (id: string) => boolean }) {
+  const [copies, setCopies] = useState(() => { try { return listCopyDrafts(localStorage, owner); } catch { return []; } });
   const [asking, setAsking] = useState<string | null>(null);
   const [note, setNote] = useState("");
   if (copies.length === 0 && !note) return null;
@@ -245,15 +252,16 @@ function UnsavedCopies() {
     setNote("");
     // Only while no tab is editing it (the same lock Create holds).
     const done = navigator.locks
-      ? await navigator.locks.request(draftLockFor(slot), { ifAvailable: true }, (lock) => {
-          if (!lock) return false;
-          localStorage.removeItem(draftKeyFor(slot));
+      ? await navigator.locks.request(draftLockFor(slot, owner), { ifAvailable: true }, (lock) => {
+          if (!lock || !isCurrent(owner)) return false;
+          localStorage.removeItem(draftKeyFor(slot, owner));
           return true;
         }).catch(() => false)
       : false;
+    if (!isCurrent(owner)) return;
     setAsking(null);
     if (!done) { setNote("That copy is open in another tab, so it was kept."); return; }
-    setCopies(listCopyDrafts(localStorage));
+    setCopies(listCopyDrafts(localStorage, owner));
     setNote("Copy discarded.");
   };
   return (
@@ -295,8 +303,14 @@ type Load = { status: "loading" } | { status: "error" } | { status: "ready"; ite
  */
 export default function MyPuzzles() {
   useGamePageTheme();
+  const { user, isCurrent } = useCopyAccount();
+  return <MyPuzzlesPage key={user?.id ?? "signed-out"} user={user} isCurrent={isCurrent} />;
+}
+
+function MyPuzzlesPage({ user, isCurrent }: {
+  user: User | null | undefined; isCurrent: (id: string) => boolean;
+}) {
   const community = communityPuzzlesOn();
-  const [user, setUser] = useState<User | null | undefined>(undefined);
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState(false);
@@ -305,11 +319,6 @@ export default function MyPuzzles() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", loadSettings().darkMode);
-  }, []);
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setUser(session?.user ?? null));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
-    return () => subscription.unsubscribe();
   }, []);
 
   const fetchFirst = useCallback(() => {
@@ -379,7 +388,7 @@ export default function MyPuzzles() {
           {user && load.status === "ready" && load.total > 0 && createLink}
         </div>
 
-        {user && <UnsavedCopies />}
+        {user && <UnsavedCopies owner={user.id} isCurrent={isCurrent} />}
 
         {user === undefined ? (
           <p className="py-12 text-center text-muted-foreground" role="status">Loading…</p>
@@ -410,7 +419,7 @@ export default function MyPuzzles() {
         ) : (
           <>
             <ul className="mt-3" data-testid="my-puzzles-list">
-              {load.items.map((p) => <PuzzleRow key={p.shortCode} puzzle={p} community={community} onChange={update} />)}
+              {load.items.map((p) => <PuzzleRow key={p.shortCode} puzzle={p} community={community} onChange={update} owner={user.id} isCurrent={isCurrent} />)}
             </ul>
             {(load.hasMore || moreError) && (
               <div className="mt-4 flex flex-col items-center gap-2">

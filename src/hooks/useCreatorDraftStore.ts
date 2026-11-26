@@ -3,7 +3,7 @@ import { CreatorDraftStore, draftKeyFor, draftLockFor } from "@/lib/builder/crea
 
 /** Hold a single writer for the editor's lifetime. No lease expiry can let a
  * suspended tab overwrite another tab. Unsupported browsers fail honestly. */
-export function useCreatorDraftStore(slot: string | null = null) {
+export function useCreatorDraftStore(slot: string | null = null, owner: string | null = null, isCurrent?: (id: string) => boolean) {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{ store?: CreatorDraftStore; busy?: boolean; unavailable?: boolean }>({});
   useEffect(() => {
@@ -14,14 +14,14 @@ export function useCreatorDraftStore(slot: string | null = null) {
       setState({ unavailable: true });
       return;
     }
-    void navigator.locks.request(draftLockFor(slot), { ifAvailable: true }, async lock => {
-      if (cancelled) return;
+    void navigator.locks.request(draftLockFor(slot, owner), { ifAvailable: true }, async lock => {
+      if (cancelled || (owner && !isCurrent?.(owner))) return;
       if (!lock) { setState({ busy: true }); return; }
       const held = new Promise<void>(resolve => { release = resolve; });
-      setState({ store: new CreatorDraftStore(() => localStorage, draftKeyFor(slot)) });
+      setState({ store: new CreatorDraftStore(() => localStorage, draftKeyFor(slot, owner), () => !owner || !!isCurrent?.(owner)) });
       await held;
     }).catch(() => { if (!cancelled) setState({ unavailable: true }); });
     return () => { cancelled = true; release?.(); };
-  }, [attempt, slot]);
+  }, [attempt, slot, owner, isCurrent]);
   return { ...state, retry: () => setAttempt(n => n + 1) };
 }
