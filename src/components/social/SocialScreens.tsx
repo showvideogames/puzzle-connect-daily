@@ -9,6 +9,7 @@ import { DisplayNameGate } from "@/components/account/DisplayNameGate";
 import { FriendActions } from "@/components/account/FriendActions";
 import { FriendsHome, type FriendsTab } from "@/components/account/FriendsHome";
 import { ProfileForm } from "@/components/account/ProfileForm";
+import { PublicNameLink } from "@/components/account/PublicNameLink";
 import { MyPuzzlesLink } from "@/components/account/MyPuzzlesLink";
 import { accountPanel, dangerFill, primaryAction, secondaryAction } from "@/components/account/accountStyles";
 import {
@@ -282,6 +283,7 @@ export function SocialScreens({
     return (
       <main ref={editor} className={`${accountPanel} ${editorClassName}`}>
         <ProfileForm mode="edit" initial={profile ?? newProfile()} onCancel={() => setEditingProfile(false)} onSave={saveProfile} onDirtyChange={markUnsaved} />
+        <PublicNameLink className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold underline underline-offset-4" />
         <MyPuzzlesLink />
         {leavePrompt}
       </main>

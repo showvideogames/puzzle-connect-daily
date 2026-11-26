@@ -14,7 +14,7 @@ import { buildSchemaPlan, applySchemaPlan } from "./lib/schema.ts";
 
 const db = new PGlite();
 
-const ALLOWED_KEYS = ["cover_background", "cover_emoji", "cover_emoji_2", "cover_emoji_3", "creator_name", "creator_slug", "favorite_count", "finished_plays", "listed_at", "mode", "short_code", "title"];
+const ALLOWED_KEYS = ["cover_background", "cover_emoji", "cover_emoji_2", "cover_emoji_3", "cover_sizes", "creator_name", "creator_slug", "favorite_count", "finished_plays", "listed_at", "mode", "short_code", "title"];
 
 type Created = { puzzle_id: string; share_id: string; short_code: string };
 type Feed = { items: Record<string, unknown>[]; has_more: boolean; limit: number; offset: number };

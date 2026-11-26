@@ -60,7 +60,9 @@ async function rpc(token: string, fn: string, body: unknown) {
 }
 async function fillBuilder(page: Page, title: string, words: string[][]) {
   await page.getByLabel("Puzzle Title").fill(title);
-  await page.getByLabel("Your Name (Designer)").fill("Pia Lindqvist");
+  const designer = page.getByLabel("Your Name (Designer)");
+  if (await designer.isEditable()) await designer.fill("Pia Lindqvist");
+  else await expect(designer).toHaveValue("Pia Lindqvist");
   await page.getByRole("button", { name: "Classic", exact: true }).click();
   for (let i = 0; i < 4; i++) {
     const fields = page.getByTestId(`category-card-${i + 1}`).getByRole("textbox");

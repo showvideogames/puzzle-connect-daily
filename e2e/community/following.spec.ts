@@ -177,7 +177,9 @@ test("guest: legacy share link + save, card bookmark, both in Favorites on this 
 
 async function fillBuilder(page: Page, title: string, words: string[][]) {
   await page.getByLabel("Puzzle Title").fill(title);
-  await page.getByLabel("Your Name (Designer)").fill("Wren Halloway");
+  const designer = page.getByLabel("Your Name (Designer)");
+  if (await designer.isEditable()) await designer.fill("Wren Halloway");
+  else await expect(designer).toHaveValue("Wren Halloway");
   await page.getByRole("button", { name: "Classic", exact: true }).click();
   for (let i = 0; i < 4; i++) {
     const fields = page.getByTestId(`category-card-${i + 1}`).getByRole("textbox");

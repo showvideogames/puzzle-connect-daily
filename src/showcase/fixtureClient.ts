@@ -11,7 +11,7 @@
  * and ratings last for the visit.
  */
 import { CREATORS, CURATION, DEMO_GROUPS, DEMO_OWNED, DEMO_PLAYER, PUZZLES, puzzle, type ShowcasePuzzle } from "./fixtures";
-import { validEmojiList } from "@/lib/creatorCover";
+import { validEmojiList, validSizes } from "@/lib/creatorCover";
 import { COVER_BACKGROUND_KEYS } from "@/lib/coverBackgrounds";
 
 // The Demo Player's own puzzles join the visit's puzzles (only the listed one shows in Community).
@@ -38,6 +38,9 @@ const authListeners = new Set<(event: string, s: typeof session) => void>();
 const myFavorites = new Set<string>();
 const myFollows = new Set<string>();
 const myRatings = new Map<string, number>();
+/** The Demo Player's public name: earlier bylines keep the name they were saved with. */
+const demoName: { name: string; renamedAt: number | null } = { name: "Demo Player", renamedAt: null };
+const COOLDOWN_MS = 720 * 3600 * 1000;
 
 export function showcaseSignedIn(): boolean {
   return session !== null;
@@ -61,7 +64,7 @@ const newestFirst = (list: ShowcasePuzzle[]) => [...list].sort((a, b) => b.liste
 function card(p: ShowcasePuzzle) {
   return {
     title: p.title,
-    creator_name: p.creator.name,
+    creator_name: p.byline ?? p.creator.name,
     creator_slug: p.creator.slug,
     mode: p.mode,
     short_code: p.shortCode,
@@ -72,6 +75,7 @@ function card(p: ShowcasePuzzle) {
     cover_emoji_2: p.cover?.emojis[1] ?? null,
     cover_emoji_3: p.cover?.emojis[2] ?? null,
     cover_background: p.cover?.background ?? null,
+    cover_sizes: p.cover?.sizes ?? null,
   };
 }
 
@@ -94,7 +98,7 @@ function full(p: ShowcasePuzzle) {
     share_id: p.shareId,
     short_code: p.shortCode,
     title: p.title,
-    creator_name: p.creator.name,
+    creator_name: p.byline ?? p.creator.name,
     visibility: p.visibility ?? "public",
     content: content(p),
     creator_slug: p.creator.slug,
@@ -104,12 +108,13 @@ function full(p: ShowcasePuzzle) {
     cover_emoji_2: p.cover?.emojis[1] ?? null,
     cover_emoji_3: p.cover?.emojis[2] ?? null,
     cover_background: p.cover?.background ?? null,
+    cover_sizes: p.cover?.sizes ?? null,
   };
 }
 
 function creatorJson(c: (typeof CREATORS)[number]) {
   return {
-    display_name: c.name,
+    display_name: c === DEMO_PLAYER ? demoName.name : c.name,
     public_slug: c.slug,
     listed_count: listed().filter((p) => p.creator === c).length,
     follower_count: c.followers + (session !== null && myFollows.has(c.slug) ? 1 : 0),
@@ -168,7 +173,7 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
       if (!c) return ok(null);
       const mine = newestFirst(PUZZLES.filter((p) => p.creator === c && isPublic(p)));
       return ok({
-        display_name: c.name, public_slug: c.slug, puzzle_count: mine.length,
+        display_name: c === DEMO_PLAYER ? demoName.name : c.name, public_slug: c.slug, puzzle_count: mine.length,
         total_plays: mine.reduce((n, p) => n + (plays.get(p.key) ?? 0), 0),
         total_favorites: mine.reduce((n, p) => n + (likes.get(p.key) ?? 0), 0),
         puzzles: mine.map((p) => ({ title: p.title, mode: p.mode, short_code: p.shortCode, finished_plays: plays.get(p.key) ?? 0, favorite_count: likes.get(p.key) ?? 0, created_at: p.listedAt })),
@@ -262,6 +267,7 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
       const now = new Date().toISOString();
       const made = puzzle({
         key, title, creator: session ? DEMO_PLAYER : { userId: "fixture-guest", slug: "", name: String(a._creator_name ?? "Guest"), followers: 0 },
+        ...(session ? { byline: demoName.name } : {}),
         shortCode: `DemoNew${String(demoCount).padStart(3, "0")}`, mode: c.mode === "rainbow" ? "rainbow" : "classic",
         groups: c.groups.map((g) => ({ category: g.category, words: g.words })),
         ...(c.mode === "rainbow" && c.rainbow_herring ? { rainbow: { name: c.rainbow_category_name ?? "", herring: c.rainbow_herring } } : {}),
@@ -284,10 +290,11 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
         ...pg,
         total: own.length,
         items: pg.items.map((p) => ({
-          share_id: p.shareId, short_code: p.shortCode, title: p.title, creator_name: p.creator.name, mode: p.mode,
+          share_id: p.shareId, short_code: p.shortCode, title: p.title, creator_name: p.byline ?? p.creator.name, mode: p.mode,
           visibility: p.visibility ?? "public", hidden: false, listed: !unlisted.has(p.key), can_list: isPublic(p),
           cover_emoji: p.cover?.emojis[0] ?? null, cover_emoji_2: p.cover?.emojis[1] ?? null, cover_emoji_3: p.cover?.emojis[2] ?? null,
-          cover_background: p.cover?.background ?? null, created_at: p.createdAt ?? p.listedAt,
+          cover_background: p.cover?.background ?? null,
+    cover_sizes: p.cover?.sizes ?? null, created_at: p.createdAt ?? p.listedAt,
         })),
       });
     }
@@ -303,6 +310,42 @@ function rpc(name: string, a: Record<string, unknown> = {}): Result {
         unlisted.delete(p.key);
       } else unlisted.add(p.key);
       return ok({ listed: !!a._listed });
+    }
+    // ── Per-emoji sizes (0014) and the public name (0013), in memory ──
+    case "set_custom_puzzle_cover_sized": {
+      const p = byShare(a._share_id);
+      if (!session) return { data: null, error: { message: "sign in to add a cover" } };
+      if (!p) return { data: null, error: { message: "puzzle not found" } };
+      if (!mine(p)) return { data: null, error: { message: "only the puzzle's creator can change its cover" } };
+      if (a._emojis == null) {
+        delete p.cover;
+        return ok({ cover_emoji: null, cover_emoji_2: null, cover_emoji_3: null, cover_background: null, cover_sizes: null });
+      }
+      const emojis = Array.isArray(a._emojis) ? validEmojiList(a._emojis) : null;
+      if (!emojis || typeof a._background !== "string" || !COVER_BACKGROUND_KEYS.includes(a._background)) return { data: null, error: { message: "that cover isn't available" } };
+      const sizes = a._sizes == null ? null : validSizes(a._sizes, emojis.length);
+      if (a._sizes != null && !sizes) return { data: null, error: { message: "an emoji size is from 50% to 250%" } };
+      p.cover = { emojis, background: a._background, ...(sizes && sizes.some((v) => v !== 100) ? { sizes } : {}) };
+      return ok({ cover_emoji: emojis[0], cover_emoji_2: emojis[1] ?? null, cover_emoji_3: emojis[2] ?? null, cover_background: a._background, cover_sizes: p.cover.sizes ?? null });
+    }
+    case "ensure_my_creator_profile":
+      return session ? ok({ public_slug: DEMO_PLAYER.slug }) : { data: null, error: { message: "sign in to manage your puzzles" } };
+    case "get_my_creator_name":
+      if (!session) return { data: null, error: { message: "sign in to manage your public name" } };
+      return ok({ display_name: demoName.name, next_change_at: demoName.renamedAt ? new Date(demoName.renamedAt + COOLDOWN_MS).toISOString() : null, chosen: true, outcome: "ready" });
+    case "set_my_creator_name": {
+      if (!session) return { data: null, error: { message: "sign in to manage your public name" } };
+      const raw = typeof a._name === "string" ? a._name : "";
+      const clean = raw.replace(/\s+/g, " ").trim();
+      const next = () => (demoName.renamedAt ? new Date(demoName.renamedAt + COOLDOWN_MS).toISOString() : null);
+      // eslint-disable-next-line no-control-regex -- refuses control characters, as the server does
+      if (!clean || clean.length > 60 || /[@\u0000-\u001f]/.test(raw)) return ok({ outcome: "invalid" });
+      if (clean === demoName.name) return ok({ outcome: "unchanged", chosen: true, display_name: demoName.name, next_change_at: next() });
+      if (demoName.renamedAt && demoName.renamedAt + COOLDOWN_MS > Date.now()) return ok({ outcome: "cooldown", chosen: true, display_name: demoName.name, next_change_at: next() });
+      // The first rename is immediate and starts the 30-day wait.
+      demoName.name = clean;
+      demoName.renamedAt = Date.now();
+      return ok({ outcome: "saved", chosen: true, display_name: clean, next_change_at: next() });
     }
     case "set_custom_puzzle_cover_emojis": {
       const p = byShare(a._share_id);

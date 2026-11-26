@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
+import { CreatorPublicNameEditor } from "@/components/account/CreatorPublicNameEditor";
 import { CommunityHeader } from "@/components/community/CommunityHeader";
 import { CreatorCoverArt } from "@/components/community/CreatorCoverArt";
 import { CoverPicker, coverToDraft, draftToCover, type CoverDraft } from "@/components/community/CoverPicker";
@@ -10,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useGamePageTheme } from "@/hooks/useGamePageTheme";
 import { communityPuzzlesOn } from "@/lib/communityFlag";
 import { cv } from "@/lib/communityStyle";
-import { MAX_PUZZLE_TITLE, getMyPuzzleSource, listMyPuzzles, renameMyPuzzle, setCommunityListing, setCustomPuzzleCover, type MyPuzzle } from "@/lib/customPuzzles";
+import { MAX_PUZZLE_TITLE, ensureMyCreatorProfile, getMyPuzzleSource, listMyPuzzles, renameMyPuzzle, setCommunityListing, setCustomPuzzleCover, type MyPuzzle } from "@/lib/customPuzzles";
 import { draftKeyFor, draftLockFor, listCopyDrafts, saveNewCopyDraft } from "@/lib/builder/creatorDraft";
 import { draftFromSource } from "@/lib/builder/copyDraft";
 import { signInWithPlatform } from "@/lib/platformSignIn";
@@ -315,6 +316,9 @@ export default function MyPuzzles() {
   const fetchFirst = useCallback(() => {
     let cancelled = false;
     setLoad({ status: "loading" });
+    // An owner with a listed puzzle but no creator page (an older puzzle
+    // reassigned to them) gets one, so its Community byline can link.
+    void ensureMyCreatorProfile();
     listMyPuzzles().then(
       (r) => { if (!cancelled) setLoad({ status: "ready", ...r }); },
       () => { if (!cancelled) setLoad({ status: "error" }); },
@@ -379,6 +383,7 @@ export default function MyPuzzles() {
           {user && load.status === "ready" && load.total > 0 && createLink}
         </div>
 
+        {user && <CreatorPublicNameEditor key={user.id} />}
         {user && <UnsavedCopies />}
 
         {user === undefined ? (

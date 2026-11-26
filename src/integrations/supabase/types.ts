@@ -948,6 +948,15 @@ export type Database = {
         }
         Returns: Json
       }
+      set_custom_puzzle_cover_sized: {
+        Args: { _background: string; _emojis: string[]; _share_id: string; _sizes: number[] }
+        Returns: Json
+      }
+      ensure_my_creator_profile: { Args: never; Returns: Json }
+      admin_ensure_puzzle_creator_profile: {
+        Args: { _short_code: string }
+        Returns: Json
+      }
       set_custom_puzzle_cover_emojis: {
         Args: { _background: string | null; _emojis: string[] | null; _share_id: string }
         Returns: Json
@@ -1008,6 +1017,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      get_my_creator_name: { Args: Record<PropertyKey, never>; Returns: Json }
+      set_my_creator_name: { Args: { _name: string }; Returns: Json }
       create_custom_puzzle: {
         Args: {
           _content: Json
