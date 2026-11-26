@@ -28,7 +28,10 @@ const create = (designer: string, title: string) => call<Puzzle>("public.create_
 const board = (short: string) => call<{ creator_name: string }>("public.get_custom_puzzle_by_short_code($1)", [short]);
 try {
   const plan = buildSchemaPlan({includeSupabaseStubs:true, includeReset:false});
-  await applySchemaPlan(db, plan.slice(0,-1));
+  // 0013 by name, so later migrations don't shift it.
+  const at = plan.findIndex((x) => x.label.includes("0013_"));
+  assert.ok(at > 0, "0013 is in the plan");
+  await applySchemaPlan(db, plan.slice(0, at));
   const legacy = await account();
   const oldBoard = await create("Early Screenname", "First mixtape");
   const fresh = await account();
@@ -37,7 +40,7 @@ try {
   await auth(null);
   const slug = (await db.query<{public_slug:string}>("select public_slug from public.creator_profiles where user_id=$1",[legacy])).rows[0].public_slug;
   const before = (await db.query("select to_jsonb(p) from public.custom_puzzles p order by id")).rows;
-  await applySchemaPlan(db, plan.slice(-1));
+  await applySchemaPlan(db, plan.slice(at, at + 1));
   assert.deepEqual((await db.query("select to_jsonb(p) from public.custom_puzzles p order by id")).rows,before);
   await auth(null,"anon");
   await assert.rejects(read(), /permission denied/);
