@@ -753,6 +753,61 @@
       }
     },
     {
+      "name": "creator_name_choices",
+      "rlsEnabled": true,
+      "rlsForced": false,
+      "comment": null,
+      "columns": [
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "display_name",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "comment": null
+        },
+        {
+          "name": "last_renamed_at",
+          "type": "timestamp with time zone",
+          "notNull": false,
+          "default": null,
+          "comment": null
+        }
+      ],
+      "constraints": [
+        {
+          "name": "creator_name_choices_display_name_check",
+          "type": "c",
+          "definition": "CHECK (((char_length(display_name) >= 1) AND (char_length(display_name) <= 60)))"
+        },
+        {
+          "name": "creator_name_choices_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (user_id)"
+        },
+        {
+          "name": "creator_name_choices_user_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (user_id) REFERENCES accounts(user_id) ON DELETE CASCADE"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "creator_name_choices_pkey",
+          "definition": "CREATE UNIQUE INDEX creator_name_choices_pkey ON public.creator_name_choices USING btree (user_id)"
+        }
+      ],
+      "triggers": [],
+      "policies": [],
+      "grants": {}
+    },
+    {
       "name": "creator_profiles",
       "rlsEnabled": true,
       "rlsForced": false,
@@ -4009,6 +4064,22 @@
       "comment": "Lucky Bot Luck numbers for the caller's own first official attempt at a Full puzzle: eligible player count, how many took the same exact guess path, and the puzzle's ceiling. Counts only; never exposes another player's path or session."
     },
     {
+      "name": "get_my_creator_name",
+      "args": "",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "executableBy": [
+        "authenticated"
+      ],
+      "comment": null
+    },
+    {
       "name": "get_my_custom_puzzle_listing",
       "args": "_share_id text",
       "returns": "jsonb",
@@ -4701,6 +4772,22 @@
       "executableBy": [
         "authenticated",
         "service_role"
+      ],
+      "comment": null
+    },
+    {
+      "name": "set_my_creator_name",
+      "args": "_name text",
+      "returns": "jsonb",
+      "language": "plpgsql",
+      "kind": "function",
+      "securityDefiner": true,
+      "volatility": "volatile",
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "executableBy": [
+        "authenticated"
       ],
       "comment": null
     },

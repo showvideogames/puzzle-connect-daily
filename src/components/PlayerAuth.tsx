@@ -1,3 +1,4 @@
+import { PublicNameLink } from "./account/PublicNameLink";
 import { AccountIcon as PersonIcon } from "./account/AccountIcon";
 import { lazy, Suspense, useState, useRef, useEffect } from "react";
 import { Link, useInRouterContext } from "react-router-dom";
@@ -168,6 +169,7 @@ export function PlayerAuth({ user, onSignOut, forceOpen = false, onForceClose, h
                 ) : (
                   <a href="/my-puzzles" className={myPuzzlesClass}>My puzzles</a>
                 )}
+                <PublicNameLink className={myPuzzlesClass} onClick={() => setShowDropdown(false)} />
                 {onEditProfile && (
                   <button
                     onClick={() => { setShowDropdown(false); onEditProfile(); }}

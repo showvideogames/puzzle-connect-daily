@@ -1008,6 +1008,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      get_my_creator_name: { Args: Record<PropertyKey, never>; Returns: Json }
+      set_my_creator_name: { Args: { _name: string }; Returns: Json }
       create_custom_puzzle: {
         Args: {
           _content: Json

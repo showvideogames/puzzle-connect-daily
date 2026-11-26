@@ -186,7 +186,9 @@ test("created from Create A Puzzle: saved to My Puzzles, not listed", async ({ p
   await signInAs(page, creds("pia"));
   await expect(page.getByTestId("create-my-puzzles")).toBeVisible();
   await page.getByLabel("Puzzle Title").fill("Pocket Orchestra");
-  await page.getByLabel("Your Name (Designer)").fill("Pia Lindqvist");
+  const designer = page.getByLabel("Your Name (Designer)");
+  if (await designer.isEditable()) await designer.fill("Pia Lindqvist");
+  else await expect(designer).toHaveValue("Pia Lindqvist");
   await page.getByRole("button", { name: "Classic", exact: true }).click();
   const words = [["CELLO", "HARP", "OBOE", "TUBA"], ["ADAGIO", "LARGO", "PRESTO", "VIVACE"], ["BATON", "PODIUM", "SCORE", "STAND"], ["DUET", "OCTET", "SOLO", "TRIO"]];
   for (let i = 0; i < 4; i++) {

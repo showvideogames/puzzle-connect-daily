@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
+import { CreatorPublicNameEditor } from "@/components/account/CreatorPublicNameEditor";
 import { CommunityHeader } from "@/components/community/CommunityHeader";
 import { CreatorCoverArt } from "@/components/community/CreatorCoverArt";
 import { CoverPicker, coverToDraft, draftToCover, type CoverDraft } from "@/components/community/CoverPicker";
@@ -379,6 +380,7 @@ export default function MyPuzzles() {
           {user && load.status === "ready" && load.total > 0 && createLink}
         </div>
 
+        {user && <CreatorPublicNameEditor key={user.id} />}
         {user && <UnsavedCopies />}
 
         {user === undefined ? (

@@ -1,3 +1,4 @@
+import { getMyCreatorName } from "@/lib/creatorPublicName";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Link2, Play, Copy, Check } from "lucide-react";
@@ -131,17 +132,31 @@ function CreatorEditor({ store, copySlot = null }: { store?: CreatorDraftStore; 
   // inferred from Public, never restored from a draft, off by default.
   const community = communityPuzzlesOn();
   const [listInCommunity, setListInCommunity] = useState(false);
-  const [signedIn, setSignedIn] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [nameChoice, setNameChoice] = useState<{ userId: string; name: string } | null>(null);
+  const publicName = nameChoice?.userId === userId ? nameChoice.name : null;
+  const byline = publicName ?? designerName;
+  const signedIn = !!userId;
   const [listing, setListing] = useState<{ listed: boolean; error?: string } | null>(null);
   // Optional creator cover: one emoji + one preset background, saved after create.
   const [coverDraft, setCoverDraft] = useState<CoverDraft>(NO_COVER);
   const [coverOutcome, setCoverOutcome] = useState<{ saved: boolean; error?: string } | null>(null);
   useEffect(() => {
-    if (!community) return;
-    supabase.auth.getSession().then(({ data: { session } }) => setSignedIn(!!session?.user));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => setSignedIn(!!session?.user));
-    return () => subscription.unsubscribe();
-  }, [community]);
+    let active = true;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (active) setUserId(session?.user?.id ?? null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => setUserId(session?.user?.id ?? null));
+    return () => { active = false; subscription.unsubscribe(); };
+  }, []);
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    void getMyCreatorName().then((choice) => {
+      if (active) setNameChoice(choice.displayName ? { userId, name: choice.displayName } : null);
+    }, () => { if (active) setNameChoice(null); });
+    return () => { active = false; };
+  }, [userId]);
   const canListInCommunity = community && signedIn && visibility === "public";
 
   const draft = useMemo(() => ({ title: puzzleTitle, designer: designerName, visibility, builder: builder.snapshot }),
@@ -179,7 +194,7 @@ function CreatorEditor({ store, copySlot = null }: { store?: CreatorDraftStore; 
 
   function validate(): string | null {
     if (!puzzleTitle.trim()) return "Please give your puzzle a title.";
-    if (!designerName.trim()) return "Please enter your name.";
+    if (!byline.trim()) return "Please enter your name.";
     for (let i = 0; i < normalizedGroups.length; i++) {
       const g = normalizedGroups[i];
       if (!g.category) return `${CATEGORY_LABELS[i]} category needs a name.`;
@@ -234,7 +249,7 @@ function CreatorEditor({ store, copySlot = null }: { store?: CreatorDraftStore; 
           : null;
 
       const { shareId, shortCode } = await createCustomPuzzle({
-        creatorName: designerName.trim(),
+        creatorName: byline.trim(),
         title: puzzleTitle.trim(),
         visibility,
         content: {
@@ -472,10 +487,14 @@ function CreatorEditor({ store, copySlot = null }: { store?: CreatorDraftStore; 
                 <Label htmlFor="pdesigner">Your Name (Designer)</Label>
                 <Input
                   id="pdesigner"
-                  value={designerName}
+                  value={byline}
+                  readOnly={!!publicName}
                   onChange={(e) => setDesignerName(e.target.value)}
                   placeholder="Your name"
                 />
+                {signedIn && <p className="mt-1 text-sm text-muted-foreground">{publicName
+                  ? "From your public name in My Puzzles."
+                  : "Choose a username or name to use on your puzzles."}</p>}
               </div>
             </div>
 
@@ -626,7 +645,7 @@ function CreatorEditor({ store, copySlot = null }: { store?: CreatorDraftStore; 
                 value={coverDraft}
                 onChange={setCoverDraft}
                 title={puzzleTitle}
-                creatorName={designerName}
+                creatorName={byline}
                 disabled={!signedIn}
                 note={signedIn ? undefined : "Sign in to give your puzzle a cover. Without one it gets the standard Rainbow cover."}
               />
@@ -654,7 +673,7 @@ function CreatorEditor({ store, copySlot = null }: { store?: CreatorDraftStore; 
               onReorder={(ids) => { if (!submitting.current) builder.setWordOrderIds(ids); }}
               onRandomize={builder.randomizeWordOrder}
               title={puzzleTitle}
-              designerName={designerName}
+              designerName={byline}
               isRainbow={builder.style === "rainbow"}
               columns={format.columns}
               showModeBadge={format.hasRainbow}
