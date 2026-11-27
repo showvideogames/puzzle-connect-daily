@@ -4,7 +4,7 @@ import { COVER_BACKGROUNDS, backgroundStyle, type CoverBackground } from "@/lib/
 import { COVER_SIZE_DEFAULT, COVER_SIZE_MAX, COVER_SIZE_MIN, COVER_SIZE_STEP, MAX_COVER_EMOJI, emojiFromKey, validSizes, type CreatorCover } from "@/lib/creatorCover";
 import { cv } from "@/lib/communityStyle";
 import { CreatorCoverArt, EMOJI_FONT } from "./CreatorCoverArt";
-import { COMMUNITY_THUMBNAIL } from "./communityThumbnail";
+import { COMMUNITY_THUMBNAIL_PREVIEW } from "./communityThumbnail";
 
 /**
  * One to three emoji (in order), each with its own size, and one background;
@@ -164,13 +164,13 @@ export function CoverPicker({ value, onChange, title, creatorName, onSave, savin
       <p className="text-sm text-muted-foreground">{note ?? "Up to three emoji on one background. Skip it and your puzzle gets the standard Rainbow cover."}</p>
 
       <p id="community-cover-preview-label" className="mt-3 text-xs font-bold text-muted-foreground">Community preview</p>
-      <div className="mt-1 flex items-center gap-3 rounded-xl bg-secondary/60 p-2 dark:bg-white/5" aria-labelledby="community-cover-preview-label" role="group" data-testid="cover-preview">
-        <div className={COMMUNITY_THUMBNAIL}>
+      <div className="mt-1 flex flex-col items-center gap-2 rounded-xl bg-secondary/60 p-3 dark:bg-white/5" aria-labelledby="community-cover-preview-label" role="group" data-testid="cover-preview">
+        <div className={COMMUNITY_THUMBNAIL_PREVIEW}>
           {value.background && value.emojis.length === 0 && selectedBg
             ? <div aria-hidden="true" className="h-full w-full" style={backgroundStyle(selectedBg)} />
             : <CreatorCoverArt cover={cover} className="h-full w-full" />}
         </div>
-        <div className="min-w-0">
+        <div className="w-full min-w-0 max-w-[300px]">
           <p className={`truncate text-base font-extrabold ${cv.ink}`}>{title.trim() || "Your puzzle title"}</p>
           <p className="truncate text-sm text-muted-foreground">by <span className="font-semibold text-violet-700 dark:text-violet-300">{creatorName.trim() || "you"}</span></p>
         </div>
