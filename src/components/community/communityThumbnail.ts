@@ -1,3 +1,9 @@
-// The creator's preview and the Explore/Newest row use the same clipping frame.
+// The editor enlarges the actual Explore/Newest crop without changing its shape.
+const COMMUNITY_THUMBNAIL_FRAME =
+  "shrink-0 overflow-hidden rounded-xl aspect-[42/29] min-[380px]:aspect-[3/2] sm:aspect-[25/14]";
+
 export const COMMUNITY_THUMBNAIL =
-  "h-[58px] w-[84px] shrink-0 overflow-hidden rounded-xl min-[380px]:h-[64px] min-[380px]:w-[96px] sm:h-[84px] sm:w-[150px]";
+  `${COMMUNITY_THUMBNAIL_FRAME} w-[84px] min-[380px]:w-[96px] sm:w-[150px]`;
+
+export const COMMUNITY_THUMBNAIL_PREVIEW =
+  `${COMMUNITY_THUMBNAIL_FRAME} w-full max-w-[300px]`;
