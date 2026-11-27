@@ -80,6 +80,9 @@ async function main(): Promise<number> {
     await expect(tiles(page)).toHaveCount(16, { timeout: 30_000 });
     await solveCategory(page, full.groups[0]);
     await expect(tiles(page)).toHaveCount(12, { timeout: 20_000 });
+    // Let the post-solve requests (streak, stats) finish before the page is left;
+    // navigating away mid-request logs a "Failed to fetch" that is not a defect.
+    await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
     const sess = await db.query<{ id: string; status: string; user_id: string | null }>(`select id, status, user_id from public.game_sessions where device_id = '${deviceId}' and puzzle_id = '${full.id}'`);
     ok(`Full guest play saved (${full.title})`, sess.rows.length === 1 && sess.rows[0].user_id === null, sess.rows[0] ? `session ${sess.rows[0].status}, no owner` : "no session row");
     const guesses = await db.query<{ n: number }>(`select count(*)::int as n from public.guess_events g join public.game_sessions s on s.id = g.game_session_id where s.device_id = '${deviceId}'`);
@@ -90,6 +93,9 @@ async function main(): Promise<number> {
     await expect(page.getByRole("dialog")).toContainText("My Stats", { timeout: 10_000 });
     ok("stats dialog opens", true, "My Stats");
     await page.keyboard.press("Escape");
+    // The dialog's own requests (streak, completed games) must finish before the
+    // next navigation, or the abort shows up as a "Failed to fetch" console error.
+    await page.waitForTimeout(2500);
 
     // 5. Mini: daily page and the latest Mini archive puzzle.
     await page.goto(previewUrl + "/mini");
@@ -100,6 +106,7 @@ async function main(): Promise<number> {
       await expect(tiles(page)).toHaveCount(9, { timeout: 30_000 });
       await solveCategory(page, mini.groups[0]);
       await expect(tiles(page)).toHaveCount(6, { timeout: 20_000 });
+      await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
       const ms = await db.query<{ n: number }>(`select count(*)::int as n from public.game_sessions where device_id = '${deviceId}' and format = 'mini'`);
       ok(`Mini guest play saved (${mini.title})`, ms.rows[0].n === 1, `${ms.rows[0].n} mini session`);
     } else {
@@ -115,8 +122,9 @@ async function main(): Promise<number> {
     ok("hosted sign-in redirects to WorkOS Staging", /detailed-pink-69-staging\.authkit\.app\/oauth2\/authorize/.test(loc), authorize ? `HTTP ${authorize.status} ${loc.replace(/client_id=[^&]+/, "client_id=<id>").slice(0, 90)}` : "no response");
 
     // 7. Account boundary on hosted: no accounts; a beta auth user without a shared identity is not a Rainbow account.
-    const accounts = await db.query<{ n: number }>(`select count(*)::int as n from public.accounts`);
-    ok("no Rainbow accounts exist yet", accounts.rows[0].n === 0, `${accounts.rows[0].n}`);
+    // Informational: Rainbow accounts exist only for people who signed in through the shared sign-in.
+    const accounts = await db.query<{ n: number; linked: number }>(`select count(*)::int as n, count(*) filter (where exists (select 1 from auth.identities i where i.user_id = a.user_id and i.provider = 'custom:platform'))::int as linked from public.accounts a`);
+    ok("every Rainbow account is linked to a shared identity", accounts.rows[0].n === accounts.rows[0].linked, `${accounts.rows[0].n} account(s), ${accounts.rows[0].linked} linked`);
     const boundary = await db.query<{ outcome: string; uid: string | null }>(`
       begin;
       select set_config('request.jwt.claims', json_build_object('sub', (select id from auth.users where email_confirmed_at is not null order by created_at limit 1), 'role', 'authenticated')::text, true);
