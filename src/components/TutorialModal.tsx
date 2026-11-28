@@ -50,7 +50,7 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-type Phase = "welcome" | "rainbow-hunt" | "rainbow-revealed" | "solve-groups" | "complete";
+type Phase = "welcome" | "practice" | "bonus" | "complete";
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
@@ -68,14 +68,12 @@ function WordTile({
   word,
   isSelected,
   isRainbow,
-  isShaking,
   onClick,
   disabled,
 }: {
   word: string;
   isSelected: boolean;
   isRainbow: boolean;
-  isShaking: boolean;
   onClick: () => void;
   disabled: boolean;
 }) {
@@ -93,7 +91,6 @@ function WordTile({
         relative w-full rounded-lg py-3 px-2 font-bold uppercase tracking-wide
         whitespace-nowrap flex items-center justify-center
         transition-all duration-150 select-none cursor-pointer
-        ${isShaking ? "animate-shake" : ""}
         ${isRainbow
           ? "rainbow-tile text-white"
           : isSelected
@@ -169,16 +166,15 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
   const gridColumns = format.columns === 3 ? "grid-cols-3" : "grid-cols-4";
   const [tab, setTab] = useState<Tab>("tutorial");
   const [phase, setPhase] = useState<Phase>("welcome");
-  // All example words, shuffled. Never removed during rainbow hunt — rainbow words stay on board.
+  // Keep the same practice board for every guess.
   const [boardWords, setBoardWords] = useState<string[]>(() => shuffle(allWords));
   const [selected, setSelected] = useState<string[]>([]);
-  const [shakingWord, setShakingWord] = useState<string | null>(null);
-  const [nudgeMessage, setNudgeMessage] = useState<string | null>(null);
+  const [rainbowFound, setRainbowFound] = useState(false);
+  const [feedback, setFeedback] = useState("");
   const [solvedGroups, setSolvedGroups] = useState<typeof TUTORIAL_GROUPS>([]);
   // Tracks words to hide after each group is solved (including that group's rainbow word)
   const [solvedGroupWords, setSolvedGroupWords] = useState<string[]>([]);
-  const [oneAway, setOneAway] = useState(false);
-  const [oneAwayDifficulty, setOneAwayDifficulty] = useState<number | null>(null);
+
   const [mistakes, setMistakes] = useState(0);
   const [shakingBoard, setShakingBoard] = useState(false);
 
@@ -186,11 +182,11 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
     setPhase("welcome");
     setBoardWords(shuffle(groups.flatMap((group) => group.words)));
     setSelected([]);
-    setShakingWord(null);
-    setNudgeMessage(null);
+    setRainbowFound(false);
+    setFeedback("");
+    setTab("tutorial");
     setSolvedGroups([]);
     setSolvedGroupWords([]);
-    setOneAway(false);
     setMistakes(0);
     setShakingBoard(false);
   }, [groups]);
@@ -201,85 +197,58 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
     reset();
   }, [onClose, reset]);
 
-  // ── Rainbow hunt: only rainbow words can be selected ──
-  const handleRainbowWordClick = useCallback((word: string) => {
-    if (selected.includes(word)) {
-      setSelected((s) => s.filter((w) => w !== word));
-      return;
-    }
-    if (selected.length >= format.answersPerCategory) return;
+  function toggleWord(word: string) {
+    setSelected((current) => current.includes(word)
+      ? current.filter((item) => item !== word)
+      : current.length < format.answersPerCategory ? [...current, word] : current);
+  }
 
-    if (!rainbowWords.includes(word)) {
-      setShakingWord(word);
-      setNudgeMessage("That one belongs to a different group — look for the Rainbow! 🌈");
-      setTimeout(() => setShakingWord(null), 400);
-      setTimeout(() => setNudgeMessage(null), 2500);
-      return;
-    }
-
-    setSelected((s) => [...s, word]);
-  }, [selected, format, rainbowWords]);
-
-  const handleRainbowSubmit = useCallback(() => {
+  function submit() {
     if (selected.length !== format.answersPerCategory) return;
-    if (selected.every((w) => rainbowWords.includes(w))) {
-      // Rainbow words STAY on the board — they show with rainbow styling and are locked
+
+    if (!rainbowFound && selected.every((word) => rainbowWords.includes(word))) {
+      setRainbowFound(true);
       setSelected([]);
-      setPhase("rainbow-revealed");
-    }
-  }, [selected, format, rainbowWords]);
-
-  // ── Solve groups: all words clickable, rainbow words just look different ──
-  const handleGroupWordClick = useCallback((word: string) => {
-    if (selected.includes(word)) {
-      setSelected((s) => s.filter((w) => w !== word));
+      if (phase === "bonus") setPhase("complete");
+      else setFeedback("You spotted the Rainbow! These words stay on the board. Each belongs to a different group.");
       return;
     }
-    if (selected.length >= format.answersPerCategory) return;
-    setSelected((s) => [...s, word]);
-  }, [selected, format]);
 
-  const handleGroupSubmit = useCallback(() => {
-    if (selected.length !== format.answersPerCategory) return;
-
-    const matchedGroup = groups.find(
-      (g) => !solvedGroups.includes(g) && g.words.every((w) => selected.includes(w))
+    const match = phase === "practice" && groups.find(
+      (group) => !solvedGroups.includes(group) && group.words.every((word) => selected.includes(word))
     );
 
-    if (matchedGroup) {
-      const newSolvedGroups = [...solvedGroups, matchedGroup];
-      // Remove ALL of this group's words from the board (including its rainbow word)
-      setSolvedGroupWords((prev) => [...prev, ...matchedGroup.words]);
-      setSolvedGroups(newSolvedGroups);
-      setSelected([]);
-
-      if (newSolvedGroups.length === groups.length) {
-        setTimeout(() => setPhase("complete"), 600);
+    setSelected([]);
+    if (match) {
+      const next = [...solvedGroups, match];
+      setSolvedGroups(next);
+      setSolvedGroupWords((previous) => [...previous, ...match.words]);
+      if (next.length === groups.length) {
+        setFeedback("");
+        setPhase(rainbowFound ? "complete" : "bonus");
+      } else if (next.length === 1 && !rainbowFound) {
+        setFeedback("That’s a regular group! If you don’t find the Rainbow up front, look for it again at the end.");
+      } else {
+        setFeedback("That’s a match!");
       }
-    } else {
-      const nearGroup = groups.find(
-        (g) =>
-          !solvedGroups.includes(g) &&
-          g.words.filter((w) => selected.includes(w)).length === oneAwayThreshold(format)
-      );
-
-      setShakingBoard(true);
-      setTimeout(() => setShakingBoard(false), 400);
-      setMistakes((m) => m + 1);
-      setSelected([]);
-
-      if (nearGroup) {
-        setOneAwayDifficulty(nearGroup.difficulty);
-        setOneAway(true);
-        setTimeout(() => setOneAway(false), 2500);
-      }
+      return;
     }
-  }, [selected, solvedGroups, format, groups]);
+
+    const near = phase === "practice" && groups.find((group) =>
+      !solvedGroups.includes(group) &&
+      group.words.filter((word) => selected.includes(word)).length === oneAwayThreshold(format)
+    );
+    setFeedback(near
+      ? format.id === "mini" ? `One Away... ${({2: "🟩", 3: "🟦", 4: "🟥"} as Record<number, string>)[near.difficulty] ?? ""}` : "One away…"
+      : phase === "bonus" ? "Not quite. Pick one word from each solved group." : "Not quite. Try another connection.");
+    setMistakes((previous) => previous + 1);
+    setShakingBoard(true);
+  }
 
   if (!open) return null;
 
   // Words shown on the board = all boardWords minus words from solved groups
-  const visibleWords = boardWords.filter((w) => !solvedGroupWords.includes(w));
+  const visibleWords = phase === "bonus" ? groups.flatMap((group) => group.words) : boardWords.filter((w) => !solvedGroupWords.includes(w));
 
   return (
     <div
@@ -370,7 +339,7 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
               <section>
                 <SectionLabel>The Rainbow</SectionLabel>
                 <p className="text-sm leading-relaxed">
-                  Some puzzles include an extra hidden category — the <strong>Rainbow</strong>. One word from each of the {countWord} groups shares a secret connection. Find and submit all {countWord} Rainbow words before solving the main groups. Classic puzzles have no Rainbow.
+                  Some puzzles include an extra hidden category — the <strong>Rainbow</strong>. One word from each of the {countWord} groups shares a secret connection. Use the same Submit button for either kind of connection. You can find the Rainbow before solving a regular group, or in the bonus at the end. Classic puzzles have no Rainbow.
                 </p>
                 <div className="mt-3 rounded-lg px-4 py-3 text-sm font-medium text-white text-center"
                   style={{ background: "linear-gradient(to right, #f87171, #facc15, #4ade80, #60a5fa)" }}>
@@ -402,166 +371,74 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
           {tab === "tutorial" && (<>
           {phase === "welcome" && (
             <div className="flex flex-col items-center text-center gap-5 py-4">
-              <div className="text-5xl">🌈</div>
+              <div className="text-5xl" aria-hidden="true">🌈</div>
               <div>
-                <h3 className="text-lg font-bold mb-2">Welcome to Rainbow Categories!</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Find <strong>{countWord} groups of {countWord} words</strong>. Some puzzles also have a hidden{" "}
-                  <strong>Rainbow</strong>; Classic puzzles do not. This practice example includes a Rainbow.
+                <h3 className="text-xl font-bold mb-2">
+                  {format.tileCount} words. {format.categoryCount + 1} connections.
+                </h3>
+                <p className="text-sm text-foreground leading-relaxed">
+                  On a Rainbow puzzle, one word from each regular group also fits a hidden category: <strong>the Rainbow</strong>.
                 </p>
-                <p className="text-sm text-muted-foreground leading-relaxed mt-2">
-                  The Rainbow is <strong>one word from each category</strong> that share a secret
-                  connection. Can you spot the Rainbow?
+                <p className="text-sm text-foreground leading-relaxed mt-2">
+                  See {countWord} words that go together? Select them and hit <strong>Submit</strong>.
                 </p>
               </div>
-              <button
-                onClick={() => setPhase("rainbow-hunt")}
-                className="w-full py-3 rounded-full bg-primary text-primary-foreground font-semibold text-sm
-                  hover:opacity-90 transition-all active:scale-95"
-              >
-                Let's try it →
+              <button onClick={() => setPhase("practice")} className="w-full py-3 rounded-full bg-primary text-primary-foreground font-semibold text-sm">
+                Let’s Try It
               </button>
             </div>
           )}
 
-          {/* ── RAINBOW HUNT ── */}
-          {phase === "rainbow-hunt" && (
+          {(phase === "practice" || phase === "bonus") && (
             <div className="flex flex-col gap-3">
-              <div className="rounded-xl p-3 text-center" style={{ background: "hsl(var(--secondary))" }}>
-                <p className="text-sm font-semibold">🌈 Find the {format.categoryCount} Rainbow words and select them</p>
-                <p className="text-xs text-muted-foreground mt-1">One from each group shares a hidden connection</p>
+              <div className="rounded-xl bg-secondary p-3 text-center">
+                <p className="text-sm font-semibold">
+                  {phase === "bonus" ? "Spot the Rainbow" : `Find ${countWord} words that go together.`}
+                </p>
+                {phase === "bonus" && <p className="text-sm mt-1">Pick one word from each solved group.</p>}
               </div>
 
-              <div style={{ minHeight: "1.5rem" }} className="text-center">
-                {nudgeMessage && (
-                  <p className="text-xs text-amber-500 font-medium">{nudgeMessage}</p>
-                )}
-              </div>
+              {phase === "practice" && (
+                <div className="space-y-2">
+                  {solvedGroups.map((g) => (
+                    <SolvedGroupBanner key={g.category} category={g.category} words={g.words} color={g.color} />
+                  ))}
+                </div>
+              )}
 
-              <div className={`grid ${gridColumns} gap-2`}>
-                {boardWords.map((word) => (
+              <div onAnimationEnd={() => setShakingBoard(false)} className={`grid ${gridColumns} gap-2 ${shakingBoard ? "animate-shake" : ""}`}>
+                {visibleWords.map((word) => (
                   <WordTile
                     key={word}
                     word={word}
                     isSelected={selected.includes(word)}
-                    isRainbow={false}
-                    isShaking={shakingWord === word}
-                    onClick={() => handleRainbowWordClick(word)}
+                    isRainbow={rainbowFound && rainbowWords.includes(word)}
+                    onClick={() => toggleWord(word)}
                     disabled={false}
                   />
                 ))}
               </div>
 
-              <p className="text-center text-xs text-muted-foreground">{selected.length} / {format.answersPerCategory} selected</p>
-
-              <button
-                onClick={handleRainbowSubmit}
-                disabled={selected.length !== format.answersPerCategory}
-                className="w-full py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm
-                  hover:opacity-90 transition-all active:scale-95
-                  disabled:opacity-40 disabled:cursor-default flex items-center justify-center gap-2"
-              >
-                <Send className="w-4 h-4" /> Submit Rainbow
-              </button>
-            </div>
-          )}
-
-          {/* ── RAINBOW REVEALED ── */}
-          {phase === "rainbow-revealed" && (
-            <div className="flex flex-col gap-4">
-              <div className="animate-fade-up">
-                <SolvedGroupBanner category="Colors of the Rainbow 🌈" words={rainbowWords} isRainbow />
-              </div>
-              <div className="text-center">
-                <p className="text-2xl mb-1">🎉</p>
-                <p className="text-sm font-semibold">You spotted the Rainbow!</p>
-                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  Now solve the remaining {format.categoryCount} groups. If your {format.answersPerCategory}-word guess contains {oneAwayThreshold(format)} from one of the main groups,
-                  the game will give you a <strong>"One Away"</strong> hint{format.id === "mini" ? " with the category color" : ""}.
-                </p>
-              </div>
-              <button
-                onClick={() => setPhase("solve-groups")}
-                className="w-full py-3 rounded-full bg-primary text-primary-foreground font-semibold text-sm
-                  hover:opacity-90 transition-all active:scale-95"
-              >
-                Solve the groups →
-              </button>
-            </div>
-          )}
-
-          {/* ── SOLVE GROUPS ── */}
-          {phase === "solve-groups" && (
-            <div className="flex flex-col gap-3">
-              <div className="rounded-xl p-3 text-center" style={{ background: "hsl(var(--secondary))" }}>
-                <p className="text-sm font-semibold">Find all {format.categoryCount} groups</p>
-                <p className="text-xs text-muted-foreground mt-1">Select {format.answersPerCategory} words that share something in common</p>
-              </div>
-
-              {oneAway && (
-                <div className="flex justify-center animate-fade-up">
-                  <div className="bg-foreground text-background px-5 py-2 rounded-full text-sm font-semibold shadow-md">
-                    {format.id === "mini" ? `One Away... ${{2: "🟩", 3: "🟦", 4: "🟥"}[oneAwayDifficulty!] ?? ""}` : "One away…"}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                {solvedGroups.map((g) => (
-                  <SolvedGroupBanner key={g.category} category={g.category} words={g.words} color={g.color} />
-                ))}
-              </div>
-
-              {visibleWords.length > 0 && (
-                <div className={`grid ${gridColumns} gap-2 ${shakingBoard ? "animate-shake" : ""}`}>
-                  {visibleWords.map((word) => {
-                    const isRainbowWord = rainbowWords.includes(word);
-                    return (
-                      <WordTile
-                        key={word}
-                        word={word}
-                        isSelected={selected.includes(word)}
-                        isRainbow={isRainbowWord}
-                        isShaking={false}
-                        onClick={() => handleGroupWordClick(word)}
-                        disabled={false}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-
-              {mistakes > 0 && (
-                <p className="text-center text-xs text-muted-foreground">Mistakes: {mistakes}</p>
-              )}
-
-              <div className="flex items-center justify-center gap-3">
-                <button
-                  onClick={() => setBoardWords((prev) => shuffle(prev))}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium
-                    hover:bg-secondary transition-colors duration-150 active:scale-95"
-                >
-                  <Shuffle className="w-4 h-4" /> Shuffle
-                </button>
-                <button
-                  onClick={() => setSelected([])}
-                  disabled={selected.length === 0}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-border text-sm font-medium
-                    hover:bg-secondary transition-colors duration-150 active:scale-95
-                    disabled:opacity-40 disabled:cursor-default"
-                >
+              <p role="status" className="text-center text-sm leading-snug min-h-5">{feedback}</p>
+              {mistakes > 0 && <p className="text-center text-xs text-muted-foreground">Mistakes: {mistakes}</p>}
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {phase === "practice" && (
+                  <button onClick={() => setBoardWords((previous) => shuffle(previous))} className="flex items-center gap-1.5 px-3 py-2.5 rounded-full border border-border text-sm font-medium">
+                    <Shuffle className="w-4 h-4" /> Shuffle
+                  </button>
+                )}
+                <button onClick={() => setSelected([])} disabled={selected.length === 0} className="flex items-center gap-1.5 px-3 py-2.5 rounded-full border border-border text-sm font-medium disabled:opacity-40">
                   <X className="w-4 h-4" /> Deselect
                 </button>
-                <button
-                  onClick={handleGroupSubmit}
-                  disabled={selected.length !== format.answersPerCategory}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-medium
-                    hover:opacity-90 transition-all duration-150 active:scale-95
-                    disabled:opacity-40 disabled:cursor-default"
-                >
+                <button onClick={submit} disabled={selected.length !== format.answersPerCategory} className="flex items-center gap-1.5 px-3 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-medium disabled:opacity-40">
                   <Send className="w-4 h-4" /> Submit
                 </button>
               </div>
+              {phase === "bonus" && (
+                <button onClick={handleClose} className="self-center underline underline-offset-2 text-sm">
+                  Play Today’s Puzzle
+                </button>
+              )}
             </div>
           )}
 
@@ -584,7 +461,7 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
                 className="w-full py-3 rounded-full bg-primary text-primary-foreground font-semibold text-sm
                   hover:opacity-90 transition-all active:scale-95"
               >
-                Play Today's Puzzle →
+                Play Today’s Puzzle
               </button>
             </div>
           )}
