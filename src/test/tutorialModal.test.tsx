@@ -34,10 +34,13 @@ for (const { format, count, rainbow, groups } of examples) {
       vi.useFakeTimers();
       const { container } = render(<TutorialModal open onClose={() => {}} format={format} />);
       fireEvent.click(screen.getByRole("button", { name: "Let's try it →" }));
-      expect(screen.getByText("Start with the easiest connection on this board.")).toBeVisible();
-      expect(screen.getByText(`Find ${count} words that are colors.`)).toBeVisible();
+      expect(screen.getByText(`🌈 Find the ${format.categoryCount} Rainbow words and select them`)).toBeVisible();
+      expect(screen.getByText("One from each group shares a hidden connection")).toBeVisible();
+      expect(screen.queryByText(/colors/i)).toBeNull();
       select(groups[0][1]);
       expect(screen.getByRole("button", { name: groups[0][1] })).toHaveAttribute("aria-pressed", "false");
+      expect(screen.getByText(/That one belongs to a different group/)).toBeVisible();
+      expect(screen.queryByText(/colors/i)).toBeNull();
       expect(container.querySelectorAll("button[aria-pressed]")).toHaveLength(format.tileCount);
       expect(container.querySelector(`.grid-cols-${format.columns}`)).toBeTruthy();
       for (const word of rainbow.slice(0, -1)) select(word);
@@ -46,6 +49,7 @@ for (const { format, count, rainbow, groups } of examples) {
       expect(screen.getByText(`${format.categoryCount} / ${format.categoryCount} selected`)).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Submit Rainbow" }));
       expect(screen.getByText(rainbow.join(" · "))).toBeInTheDocument();
+      expect(screen.getByText(/Colors of the Rainbow/i)).toBeVisible();
       expect(screen.getByText(/Each also belongs to a different regular group/)).toBeVisible();
       expect(screen.getByText(/You don’t have to look for the Rainbow first/)).toBeVisible();
       fireEvent.click(screen.getByRole("button", { name: "Solve the groups →" }));
