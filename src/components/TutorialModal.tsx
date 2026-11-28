@@ -211,7 +211,7 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
 
     if (!rainbowWords.includes(word)) {
       setShakingWord(word);
-      setNudgeMessage("Not a color in this example. Look for the colors!");
+      setNudgeMessage("That one belongs to a different group — look for the Rainbow! 🌈");
       setTimeout(() => setShakingWord(null), 400);
       setTimeout(() => setNudgeMessage(null), 2500);
       return;
@@ -426,8 +426,8 @@ function FormatTutorialModal({ open, onClose, format = FULL_FORMAT }: TutorialMo
           {phase === "rainbow-hunt" && (
             <div className="flex flex-col gap-3">
               <div className="rounded-xl p-3 text-center" style={{ background: "hsl(var(--secondary))" }}>
-                <p className="text-sm font-semibold">Start with the easiest connection on this board.</p>
-                <p className="text-sm text-muted-foreground mt-1">Find {countWord} words that are colors.</p>
+                <p className="text-sm font-semibold">🌈 Find the {format.categoryCount} Rainbow words and select them</p>
+                <p className="text-xs text-muted-foreground mt-1">One from each group shares a hidden connection</p>
               </div>
 
               <div style={{ minHeight: "1.5rem" }} className="text-center">
